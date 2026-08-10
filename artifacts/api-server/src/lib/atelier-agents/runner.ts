@@ -34,6 +34,10 @@ import { perplexityResearch } from "./perplexity.js";
 import { findPersonMatch, richerPersonName } from "./person-name.js";
 import { resolveIndustryTaxonomy } from "./industry-taxonomy.js";
 import {
+  buildAllianceCapabilityContext,
+  filterPartnerFit,
+} from "./alliance-capability-context.js";
+import {
   classifyCriticalRole,
   guardExecutiveMapperCriticalRoles,
   isGovernmentAccount,
@@ -93,14 +97,19 @@ export interface PursuitScoutOutput {
   openQuestions: string[];
   facts: AgentFact[];
   confidence: "green" | "amber" | "red";
+  // Task #872 — advisory alliance-partner opportunity-fit flags. Optional:
+  // present only when active (agreed, non-deleted) alliance partners exist
+  // AND the model found a genuinely material fit. Entries are filtered
+  // deterministically against the active-partner allowlist before persist.
+  partnerFit?: PartnerFitEntry[];
 }
 
-// Task #653 — a Pursuit Scout run can return a structurally-valid-but-empty
-// object (a soft refusal for accounts with no public footprint, or a degraded
-// run). Persisting that would put a blank brief in front of the partner as if it
-// were research. Treat a brief as empty unless at least one narrative section
-// carries text. Shared by the persistence path and the create/re-run handlers so
-// "empty" is detected the same way everywhere.
+export interface PartnerFitEntry {
+  partnerName: string;
+  capabilityDomain: string;
+  rationale: string;
+  sourceUrls: string[];
+}
 export function isScoutBriefEmpty(out: PursuitScoutOutput | null | undefined): boolean {
   if (!out) return true;
   const narrative = [
@@ -974,6 +983,24 @@ export async function runPursuitScout(args: {
     },
     async (ctx) => {
       const system = loadPrompt("pursuit_scout");
+      // Task #872 — alliance-partner capability context (advisory, capped).
+      // Org resolved from the opportunity row; built at run time from ACTIVE
+      // agreed partners only. Failure degrades to no partner context — it
+      // must never break the brief run.
+      let allianceBlock: string | null = null;
+      let allianceFirmNames: string[] = [];
+      try {
+        const [oppRow] = await db
+          .select({ orgId: atelierOpportunities.orgId })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.id, args.opportunityId))
+          .limit(1);
+        const ctx872 = await buildAllianceCapabilityContext(oppRow?.orgId ?? "aico");
+        allianceBlock = ctx872.block;
+        allianceFirmNames = ctx872.firmNames;
+      } catch (e) {
+        console.warn("[atelier] alliance capability context failed (scout)", e);
+      }
       await ctx.progress(25, "Planning research lines");
       // Task #687 — Scout briefs are now web-grounded (Perplexity retrieval →
       // Claude synthesis) instead of model-memory-only.
@@ -987,6 +1014,9 @@ export async function runPursuitScout(args: {
             accountSector: args.accountSector,
             opportunityName: args.opportunityName,
             contextBlurb: args.contextBlurb,
+            // Task #872 — advisory alliance-partner capability registry; the
+            // prompt instructs the model to flag only material fits.
+            ...(allianceBlock ? { alliancePartnerContext: allianceBlock } : {}),
           }),
           {
             // Task #771 — split profile query from news; dedicated recency pass.
@@ -1012,6 +1042,13 @@ export async function runPursuitScout(args: {
         ...value,
         facts: applyCitationGuardrail(value.facts ?? []),
         openQuestions: [...staleWarn, ...(value.openQuestions ?? [])],
+        // Task #872 — deterministic partner-fit guard: only entries naming an
+        // ACTIVE agreed alliance partner survive; empty when no context was
+        // injected (the model can never invent partner fits).
+        partnerFit: filterPartnerFit(
+          normalisePartnerFit((value as { partnerFit?: unknown }).partnerFit),
+          allianceFirmNames,
+        ),
       };
       // Pursuit Scout v2 governed-write — Task #238 §2.5.
       // Profile deltas enqueued onto the Cartographer approval queue.
@@ -1969,6 +2006,11 @@ export interface CartographerResearchBrief {
   singleMostImportant: string;
   // Step 3 (Task #589) — stress-test of the origination hypothesis.
   stressTest: CartographerStressTest;
+  // Task #872 — alliance-partner opportunity fit: which ACTIVE partner
+  // capabilities match which account needs. Advisory and capped; empty when
+  // no agreed partner materially fits. Persisted output is a snapshot —
+  // later partner archival never mutates it.
+  partnerFit: PartnerFitEntry[];
 }
 
 export interface CartographerStressTest {
@@ -2072,6 +2114,7 @@ function normaliseResearchBrief(v: unknown): CartographerResearchBrief {
     openQuestions: asStringList(r.openQuestions),
     singleMostImportant: asTrimmed(r.singleMostImportant),
     stressTest: normaliseStressTest(r.stressTest),
+    partnerFit: normalisePartnerFit(r.partnerFit),
   };
 }
 
@@ -2276,6 +2319,7 @@ const CARTOGRAPHER_SYNTH_SECTIONS = [
   { key: '"openQuestions"', pct: 94, label: "Noting open questions…" },
   { key: '"singleMostImportant"', pct: 95, label: "Distilling the key takeaway…" },
   { key: '"stressTest"', pct: 96, label: "Stress-testing the hypothesis…" },
+  { key: '"partnerFit"', pct: 96, label: "Evaluating alliance-partner fit…" },
 ] as const satisfies readonly { key: string; pct: number; label: string }[];
 
 /**
@@ -3064,6 +3108,10 @@ export async function runAccountCartographer(args: {
   actorLabel: string;
   focusOpportunityId?: string | null;
   mode?: "live" | "research_only";
+  // Task #872 — org scoping for the alliance-partner capability context.
+  // Optional: when absent, resolved from the account row (live mode) or
+  // defaults to the tenant key (research_only prefill runs).
+  orgId?: string | null;
 }): Promise<{ runId: string | null; output: CartographerOutput; costUsd: number }> {
   const mode = args.mode ?? "live";
   if (mode === "live" && !args.accountId) {
@@ -3084,6 +3132,28 @@ export async function runAccountCartographer(args: {
       : null;
   try {
     const system = loadPrompt("account_cartographer");
+    // Task #872 — alliance-partner capability context (advisory, capped).
+    // Built at run time from ACTIVE agreed partners only, so archived firms
+    // drop out of all future evaluations automatically. Failure to build the
+    // block must never break account research — degrade to no partner context.
+    let allianceBlock: string | null = null;
+    let allianceFirmNames: string[] = [];
+    try {
+      let orgId = args.orgId ?? null;
+      if (!orgId && args.accountId) {
+        const [acctRow] = await db
+          .select({ orgId: atelierAccounts.orgId })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.id, args.accountId))
+          .limit(1);
+        orgId = acctRow?.orgId ?? null;
+      }
+      const ctx = await buildAllianceCapabilityContext(orgId ?? "aico");
+      allianceBlock = ctx.block;
+      allianceFirmNames = ctx.firmNames;
+    } catch (e) {
+      console.warn("[atelier] alliance capability context failed (cartographer)", e);
+    }
     // progressRun forwards to the ambient sink in live mode; in research_only
     // (runId null) emit the same breadcrumb directly so chat still shows it.
     if (runId) await progressRun(runId, 25, "Searching the public web");
@@ -3097,6 +3167,9 @@ export async function runAccountCartographer(args: {
           accountCountry: args.accountCountry,
           accountSector: args.accountSector,
           accountHqCity: args.accountHqCity ?? null,
+          // Task #872 — advisory alliance-partner capability registry; the
+          // prompt instructs the model to flag only material fits.
+          ...(allianceBlock ? { alliancePartnerContext: allianceBlock } : {}),
         }),
         // Live runs persist phase to the run row so the account page shows a
         // current phase, not a bare spinner. research_only (runId null) relies
@@ -3267,6 +3340,15 @@ export async function runAccountCartographer(args: {
         (value as { researchBrief?: unknown } | null | undefined)?.researchBrief,
       ),
     };
+
+    // Task #872 — deterministic partner-fit guard: keep only entries naming
+    // an ACTIVE agreed alliance partner (case-insensitive), capped. When no
+    // partner context was injected, force the section empty so the model can
+    // never invent partner fits.
+    normalised.researchBrief.partnerFit = filterPartnerFit(
+      normalised.researchBrief.partnerFit,
+      allianceFirmNames,
+    );
 
     // Task #771 — if the dossier contained no recent dates, surface the
     // staleness warning in openQuestions so partners see it in the brief.
@@ -8185,4 +8267,23 @@ export async function runCashFlowForecaster(
     await failRun(runId, err, { actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_" });
     throw err;
   }
+}
+
+function normalisePartnerFit(v: unknown): PartnerFitEntry[] {
+  return (Array.isArray(v) ? v : [])
+    .map((raw) => {
+      const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+      return {
+        partnerName: typeof o.partnerName === "string" ? o.partnerName.trim() : "",
+        capabilityDomain:
+          typeof o.capabilityDomain === "string" ? o.capabilityDomain.trim() : "",
+        rationale: typeof o.rationale === "string" ? o.rationale.trim() : "",
+        sourceUrls: Array.isArray(o.sourceUrls)
+          ? o.sourceUrls.filter(
+              (u): u is string => typeof u === "string" && /^https?:\/\//.test(u),
+            )
+          : [],
+      };
+    })
+    .filter((e) => e.partnerName.length > 0 && e.rationale.length > 0);
 }

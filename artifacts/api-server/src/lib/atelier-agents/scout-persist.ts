@@ -47,6 +47,8 @@ export async function persistBriefAndFacts(
     buyerLandscape: out.buyerLandscape,
     fiveCDraft: out.fiveCDraft,
     openQuestions: out.openQuestions ?? [],
+    // Task #872 — alliance-partner fit flags, snapshotted at brief creation.
+    partnerFit: out.partnerFit ?? [],
     citations: guardedFacts,
     confidence: out.confidence ?? "amber",
   });

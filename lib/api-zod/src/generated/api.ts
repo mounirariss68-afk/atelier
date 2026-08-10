@@ -8729,6 +8729,16 @@ export const AtelierGetBriefResponse = zod.object({
         contract: zod.string(),
       }),
       openQuestions: zod.array(zod.string()),
+      partnerFit: zod
+        .array(
+          zod.object({
+            partnerName: zod.string(),
+            capabilityDomain: zod.string(),
+            rationale: zod.string(),
+            sourceUrls: zod.array(zod.string()),
+          }),
+        )
+        .optional(),
       facts: zod.array(
         zod.object({
           id: zod.string().optional(),
@@ -8820,6 +8830,16 @@ export const AtelierRunPursuitScoutResponse = zod.object({
         contract: zod.string(),
       }),
       openQuestions: zod.array(zod.string()),
+      partnerFit: zod
+        .array(
+          zod.object({
+            partnerName: zod.string(),
+            capabilityDomain: zod.string(),
+            rationale: zod.string(),
+            sourceUrls: zod.array(zod.string()),
+          }),
+        )
+        .optional(),
       facts: zod.array(
         zod.object({
           id: zod.string().optional(),
@@ -10464,6 +10484,16 @@ export const AtelierCreateAccountBody = zod.object({
                   .describe(
                     "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                   ),
+                partnerFit: zod
+                  .array(
+                    zod.object({
+                      partnerName: zod.string(),
+                      capabilityDomain: zod.string(),
+                      rationale: zod.string(),
+                      sourceUrls: zod.array(zod.string()),
+                    }),
+                  )
+                  .optional(),
               }),
               zod.null(),
             ])
@@ -11216,6 +11246,16 @@ export const AtelierMergeAccountsResponse = zod.object({
                   .describe(
                     "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                   ),
+                partnerFit: zod
+                  .array(
+                    zod.object({
+                      partnerName: zod.string(),
+                      capabilityDomain: zod.string(),
+                      rationale: zod.string(),
+                      sourceUrls: zod.array(zod.string()),
+                    }),
+                  )
+                  .optional(),
               }),
               zod.null(),
             ])
@@ -12403,6 +12443,16 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -13836,6 +13886,16 @@ export const AtelierUpdateAccountResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -15116,6 +15176,16 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -17003,6 +17073,16 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -18188,6 +18268,16 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -19384,6 +19474,16 @@ export const AtelierCreateAccountInsightResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -20579,6 +20679,16 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -21758,6 +21868,16 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -22946,6 +23066,16 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -24134,6 +24264,16 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -25315,6 +25455,16 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -26508,6 +26658,16 @@ export const AtelierCreateAccountActionResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -27698,6 +27858,16 @@ export const AtelierUpdateAccountActionResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -28877,6 +29047,16 @@ export const AtelierDeleteAccountActionResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -30065,6 +30245,16 @@ export const AtelierCreateAccountRiskResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -31254,6 +31444,16 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -32433,6 +32633,16 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])
@@ -33620,6 +33830,16 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
                 .describe(
                   "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
                 ),
+              partnerFit: zod
+                .array(
+                  zod.object({
+                    partnerName: zod.string(),
+                    capabilityDomain: zod.string(),
+                    rationale: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                )
+                .optional(),
             }),
             zod.null(),
           ])

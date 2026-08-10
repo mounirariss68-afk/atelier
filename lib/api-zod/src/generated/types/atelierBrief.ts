@@ -9,6 +9,7 @@ import type { AtelierBriefAccountSnapshot } from "./atelierBriefAccountSnapshot"
 import type { AtelierBriefBuyerLandscape } from "./atelierBriefBuyerLandscape";
 import type { AtelierFact } from "./atelierFact";
 import type { AtelierFiveC } from "./atelierFiveC";
+import type { AtelierPartnerFitItem } from "./atelierPartnerFitItem";
 import type { Confidence } from "./confidence";
 
 export interface AtelierBrief {
@@ -16,6 +17,7 @@ export interface AtelierBrief {
   buyerLandscape: AtelierBriefBuyerLandscape;
   fiveCDraft: AtelierFiveC;
   openQuestions: string[];
+  partnerFit?: AtelierPartnerFitItem[];
   facts: AtelierFact[];
   confidence?: Confidence;
 }

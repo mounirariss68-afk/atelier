@@ -801,6 +801,7 @@ const ACCOUNT_BRIEF_SECTION_LABELS: Record<string, string> = {
   executiveTensions: "Executive tensions",
   serviceLineFit: "Service-line fit",
   partnerEcosystem: "Partner ecosystem",
+  partnerFit: "Alliance partner fit",
   businessUnits: "Business units",
   mandateAngles: "Mandate angles",
   stressTest: "Stress test",
@@ -1210,6 +1211,28 @@ function ProfileTab({
                     ))}
                   </ul>
                 </BriefSection>
+
+                {(brief.partnerFit ?? []).length > 0 && (
+                  <BriefSection
+                    title="Alliance partner fit"
+                    count={brief.partnerFit?.length}
+                    testid="partner-fit"
+                  >
+                    <ul className="space-y-3">
+                      {(brief.partnerFit ?? []).map((p, i) => (
+                        <li key={i} className="text-sm text-text" data-testid={`row-partner-fit-${i}`}>
+                          <span className="font-semibold">{p.partnerName}</span>{" "}
+                          <MonoChip>{p.capabilityDomain}</MonoChip>
+                          <div className="text-text-mute text-xs mt-0.5">{p.rationale}</div>
+                          <SourceLinks urls={p.sourceUrls} testid={`link-pf-${i}`} />
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-text-faint text-xs italic mt-3">
+                      Advisory — engaging a partner remains a human decision.
+                    </p>
+                  </BriefSection>
+                )}
 
                 <BriefSection
                   title="Mandate angles"

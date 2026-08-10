@@ -51,6 +51,7 @@
     "test:contract-capabilities": "tsx ./tests/crm/contract-capability-probe.ts",
     "test:me-profile": "tsx ./tests/me-profile/run.ts",
     "test:brief-envelope": "tsx ./tests/crm/brief-envelope-contract-probe.ts",
+    "test:partner-fit": "tsx ./tests/crm/partner-fit-context-probe.ts",
     "test:esign-link": "tsx ./tests/crm/esign-account-link-probe.ts",
     "test:proposal-enrich": "tsx ./tests/crm/proposal-contact-enrich-probe.ts",
     "test:change-password": "tsx ./tests/change-password/run.ts",

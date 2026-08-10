@@ -235,6 +235,22 @@ export function BriefTab({ oppId, onOpenQualifier }: { oppId: string; onOpenQual
         </Card>
       )}
 
+      {(b.partnerFit ?? []).length > 0 && (
+        <Card className="p-6 space-y-3" data-testid="card-partner-fit">
+          <h3 className="text-xs uppercase tracking-widest font-mono text-text-faint">Alliance partner fit</h3>
+          <ul className="space-y-3">
+            {(b.partnerFit ?? []).map((p: { partnerName: string; capabilityDomain: string; rationale: string; sourceUrls: string[] }, i: number) => (
+              <li key={i} className="text-sm text-text" data-testid={`row-partner-fit-${i}`}>
+                <span className="font-semibold">{p.partnerName}</span>
+                <span className="ml-2 text-xs font-mono text-text-mute uppercase tracking-wider">{p.capabilityDomain}</span>
+                <div className="text-text-mute text-xs mt-0.5">{p.rationale}</div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-text-faint italic">Advisory — engaging a partner remains a human decision.</p>
+        </Card>
+      )}
+
       <Card className="p-6 space-y-3">
         <h3 className="text-xs uppercase tracking-widest font-mono text-text-faint">Open questions</h3>
         <ul className="text-sm text-text list-decimal list-inside space-y-1">

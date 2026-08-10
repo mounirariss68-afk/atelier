@@ -393,6 +393,13 @@ export interface AtelierResearchStressTest {
   revisedHypothesis: string;
 }
 
+export interface AtelierPartnerFitItem {
+  partnerName: string;
+  capabilityDomain: string;
+  rationale: string;
+  sourceUrls: string[];
+}
+
 export type AtelierResearchBriefServiceLineFitItem = {
   serviceLine: string;
   signal: string;
@@ -434,6 +441,7 @@ export interface AtelierResearchBrief {
   openQuestions: string[];
   singleMostImportant: string;
   stressTest?: AtelierResearchStressTest;
+  partnerFit?: AtelierPartnerFitItem[];
 }
 
 /**
@@ -5902,6 +5910,7 @@ export interface AtelierBrief {
   buyerLandscape: AtelierBriefBuyerLandscape;
   fiveCDraft: AtelierFiveC;
   openQuestions: string[];
+  partnerFit?: AtelierPartnerFitItem[];
   facts: AtelierFact[];
   confidence?: Confidence;
 }
@@ -5977,6 +5986,16 @@ export interface AtelierUpdatePovInput {
   objective?: string;
   outline?: AtelierPovOutlineSection[];
 }
+
+export interface AtelierRegeneratePovOutlineInput {
+  feedback?: string;
+}
+
+export interface AtelierRevisePovInput {
+  feedback: string;
+  baseVersionId?: string;
+}
+
 export type AtelierPovStatus =
   (typeof AtelierPovStatus)[keyof typeof AtelierPovStatus];
 
@@ -9402,12 +9421,3 @@ export type AtelierListPartnerFirmQuotedDeals200 = {
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;
 };
-
-export interface AtelierRegeneratePovOutlineInput {
-  feedback?: string;
-}
-
-export interface AtelierRevisePovInput {
-  feedback: string;
-  baseVersionId?: string;
-}

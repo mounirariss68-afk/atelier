@@ -520,6 +520,7 @@ export * from "./atelierPartnerFirmRiskRegisterItemEvidence";
 export * from "./atelierPartnerFirmRiskRegisterItemSeverity";
 export * from "./atelierPartnerFirmStatus";
 export * from "./atelierPartnerFirmTier";
+export * from "./atelierPartnerFitItem";
 export * from "./atelierPartnerFitScorecardAdjust";
 export * from "./atelierPartnerFitScorecardAdjustScores";
 export * from "./atelierPartnerPromoteResponse";

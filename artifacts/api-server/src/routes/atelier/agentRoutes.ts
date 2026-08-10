@@ -985,6 +985,8 @@ router.get("/opportunities/:oppId/brief", async (req, res) => {
       buyerLandscape: row.buyerLandscape,
       fiveCDraft: row.fiveCDraft,
       openQuestions: row.openQuestions,
+      // Task #872 — alliance-partner fit flags (historical snapshot).
+      partnerFit: row.partnerFit ?? [],
       facts,
       confidence: row.confidence,
     },
@@ -1051,6 +1053,8 @@ router.post("/opportunities/:oppId/scout", async (req, res) => {
             buyerLandscape: briefRow.buyerLandscape,
             fiveCDraft: briefRow.fiveCDraft,
             openQuestions: briefRow.openQuestions,
+            // Task #872 — alliance-partner fit flags (historical snapshot).
+            partnerFit: briefRow.partnerFit ?? [],
             facts: briefFacts,
             confidence: briefRow.confidence,
           }

@@ -1517,6 +1517,19 @@ export const atelierBriefs = pgTable(
     buyerLandscape: jsonb("buyer_landscape").notNull().default({}),
     fiveCDraft: jsonb("five_c_draft").notNull().default({}),
     openQuestions: jsonb("open_questions").notNull().default([]).$type<string[]>(),
+    // Task #872 — alliance-partner opportunity-fit flags. Snapshot at brief
+    // creation time: later partner archival never mutates persisted briefs.
+    partnerFit: jsonb("partner_fit")
+      .notNull()
+      .default([])
+      .$type<
+        Array<{
+          partnerName: string;
+          capabilityDomain: string;
+          rationale: string;
+          sourceUrls: string[];
+        }>
+      >(),
     citations: jsonb("citations").notNull().default([]),
     confidence: text("confidence"),
     status: text("status").notNull().default("draft"),

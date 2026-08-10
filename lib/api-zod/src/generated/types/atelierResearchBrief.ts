@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPartnerFitItem } from "./atelierPartnerFitItem";
 import type { AtelierResearchBriefBusinessUnitsItem } from "./atelierResearchBriefBusinessUnitsItem";
 import type { AtelierResearchBriefFact } from "./atelierResearchBriefFact";
 import type { AtelierResearchBriefMandateAnglesItem } from "./atelierResearchBriefMandateAnglesItem";
@@ -23,4 +24,5 @@ export interface AtelierResearchBrief {
   openQuestions: string[];
   singleMostImportant: string;
   stressTest?: AtelierResearchStressTest;
+  partnerFit?: AtelierPartnerFitItem[];
 }

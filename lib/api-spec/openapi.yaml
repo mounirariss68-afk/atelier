@@ -7005,6 +7005,11 @@ components:
         singleMostImportant: { type: string }
         stressTest:
           $ref: "#/components/schemas/AtelierResearchStressTest"
+        # Task #872 — alliance-partner opportunity-fit section (optional;
+        # absent on plans generated before this shipped).
+        partnerFit:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerFitItem" }
 
     AtelierResearchStressTest:
       type: object
@@ -10898,10 +10903,29 @@ components:
         openQuestions:
           type: array
           items: { type: string }
+        # Task #872 — alliance-partner opportunity-fit flags (historical
+        # snapshot; absent on briefs created before this shipped).
+        partnerFit:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerFitItem" }
         facts:
           type: array
           items: { $ref: "#/components/schemas/AtelierFact" }
         confidence: { $ref: "#/components/schemas/Confidence" }
+
+    # Task #872 — one advisory alliance-partner capability fit flagged by a
+    # research agent. Snapshot at generation time; later partner archival
+    # never mutates persisted plans/briefs.
+    AtelierPartnerFitItem:
+      type: object
+      required: [partnerName, capabilityDomain, rationale, sourceUrls]
+      properties:
+        partnerName: { type: string }
+        capabilityDomain: { type: string }
+        rationale: { type: string }
+        sourceUrls:
+          type: array
+          items: { type: string }
 
     AtelierBriefEnvelope:
       type: object
