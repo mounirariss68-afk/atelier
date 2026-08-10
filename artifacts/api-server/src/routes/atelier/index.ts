@@ -96,6 +96,7 @@ import contractLifecycleRoutes from "./contractLifecycleRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import partnersRoutes from "./partnersRoutes";
+import partnerPortalRoutes from "./partnerPortalRoutes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
@@ -186,6 +187,48 @@ router.use((req, res, next) => {
       error: "recruiter-scope",
       message:
         "Recruiter persona may only access /studio, /me, and /personas.",
+    });
+    return;
+  }
+  // Task #873 — alliance-partner portal logins. Their entire world is
+  // the partner portal: identity (/me), the grant-scoped /partner-portal
+  // reads, and chat (/cli — clamped server-side to the partnerportal.*
+  // capability set in the capability catalog). Everything else — CRM,
+  // roster, finance, documents, /partners alliance intel, /users
+  // enumeration — is forbidden here at the central gate.
+  if (me.role === "alliance_partner") {
+    const p = req.path;
+    if (p === "/me") return next();
+    // /personas answers with ONLY the caller's own persona for this role
+    // (see the self-only branch in the /personas handler below).
+    if (p === "/personas") return next();
+    if (p === "/partner-portal" || p.startsWith("/partner-portal/")) return next();
+    // /cli chat is allowed via an explicit sub-path allowlist (tool surface
+    // is clamped to partnerportal.* in getToolsForPersona). Everything else
+    // under /cli — attachments (internal-document side channel), admin
+    // metrics, help/suggestion indexes, turn recordings — stays 403.
+    if (p === "/cli" || p.startsWith("/cli/")) {
+      const cliAllowed =
+        p === "/cli/turn" ||
+        /^\/cli\/turn\/[^/]+\/(cancel|confirm)$/.test(p) ||
+        p === "/cli/sessions" ||
+        /^\/cli\/sessions\/[^/]+$/.test(p) ||
+        p === "/cli/events" ||
+        p === "/cli/capabilities" ||
+        p === "/cli/turns/pending-clarification" ||
+        p === "/cli/turns/recent" ||
+        /^\/cli\/turns\/[^/]+\/feedback$/.test(p);
+      if (cliAllowed) return next();
+      res.status(403).json({
+        error: "alliance-partner-scope",
+        message: "This chat feature is not available to alliance-partner logins.",
+      });
+      return;
+    }
+    res.status(403).json({
+      error: "alliance-partner-scope",
+      message:
+        "Alliance-partner logins may only access their assigned opportunities via the partner portal.",
     });
     return;
   }
@@ -381,6 +424,9 @@ router.use(v5Routes);
 // Task #513 — Partners lens CRUD (unified registry, co-sell, certs,
 // conflicts, e-sign/RCTI projections). Central Partners gate above applies.
 router.use(partnersRoutes);
+// Task #873 — alliance-partner portal: grant-scoped partner reads
+// (/partner-portal/*) + leadership grant/login admin surfaces.
+router.use(partnerPortalRoutes);
 router.use(financeEntitiesRoutes);
 // Task #383 — expense taxonomy, categorization suggestions, GL/VAT
 // mappings, bank signatory register, client-ready exports.
@@ -471,7 +517,9 @@ router.get("/personas", async (req, res) => {
   // Self-only personas (employee/contractor) never see the org directory:
   // they get exactly their own persona back — nothing to switch to. Everyone
   // else is org-scoped, so no cross-org identity exposure either.
-  if (me.role === "employee" || me.role === "contractor") {
+  // Task #873 — alliance partners are external: they must never see the
+  // org directory either.
+  if (me.role === "employee" || me.role === "contractor" || me.role === "alliance_partner") {
     res.json(AtelierListPersonasResponse.parse([personaToWire(me)]));
     return;
   }

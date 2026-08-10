@@ -949,6 +949,10 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
   // the legacy TOOL_REGISTRY fallthrough: their chat surface is exactly
   // the identity-locked me.* catalog entries already collected above.
   if (SELF_ONLY_CHAT_ROLES.has(persona.role)) return out;
+  // Task #873 — alliance partners (external firm logins) never receive the
+  // legacy TOOL_REGISTRY fallthrough either: their chat surface is exactly
+  // the grant-scoped partnerportal.* catalog entries collected above.
+  if (persona.role === "alliance_partner") return out;
   for (const t of Object.values(TOOL_REGISTRY)) {
     if (seenNames.has(t.name)) continue;
     if (t.isWrite && READ_ONLY_ROLES.has(persona.role)) continue;
@@ -974,6 +978,19 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
  * lookup inside runTurn so the model can never invoke a capability
  * its persona was not granted (defense-in-depth for the catalog).
  */
+// Meta post-processors the turn loop itself relies on (recap, undo,
+// clarification choices, feature requests). Restricted personas — self-only
+// employees/contractors AND external alliance partners — may dispatch these
+// even though they sit outside their clamped capability slice.
+const RESTRICTED_META_ALLOW = new Set([
+  "refine_last",
+  "recap",
+  "explain_last",
+  "undo_last",
+  "request_feature",
+  "present_choices",
+]);
+
 export function findToolByName(
   name: string,
   persona?: CliPersona,
@@ -981,6 +998,13 @@ export function findToolByName(
   if (persona) {
     const fromSurface = getToolsForPersona(persona).find((t) => t.name === name);
     if (fromSurface) return fromSurface;
+    // Task #873 — alliance partners (external logins) get NO fallback
+    // resolution: their dispatchable surface is exactly the clamped
+    // partnerportal.* set above, plus the meta post-processors (recap,
+    // clarification choices, …) that the turn loop itself invokes.
+    if (persona.role === "alliance_partner") {
+      if (!RESTRICTED_META_ALLOW.has(name)) return undefined;
+    }
     // Task #484 — fall through to the catalog when the persona-filtered
     // chat surface misses. `getToolsForPersona` strips legacy
     // chat-write tools (account_create, opportunity_create, …) so they
@@ -5109,16 +5133,14 @@ export async function runTurn(
       // findToolByName and run an org-wide capability their clamp is
       // supposed to hide. Meta post-processors stay allowed so recap /
       // undo / request_feature keep working for these personas.
-      const SELF_ONLY_META_ALLOW = new Set([
-        "refine_last",
-        "recap",
-        "explain_last",
-        "undo_last",
-        "request_feature",
-        "present_choices",
-      ]);
+      const SELF_ONLY_META_ALLOW = RESTRICTED_META_ALLOW;
+      // Task #873 — alliance partners share the same hard surface-membership
+      // gate: any tool call outside their clamped partnerportal.* set (plus
+      // meta post-processors) is refused BEFORE resolution, so a hallucinated
+      // tool name can never reach the catalog/legacy fallthrough.
+      const isAlliancePartnerChat = persona.role === "alliance_partner";
       if (
-        SELF_ONLY_CHAT_ROLES.has(persona.role) &&
+        (SELF_ONLY_CHAT_ROLES.has(persona.role) || isAlliancePartnerChat) &&
         !SELF_ONLY_META_ALLOW.has(tc.name) &&
         !getToolsForPersona(persona).some((t) => t.name === tc.name)
       ) {
@@ -5127,8 +5149,9 @@ export async function runTurn(
           type: "refusal",
           data: {
             step,
-            reason:
-              "That isn't something I can help with from your workspace — here I can only work with your own timesheets, expenses, leave, documents, payslips and profile.",
+            reason: isAlliancePartnerChat
+              ? "That isn't available in the partner portal — here I can only show the opportunities shared with your firm and their client overview."
+              : "That isn't something I can help with from your workspace — here I can only work with your own timesheets, expenses, leave, documents, payslips and profile.",
             closestCapabilityId: null,
             pageHref: fallbackHref,
             suggestion:

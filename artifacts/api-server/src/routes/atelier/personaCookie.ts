@@ -187,7 +187,9 @@ export function personaToWire(p: typeof atelierUsers.$inferSelect) {
       | "board_observer"
       | "recruiter"
       | "compliance_officer"
-      | "employee",
+      | "employee"
+      // Task #873 — external alliance-partner portal logins.
+      | "alliance_partner",
     roleLabel: p.roleLabel,
     title: p.title,
     initials: p.initials,

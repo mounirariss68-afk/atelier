@@ -38,7 +38,7 @@ import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { isSelfOnlyRole } from "@/lib/lens";
+import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 import { TwoFactorDialog } from "@/components/layout/TwoFactorDialog";
 
@@ -87,7 +87,8 @@ export function TopNav() {
   // and whenever the switcher is disabled.
   const personaSwitcherEnabled =
     import.meta.env.VITE_ATELIER_PERSONA_SWITCHER === "true";
-  const selfOnly = isSelfOnlyRole(me?.role);
+  // Task #873 — alliance-partner logins share the locked-down chrome.
+  const selfOnly = isSelfOnlyRole(me?.role) || isAlliancePartnerRole(me?.role);
   const { data: fetchedPersonas } = useAtelierListPersonas({
     query: {
       enabled: personaSwitcherEnabled && !!me && !selfOnly,
@@ -148,7 +149,12 @@ export function TopNav() {
   // (see comments in App.tsx on `/crm`, `/opportunities`, `/engagements`,
   // `/studio`, `/roster`, `/ledger`, `/wallet`, `/alliances`, `/agents`,
   // `/finance`, `/pricing`, `/atelier`, `/press`, `/guardhouse`).
-  const homeItem = { href: "/", label: "Home", badge: pendingApprovals } as
+  // Task #873 — alliance-partner logins live entirely in /partner; their
+  // "home" is the portal and the lens chrome is hidden below.
+  const alliancePartner = isAlliancePartnerRole(me?.role);
+  const homeItem = (alliancePartner
+    ? { href: "/partner", label: "Portal" }
+    : { href: "/", label: "Home", badge: pendingApprovals }) as
     { href: string; label: string; badge?: number };
   const isHomeActive = location === "/";
   const isFirmAdmin = me?.role === "founding_partner" || me?.role === "hr";
@@ -201,11 +207,15 @@ export function TopNav() {
               default sections; each lens task replaces these with its own
               lifecycle-shaped tabs. Always visible (including on Home) so
               the menu doesn't appear empty on first load. */}
-          <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
+          {!alliancePartner && (
+            <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
-          <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          {!alliancePartner && (
+            <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          )}
           <ThemeToggle />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
@@ -562,7 +572,7 @@ export function RightRail() {
   // AND the role is allowed, and hide the Activity/Reports rail tabs so
   // they aren't dead ends.
   const { data: railMe } = useAtelierGetMe();
-  const selfOnly = isSelfOnlyRole(railMe?.role);
+  const selfOnly = isSelfOnlyRole(railMe?.role) || isAlliancePartnerRole(railMe?.role);
   const canSeeOrgRail = !!railMe && !selfOnly;
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },

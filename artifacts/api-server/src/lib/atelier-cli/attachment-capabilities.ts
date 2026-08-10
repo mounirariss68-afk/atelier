@@ -1039,6 +1039,17 @@ defineCapability({
   outboundChannel: null,
   resultCard: "document_search",
   async run(input, ctx) {
+    // Task #873 — external alliance-partner logins must NEVER retrieve
+    // internal RAG content. The catalog gate already strips this entry
+    // from their surface; this is defence-in-depth against direct
+    // dispatch or a future catalog change.
+    if (ctx.persona.role === "alliance_partner") {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: "Document search is not available on the partner portal.",
+      };
+    }
     const query = String(input.query ?? "").slice(0, 1000);
     if (!query.trim()) {
       return { ok: false, errorCode: "bad_input", errorMessage: "query is required" };

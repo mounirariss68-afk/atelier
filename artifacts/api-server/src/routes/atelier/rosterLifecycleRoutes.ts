@@ -1212,6 +1212,13 @@ interface ProvisionLoginArgs {
   msServiceProfile?: "employee" | "contractor" | null;
   /** Origin header of the calling request (for the activation link). */
   origin?: string | null;
+  /**
+   * Task #873 — when set, the login is an EXTERNAL alliance-partner
+   * portal account: role becomes `alliance_partner`, the user row is
+   * linked to this partner firm, no M365 provisioning, and no welcome
+   * notification (partners never see the Me lens).
+   */
+  alliancePartnerFirmId?: string | null;
 }
 
 type ProvisionLoginResult =
@@ -1228,13 +1235,34 @@ type ProvisionLoginResult =
       };
     };
 
-async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<ProvisionLoginResult> {
+export async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<ProvisionLoginResult> {
   const { me, person, onboarding } = args;
   const email = (person.email ?? "").trim().toLowerCase();
   if (!email.includes("@")) {
     return { ok: false, status: 422, body: { error: "person-has-no-email" } };
   }
-  const existingUserId = await resolveLinkedUserIdForPerson(person);
+  // Task #873 security hardening — external alliance-partner logins must
+  // NEVER reuse an existing user identity. resolveLinkedUserIdForPerson
+  // matches by email without an org predicate, so reusing the row could
+  // attach an activation link (and thus credentials) to an internal or
+  // cross-org persona with its original privileges. Partner logins are
+  // always freshly minted rows; any email collision is a hard 409.
+  if (args.alliancePartnerFirmId) {
+    const [collision] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.email, email));
+    if (collision) {
+      return {
+        ok: false,
+        status: 409,
+        body: { error: "email-taken", message: "A user already exists with that email." },
+      };
+    }
+  }
+  const existingUserId = args.alliancePartnerFirmId
+    ? null
+    : await resolveLinkedUserIdForPerson(person);
   if (existingUserId) {
     const [cred] = await db
       .select({ email: atelierAuthCredentials.email })
@@ -1263,14 +1291,17 @@ async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Provision
       .map((p) => p[0]!.toUpperCase())
       .slice(0, 2)
       .join("") || "??";
-  const role =
-    person.workerType === "employee"
+  const isAlliancePartnerLogin = !!args.alliancePartnerFirmId;
+  const role = isAlliancePartnerLogin
+    ? "alliance_partner"
+    : person.workerType === "employee"
       ? "employee"
       : person.workerType === "contractor"
         ? "contractor"
         : "partner_firm_resource";
-  const roleLabel =
-    person.workerType === "employee"
+  const roleLabel = isAlliancePartnerLogin
+    ? "Alliance Partner"
+    : person.workerType === "employee"
       ? "Employee"
       : person.workerType === "contractor"
         ? "Contractor"
@@ -1284,6 +1315,7 @@ async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Provision
   const activationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
   const userId = existingUserId ?? rid("p_joiner");
 
+  try {
   await db.transaction(async (tx) => {
     if (!existingUserId) {
       await tx.insert(atelierUsers).values({
@@ -1297,8 +1329,10 @@ async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Provision
         role,
         roleLabel,
         title: roleLabel,
+        // Task #873 — link external alliance-partner logins to their firm.
+        partnerFirmId: args.alliancePartnerFirmId ?? null,
       });
-      if (person.workerType === "employee") {
+      if (!isAlliancePartnerLogin && person.workerType === "employee") {
         await tx
           .update(atelierEmployees)
           .set({ userId, updatedAt: new Date() })
@@ -1359,6 +1393,7 @@ async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Provision
       payload: { personId: person.id, userId, email, workerType: person.workerType },
       payloadSummary: `${me.name} created the portal login for ${person.fullName} (${email}).`,
     });
+    if (isAlliancePartnerLogin) return; // no Me-lens welcome for externals
     await emitSelfNotification(
       {
         orgId: me.orgId,
@@ -1371,6 +1406,24 @@ async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Provision
       tx,
     );
   });
+  } catch (err) {
+    // Task #873 — concurrent provisioning for the same email races past the
+    // application-level pre-check; the atelier_auth_credentials.email
+    // primary key serializes the winners and the loser's transaction rolls
+    // back atomically (no orphan user row). Surface it as the same 409 the
+    // pre-check would have produced, not a 500.
+    const pgCode =
+      (err as { code?: string })?.code ??
+      ((err as { cause?: { code?: string } })?.cause?.code);
+    if (pgCode === "23505") {
+      return {
+        ok: false,
+        status: 409,
+        body: { error: "email-taken", message: "A login already exists for that email." },
+      };
+    }
+    throw err;
+  }
 
   // Task #628 — Microsoft 365 provisioning rides on login creation but
   // never blocks it: the run fires in the background after commit, and

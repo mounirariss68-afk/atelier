@@ -211,6 +211,16 @@ export function isSelfOnlyRole(role: string | null | undefined): boolean {
   return role === "employee" || role === "contractor";
 }
 
+/**
+ * Task #873 — external alliance-partner portal logins. Their world is
+ * ONLY /partner (assigned opportunities + redacted client overview) and
+ * /cli. No lenses, no Me lens, no org rail — the server forbids every
+ * other route at the central gate.
+ */
+export function isAlliancePartnerRole(role: string | null | undefined): boolean {
+  return role === "alliance_partner";
+}
+
 /** Task #274 — the Contracts lens is partner-tier only. */
 export function canSeeContractsLens(role: string | null | undefined): boolean {
   return role === "founding_partner" || role === "partner";

@@ -487,6 +487,11 @@ function IdentifyView() {
   const archive = useAtelierArchivePartnerFirm();
   const [evalOpenId, setEvalOpenId] = React.useState<string | null>(null);
   const [quotesOpenId, setQuotesOpenId] = React.useState<string | null>(null);
+  // Task #873 — partner-portal login management (leadership only).
+  const [loginsOpenId, setLoginsOpenId] = React.useState<string | null>(null);
+  const { data: meForPortal } = useAtelierGetMe();
+  const canManagePortal =
+    meForPortal?.role === "founding_partner" || meForPortal?.role === "partner";
   // Task #723 — list/card toggle, persisted per page.
   const [viewMode, setViewMode] = useViewMode("partners-directory");
 
@@ -662,6 +667,15 @@ function IdentifyView() {
                       <ChevronRight className={`w-3 h-3 transition-transform ${quotesOpenId === f.id ? "rotate-90" : ""}`} />
                       quotes
                     </RecordCardAction>
+                    {canManagePortal && (
+                      <RecordCardAction
+                        onClick={() => setLoginsOpenId(loginsOpenId === f.id ? null : f.id)}
+                        data-testid={`button-portal-logins-${f.id}`}
+                      >
+                        <ChevronRight className={`w-3 h-3 transition-transform ${loginsOpenId === f.id ? "rotate-90" : ""}`} />
+                        portal
+                      </RecordCardAction>
+                    )}
                     {canEdit && (
                       <RecordCardAction
                         danger
@@ -716,6 +730,11 @@ function IdentifyView() {
                     <QuotedDealsPanel firmId={f.id} />
                   </div>
                 )}
+                {loginsOpenId === f.id && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <PortalLoginsPanel firmId={f.id} />
+                  </div>
+                )}
               </RecordCard>
             ),
           )}
@@ -724,6 +743,139 @@ function IdentifyView() {
       </section>
 
       <TargetsSection firms={firms} />
+    </div>
+  );
+}
+
+// ---- Partner portal logins (Task #873) --------------------------------------
+// Leadership-only management of a firm's external Atelier logins
+// (role = alliance_partner, locked to /partner-portal + chat). Raw fetch:
+// these bespoke routes are not in the OpenAPI spec.
+function PortalLoginsPanel({ firmId }: { firmId: string }) {
+  type LoginRow = {
+    id: string;
+    name: string;
+    email: string;
+    active: boolean;
+    createdAt: string;
+  };
+  const [rows, setRows] = React.useState<LoginRow[] | null>(null);
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [activationUrl, setActivationUrl] = React.useState<string | null>(null);
+
+  const load = React.useCallback(() => {
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: { logins: LoginRow[] }) => setRows(j.logins))
+      .catch(() => setMsg("Couldn't load portal logins."));
+  }, [firmId]);
+  React.useEffect(() => load(), [load]);
+
+  const provision = () => {
+    setBusy(true);
+    setMsg(null);
+    setActivationUrl(null);
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : "Provisioning failed.");
+        setName("");
+        setEmail("");
+        if (typeof j.activationUrl === "string") setActivationUrl(j.activationUrl);
+        setMsg("Login created. Share the activation link with the partner.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const deactivate = (userId: string) => {
+    setBusy(true);
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins/${userId}/deactivate`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Deactivation failed.");
+        setMsg("Login deactivated; their sessions were revoked.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="mt-3 border-t border-border-soft pt-3 space-y-2" data-testid={`panel-portal-logins-${firmId}`}>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Partner portal logins
+      </div>
+      <p className="text-xs text-text-mute">
+        External logins see ONLY the opportunities granted to this firm plus a
+        redacted client overview — nothing else.
+      </p>
+      {rows == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-text-mute">No portal logins yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {rows.map((u) => (
+            <div key={u.id} className="flex items-center gap-2 text-xs" data-testid={`row-portal-login-${u.id}`}>
+              <span className="text-text font-medium">{u.name}</span>
+              <span className="text-text-faint">{u.email}</span>
+              <MonoChip tone={u.active ? "green" : "default"}>{u.active ? "active" : "deactivated"}</MonoChip>
+              {u.active && (
+                <button
+                  type="button"
+                  className="text-danger hover:underline"
+                  disabled={busy}
+                  onClick={() => deactivate(u.id)}
+                  data-testid={`button-deactivate-login-${u.id}`}
+                >
+                  deactivate
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-testid={`input-portal-login-name-${firmId}`}
+        />
+        <input
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          data-testid={`input-portal-login-email-${firmId}`}
+        />
+        <button
+          type="button"
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+          disabled={busy || !name.trim() || !email.includes("@")}
+          onClick={provision}
+          data-testid={`button-provision-login-${firmId}`}
+        >
+          create login
+        </button>
+      </div>
+      {activationUrl && (
+        <p className="text-xs text-text-mute break-all">Activation link: {activationUrl}</p>
+      )}
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
     </div>
   );
 }

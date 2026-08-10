@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useAtelierGetMe } from "@workspace/api-client-react";
-import { isSelfOnlyRole } from "@/lib/lens";
+import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
 import {
   QueryClient,
   QueryClientProvider,
@@ -18,6 +18,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
+import { PartnerPortalHome, PartnerPortalOpportunity } from "@/pages/PartnerPortal";
 import Activate from "@/pages/Activate";
 import ResetPassword from "@/pages/ResetPassword";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
@@ -294,16 +295,27 @@ function SelfOnlyRouteGuard({ children }: { children: React.ReactNode }) {
   const { data: me } = useAtelierGetMe();
   const [location, setLocation] = useLocation();
   const selfOnly = isSelfOnlyRole(me?.role);
+  // Task #873 — alliance-partner logins are even narrower: ONLY the
+  // partner portal (/partner*) and chat. No Me lens either.
+  const alliancePartner = isAlliancePartnerRole(me?.role);
   const allowed =
     location === "/sign-in" ||
     location === "/me" ||
     location.startsWith("/me/") ||
     location === "/cli" ||
     location.startsWith("/cli/");
-  const blocked = selfOnly && !allowed;
+  const partnerAllowed =
+    location === "/sign-in" ||
+    location === "/partner" ||
+    location.startsWith("/partner/") ||
+    location === "/cli" ||
+    location.startsWith("/cli/");
+  const blocked =
+    (alliancePartner && !partnerAllowed) ||
+    (!alliancePartner && selfOnly && !allowed);
   React.useEffect(() => {
-    if (blocked) setLocation("/me", { replace: true });
-  }, [blocked, setLocation]);
+    if (blocked) setLocation(alliancePartner ? "/partner" : "/me", { replace: true });
+  }, [blocked, alliancePartner, setLocation]);
   if (blocked) return null;
   // Task #444 — while /me is still loading we can't tell whether the user is
   // self-only. Hold off mounting org routes so their queries (accounts,
@@ -319,6 +331,10 @@ function Router() {
       <Switch>
         <Route path="/sign-in" component={SignIn} />
         <Route path="/cli" component={Cli} />
+        {/* Task #873 — alliance-partner portal (the ONLY pages that
+            role can reach; SelfOnlyRouteGuard steers them here). */}
+        <Route path="/partner" component={PartnerPortalHome} />
+        <Route path="/partner/opportunities/:oppId" component={PartnerPortalOpportunity} />
         <Route path="/" component={Home} />
         {/* Task #369 — commercial-loop redirects. The lens lives at
             /clients/*; old top-level URLs keep resolving so deep-links

@@ -273,6 +273,10 @@ export default function Opportunity() {
 
         <OpportunityPartnerInvolvement oppId={opp.id} role={me?.role} />
 
+        {(me?.role === "founding_partner" || me?.role === "partner") && (
+          <OpportunityPartnerPortalAccess oppId={opp.id} />
+        )}
+
         <TabNav>
           {TABS.map((tab) => (
             <TabNavItem
@@ -402,6 +406,146 @@ const PARTNERS_READER_ROLES = new Set([
   "hr",
   "compliance_officer",
 ]);
+
+// ---- Partner portal access (Task #873) --------------------------------------
+// Leadership-only: grant/revoke a partner firm's portal visibility of THIS
+// opportunity. A grant is exactly what makes the opportunity (plus a
+// redacted client overview) appear for that firm's external logins.
+// Raw fetch — bespoke routes, not in the OpenAPI spec.
+function OpportunityPartnerPortalAccess({ oppId }: { oppId: string }) {
+  const API = `${import.meta.env.BASE_URL}api/atelier`;
+  type GrantRow = {
+    id: string;
+    partnerFirmId: string;
+    firmName: string;
+    firmArchived: boolean;
+    createdAt: string;
+    revokedAt: string | null;
+  };
+  const [grants, setGrants] = React.useState<GrantRow[] | null>(null);
+  const [firms, setFirms] = React.useState<Array<{ id: string; name: string }> | null>(null);
+  const [firmId, setFirmId] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+
+  const load = React.useCallback(() => {
+    void fetch(`${API}/opportunities/${oppId}/partner-grants`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: { grants: GrantRow[] }) => setGrants(j.grants))
+      .catch(() => setMsg("Couldn't load partner access."));
+  }, [API, oppId]);
+  React.useEffect(() => load(), [load]);
+  React.useEffect(() => {
+    void fetch(`${API}/partners/firms`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: { items?: Array<{ id: string; name: string }> }) =>
+        setFirms((j.items ?? []).map((f) => ({ id: f.id, name: f.name }))),
+      )
+      .catch(() => setFirms([]));
+  }, [API]);
+
+  const active = (grants ?? []).filter((g) => !g.revokedAt);
+
+  const assign = () => {
+    if (!firmId) return;
+    setBusy(true);
+    setMsg(null);
+    void fetch(`${API}/opportunities/${oppId}/partner-grants`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ partnerFirmId: firmId }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Assigning failed.");
+        setFirmId("");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const revoke = (grantId: string) => {
+    setBusy(true);
+    setMsg(null);
+    void fetch(`${API}/opportunities/${oppId}/partner-grants/${grantId}/revoke`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Revoking failed.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div
+      className="rounded-md border border-border-soft bg-bg-elevate/60 p-4 space-y-3"
+      data-testid="panel-partner-portal-access"
+    >
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Partner portal access
+      </div>
+      <p className="text-xs text-text-mute">
+        Granted firms' external logins see this opportunity (and a redacted
+        client overview) in the partner portal. Revoking removes visibility
+        immediately.
+      </p>
+      {grants == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : active.length === 0 ? (
+        <p className="text-xs text-text-mute">No partner firm has portal access.</p>
+      ) : (
+        <ul className="space-y-1">
+          {active.map((g) => (
+            <li key={g.id} className="flex items-center gap-2 text-sm" data-testid={`row-partner-grant-${g.id}`}>
+              <span className="font-medium text-text">{g.firmName}</span>
+              {g.firmArchived && <span className="text-xs text-warning">firm archived</span>}
+              <button
+                type="button"
+                className="text-xs text-danger hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => revoke(g.id)}
+                data-testid={`button-revoke-grant-${g.id}`}
+              >
+                revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          value={firmId}
+          onChange={(e) => setFirmId(e.target.value)}
+          data-testid="select-partner-grant-firm"
+        >
+          <option value="">Select partner firm…</option>
+          {(firms ?? [])
+            .filter((f) => !active.some((g) => g.partnerFirmId === f.id))
+            .map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+        </select>
+        <button
+          type="button"
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+          disabled={busy || !firmId}
+          onClick={assign}
+          data-testid="button-assign-partner-grant"
+        >
+          grant access
+        </button>
+      </div>
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
+    </div>
+  );
+}
 
 const LEAD_PARTY_LABEL: Record<string, string> = {
   cognirise: "Cognirise-led",

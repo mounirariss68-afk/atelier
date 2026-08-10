@@ -36,6 +36,13 @@ export const ATELIER_PERSONA_ROLES = [
   // sees ONLY the Me lens (/me self-scope routes + /personas). No org-wide
   // data, no client work surfaces.
   "employee",
+  // Task #873 — external alliance-partner portal login. Linked to a firm
+  // via atelier_users.partner_firm_id; sees ONLY the opportunities their
+  // firm holds an unrevoked grant on (atelier_partner_opp_grants) plus a
+  // redacted overview of the owning account. Everything else — CRM,
+  // roster, finance, documents, partners lens — is denied at the central
+  // gate; chat is clamped to the partnerportal.* capability set.
+  "alliance_partner",
 ] as const;
 
 export type AtelierRole = (typeof ATELIER_PERSONA_ROLES)[number];
@@ -97,7 +104,16 @@ const PEOPLE_EDITORS = SET("founding_partner", "hr");
 // access reviews, backups, DSARs). They get no comp / personnel /
 // approval / breakglass capabilities elsewhere in this file, so the
 // firm-wide read is bounded to non-sensitive audit surfaces.
-const RESTRICTED = SET("contractor", "partner_firm_resource", "recruiter");
+// Task #873 — `alliance_partner` is restricted too: they hold no
+// engagement grants, so the RLS middleware resolves the deny-all
+// sentinel and every engagement-scoped table denies access. Their only
+// data path is the explicit opportunity-grant join in partnerPortalRoutes.
+const RESTRICTED = SET(
+  "contractor",
+  "partner_firm_resource",
+  "recruiter",
+  "alliance_partner",
+);
 
 // Reference-data / firm-config admin (Task #292 re-gate).
 const REFERENCE_DATA_ADMIN = SET("founding_partner", "hr");
@@ -113,6 +129,9 @@ export const isContractor = (r: RoleLike): boolean => r === "contractor";
 export const isPartnerFirmResource = (r: RoleLike): boolean =>
   r === "partner_firm_resource";
 export const isBoardObserver = (r: RoleLike): boolean => r === "board_observer";
+/** Task #873 — external alliance-partner portal login (firm-linked). */
+export const isAlliancePartner = (r: RoleLike): boolean =>
+  r === "alliance_partner";
 
 /** Lead-tier approval (timesheet stage 1, expense lead-approve, etc.). */
 export const canApproveAsLead = (r: RoleLike): boolean =>

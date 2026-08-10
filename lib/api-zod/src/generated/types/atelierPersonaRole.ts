@@ -22,4 +22,5 @@ export const AtelierPersonaRole = {
   recruiter: "recruiter",
   compliance_officer: "compliance_officer",
   employee: "employee",
+  alliance_partner: "alliance_partner",
 } as const;

@@ -49,6 +49,18 @@ const upload = multer({
 
 const router: IRouter = Router();
 
+// Task #873 — defense-in-depth: external alliance-partner logins never
+// reach any attachment surface (upload OR read). The central gate already
+// 403s /cli/attachments* for the role; this guard keeps the invariant even
+// if the router is ever remounted elsewhere.
+router.use((req, res, next) => {
+  if (req.path.startsWith("/cli/attachments") && req.atelierPersona?.role === "alliance_partner") {
+    res.status(403).json({ error: "forbidden", message: "Not available to partner logins." });
+    return;
+  }
+  next();
+});
+
 /**
  * Wraps `upload.array(...)` so multer's own `LIMIT_FILE_SIZE` /
  * `LIMIT_FILE_COUNT` errors return a structured 413 JSON response

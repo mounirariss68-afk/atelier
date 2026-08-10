@@ -8376,7 +8376,7 @@ components:
       # employee (Task #50) — self-service persona created by the HR
       # add-joiner flow; sees only the Me lens. recruiter/compliance_officer
       # are the v5 Scale & Trust personas (already in personaRoles.ts).
-      enum: [founding_partner, partner, finance, hr, senior_manager, consultant, contractor, partner_firm_resource, board_observer, recruiter, compliance_officer, employee]
+      enum: [founding_partner, partner, finance, hr, senior_manager, consultant, contractor, partner_firm_resource, board_observer, recruiter, compliance_officer, employee, alliance_partner]
 
     AtelierPersona:
       type: object

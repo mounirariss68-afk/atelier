@@ -561,6 +561,14 @@ export function scrubKnownToolNames(text: string | null | undefined): string | n
 
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
+  // Task #873 — external alliance-partner logins get EXACTLY the
+  // partnerportal.* read capabilities (their granted opportunities +
+  // redacted account overview). No me.* tools (they have no roster
+  // identity), no entity.detail widening, no attachment/RAG retrieval,
+  // no roster / finance / CRM tools — ever.
+  if (role === "alliance_partner") {
+    return REGISTRY.filter((e) => e.id.startsWith("partnerportal.") && !e.isWrite);
+  }
   if (SELF_ONLY_CHAT_ROLES.has(role)) {
     // Task #583 — self-only personas now get the identity-locked me.*
     // WRITE capabilities too (leave request, expense create, timesheet

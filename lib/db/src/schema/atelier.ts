@@ -108,6 +108,11 @@ export const atelierUsers = pgTable(
     // source of truth; this only affects display conversion.
     displayCurrency: text("display_currency").notNull().default("USD"),
     permissions: jsonb("permissions").notNull().$type<string[]>().default([]),
+    // Task #873 — alliance-partner portal logins. Set ONLY for
+    // role="alliance_partner" users: links the login to its firm in
+    // atelier_partner_firms. Every partner-portal read resolves the
+    // caller's firm through this column; NULL for every internal role.
+    partnerFirmId: text("partner_firm_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -116,6 +121,35 @@ export const atelierUsers = pgTable(
   (t) => [
     index("idx_atelier_users_org").on(t.orgId),
     index("idx_atelier_users_role").on(t.role),
+  ],
+);
+
+// ============================================================
+// PARTNER-PORTAL OPPORTUNITY GRANTS (Task #873)
+// ============================================================
+// Explicit firm ↔ opportunity visibility grants for the alliance-partner
+// portal. A partner login (atelier_users.role = "alliance_partner",
+// partner_firm_id set) may see an opportunity IFF an unrevoked grant row
+// links their firm to it AND the firm itself is not archived AND the
+// opportunity is not deleted. Revocation is soft (revoked_at) so the
+// assignment history is retained internally while visibility drops
+// immediately. Assign/revoke are leadership-only and audited.
+export const atelierPartnerOppGrants = pgTable(
+  "atelier_partner_opp_grants",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+  },
+  (t) => [
+    index("idx_atelier_partner_opp_grants_org").on(t.orgId),
+    index("idx_atelier_partner_opp_grants_firm").on(t.partnerFirmId),
+    index("idx_atelier_partner_opp_grants_opp").on(t.opportunityId),
   ],
 );
 

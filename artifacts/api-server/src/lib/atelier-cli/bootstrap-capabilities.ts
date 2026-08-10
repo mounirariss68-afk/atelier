@@ -110,6 +110,9 @@ import "./travel-preferences-db.js";
 // one generic `entity.detail` tool) + AR rollups (statement of account,
 // pending invoices by fuzzy project/account).
 import "./entity-detail-capabilities.js";
+// Task #873 — alliance-partner portal reads (the ONLY surface the
+// external `alliance_partner` role ever sees; catalog gate enforces).
+import "./partner-portal-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

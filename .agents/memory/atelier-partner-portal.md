@@ -1,0 +1,15 @@
+---
+name: Alliance partner portal invariants
+description: Security model for external alliance_partner logins (grant-scoped opportunity visibility, clamps, provisioning).
+---
+
+# Alliance partner portal (external logins)
+
+- Role `alliance_partner` is external: user row carries `partnerFirmId`; visibility comes ONLY from active rows in `atelier_partner_opp_grants` (soft revoke via revokedAt; archived firm = immediate 403). No table RLS — isolation is explicit orgId predicates + the central gate (security-log precedent).
+- Central gate allows only /me, /personas (self-only), /partner-portal*, /cli* — and inside /cli, `/cli/attachments*` is explicitly 403'd BEFORE the /cli allowance (attachment digests are an internal-document side channel). The attachment router has a path-scoped defense-in-depth guard too.
+- **Chat clamp needs BOTH layers**: `capabilitiesForPersona` slice AND an early return in `getToolsForPersona` — otherwise the legacy TOOL_REGISTRY fallthrough (appended for every non-self-only role) leaks org-wide read tools like resolve_account_by_name. Any future restricted role must be added to both.
+- Redacted account overview is an explicit field allowlist (name, brandName, sector, country, hqCity, size, employeeCount); probes assert keys === allowlist exactly.
+- Provisioning: alliance flow must NEVER reuse an existing user identity (resolveLinkedUserIdForPerson matches email without org predicate → cross-org/privileged takeover). Blanket 409 on any existing users email + always mint fresh row. Concurrent same-email race is serialized by the `atelier_auth_credentials.email` PRIMARY KEY inside the one transaction; map SQLSTATE 23505 (check err.code AND err.cause.code — drizzle wraps pg errors) to 409. No unique index on atelier_users.email (historical internal reuse is intentional).
+- Partner-portal routes are raw-fetch, not in openapi (account-agent precedent). But /me and /personas responses ARE zod-validated against the api-spec role enum — any NEW role must be added to the openapi role enum + codegen rerun or /me 500s for that role.
+- Chat clamp is FOUR layers, all required: (1) capabilitiesForPersona slice, (2) getToolsForPersona early return (no legacy registry append), (3) findToolByName returns undefined outside the surface + meta allowlist (otherwise the catalog fallthrough runs hallucinated tools), (4) dispatch-time surface-membership refusal in the turn loop (shared RESTRICTED_META_ALLOW with self-only roles).
+- The alliance /cli gate is a sub-path allowlist (turn/confirm/cancel, sessions, events, capabilities, pending-clarification, recent, feedback); help/admin/recordings/attachments stay 403.
