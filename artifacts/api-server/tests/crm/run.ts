@@ -1813,7 +1813,7 @@ async function main(): Promise<void> {
         check("opportunity_create phase1 \u2192 confirmation envelope (missing account)", p1ok);
 
         const capOppName = uniq("CapOpp");
-        const phase2 = await oppCap.run({ name: capOppName, accountId: ACC, dealSizeUsd: 333000, runScout: false, confirm: true }, ctx);
+        const phase2 = await oppCap.run({ name: capOppName, accountId: ACC, description: "CRM harness parity probe", dealSizeUsd: 333000, runScout: false, confirm: true }, ctx);
         const id = (phase2.data as any)?.id as string | undefined;
         check("opportunity_create phase2 (confirm) \u2192 ok + id", phase2.ok === true && !!id, JSON.stringify(phase2).slice(0, 160));
         if (id) {
@@ -1947,7 +1947,7 @@ async function main(): Promise<void> {
       if (oppCap) {
         // Role gate: consultant is now denied (REST parity).
         const oppDenied = await oppCap.run(
-          { name: uniq("CapOppDenied"), accountId: ACC, confirm: true },
+          { name: uniq("CapOppDenied"), accountId: ACC, description: "CRM harness parity probe", confirm: true },
           makeCtx(PERSONA.consultant, "consultant", "Omar Najjar"),
         );
         check(
@@ -1960,7 +1960,7 @@ async function main(): Promise<void> {
         // and surfaced as scout.status "skipped".
         const parName = uniq("CapOppParity");
         const par = await oppCap.run(
-          { name: parName, accountId: ACC, runScout: false, confirm: true },
+          { name: parName, accountId: ACC, description: "CRM harness parity probe", runScout: false, confirm: true },
           ctx,
         );
         const parId = (par.data as any)?.id as string | undefined;

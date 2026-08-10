@@ -583,6 +583,10 @@ defineCapability({
     }
     const name = String(input.name ?? "").trim();
     if (!name) return denyInvalid("name required");
+    // Task #867 — chat/web parity: the description is the brief Scout reads
+    // first and is persisted as the offering anchor, exactly like the REST
+    // create route. It is required at the proposal step and at commit.
+    const description = String(input.description ?? "").trim();
     let accountId = String(input.accountId ?? "");
     if (!accountId && input.accountQuery) {
       const r = await resolveAccount(String(input.accountQuery), ctx.persona);
@@ -613,6 +617,7 @@ defineCapability({
     if (input.confirm !== true) {
       const missing: string[] = [];
       if (!accountId) missing.push("account");
+      if (!description) missing.push("description");
       const dups = await findDups();
       const exactDup = dups.find((d) => d.exact);
       // Confirming a card that visibly carries the duplicate warning IS the
@@ -627,7 +632,7 @@ defineCapability({
       return {
         ok: true,
         data: {
-          preview: { name, accountId },
+          preview: { name, accountId, description },
           missingFields: missing,
           ...(dups.length > 0 ? { duplicateWarning: { exact: exactDup ?? null, similar: dups } } : {}),
         },
@@ -649,6 +654,10 @@ defineCapability({
       };
     }
     if (!accountId) return denyInvalid("accountId required to commit");
+    if (!description)
+      return denyInvalid(
+        "description required to commit — describe what we're pursuing (Pursuit Scout reads this first).",
+      );
     if (input.allowDuplicate !== true) {
       const dups = await findDups();
       const exactDup = dups.find((d) => d.exact);
@@ -665,7 +674,14 @@ defineCapability({
       }
     }
     const id = rid("opp");
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+    // Task #867 — punctuation/non-Latin-only names must never yield an empty
+    // slug (parity with the REST route's slugify guard).
+    const slug =
+      name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) ||
+      `x${Math.random().toString(36).slice(2, 8)}`;
+    // Task #867 — parity with the REST create route: same probability default,
+    // same deal-size default, same stage derivation, same milestone default.
+    const probabilityPct = Number(input.probabilityPct ?? 25);
     const [row] = await db
       .insert(atelierOpportunities)
       .values({
@@ -674,17 +690,21 @@ defineCapability({
         slug,
         name,
         accountId,
+        // Persist the description as the offering anchor, exactly like the
+        // REST create route (Task #867 chat/web parity).
+        offeringAnchor: description,
         // Task #654 — sales_stage is the single source of truth for
-        // opportunities; plm_stage has been retired.
-        salesStage: "suspect",
+        // opportunities; plm_stage has been retired. Task #867 — derive it
+        // from probability like the REST route instead of hardcoding.
+        salesStage: deriveSalesStage("identify", probabilityPct),
         partnerOwnerId: (input.partnerOwnerId as string | undefined) ?? ctx.persona.id,
         engagementLeadId: (input.engagementLeadId as string | undefined) ?? ctx.persona.id,
-        dealSizeHypothesis: Number(input.dealSizeUsd ?? 0),
+        dealSizeHypothesis: Number(input.dealSizeUsd ?? 250000),
         // Task #8 — default probability aligned with the REST create route
         // (25%), so chat- and UI-created opportunities land in the same
         // forecast band.
-        probabilityPct: Number(input.probabilityPct ?? 25),
-        nextMilestone: String(input.nextMilestone ?? "Initial qualification"),
+        probabilityPct,
+        nextMilestone: String(input.nextMilestone ?? "Run Pursuit Scout · qualify 5C"),
         sourceLead: String(input.sourceLead ?? "cli"),
         createdByUserId: ctx.persona.id,
       })
@@ -712,7 +732,7 @@ defineCapability({
               accountCountry: acct?.country ?? "",
               accountSector: acct?.sector ?? "",
               opportunityName: row.name,
-              contextBlurb: String(input.description ?? "").trim(),
+              contextBlurb: description,
               triggeredByUserId: ctx.persona.id,
               actorLabel: "Pursuit Scout",
             });

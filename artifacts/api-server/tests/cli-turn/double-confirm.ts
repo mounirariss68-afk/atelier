@@ -88,6 +88,7 @@ async function main(): Promise<void> {
     const pendingInput = {
       name: OPP_NAME,
       accountId: ACCT_ID,
+      description: "Double-confirm race probe opportunity",
       runScout: false,
       confirm: true,
     };

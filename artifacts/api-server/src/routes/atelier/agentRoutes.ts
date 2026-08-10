@@ -102,11 +102,14 @@ function rid(prefix: string): string {
 }
 
 function slugify(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+  // Task #867 — names made entirely of punctuation/non-Latin characters must
+  // never produce an empty slug (empty slugs break URLs and id readability).
+  return slug || `x${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferSelect | null {
@@ -244,7 +247,21 @@ router.post("/opportunities", async (req, res) => {
   if (!me) return;
   const parsed = AtelierCreateOpportunityBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid-body" });
+    // Task #867 — map schema failures to field-level messages so the dialog
+    // can point at the offending field instead of a generic error.
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.length ? String(issue.path[0]) : "_";
+      if (!fields[key]) fields[key] = issue.message;
+    }
+    res.status(400).json({
+      error: "invalid-body",
+      fields,
+      message:
+        Object.keys(fields).length > 0
+          ? `Invalid input for: ${Object.keys(fields).join(", ")}.`
+          : "Invalid request body.",
+    });
     return;
   }
   const input = parsed.data;

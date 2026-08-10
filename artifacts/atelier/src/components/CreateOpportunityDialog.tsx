@@ -23,9 +23,12 @@ import {
   getAtelierListUsersQueryKey,
   useAtelierCheckOpportunityDuplicates,
   getAtelierCheckOpportunityDuplicatesQueryKey,
+  useAtelierRunPursuitScout,
+  getAtelierGetBriefQueryKey,
   ApiError,
   type AtelierOpportunityDuplicateError,
 } from "@workspace/api-client-react";
+import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Telescope, ChevronsUpDown, Check, Plus, AlertTriangle } from "lucide-react";
@@ -143,6 +146,7 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
   const qc = useQueryClient();
   const { toast } = useToast();
   const create = useAtelierCreateOpportunity();
+  const runScoutMutation = useAtelierRunPursuitScout();
   const { data: accounts } = useAtelierListAccounts(undefined, {
     query: {
       enabled: open,
@@ -298,6 +302,29 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
     await doCreate(false);
   }
 
+  // Task #867 — rerun affordance offered from the failed/empty Scout toast.
+  async function rerunScout(oppId: string) {
+    toast({
+      title: "Rerunning Pursuit Scout…",
+      description: "This takes a minute — the brief lands on the Brief tab.",
+    });
+    try {
+      await runScoutMutation.mutateAsync({ oppId, data: {} });
+      qc.invalidateQueries({ queryKey: getAtelierGetBriefQueryKey(oppId) });
+      toast({
+        title: "Pursuit Scout finished",
+        description: "The brief is ready on the opportunity's Brief tab.",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({
+        title: "Pursuit Scout failed again",
+        description: `${msg} — you can rerun it from the Brief tab.`,
+        variant: "destructive",
+      });
+    }
+  }
+
   async function doCreate(allowDuplicate: boolean) {
     if (!validate()) return;
 
@@ -341,12 +368,41 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
       setDuplicateConflict(null);
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
-      toast({
-        title: `Opportunity created · ${partnerName} owns it`,
-        description: form.runScout
-          ? "Pursuit Scout is drafting the brief — find it on the Brief tab and the 5C Qualifier."
-          : "Pipeline updated. Run Pursuit Scout from the Brief tab when ready.",
-      });
+      // Task #867 — the create response carries the definitive Scout outcome
+      // (the run is synchronous server-side). Surface failed/empty runs with a
+      // retry affordance instead of an unconditional "Scout is drafting" toast.
+      const scoutStatus = res.scout?.status ?? "skipped";
+      const oppId = res.opportunity.id;
+      if (scoutStatus === "completed") {
+        toast({
+          title: `Opportunity created · ${partnerName} owns it`,
+          description:
+            "Pursuit Scout finished — the brief is on the Brief tab and feeds the 5C Qualifier.",
+        });
+      } else if (scoutStatus === "empty" || scoutStatus === "failed") {
+        toast({
+          title:
+            scoutStatus === "failed"
+              ? "Opportunity created · Scout failed"
+              : "Opportunity created · Scout found nothing",
+          description:
+            scoutStatus === "failed"
+              ? `The opportunity is saved, but Pursuit Scout hit an error${res.scout?.error ? `: ${res.scout.error}` : ""}. You can rerun it now or later from the Brief tab.`
+              : "The opportunity is saved, but Pursuit Scout returned an empty brief. You can rerun it now or later from the Brief tab.",
+          variant: "destructive",
+          action: (
+            <ToastAction altText="Rerun Pursuit Scout" onClick={() => rerunScout(oppId)}>
+              Rerun Scout
+            </ToastAction>
+          ),
+        });
+      } else {
+        toast({
+          title: `Opportunity created · ${partnerName} owns it`,
+          description:
+            "Pipeline updated. Run Pursuit Scout from the Brief tab when ready.",
+        });
+      }
       setOpen(false);
       if (onCreated) {
         onCreated(res.opportunity.id);
@@ -365,6 +421,25 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
       ) {
         setDuplicateConflict(err.data as AtelierOpportunityDuplicateError);
         return;
+      }
+      // Task #867 — a 400 with field-level messages maps back onto the form
+      // instead of a generic error toast, so the user sees which field to fix.
+      if (err instanceof ApiError && err.status === 400) {
+        const data = err.data as {
+          fields?: Record<string, string>;
+          message?: string;
+          error?: string;
+        } | null;
+        if (data?.fields && Object.keys(data.fields).length > 0) {
+          setErrors((e) => ({ ...e, ...data.fields }));
+          toast({
+            title: "Check the highlighted fields",
+            description:
+              data.message ?? `Invalid input for: ${Object.keys(data.fields).join(", ")}.`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
       const msg = err instanceof Error ? err.message : "Could not create opportunity.";
       toast({
