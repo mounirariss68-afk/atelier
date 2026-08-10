@@ -2517,9 +2517,33 @@ export const atelierPartnerFirms = pgTable(
     // reference_brand | delivery_backbone | platform_capability |
     // niche_subcontractor | market_access_jv | competitor_monitor
     archetype: text("archetype"),
-    // Framework lifecycle position: candidate (under evaluation) | agreed
-    // (signed / active partner). Distinct from `status` (ops lifecycle).
-    partnershipStage: text("partnership_stage").notNull().default("candidate"),
+    // Task #871 — two-dimensional stage model. Partnership stage:
+    // consideration → exploration → agreed. (Legacy value "candidate"
+    // migrates to "consideration" at boot.) Distinct from `status`
+    // (ops lifecycle).
+    partnershipStage: text("partnership_stage").notNull().default("consideration"),
+    // Agreement stage — only meaningful once partnershipStage = "agreed":
+    // preparing → negotiating → reviewing → signing → signed. NULL for
+    // non-agreed firms. Legacy "agreed" rows backfill to "signed" at boot
+    // (agreed previously meant signed/active).
+    agreementStage: text("agreement_stage"),
+    // Task #871 — approved capability profile (narrative + domain map),
+    // written ONLY via the pendingUpdates approval path. Drives the
+    // partner-firm RAG chunks Riser cites from.
+    capabilityProfile: jsonb("capability_profile")
+      .$type<{
+        summary: string;
+        domains: Array<{
+          id: string;
+          label: string;
+          description: string;
+          evidence: "evidenced" | "inferred" | "unverified";
+          sourceUrls?: string[];
+        }>;
+        researchedAt: string;
+        researchedBy: string;
+      } | null>()
+      .default(null),
     // Stage 1 — nine-dimension weighted fit scorecard. Scores 1–5, weights
     // sum to 1.0; weightedTotal + verdict computed in code, never trusted
     // from the model.

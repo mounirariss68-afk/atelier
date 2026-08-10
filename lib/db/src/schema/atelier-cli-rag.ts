@@ -163,6 +163,41 @@ export const atelierEntityEmbeddings = pgTable(
  * cleared. Retrieval is brute-force cosine over the org's rows (the account
  * roster is small), so `vec` (jsonb) is the only vector store needed.
  */
+/**
+ * Task #871 — Partner-firm capability chunks (Riser RAG).
+ *
+ * One row per capability-domain chunk of an APPROVED partner capability
+ * profile (plus one summary chunk per firm). Rebuilt wholesale whenever a
+ * firm's capability profile / speciality is approved or edited; deleted on
+ * firm archive. Org-scoped in every read. Retrieval is brute-force cosine
+ * over the org's rows (the partner registry is small), so `vec` (jsonb)
+ * is the only vector store needed.
+ */
+export const atelierPartnerCapabilityChunks = pgTable(
+  "atelier_partner_capability_chunks",
+  {
+    /** `<firmId>#cNNN` — rebuilt wholesale per firm, ids not stable. */
+    chunkId: text("chunk_id").primaryKey(),
+    orgId: text("org_id").notNull().default("aico"),
+    firmId: text("firm_id").notNull(),
+    firmName: text("firm_name").notNull(),
+    /** Capability-domain label ("summary" for the profile summary chunk). */
+    domain: text("domain").notNull(),
+    /** The chunk text that was embedded. */
+    text: text("text").notNull(),
+    /** Public source URLs backing this chunk (citations). */
+    sourceUrls: jsonb("source_urls").$type<string[]>().notNull().default([]),
+    provider: text("provider").notNull(),
+    dim: integer("dim").notNull(),
+    vec: jsonb("vec").$type<number[]>().notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_pcap_chunk_org").on(t.orgId),
+    index("idx_atelier_pcap_chunk_firm").on(t.orgId, t.firmId),
+  ],
+);
+
 export const atelierStrategyExemplars = pgTable(
   "atelier_strategy_exemplars",
   {

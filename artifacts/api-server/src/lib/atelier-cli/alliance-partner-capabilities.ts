@@ -31,6 +31,25 @@ import {
   type AllianceArchetype,
 } from "../atelier-agents/alliance-cartographer.js";
 import { runAllianceCartographerAndQueue } from "../atelier-agents/alliance-mapper-chain.js";
+import {
+  refreshPartnerFirmRag,
+  searchPartnerCapabilities,
+} from "./partner-capability-rag.js";
+
+// Task #871 — two-dimensional stage model.
+const PARTNERSHIP_STAGES = ["consideration", "exploration", "agreed"] as const;
+const AGREEMENT_STAGES = ["preparing", "negotiating", "reviewing", "signing", "signed"] as const;
+type PartnershipStage = (typeof PARTNERSHIP_STAGES)[number];
+type AgreementStage = (typeof AGREEMENT_STAGES)[number];
+
+/** Accepts current stages plus the legacy "candidate" alias. */
+function parsePartnershipStage(v: unknown): PartnershipStage | null {
+  if (v === "candidate") return "consideration";
+  return PARTNERSHIP_STAGES.includes(v as PartnershipStage) ? (v as PartnershipStage) : null;
+}
+function parseAgreementStage(v: unknown): AgreementStage | null {
+  return AGREEMENT_STAGES.includes(v as AgreementStage) ? (v as AgreementStage) : null;
+}
 
 const rid = (prefix: string): string =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -166,9 +185,17 @@ defineCapability({
       name: { type: "string", minLength: 2, description: "Company name." },
       partnershipStage: {
         type: "string",
-        enum: ["candidate", "agreed"],
+        enum: [...PARTNERSHIP_STAGES],
         description:
-          "candidate = under evaluation; agreed = signed/active partner. Ask the user if not stated.",
+          "consideration = being considered; exploration = partnership in discussion; " +
+          "agreed = partnership agreed (agreement paperwork tracked separately). Ask the user if not stated.",
+      },
+      agreementStage: {
+        type: "string",
+        enum: [...AGREEMENT_STAGES],
+        description:
+          "Only when partnershipStage is agreed: where the agreement itself stands " +
+          "(preparing → negotiating → reviewing → signing → signed). Defaults to preparing.",
       },
       country: { type: "string" },
       archetypeHint: {
@@ -231,12 +258,9 @@ defineCapability({
       };
     }
 
-    // 2. Candidate vs agreed clarification (multi-field protocol; the
+    // 2. Partnership-stage clarification (multi-field protocol; the
     //    answer merges back at TOP-LEVEL args, not nested).
-    const stage =
-      input.partnershipStage === "candidate" || input.partnershipStage === "agreed"
-        ? input.partnershipStage
-        : null;
+    const stage = parsePartnershipStage(input.partnershipStage);
     if (!stage) {
       return {
         ok: true,
@@ -245,22 +269,26 @@ defineCapability({
           field: "partnershipStage",
           tool: "alliance_partner_add",
           question:
-            `Is ${rawName} a candidate partner (under evaluation) or an agreed partner (signed / active)?`,
+            `Where does the ${rawName} partnership stand — consideration, exploration (in discussion), or agreed?`,
           partial: { ...input },
           suggestions: [
-            { id: "candidate", label: "Candidate — under evaluation" },
-            { id: "agreed", label: "Agreed — signed / active partner" },
+            { id: "consideration", label: "Consideration — being considered" },
+            { id: "exploration", label: "Exploration — partnership in discussion" },
+            { id: "agreed", label: "Agreed — partnership agreed" },
           ],
           fields: [
             {
               field: "partnershipStage",
               label: "Partnership stage",
-              hint: "candidate or agreed",
+              hint: "consideration, exploration or agreed",
             },
           ],
         },
       };
     }
+    // Agreed firms always carry an agreement stage (default: preparing).
+    const agreementStage: AgreementStage | null =
+      stage === "agreed" ? (parseAgreementStage(input.agreementStage) ?? "preparing") : null;
 
     // 3. Confirm card.
     if (input.confirm !== true) {
@@ -270,12 +298,13 @@ defineCapability({
         errorMessage: "alliance_partner_add requires confirm:true.",
         confirmation: {
           summary:
-            `Add "${rawName}" as a ${stage} alliance partner and launch the framework evaluation ` +
-            `(Alliance Cartographer → Executive Mapper)?`,
+            `Add "${rawName}" as a ${stage}${agreementStage ? ` (${agreementStage})` : ""} alliance partner ` +
+            `and launch the framework evaluation (Alliance Cartographer → Executive Mapper)?`,
           diff: {
             create: {
               name: rawName,
               partnershipStage: stage,
+              agreementStage,
               country: input.country ?? null,
               archetype: input.archetypeHint ?? null,
               contactName: input.contactName ?? null,
@@ -315,6 +344,7 @@ defineCapability({
       name: rawName,
       country: typeof input.country === "string" ? input.country : null,
       partnershipStage: stage,
+      agreementStage,
       archetype,
       contacts,
       contactName: typeof input.contactName === "string" ? input.contactName : null,
@@ -331,6 +361,9 @@ defineCapability({
       { ...input, source: "chat" },
       `partner_firm.create (chat): ${rawName} as ${stage}`,
     );
+    // Task #871 — mirror the new firm into the entity-embedding index so
+    // Riser can resolve it on the next turn (fire-and-forget).
+    void refreshPartnerFirmRag(id);
 
     // 5. Launch the Alliance Cartographer fire-and-forget (auto-chains the
     //    Executive Mapper). A launch failure NEVER rolls back the firm —
@@ -370,6 +403,7 @@ defineCapability({
         kind: "partner_firm",
         name: rawName,
         partnershipStage: stage,
+        agreementStage,
         archetype,
         agent: {
           id: "ag_alliance_cartographer",
@@ -484,6 +518,7 @@ defineCapability({
         id: firm.id,
         name: firm.name,
         partnershipStage: firm.partnershipStage,
+        agreementStage: firm.agreementStage ?? null,
         archetype: firm.archetype,
         tier: firm.tier,
         status: firm.status,
@@ -513,6 +548,164 @@ defineCapability({
         pendingProposalCount: pending.length,
         pendingProposalFields: [...new Set(pending.map((p) => p.field))],
         pageHref: "/partners/qualify",
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// alliance_partner_capabilities (read) — Task #871
+// ---------------------------------------------------------------------
+
+defineCapability({
+  id: "alliance.partner_capabilities",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "firm_profile",
+  toolName: "alliance_partner_capabilities",
+  description:
+    "Answer questions about alliance partner capabilities from the approved, researched " +
+    "capability profiles (org-scoped RAG with source-URL citations). Ask 'what can partner X do' " +
+    "with a name, or 'which partner can do Y' with just a query — returns matched capability " +
+    "chunks with the source URLs to cite. Ground every claim in the returned chunks/profile.",
+  slashAliases: { en: ["/partner-capabilities"] },
+  representativePrompts: {
+    en: [
+      "What are Thoughtworks' capabilities as a partner?",
+      "Which alliance partner can build voice AI for call centers?",
+    ],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        minLength: 2,
+        description: "The capability question (e.g. 'marketing mix modelling').",
+      },
+      name: {
+        type: "string",
+        description: "Optional partner firm name to scope the answer to one firm.",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+  isWrite: false,
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: false,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  requiredRoles: [
+    "founding_partner",
+    "partner",
+    "senior_manager",
+    "consultant",
+    "finance",
+    "hr",
+    "compliance_officer",
+  ],
+  async run(input, ctx) {
+    const query = String(input.query ?? "").trim();
+    if (query.length < 2) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "A capability question is required." };
+    }
+    const rawName = typeof input.name === "string" ? input.name.trim() : "";
+
+    // Optional firm scoping — resolve the name against the org registry.
+    let firm: typeof atelierPartnerFirms.$inferSelect | null = null;
+    if (rawName.length >= 2) {
+      const [byId] = await db
+        .select()
+        .from(atelierPartnerFirms)
+        .where(
+          and(
+            eq(atelierPartnerFirms.id, rawName),
+            eq(atelierPartnerFirms.orgId, ctx.persona.orgId),
+            isNull(atelierPartnerFirms.deletedAt),
+          ),
+        )
+        .limit(1);
+      firm = byId ?? null;
+      if (!firm) {
+        const { firms } = await findDupes(ctx.persona.orgId, rawName);
+        if (firms.length === 0) {
+          return {
+            ok: false,
+            errorCode: "not_found",
+            errorMessage: `No partner firm matching "${rawName}" in the registry.`,
+          };
+        }
+        if (firms.length > 1) {
+          return {
+            ok: false,
+            errorCode: "ambiguous",
+            errorMessage: `Multiple partner firms match "${rawName}".`,
+            disambiguation: {
+              kind: "partner_firm",
+              options: firms.slice(0, 5).map((f) => ({ id: f.id, label: f.name })),
+            },
+          };
+        }
+        const [full] = await db
+          .select()
+          .from(atelierPartnerFirms)
+          .where(eq(atelierPartnerFirms.id, firms[0].id))
+          .limit(1);
+        firm = full ?? null;
+      }
+    }
+
+    const hits = await searchPartnerCapabilities(ctx.persona.orgId, query, {
+      firmId: firm?.id,
+      limit: firm ? 8 : 6,
+    });
+    const profile = firm?.capabilityProfile ?? null;
+    if (!profile && hits.length === 0) {
+      return {
+        ok: true,
+        data: {
+          matches: [],
+          note: firm
+            ? `"${firm.name}" has no approved capability profile yet — run (or approve) the Alliance Cartographer evaluation on its firm page to research one.`
+            : "No approved partner capability profiles matched. Profiles land after the Alliance Cartographer research is approved on each firm's Evaluation section.",
+          pageHref: "/partners/identify",
+        },
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        query,
+        firm: firm
+          ? {
+              id: firm.id,
+              name: firm.name,
+              partnershipStage: firm.partnershipStage,
+              agreementStage: firm.agreementStage ?? null,
+              speciality: firm.speciality ?? null,
+              capabilitySummary: profile?.summary ?? null,
+              domains: (profile?.domains ?? []).map((d) => ({
+                label: d.label,
+                description: d.description,
+                evidence: d.evidence,
+                sourceUrls: d.sourceUrls ?? [],
+              })),
+              researchedAt: profile?.researchedAt ?? null,
+            }
+          : null,
+        matches: hits.map((h) => ({
+          firmId: h.firmId,
+          firmName: h.firmName,
+          domain: h.domain,
+          text: h.text,
+          sourceUrls: h.sourceUrls,
+          score: h.score,
+        })),
+        citationNote:
+          "Cite the sourceUrls attached to each matched chunk/domain when stating a capability claim.",
+        pageHref: "/partners/identify",
       },
     };
   },

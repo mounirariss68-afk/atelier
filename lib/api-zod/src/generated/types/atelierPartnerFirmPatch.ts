@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierPartnerContact } from "./atelierPartnerContact";
+import type { AtelierPartnerFirmPatchAgreementStage } from "./atelierPartnerFirmPatchAgreementStage";
 import type { AtelierPartnerFirmPatchArchetype } from "./atelierPartnerFirmPatchArchetype";
 import type { AtelierPartnerFirmPatchCapabilities } from "./atelierPartnerFirmPatchCapabilities";
 import type { AtelierPartnerFirmPatchPartnershipStage } from "./atelierPartnerFirmPatchPartnershipStage";
@@ -34,4 +35,5 @@ export interface AtelierPartnerFirmPatch {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmPatchArchetype;
   partnershipStage?: AtelierPartnerFirmPatchPartnershipStage;
+  agreementStage?: AtelierPartnerFirmPatchAgreementStage;
 }

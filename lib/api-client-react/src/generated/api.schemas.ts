@@ -7999,9 +7999,29 @@ export type AtelierPartnerFirmPartnershipStage =
   (typeof AtelierPartnerFirmPartnershipStage)[keyof typeof AtelierPartnerFirmPartnershipStage];
 
 export const AtelierPartnerFirmPartnershipStage = {
-  candidate: "candidate",
+  consideration: "consideration",
+  exploration: "exploration",
   agreed: "agreed",
 } as const;
+
+export type AtelierPartnerFirmAgreementStage =
+  | (typeof AtelierPartnerFirmAgreementStage)[keyof typeof AtelierPartnerFirmAgreementStage]
+  | null;
+
+export const AtelierPartnerFirmAgreementStage = {
+  preparing: "preparing",
+  negotiating: "negotiating",
+  reviewing: "reviewing",
+  signing: "signing",
+  signed: "signed",
+} as const;
+
+/**
+ * Approved capability profile (summary + capability-domain map with sources).
+ */
+export type AtelierPartnerFirmCapabilityProfile = {
+  [key: string]: unknown;
+} | null;
 
 export type AtelierPartnerFirmFitScorecardVerdict =
   (typeof AtelierPartnerFirmFitScorecardVerdict)[keyof typeof AtelierPartnerFirmFitScorecardVerdict];
@@ -8180,6 +8200,9 @@ export interface AtelierPartnerFirm {
   activeResourceCount?: number;
   archetype?: AtelierPartnerFirmArchetype;
   partnershipStage?: AtelierPartnerFirmPartnershipStage;
+  agreementStage?: AtelierPartnerFirmAgreementStage;
+  /** Approved capability profile (summary + capability-domain map with sources). */
+  capabilityProfile?: AtelierPartnerFirmCapabilityProfile;
   fitScorecard?: AtelierPartnerFirmFitScorecard;
   dueDiligence?: AtelierPartnerFirmDueDiligence;
   riskRegister?: AtelierPartnerFirmRiskRegisterItem[];
@@ -8232,8 +8255,21 @@ export type AtelierPartnerFirmInputPartnershipStage =
   (typeof AtelierPartnerFirmInputPartnershipStage)[keyof typeof AtelierPartnerFirmInputPartnershipStage];
 
 export const AtelierPartnerFirmInputPartnershipStage = {
-  candidate: "candidate",
+  consideration: "consideration",
+  exploration: "exploration",
   agreed: "agreed",
+} as const;
+
+export type AtelierPartnerFirmInputAgreementStage =
+  | (typeof AtelierPartnerFirmInputAgreementStage)[keyof typeof AtelierPartnerFirmInputAgreementStage]
+  | null;
+
+export const AtelierPartnerFirmInputAgreementStage = {
+  preparing: "preparing",
+  negotiating: "negotiating",
+  reviewing: "reviewing",
+  signing: "signing",
+  signed: "signed",
 } as const;
 
 export interface AtelierPartnerFirmInput {
@@ -8258,6 +8294,7 @@ export interface AtelierPartnerFirmInput {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmInputArchetype;
   partnershipStage?: AtelierPartnerFirmInputPartnershipStage;
+  agreementStage?: AtelierPartnerFirmInputAgreementStage;
   /** Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870). */
   confirmDuplicate?: boolean;
 }
@@ -8311,8 +8348,21 @@ export type AtelierPartnerFirmPatchPartnershipStage =
   (typeof AtelierPartnerFirmPatchPartnershipStage)[keyof typeof AtelierPartnerFirmPatchPartnershipStage];
 
 export const AtelierPartnerFirmPatchPartnershipStage = {
-  candidate: "candidate",
+  consideration: "consideration",
+  exploration: "exploration",
   agreed: "agreed",
+} as const;
+
+export type AtelierPartnerFirmPatchAgreementStage =
+  | (typeof AtelierPartnerFirmPatchAgreementStage)[keyof typeof AtelierPartnerFirmPatchAgreementStage]
+  | null;
+
+export const AtelierPartnerFirmPatchAgreementStage = {
+  preparing: "preparing",
+  negotiating: "negotiating",
+  reviewing: "reviewing",
+  signing: "signing",
+  signed: "signed",
 } as const;
 
 export interface AtelierPartnerFirmPatch {
@@ -8337,6 +8387,7 @@ export interface AtelierPartnerFirmPatch {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmPatchArchetype;
   partnershipStage?: AtelierPartnerFirmPatchPartnershipStage;
+  agreementStage?: AtelierPartnerFirmPatchAgreementStage;
 }
 
 export type AtelierPartnerTargetPriority =

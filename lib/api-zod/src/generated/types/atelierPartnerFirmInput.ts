@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierPartnerContact } from "./atelierPartnerContact";
+import type { AtelierPartnerFirmInputAgreementStage } from "./atelierPartnerFirmInputAgreementStage";
 import type { AtelierPartnerFirmInputArchetype } from "./atelierPartnerFirmInputArchetype";
 import type { AtelierPartnerFirmInputCapabilities } from "./atelierPartnerFirmInputCapabilities";
 import type { AtelierPartnerFirmInputPartnershipStage } from "./atelierPartnerFirmInputPartnershipStage";
@@ -34,6 +35,7 @@ export interface AtelierPartnerFirmInput {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmInputArchetype;
   partnershipStage?: AtelierPartnerFirmInputPartnershipStage;
+  agreementStage?: AtelierPartnerFirmInputAgreementStage;
   /** Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870). */
   confirmDuplicate?: boolean;
 }

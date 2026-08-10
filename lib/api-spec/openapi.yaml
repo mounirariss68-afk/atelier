@@ -12566,7 +12566,13 @@ components:
         notes: { type: string, nullable: true }
         activeResourceCount: { type: number }
         archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
-        partnershipStage: { type: string, enum: [candidate, agreed] }
+        partnershipStage: { type: string, enum: [consideration, exploration, agreed] }
+        agreementStage: { type: string, nullable: true, enum: [preparing, negotiating, reviewing, signing, signed, null] }
+        capabilityProfile:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Approved capability profile (summary + capability-domain map with sources).
         fitScorecard:
           type: object
           nullable: true
@@ -12687,7 +12693,8 @@ components:
         notes: { type: string, nullable: true }
         tierChangeReason: { type: string, nullable: true }
         archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
-        partnershipStage: { type: string, enum: [candidate, agreed] }
+        partnershipStage: { type: string, enum: [consideration, exploration, agreed] }
+        agreementStage: { type: string, nullable: true, enum: [preparing, negotiating, reviewing, signing, signed, null] }
         confirmDuplicate:
           type: boolean
           description: Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870).
@@ -12727,7 +12734,8 @@ components:
         notes: { type: string, nullable: true }
         tierChangeReason: { type: string, nullable: true }
         archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
-        partnershipStage: { type: string, enum: [candidate, agreed] }
+        partnershipStage: { type: string, enum: [consideration, exploration, agreed] }
+        agreementStage: { type: string, nullable: true, enum: [preparing, negotiating, reviewing, signing, signed, null] }
     AtelierPartnerTarget:
       type: object
       additionalProperties: true

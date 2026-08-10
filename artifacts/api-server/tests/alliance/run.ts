@@ -95,6 +95,26 @@ const CARTOGRAPHER_OUTPUT = {
   ],
   phasing: { phase: "pilot", milestone: "Run one co-delivered engagement", note: "Start small." },
   capabilities: { cloud: 5, data: 4, genai: 3 },
+  // Task #871 — researched capability profile (drives Riser RAG chunks).
+  capabilityProfile: {
+    summary: "Cloud platform engineering and managed delivery across EMEA with a growing GenAI practice.",
+    domains: [
+      {
+        id: "cloud_engineering",
+        label: "Cloud Engineering",
+        description: "Designs and runs cloud platforms on AWS and Azure; 420-person delivery bench.",
+        evidence: "evidenced",
+        sourceUrls: ["https://example.test/services"],
+      },
+      {
+        id: "genai",
+        label: "GenAI Delivery",
+        description: "GenAI practice launched 2025 building agentic workflow pilots.",
+        evidence: "inferred",
+        sourceUrls: ["https://example.test/news1"],
+      },
+    ],
+  },
   sourceSignals: [
     { kind: "news", title: "Alliance Probe expands", url: "https://example.test/news1", summary: "EMEA growth", confidence: "green" },
     { kind: "site", title: "Services page", url: "https://example.test/services", confidence: "green" },
@@ -305,7 +325,7 @@ async function main(): Promise<void> {
     const pending = (firmRow?.pendingUpdates ?? []).filter((p: any) => p.status === "pending");
     const fields = new Set(pending.map((p: any) => p.field));
     check("proposals landed as pending", pending.length > 0, pending.length);
-    for (const f of ["archetype", "tier", "fitScorecard", "dueDiligence", "riskRegister", "phasing", "capabilities"]) {
+    for (const f of ["archetype", "tier", "fitScorecard", "dueDiligence", "riskRegister", "phasing", "capabilities", "capabilityProfile"]) {
       check(`proposal queued: ${f}`, fields.has(f));
     }
     check(
@@ -442,7 +462,12 @@ async function main(): Promise<void> {
     const [chatFirm] = chatFirmId
       ? await db.select().from(atelierPartnerFirms).where(eq(atelierPartnerFirms.id, chatFirmId))
       : [null];
-    check("chat-created firm persisted as candidate", chatFirm?.partnershipStage === "candidate", chatFirm?.partnershipStage);
+    // Task #871 — legacy "candidate" input maps to "consideration".
+    check(
+      "chat-created firm persisted as consideration (legacy candidate alias)",
+      chatFirm?.partnershipStage === "consideration" && chatFirm?.agreementStage == null,
+      { stage: chatFirm?.partnershipStage, agreement: chatFirm?.agreementStage },
+    );
 
     // Wait for the fire-and-forget evaluation to land proposals.
     let chatPendingCount = 0;
@@ -480,6 +505,112 @@ async function main(): Promise<void> {
       sd,
     );
 
+    // ---- 7. Task #871: two-dimensional stage model (REST) ----
+    group("stage model \u2014 partnership + agreement stages");
+    const stageFirm = await call("POST", "/partners/firms", {
+      name: `Stageprobe Alliance ${STAMP}`,
+      partnershipStage: "agreed",
+    });
+    check(
+      "create agreed \u2192 agreementStage defaults to preparing",
+      stageFirm.status === 201 && stageFirm.body?.agreementStage === "preparing",
+      stageFirm.body?.agreementStage,
+    );
+    const stageFirmId = stageFirm.body?.id as string;
+    const toSigning = await call("PATCH", `/partners/firms/${stageFirmId}`, { agreementStage: "signing" });
+    check("PATCH agreementStage \u2192 signing", toSigning.body?.agreementStage === "signing", toSigning.body);
+    const toExploration = await call("PATCH", `/partners/firms/${stageFirmId}`, { partnershipStage: "exploration" });
+    check(
+      "PATCH back to exploration clears agreementStage",
+      toExploration.body?.partnershipStage === "exploration" && toExploration.body?.agreementStage == null,
+      toExploration.body,
+    );
+
+    // ---- 8. Task #871: capability profile approval → RAG refresh ----
+    group("capabilityProfile approval \u2192 chunks + entity embedding + org scoping");
+    const { atelierPartnerCapabilityChunks, atelierEntityEmbeddings } = D as any;
+    const capProp = pending.find((p: any) => p.field === "capabilityProfile") as any;
+    check("capabilityProfile proposal present", Boolean(capProp?.id), capProp);
+    const approveCap = await call("POST", `/partners/firms/${firmId}/proposals/${capProp.id}/decide`, { action: "approve" });
+    check("capabilityProfile approved", approveCap.status === 200, approveCap);
+    const [firmAfterCap] = await db.select().from(atelierPartnerFirms).where(eq(atelierPartnerFirms.id, firmId));
+    check(
+      "approved profile applied to firm row",
+      firmAfterCap?.capabilityProfile?.summary?.includes("Cloud platform engineering") &&
+        firmAfterCap?.capabilityProfile?.domains?.length === 2,
+      firmAfterCap?.capabilityProfile,
+    );
+    // The RAG refresh is fire-and-forget — poll for the chunks.
+    let chunks: any[] = [];
+    for (let i = 0; i < 40; i++) {
+      await sleep(500);
+      chunks = await db
+        .select()
+        .from(atelierPartnerCapabilityChunks)
+        .where(eq(atelierPartnerCapabilityChunks.firmId, firmId));
+      if (chunks.length > 0) break;
+    }
+    check("capability chunks written (summary + 2 domains)", chunks.length === 3, chunks.length);
+    check(
+      "chunks are org-scoped + cite sources",
+      chunks.every((c: any) => c.orgId === "aico") &&
+        chunks.some((c: any) => (c.sourceUrls ?? []).includes("https://example.test/services")),
+      chunks.map((c: any) => ({ org: c.orgId, urls: c.sourceUrls })),
+    );
+    const eembRows = await db
+      .select()
+      .from(atelierEntityEmbeddings)
+      .where(
+        and(
+          eq(atelierEntityEmbeddings.kind, "partner_firm"),
+          eq(atelierEntityEmbeddings.targetId, firmId),
+        ),
+      );
+    check("partner_firm entity embedding mirrored", eembRows.length === 1 && eembRows[0].orgId === "aico", eembRows.length);
+
+    const rag = await import("../../src/lib/atelier-cli/partner-capability-rag.js");
+    const hitsOwn = await rag.searchPartnerCapabilities("aico", "cloud platform engineering");
+    check(
+      "search finds the firm's cloud chunk",
+      hitsOwn.length > 0 && hitsOwn[0].firmId === firmId,
+      hitsOwn.slice(0, 2).map((h) => ({ firm: h.firmName, d: h.domain, s: h.score })),
+    );
+    const hitsOtherOrg = await rag.searchPartnerCapabilities(`org_other_${STAMP}`, "cloud platform engineering");
+    check("other org sees nothing (org perimeter)", hitsOtherOrg.length === 0, hitsOtherOrg.length);
+
+    // ---- 9. Task #871: chat alliance_partner_capabilities ----
+    group("chat alliance_partner_capabilities \u2014 grounded, cited answer");
+    const capCap = findByToolName("alliance_partner_capabilities");
+    check("capability registered", Boolean(capCap));
+    const capAnswer = await capCap!.run({ query: "cloud engineering", name: firmId }, ctx);
+    const capData = capAnswer.data as any;
+    check(
+      "firm-scoped answer carries profile + cited matches",
+      capAnswer.ok === true &&
+        capData?.firm?.id === firmId &&
+        capData?.firm?.domains?.length === 2 &&
+        capData?.matches?.length > 0 &&
+        capData.matches.every((m: any) => Array.isArray(m.sourceUrls)),
+      capData,
+    );
+    const capBroad = await capCap!.run({ query: "who can build GenAI delivery pilots?" }, ctx);
+    check(
+      "unscoped query surfaces the firm via RAG",
+      capBroad.ok === true && ((capBroad.data as any)?.matches ?? []).some((m: any) => m.firmId === firmId),
+      (capBroad.data as any)?.matches?.map((m: any) => m.domain),
+    );
+    check(
+      "self-only roles excluded from the capability",
+      Array.isArray((capCap as any).requiredRoles) &&
+        !(capCap as any).requiredRoles.includes("employee") &&
+        !(capCap as any).requiredRoles.includes("contractor"),
+      (capCap as any).requiredRoles,
+    );
+
+    // Archive cleanup semantics — archived firm disappears from retrieval.
+    const archived = await call("POST", `/partners/firms/${stageFirmId}/archive`);
+    check("stage-probe firm archived", archived.status === 200 || archived.status === 204, archived.status);
+
     if (failures.length === 0) console.log("\nALL CHECKS PASSED");
     else {
       console.error(`\n${failures.length} CHECK(S) FAILED:\n- ${failures.join("\n- ")}`);
@@ -493,6 +624,9 @@ async function main(): Promise<void> {
         .from(atelierPartnerFirms)
         .where(like(atelierPartnerFirms.name, `%${STAMP}%`));
       const firmIds = firms.map((f: any) => f.id).concat([firmId]);
+      const { atelierPartnerCapabilityChunks: pcap, atelierEntityEmbeddings: eemb } = D as any;
+      await db.delete(pcap).where(inArray(pcap.firmId, firmIds));
+      await db.delete(eemb).where(inArray(eemb.targetId, firmIds));
       await db.delete(atelierAgentRuns).where(inArray(atelierAgentRuns.targetId, firmIds));
       await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, firmIds));
       await db.delete(atelierPartnerFirms).where(inArray(atelierPartnerFirms.id, firmIds));

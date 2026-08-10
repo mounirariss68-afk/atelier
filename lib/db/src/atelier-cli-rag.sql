@@ -98,3 +98,31 @@ BEGIN
   CREATE INDEX IF NOT EXISTS idx_atelier_chunk_emb_text_trgm
     ON atelier_document_chunk_embeddings USING gin (text gin_trgm_ops);
 END $$;
+
+-- ============================================================
+-- Task #871 — Two-dimensional partner stage model migration
+-- ============================================================
+-- Partnership stage: consideration → exploration → agreed (legacy
+-- "candidate" maps to "consideration"). Agreement stage (new column,
+-- pushed by Drizzle): legacy "agreed" rows meant signed/active, so
+-- agreed rows with a NULL agreement_stage backfill to "signed" —
+-- new write surfaces always stamp an explicit agreement stage, so a
+-- NULL there only ever means a pre-migration row.
+DO $$
+BEGIN
+  IF to_regclass('atelier_partner_firms') IS NULL THEN
+    RETURN;
+  END IF;
+  UPDATE atelier_partner_firms
+    SET partnership_stage = 'consideration'
+    WHERE partnership_stage = 'candidate';
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'atelier_partner_firms'
+      AND column_name = 'agreement_stage'
+  ) THEN
+    UPDATE atelier_partner_firms
+      SET agreement_stage = 'signed'
+      WHERE partnership_stage = 'agreed' AND agreement_stage IS NULL;
+  END IF;
+END $$;

@@ -10,6 +10,7 @@ export type AtelierPartnerFirmPartnershipStage =
   (typeof AtelierPartnerFirmPartnershipStage)[keyof typeof AtelierPartnerFirmPartnershipStage];
 
 export const AtelierPartnerFirmPartnershipStage = {
-  candidate: "candidate",
+  consideration: "consideration",
+  exploration: "exploration",
   agreed: "agreed",
 } as const;

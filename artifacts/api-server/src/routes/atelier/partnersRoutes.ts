@@ -47,6 +47,10 @@ import {
   runAllianceMapperAndQueue,
 } from "../../lib/atelier-agents/alliance-mapper-chain.js";
 import {
+  refreshPartnerFirmRag,
+  removePartnerFirmRag,
+} from "../../lib/atelier-cli/partner-capability-rag.js";
+import {
   ALLIANCE_FIT_DIMENSIONS,
   computeFitTotals,
 } from "../../lib/atelier-agents/alliance-cartographer.js";
@@ -141,11 +145,32 @@ const firmBaseSchema = z.object({
       "competitor_monitor",
     ])
     .nullish(),
-  partnershipStage: z.enum(["candidate", "agreed"]).optional(),
+  // Task #871 — two-dimensional stage model. Partnership stage:
+  // consideration → exploration → agreed; agreement stage only applies
+  // once agreed (server enforces the pairing).
+  partnershipStage: z.enum(["consideration", "exploration", "agreed"]).optional(),
+  agreementStage: z
+    .enum(["preparing", "negotiating", "reviewing", "signing", "signed"])
+    .nullish(),
   // Task #870 — duplicate-name guard: set true to create despite an existing
   // firm with the same (case-insensitive) name in this org.
   confirmDuplicate: z.boolean().optional(),
 });
+
+/**
+ * Task #871 — keep the two stage dimensions consistent: an agreed firm
+ * always carries an agreement stage (default "preparing"); a non-agreed
+ * firm never does.
+ */
+function reconcileStages(
+  partnershipStage: string,
+  agreementStage: string | null | undefined,
+): { partnershipStage: string; agreementStage: string | null } {
+  if (partnershipStage === "agreed") {
+    return { partnershipStage, agreementStage: agreementStage ?? "preparing" };
+  }
+  return { partnershipStage, agreementStage: null };
+}
 
 // Task #538 — contact-list writes back every entry with a person record.
 import { writePersonFromFullName } from "../../lib/atelier-person-sync.js";
@@ -409,7 +434,8 @@ router.post("/partners/firms", async (req, res, next) => {
           defaultBillingCurrency: b.defaultBillingCurrency ?? null,
           notes: b.notes ?? null,
           archetype: b.archetype ?? null,
-          partnershipStage: b.partnershipStage ?? "candidate",
+          // Task #871 — two-dimensional stage model (agreed ⇔ agreementStage).
+          ...reconcileStages(b.partnershipStage ?? "consideration", b.agreementStage),
           tierHistory,
           createdByUserId: me.id,
         })
@@ -439,6 +465,18 @@ router.post("/partners/firms", async (req, res, next) => {
       });
       return out;
     });
+    // Task #871 — every new partner firm gets (a) an entity embedding so
+    // Riser can resolve it immediately and (b) a fire-and-forget capability
+    // research run (Alliance Cartographer, which now also proposes the
+    // capability profile). Neither can fail the create.
+    void refreshPartnerFirmRag(id);
+    if (!(await alreadyRunningInDb("alliance_cartographer", id))) {
+      launchAllianceAgent({
+        agentId: "alliance_cartographer",
+        firmId: id,
+        run: () => runAllianceCartographerAndQueue(id, me.id, { chainMapper: true }),
+      });
+    }
     res.status(201).json(row);
   } catch (err) {
     next(err);
@@ -486,7 +524,22 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
     assign("defaultBillingCurrency", "defaultBillingCurrency");
     assign("notes", "notes");
     assign("archetype", "archetype");
-    assign("partnershipStage", "partnershipStage");
+    // Task #871 — the two stage dimensions patch together so they can
+    // never drift apart (agreed ⇒ agreement stage set; else ⇒ null).
+    if (b.partnershipStage !== undefined || b.agreementStage !== undefined) {
+      const next = reconcileStages(
+        b.partnershipStage ?? firm.partnershipStage,
+        b.agreementStage !== undefined ? b.agreementStage : firm.agreementStage,
+      );
+      if (next.partnershipStage !== firm.partnershipStage) {
+        patch.partnershipStage = next.partnershipStage;
+        changes.partnershipStage = { from: firm.partnershipStage, to: next.partnershipStage };
+      }
+      if (next.agreementStage !== (firm.agreementStage ?? null)) {
+        patch.agreementStage = next.agreementStage;
+        changes.agreementStage = { from: firm.agreementStage ?? null, to: next.agreementStage };
+      }
+    }
     if (b.contacts !== undefined) {
       const to = await stampContactPersons(db, me, firm.id, normalizeContacts(b.contacts) ?? []);
       patch.contacts = to;
@@ -526,6 +579,10 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
       payload: { changes },
       summary: `Updated partner firm "${firm.name}" (${Object.keys(changes).join(", ")})`,
     });
+    // Task #871 — keep Riser's partner retrieval fresh on firmographic edits.
+    if (["name", "speciality", "capabilities"].some((k) => k in changes)) {
+      void refreshPartnerFirmRag(firm.id);
+    }
     res.json(row);
   } catch (err) {
     next(err);
@@ -575,6 +632,8 @@ router.post("/partners/firms/:id/archive", async (req, res, next) => {
       payload: { name: firm.name },
       summary: `Archived partner firm "${firm.name}"`,
     });
+    // Task #871 — an archived partner must never surface in retrieval.
+    void removePartnerFirmRag(me.orgId, firm.id);
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -960,6 +1019,16 @@ router.post("/partners/targets/:id/promote", async (req, res, next) => {
       payload: { targetId: target.id, name: target.name },
       summary: `Promoted target "${target.name}" to partner firm`,
     });
+    // Task #871 — promoted firms get the same treatment as directly
+    // created ones: entity embedding + capability research run.
+    void refreshPartnerFirmRag(firmId);
+    if (!(await alreadyRunningInDb("alliance_cartographer", firmId))) {
+      launchAllianceAgent({
+        agentId: "alliance_cartographer",
+        firmId,
+        run: () => runAllianceCartographerAndQueue(firmId, me.id, { chainMapper: true }),
+      });
+    }
     res.status(201).json({ firm, target: updatedTarget });
   } catch (err) {
     next(err);
@@ -2004,6 +2073,10 @@ function applyPartnerProposal(
       return { phasing: v as (typeof firm)["phasing"] };
     case "capabilities":
       return { capabilities: (v ?? {}) as Record<string, number> };
+    case "capabilityProfile":
+      // Task #871 — approved capability profile; the decide route
+      // refreshes the firm's RAG chunks after the row update.
+      return { capabilityProfile: v as (typeof firm)["capabilityProfile"] };
     case "speciality":
       return { speciality: typeof v === "string" ? v : null };
     case "kind":
@@ -2122,6 +2195,17 @@ router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res,
           .set({ contacts: stamped, updatedAt: new Date() })
           .where(eq(atelierPartnerFirms.id, fresh.id));
       }
+    }
+    // Task #871 — an approved proposal that touched profile/capability
+    // fields must refresh the firm's entity embedding + capability chunks.
+    if (
+      action === "approve" &&
+      "appliedFields" in result &&
+      (result.appliedFields ?? []).some((f) =>
+        ["capabilityProfile", "capabilities", "speciality", "kind", "country"].includes(f),
+      )
+    ) {
+      void refreshPartnerFirmRag(req.params.id);
     }
     if (!("idempotent" in result && result.idempotent)) {
       await audit({

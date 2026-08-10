@@ -99,6 +99,7 @@
 - [Partner NDA → firm linkage](atelier-partner-nda-linkage.md) — no FK between contracts and partner-firm registry; /partners/agreements joins by normalized name → partnerFirmId; UI keys on that, never counterpartyId.
 - [Receipt enrichment details](atelier-receipt-enrichment.md) — category details are baked into `summary` at parse time (ocrPayload gets redacted at 90d); sanitizer+formatter pair owns the format, never the auditor LLM.
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design; invitations source-restricted; login only via onboarding create-login; People nav derives from peopleLifecycle.STAGES.
+- [Partner capability profiles & RAG](atelier-partner-capability-rag.md) — 2-D stage model (agreed⇔agreementStage), profile via approval queue only, org-scoped chunks; PROD re-run of the 7-partner ingest at go-live.
 - [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
 - [Qualify fit-scorecard adjust](atelier-qualify-fit-scorecard.md) — total/verdict recomputed only via shared computeFitTotals; adjust stamps mark manual scores; noop = no audit; legacy capabilities column unused.

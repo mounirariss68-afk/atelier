@@ -769,6 +769,17 @@ registerDetailProvider({
         detail: {
           archetype: pf.archetype ?? null,
           partnershipStage: pf.partnershipStage,
+          agreementStage: pf.agreementStage ?? null,
+          capabilityProfile: pf.capabilityProfile
+            ? {
+                summary: pf.capabilityProfile.summary,
+                domains: take(pf.capabilityProfile.domains, 6).map((d) => ({
+                  label: d.label,
+                  description: d.description,
+                  sourceUrls: d.sourceUrls ?? [],
+                })),
+              }
+            : null,
           relationshipStrength: pf.relationshipStrength ?? null,
           anchors: { cognirise: pf.anchorCognirise ?? null, partner: pf.anchorPartner ?? null },
           fitScorecard: sc

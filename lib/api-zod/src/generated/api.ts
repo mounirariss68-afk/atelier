@@ -36578,7 +36578,25 @@ export const AtelierListPartnerFirmsResponse = zod.object({
           zod.literal(null),
         ])
         .nullish(),
-      partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+      partnershipStage: zod
+        .enum(["consideration", "exploration", "agreed"])
+        .optional(),
+      agreementStage: zod
+        .union([
+          zod.literal("preparing"),
+          zod.literal("negotiating"),
+          zod.literal("reviewing"),
+          zod.literal("signing"),
+          zod.literal("signed"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      capabilityProfile: zod
+        .record(zod.string(), zod.unknown())
+        .nullish()
+        .describe(
+          "Approved capability profile (summary + capability-domain map with sources).",
+        ),
       fitScorecard: zod
         .object({
           weightedTotal: zod.number().optional(),
@@ -36721,7 +36739,19 @@ export const AtelierCreatePartnerFirmBody = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  partnershipStage: zod
+    .enum(["consideration", "exploration", "agreed"])
+    .optional(),
+  agreementStage: zod
+    .union([
+      zod.literal("preparing"),
+      zod.literal("negotiating"),
+      zod.literal("reviewing"),
+      zod.literal("signing"),
+      zod.literal("signed"),
+      zod.literal(null),
+    ])
+    .nullish(),
   confirmDuplicate: zod
     .boolean()
     .optional()
@@ -36802,7 +36832,25 @@ export const AtelierGetPartnerFirmResponse = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  partnershipStage: zod
+    .enum(["consideration", "exploration", "agreed"])
+    .optional(),
+  agreementStage: zod
+    .union([
+      zod.literal("preparing"),
+      zod.literal("negotiating"),
+      zod.literal("reviewing"),
+      zod.literal("signing"),
+      zod.literal("signed"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  capabilityProfile: zod
+    .record(zod.string(), zod.unknown())
+    .nullish()
+    .describe(
+      "Approved capability profile (summary + capability-domain map with sources).",
+    ),
   fitScorecard: zod
     .object({
       weightedTotal: zod.number().optional(),
@@ -36945,7 +36993,19 @@ export const AtelierUpdatePartnerFirmBody = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  partnershipStage: zod
+    .enum(["consideration", "exploration", "agreed"])
+    .optional(),
+  agreementStage: zod
+    .union([
+      zod.literal("preparing"),
+      zod.literal("negotiating"),
+      zod.literal("reviewing"),
+      zod.literal("signing"),
+      zod.literal("signed"),
+      zod.literal(null),
+    ])
+    .nullish(),
 });
 
 export const AtelierUpdatePartnerFirmResponse = zod.object({
@@ -37013,7 +37073,25 @@ export const AtelierUpdatePartnerFirmResponse = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  partnershipStage: zod
+    .enum(["consideration", "exploration", "agreed"])
+    .optional(),
+  agreementStage: zod
+    .union([
+      zod.literal("preparing"),
+      zod.literal("negotiating"),
+      zod.literal("reviewing"),
+      zod.literal("signing"),
+      zod.literal("signed"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  capabilityProfile: zod
+    .record(zod.string(), zod.unknown())
+    .nullish()
+    .describe(
+      "Approved capability profile (summary + capability-domain map with sources).",
+    ),
   fitScorecard: zod
     .object({
       weightedTotal: zod.number().optional(),
@@ -37185,7 +37263,25 @@ export const AtelierAdjustPartnerFitScorecardResponse = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  partnershipStage: zod
+    .enum(["consideration", "exploration", "agreed"])
+    .optional(),
+  agreementStage: zod
+    .union([
+      zod.literal("preparing"),
+      zod.literal("negotiating"),
+      zod.literal("reviewing"),
+      zod.literal("signing"),
+      zod.literal("signed"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  capabilityProfile: zod
+    .record(zod.string(), zod.unknown())
+    .nullish()
+    .describe(
+      "Approved capability profile (summary + capability-domain map with sources).",
+    ),
   fitScorecard: zod
     .object({
       weightedTotal: zod.number().optional(),
@@ -37512,7 +37608,25 @@ export const AtelierPromotePartnerTargetResponse = zod.object({
         zod.literal(null),
       ])
       .nullish(),
-    partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+    partnershipStage: zod
+      .enum(["consideration", "exploration", "agreed"])
+      .optional(),
+    agreementStage: zod
+      .union([
+        zod.literal("preparing"),
+        zod.literal("negotiating"),
+        zod.literal("reviewing"),
+        zod.literal("signing"),
+        zod.literal("signed"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    capabilityProfile: zod
+      .record(zod.string(), zod.unknown())
+      .nullish()
+      .describe(
+        "Approved capability profile (summary + capability-domain map with sources).",
+      ),
     fitScorecard: zod
       .object({
         weightedTotal: zod.number().optional(),

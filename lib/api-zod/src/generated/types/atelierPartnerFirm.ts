@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierPartnerContact } from "./atelierPartnerContact";
+import type { AtelierPartnerFirmAgreementStage } from "./atelierPartnerFirmAgreementStage";
 import type { AtelierPartnerFirmArchetype } from "./atelierPartnerFirmArchetype";
 import type { AtelierPartnerFirmCapabilities } from "./atelierPartnerFirmCapabilities";
+import type { AtelierPartnerFirmCapabilityProfile } from "./atelierPartnerFirmCapabilityProfile";
 import type { AtelierPartnerFirmDueDiligence } from "./atelierPartnerFirmDueDiligence";
 import type { AtelierPartnerFirmFitScorecard } from "./atelierPartnerFirmFitScorecard";
 import type { AtelierPartnerFirmPartnershipStage } from "./atelierPartnerFirmPartnershipStage";
@@ -42,6 +44,9 @@ export interface AtelierPartnerFirm {
   activeResourceCount?: number;
   archetype?: AtelierPartnerFirmArchetype;
   partnershipStage?: AtelierPartnerFirmPartnershipStage;
+  agreementStage?: AtelierPartnerFirmAgreementStage;
+  /** Approved capability profile (summary + capability-domain map with sources). */
+  capabilityProfile?: AtelierPartnerFirmCapabilityProfile;
   fitScorecard?: AtelierPartnerFirmFitScorecard;
   dueDiligence?: AtelierPartnerFirmDueDiligence;
   riskRegister?: AtelierPartnerFirmRiskRegisterItem[];

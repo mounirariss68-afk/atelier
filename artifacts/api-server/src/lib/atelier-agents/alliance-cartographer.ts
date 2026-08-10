@@ -146,6 +146,8 @@ export interface AllianceCartographerOutput {
   riskRegister: PartnerFirmRow["riskRegister"];
   phasing: NonNullable<PartnerFirmRow["phasing"]> | null;
   capabilities: Record<string, number>;
+  /** Task #871 — narrative capability profile (summary + domain map). */
+  capabilityProfile: NonNullable<PartnerFirmRow["capabilityProfile"]> | null;
   sourceSignals: Array<{
     kind: string;
     title: string;
@@ -367,6 +369,36 @@ export async function runAllianceCartographer(args: {
       }
     }
 
+    // --- capability profile (Task #871) ---
+    const rcp = (raw.capabilityProfile ?? {}) as Record<string, unknown>;
+    const rawDomains = Array.isArray(rcp.domains)
+      ? (rcp.domains as Array<Record<string, unknown>>)
+      : [];
+    const domains = rawDomains
+      .filter((d) => typeof d?.label === "string" && (d.label as string).trim().length > 0)
+      .slice(0, 10)
+      .map((d, i) => ({
+        id:
+          typeof d.id === "string" && d.id.trim().length > 0
+            ? d.id.trim().slice(0, 60)
+            : `dom_${i + 1}`,
+        label: (d.label as string).trim().slice(0, 60),
+        description: str(d.description, 500) ?? "",
+        evidence: normaliseEvidence(d.evidence),
+        sourceUrls: normaliseUrls(d.sourceUrls),
+      }))
+      .filter((d) => d.description.length > 0);
+    const capSummary = str(rcp.summary, 800);
+    const capabilityProfile: AllianceCartographerOutput["capabilityProfile"] =
+      capSummary || domains.length > 0
+        ? {
+            summary: capSummary ?? firm.summary ?? "",
+            domains,
+            researchedAt: now,
+            researchedBy: "ag_alliance_cartographer",
+          }
+        : null;
+
     // --- source signals (+ citation backfill) ---
     const sourceSignals: AllianceCartographerOutput["sourceSignals"] = (
       Array.isArray(raw.sourceSignals) ? (raw.sourceSignals as Array<Record<string, unknown>>) : []
@@ -405,6 +437,7 @@ export async function runAllianceCartographer(args: {
       riskRegister,
       phasing,
       capabilities,
+      capabilityProfile,
       sourceSignals,
       openQuestions,
     };
@@ -454,6 +487,8 @@ function partnerProposalKey(p: { field: string; toValue: unknown }): string {
     v = { ...(v as Record<string, unknown>), scoredAt: "", scoredBy: "" };
   } else if (p.field === "dueDiligence" && v && typeof v === "object") {
     v = { ...(v as Record<string, unknown>), assessedAt: "", assessedBy: "" };
+  } else if (p.field === "capabilityProfile" && v && typeof v === "object") {
+    v = { ...(v as Record<string, unknown>), researchedAt: "", researchedBy: "" };
   } else if (p.field === "riskRegister" && Array.isArray(v)) {
     v = v.map((r) =>
       r && typeof r === "object" ? { ...(r as Record<string, unknown>), id: "" } : r,
@@ -554,6 +589,21 @@ export function buildAllianceCartographerProposals(args: {
       firm.phasing ?? null,
       output.phasing,
       `Alliance Cartographer recommends phase "${output.phasing.phase}" — ${output.phasing.milestone}`,
+    );
+  }
+  // Task #871 — capability profile proposal (comparison strips the
+  // code-stamped research timestamps, mirroring fit/DD).
+  const stripCapTs = (v: PartnerFirmRow["capabilityProfile"]) =>
+    v ? { ...v, researchedAt: "", researchedBy: "" } : v;
+  if (
+    output.capabilityProfile &&
+    !materiallyEqual(stripCapTs(output.capabilityProfile), stripCapTs(firm.capabilityProfile))
+  ) {
+    push(
+      "capabilityProfile",
+      firm.capabilityProfile ?? null,
+      output.capabilityProfile,
+      `Alliance Cartographer researched the firm's capability profile (${output.capabilityProfile.domains.length} domain(s)). Approving refreshes Riser's partner-capability retrieval.`,
     );
   }
   if (Object.keys(output.capabilities).length > 0) {

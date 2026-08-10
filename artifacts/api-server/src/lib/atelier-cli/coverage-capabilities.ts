@@ -60,6 +60,8 @@ import { writePersonFromFullName, syncLegacyColumns } from "../atelier-person-sy
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { resolveAccountRefByName } from "./finance-name-resolvers.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
+import { refreshPartnerFirmRag } from "./partner-capability-rag.js";
+import { runAllianceCartographerAndQueue } from "../atelier-agents/alliance-mapper-chain.js";
 import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
 import {
   resolvePersonForCaller,
@@ -849,6 +851,18 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "partner_firm", id, "create", input);
+    // Task #871 — new firms get an entity embedding immediately and a
+    // fire-and-forget capability-research run (proposals land in the
+    // firm's approval queue).
+    void refreshPartnerFirmRag(id);
+    void runAllianceCartographerAndQueue(id, ctx.persona.id, { chainMapper: true }).catch(
+      (err) =>
+        console.error(
+          "[partner_firm_create] cartographer launch failed",
+          id,
+          err instanceof Error ? err.message : String(err),
+        ),
+    );
     return { ok: true, data: { id, kind: "partner_firm", navigateTo: null } };
   },
 });

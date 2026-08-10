@@ -306,14 +306,36 @@ type FirmDraft = {
   contactName: string;
   contactEmail: string;
   notes: string;
+  partnershipStage: string;
+  agreementStage: string;
 };
 
+const PARTNERSHIP_STAGES = ["consideration", "exploration", "agreed"] as const;
 const emptyFirmDraft: FirmDraft = {
   name: "", kind: "", speciality: "", country: "", tier: "", status: "active",
   relationshipStrength: "", anchorCognirise: "", anchorPartner: "",
   contactName: "", contactEmail: "", notes: "",
+  partnershipStage: "consideration", agreementStage: "",
 };
 
+function FirmStageChips({ firm: f }: { firm: AtelierPartnerFirm }) {
+  const ps = f.partnershipStage ?? "consideration";
+  return (
+    <>
+      <MonoChip tone={ps === "agreed" ? "green" : "amber"} data-testid={`chip-partnership-stage-${f.id}`}>
+        {ps}
+      </MonoChip>
+      {ps === "agreed" && f.agreementStage && (
+        <MonoChip
+          tone={f.agreementStage === "signed" || f.agreementStage === "signing" ? "gold" : "default"}
+          data-testid={`chip-agreement-stage-${f.id}`}
+        >
+          {f.agreementStage}
+        </MonoChip>
+      )}
+    </>
+  );
+}
 function firmDraftFrom(f: AtelierPartnerFirm): FirmDraft {
   return {
     name: f.name ?? "",
@@ -328,6 +350,8 @@ function firmDraftFrom(f: AtelierPartnerFirm): FirmDraft {
     contactName: f.contactName ?? "",
     contactEmail: f.contactEmail ?? "",
     notes: f.notes ?? "",
+    partnershipStage: f.partnershipStage ?? "consideration",
+    agreementStage: f.agreementStage ?? "",
   };
 }
 
@@ -345,6 +369,10 @@ function firmInputFrom(d: FirmDraft): AtelierPartnerFirmInput {
     contactName: d.contactName.trim() || null,
     contactEmail: d.contactEmail.trim() || null,
     notes: d.notes.trim() || null,
+    partnershipStage: d.partnershipStage as AtelierPartnerFirmInput["partnershipStage"],
+    agreementStage: (d.partnershipStage === "agreed"
+      ? d.agreementStage || "preparing"
+      : null) as AtelierPartnerFirmInput["agreementStage"],
   };
 }
 
@@ -379,6 +407,18 @@ function FirmForm({
             {FIRM_STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
           </Select>
         </Field>
+        <Field label="Partnership stage">
+          <Select value={d.partnershipStage} onChange={set("partnershipStage")} data-testid="select-partnership-stage">
+            {PARTNERSHIP_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </Select>
+        </Field>
+        {d.partnershipStage === "agreed" && (
+          <Field label="Agreement stage">
+            <Select value={d.agreementStage || "preparing"} onChange={set("agreementStage")} data-testid="select-agreement-stage">
+              {AGREEMENT_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Strength 1–5"><TextInput type="number" min={1} max={5} value={d.relationshipStrength} onChange={set("relationshipStrength")} /></Field>
         <Field label="Anchor · Cognirise"><TextInput value={d.anchorCognirise} onChange={set("anchorCognirise")} /></Field>
         <Field label="Anchor · Partner"><TextInput value={d.anchorPartner} onChange={set("anchorPartner")} /></Field>
@@ -580,7 +620,7 @@ function IdentifyView() {
                 }
                 trailing={
                   <>
-                    {f.partnershipStage === "candidate" && <MonoChip tone="amber">candidate</MonoChip>}
+                    <FirmStageChips firm={f} />
                     <AllianceVerdictChip firm={f} />
                     {f.tier && <MonoChip tone={f.tier === "strategic" ? "gold" : "default"}>{f.tier}</MonoChip>}
                     <MonoChip tone={f.status === "active" ? "green" : f.status === "renewal_due" ? "amber" : "default"}>
@@ -598,7 +638,7 @@ function IdentifyView() {
                 subtitle={[f.kind, f.country, f.speciality].filter(Boolean).join(" · ") || "—"}
                 trailing={
                   <>
-                    {f.partnershipStage === "candidate" && <MonoChip tone="amber">candidate</MonoChip>}
+                    <FirmStageChips firm={f} />
                     <AllianceVerdictChip firm={f} />
                     {f.tier && <MonoChip tone={f.tier === "strategic" ? "gold" : "default"}>{f.tier}</MonoChip>}
                     <MonoChip tone={f.status === "active" ? "green" : f.status === "renewal_due" ? "amber" : "default"}>
@@ -2373,3 +2413,5 @@ function RenewView() {
     </div>
   );
 }
+
+const AGREEMENT_STAGES = ["preparing", "negotiating", "reviewing", "signing", "signed"] as const;

@@ -192,7 +192,18 @@ export function AllianceEvaluationPanel({
             Evaluation
           </span>
           {firm.archetype && <MonoChip tone="gold">{firm.archetype.replace(/_/g, " ")}</MonoChip>}
-          {firm.partnershipStage && <MonoChip>{firm.partnershipStage}</MonoChip>}
+          {firm.partnershipStage && (
+            <MonoChip tone={firm.partnershipStage === "agreed" ? "green" : "amber"}>
+              {firm.partnershipStage}
+            </MonoChip>
+          )}
+          {firm.partnershipStage === "agreed" && firm.agreementStage && (
+            <MonoChip
+              tone={firm.agreementStage === "signed" || firm.agreementStage === "signing" ? "gold" : "default"}
+            >
+              agreement · {firm.agreementStage}
+            </MonoChip>
+          )}
           {sc?.verdict && (
             <MonoChip tone={verdictTone(sc.verdict)}>
               {sc.verdict}
@@ -328,6 +339,39 @@ export function AllianceEvaluationPanel({
           {phasing.note && <div className="text-text-faint mt-0.5">{phasing.note}</div>}
         </div>
       )}
+
+      {/* capability profile — Task #871 (approved research; feeds Riser retrieval) */}
+      {(() => {
+        const cp = firm.capabilityProfile as
+          | {
+              summary?: string;
+              domains?: Array<{ id?: string; label?: string; description?: string; sourceUrls?: string[] }>;
+            }
+          | null
+          | undefined;
+        if (!cp || (!cp.summary && !(cp.domains?.length))) return null;
+        return (
+          <div className="space-y-1.5" data-testid="section-capability-profile">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+              Capability profile
+            </div>
+            {cp.summary && <div className="text-xs text-text-mute">{cp.summary}</div>}
+            {(cp.domains ?? []).map((d) => (
+              <div key={d.id ?? d.label} className="text-xs flex items-start gap-2">
+                <MonoChip tone="gold">{d.label}</MonoChip>
+                <div className="min-w-0">
+                  <span className="text-text">{d.description}</span>
+                  {(d.sourceUrls ?? []).slice(0, 2).map((u) => (
+                    <a key={u} href={u} target="_blank" rel="noreferrer" className="text-text-faint underline ml-1 break-all">
+                      source
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* proposal review queue */}
       {pending.length > 0 && (
