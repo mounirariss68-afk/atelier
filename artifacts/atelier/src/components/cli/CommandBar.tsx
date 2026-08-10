@@ -1534,7 +1534,7 @@ function TurnBody({
         if (breadcrumbs.length === 0 && narrations.length === 0 && !hasToolEntries) return null;
         return (
           <div
-            className="bg-bg-elevate border border-border rounded-md px-3 py-2 space-y-2"
+            className="bg-bg-elevate/70 border border-border rounded-md px-3 py-2 space-y-2"
             data-testid="cli-trace"
           >
             {breadcrumbs.length > 0 && (
@@ -1596,7 +1596,7 @@ function TurnBody({
 
       {turn.proactiveRecap && (
         <div
-          className="bg-bg-elevate border border-gold/30 rounded-md p-3 space-y-1.5"
+          className="bg-bg-elevate/70 border border-gold/30 rounded-md p-3 space-y-1.5"
           data-testid="cli-proactive-recap"
         >
           <div className="flex items-center justify-between">
@@ -1646,7 +1646,7 @@ function TurnBody({
 
       {turn.refusal && (
         <div
-          className="bg-bg-elevate border border-warning/40 rounded-md p-3 space-y-2"
+          className="bg-bg-elevate/70 border border-warning/40 rounded-md p-3 space-y-2"
           data-testid="cli-refusal"
         >
           <div className="text-xs font-mono uppercase tracking-wider text-warning">
@@ -1689,7 +1689,7 @@ function TurnBody({
 
       {turn.disambig && turn.status === "needs_disambiguation" && (
         <div
-          className="bg-bg-elevate border border-gold/40 rounded-md p-3 space-y-2"
+          className="bg-bg-elevate/70 border border-gold/40 rounded-md p-3 space-y-2"
           data-testid="cli-disambig"
         >
           <div className="text-xs font-mono uppercase tracking-wider text-gold">
@@ -1733,7 +1733,7 @@ function TurnBody({
 
       {turn.status === "needs_confirmation" && turn.pending && isCurrent && (
         <div
-          className="bg-bg-elevate border border-gold rounded-md p-3 space-y-2.5"
+          className="bg-bg-elevate/70 border border-gold rounded-md p-3 space-y-2.5"
           data-testid="cli-confirm-card"
         >
           <div className="text-xs">{turn.pending.summary}</div>
@@ -1879,7 +1879,7 @@ function TurnBody({
 
       {turn.status === "async_handoff" && turn.asyncJob && (
         <div
-          className="bg-bg-elevate border border-gold/40 rounded-md p-3 flex items-start gap-2"
+          className="bg-bg-elevate/70 border border-gold/40 rounded-md p-3 flex items-start gap-2"
           data-testid="cli-async-handoff"
         >
           <Clock className="w-4 h-4 text-gold mt-0.5 shrink-0" />
@@ -2052,7 +2052,7 @@ function ClarificationCard({
   if (plannerField && plannerField.planner) {
     return (
       <div
-        className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+        className="bg-bg-elevate/70 border border-gold/50 rounded-md p-3 space-y-2.5"
         data-testid="cli-clarification"
       >
         <div className="text-xs font-mono uppercase tracking-wider text-gold">
@@ -2122,7 +2122,7 @@ function ClarificationCard({
     };
     return (
       <div
-        className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+        className="bg-bg-elevate/70 border border-gold/50 rounded-md p-3 space-y-2.5"
         data-testid="cli-clarification"
       >
         <div className="text-xs font-mono uppercase tracking-wider text-gold">
@@ -2209,7 +2209,7 @@ function ClarificationCard({
   }
   return (
     <div
-      className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+      className="bg-bg-elevate/70 border border-gold/50 rounded-md p-3 space-y-2.5"
       data-testid="cli-clarification"
     >
       <div className="text-xs font-mono uppercase tracking-wider text-gold">
@@ -2309,7 +2309,7 @@ function PlanCard({
   const visibleSteps = isBulk && !showAll ? plan.slice(0, 5) : plan;
   return (
     <div
-      className="bg-bg-elevate border border-border rounded-md p-3 space-y-2"
+      className="bg-bg-elevate/70 border border-border rounded-md p-3 space-y-2"
       data-testid="cli-plan-card"
     >
       <div className="flex items-center justify-between">
@@ -2436,7 +2436,7 @@ function ResultCard({
 }) {
   return (
     <div
-      className="bg-bg-elevate border border-success/40 rounded-md p-3 space-y-2.5"
+      className="bg-bg-elevate/70 border border-success/40 rounded-md p-3 space-y-2.5"
       data-testid="cli-result"
     >
       <div className="flex items-start gap-2">
@@ -2765,7 +2765,7 @@ function HelpPanel({
             {caps.map((c) => (
               <div
                 key={c.id}
-                className="bg-bg-elevate border border-border rounded p-2"
+                className="bg-bg-elevate/70 border border-border rounded p-2"
                 data-testid="cli-help-row"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -2828,7 +2828,7 @@ function SavedPanel({
             return (
               <div
                 key={p.id}
-                className="bg-bg-elevate border border-border rounded p-2.5 text-xs"
+                className="bg-bg-elevate/70 border border-border rounded p-2.5 text-xs"
                 data-testid="cli-saved-row"
               >
                 <div className="font-medium leading-snug">{p.label}</div>

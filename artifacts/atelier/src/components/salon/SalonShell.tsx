@@ -169,7 +169,7 @@ export function SalonShell(props: {
   const baseHref = `/salon/${props.workspace.slug}`;
   return (
     <div
-      className="min-h-screen bg-bg text-text"
+      className="min-h-screen text-text"
       style={
         {
           ["--salon-accent" as string]: props.workspace.accentColor,
@@ -184,7 +184,7 @@ export function SalonShell(props: {
         />
       )}
       <header
-        className="sticky top-0 z-30 w-full border-b border-border bg-bg/90 backdrop-blur"
+        className="sticky top-0 z-30 w-full border-b border-border bg-bg/75 backdrop-blur-xl"
         style={{ borderTopWidth: 3, borderTopStyle: "solid", borderTopColor: "var(--salon-accent)" }}
       >
         <div className="px-4 md:px-6 py-3 flex items-center gap-4">

@@ -311,7 +311,9 @@ const initialsFor = (name?: string) =>
 export const OwnershipPanel = ({ rows, className }: { rows: OwnershipRow[]; className?: string }) => (
   <div
     className={cn(
-      "min-w-[240px] rounded-lg border border-border bg-bg-elevate/60 backdrop-blur-sm divide-y divide-border-soft",
+      // Task #900 — no backdrop-blur here: this panel sits inside the
+      // now-frosted .page-hero and blur must not nest inside blur.
+      "min-w-[240px] rounded-lg border border-border bg-bg-elevate/60 divide-y divide-border-soft",
       className,
     )}
   >
