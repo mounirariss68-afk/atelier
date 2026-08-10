@@ -260,6 +260,7 @@ interface MyLetterType {
   id: string;
   label: string;
   hint: string;
+  salaryBearing: boolean;
   travelDates: boolean;
 }
 
@@ -279,6 +280,16 @@ interface MyLetter {
   createdAt: string;
 }
 
+/** POST /me/letters/preview response — the confirm-step summary (Task #862). */
+interface LetterPreviewPayload {
+  ok: true;
+  entity: {
+    name: string;
+    signatoryName: string | null;
+    signatoryTitle: string | null;
+  };
+  salary: { hasSalary: boolean; currency?: string };
+}
 interface MyLettersPayload {
   letters: MyLetter[];
   catalog: MyLetterType[];
@@ -341,6 +352,9 @@ function LettersSection() {
   const [travelStart, setTravelStart] = useState("");
   const [travelEnd, setTravelEnd] = useState("");
   const [busy, setBusy] = useState(false);
+  // Confirm step (Task #862): preview result held here means "awaiting confirm".
+  const [preview, setPreview] = useState<LetterPreviewPayload | null>(null);
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
 
   const downloadPdf = useCallback(
     async (l: MyLetter) => {
@@ -378,25 +392,58 @@ function LettersSection() {
   const dateOk = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
   const travelMissing = needsTravel && (!dateOk(travelStart) || !dateOk(travelEnd));
 
-  const submit = useCallback(async () => {
+  const buildBody = useCallback((): Record<string, string> => {
+    const body: Record<string, string> = {
+      letterType: letterType ?? "",
+      language,
+      deliveryMode: wet ? "wet_signature" : "digital",
+    };
+    if (purpose.trim()) body.purpose = purpose.trim();
+    if (needsTravel) {
+      body.travelStart = travelStart;
+      body.travelEnd = travelEnd;
+    }
+    return body;
+  }, [letterType, language, wet, purpose, needsTravel, travelStart, travelEnd]);
+
+  // Step 1 — call the preview endpoint so the employee sees who signs and
+  // whether salary figures will appear before anything is generated or
+  // emailed (parity with the chat confirm card, Task #862).
+  const requestPreview = useCallback(async () => {
     if (!letterType || busy || travelMissing) return;
     setBusy(true);
+    setPreviewErr(null);
     try {
-      const body: Record<string, string> = {
-        letterType,
-        language,
-        deliveryMode: wet ? "wet_signature" : "digital",
-      };
-      if (purpose.trim()) body.purpose = purpose.trim();
-      if (needsTravel) {
-        body.travelStart = travelStart;
-        body.travelEnd = travelEnd;
-      }
+      const res = await fetch(`${API_BASE}/api/atelier/me/letters/preview`, {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(buildBody()),
+      });
+      const j = (await res.json().catch(() => null)) as
+        | (LetterPreviewPayload & { message?: string; error?: string })
+        | null;
+      if (!res.ok || !j?.ok) throw new Error(j?.message ?? j?.error ?? `${res.status}`);
+      setPreview(j);
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }, [letterType, busy, travelMissing, buildBody, feedback]);
+
+  // Step 2 — confirmed: actually issue the letter.
+  const confirmIssue = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setPreviewErr(null);
+    try {
       const res = await fetch(`${API_BASE}/api/atelier/me/letters`, {
         method: "POST",
         headers: { ...authHeader(), "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody()),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as
@@ -407,6 +454,7 @@ function LettersSection() {
       hapticSuccess();
       feedback.toast("Letter issued", "success");
       setFormOpen(false);
+      setPreview(null);
       setLetterType(null);
       setPurpose("");
       setTravelStart("");
@@ -415,11 +463,11 @@ function LettersSection() {
       await reload();
     } catch (e) {
       hapticError();
-      feedback.toast((e as Error).message, "error");
+      setPreviewErr((e as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [letterType, language, wet, purpose, needsTravel, travelStart, travelEnd, busy, travelMissing, reload, feedback]);
+  }, [busy, buildBody, reload, feedback]);
 
   if (!allowed || !data) return null;
 
@@ -447,7 +495,13 @@ function LettersSection() {
         >
           Official letters
         </Text>
-        <PressScale onPress={() => setFormOpen(true)}>
+        <PressScale
+          onPress={() => {
+            setPreview(null);
+            setPreviewErr(null);
+            setFormOpen(true);
+          }}
+        >
           <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
             <Feather name="plus" size={15} color={c.primary} />
             <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
@@ -526,6 +580,71 @@ function LettersSection() {
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={[{ backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12, maxHeight: "88%" }, softShadow(c.shadow)]}>
+              {preview ? (
+                <ScrollView contentContainerStyle={{ gap: 12 }}>
+                  <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16, textAlign: rtl.textAlign }}>
+                    Confirm before issuing
+                  </Text>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+                    Nothing has been generated or emailed yet — review the details below.
+                  </Text>
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                      {def?.label ?? letterType} ·{" "}
+                      {language === "en" ? "English" : language === "ar" ? "Arabic" : "Turkish"} ·{" "}
+                      {wet ? "Wet signature" : "Digital"}
+                    </Text>
+                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                      Issued by {preview.entity.name}
+                    </Text>
+                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                      {preview.entity.signatoryName
+                        ? `Signed by ${preview.entity.signatoryName}${preview.entity.signatoryTitle ? `, ${preview.entity.signatoryTitle}` : ""}`
+                        : "No named signatory on file"}
+                    </Text>
+                    {def?.salaryBearing ? (
+                      <Text
+                        style={{
+                          color: preview.salary.hasSalary ? c.foreground : "#B8860B",
+                          fontFamily: "PlusJakartaSans_500Medium",
+                          fontSize: 13,
+                          textAlign: rtl.textAlign,
+                        }}
+                      >
+                        {preview.salary.hasSalary
+                          ? `Salary figures will appear${preview.salary.currency ? ` (${preview.salary.currency})` : ""} — from your compensation record`
+                          : "No salary data on file — the letter will omit salary figures"}
+                      </Text>
+                    ) : null}
+                    <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+                      {wet
+                        ? `Sent to ${preview.entity.signatoryName ?? "the signatory"} to print, sign and hand over`
+                        : "Emailed to your Cognirise inbox"}
+                    </Text>
+                  </View>
+                  {previewErr ? (
+                    <Text style={{ color: "#B00020", fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                      {previewErr}
+                    </Text>
+                  ) : null}
+                  <View style={{ flexDirection: rtl.row, gap: 10, justifyContent: "flex-end" }}>
+                    <Button
+                      label="Back"
+                      variant="secondary"
+                      onPress={() => {
+                        setPreview(null);
+                        setPreviewErr(null);
+                      }}
+                      disabled={busy}
+                    />
+                    <Button
+                      label={busy ? "Issuing…" : "Confirm & issue"}
+                      onPress={confirmIssue}
+                      disabled={busy}
+                    />
+                  </View>
+                </ScrollView>
+              ) : (
               <ScrollView contentContainerStyle={{ gap: 12 }}>
                 <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16 }}>
                   Request a letter
@@ -609,12 +728,13 @@ function LettersSection() {
                 <View style={{ flexDirection: rtl.row, gap: 10, justifyContent: "flex-end" }}>
                   <Button label="Cancel" variant="secondary" onPress={() => setFormOpen(false)} />
                   <Button
-                    label={busy ? "Issuing…" : "Issue letter"}
-                    onPress={submit}
+                    label={busy ? "Checking…" : "Review & issue"}
+                    onPress={requestPreview}
                     disabled={busy || !letterType || travelMissing}
                   />
                 </View>
               </ScrollView>
+              )}
             </View>
           </Pressable>
         </Pressable>

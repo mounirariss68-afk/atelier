@@ -3,7 +3,10 @@
  *
  * Lists the caller's letter issuances (type, language, date, ref number,
  * delivery status) with one-click re-download of the stored PDF, plus a
- * "Request a letter" form with chat parity (POST /me/letters).
+ * "Request a letter" form with chat parity (POST /me/letters). Submitting
+ * the form first calls POST /me/letters/preview and shows a confirm step
+ * (issuing entity, signatory, salary presence) before anything is
+ * generated or emailed — parity with the chat flow's confirm card (Task #862).
  *
  * The bespoke /me/letters routes (Task #845) are not in the openapi spec,
  * so this page uses raw fetch with the base-path-aware API_BASE pattern.
@@ -64,6 +67,20 @@ interface LettersResponse {
   } | null;
 }
 
+/** POST /me/letters/preview response — the confirm-step summary. */
+interface LetterPreview {
+  ok: true;
+  entity: {
+    id: string;
+    name: string;
+    via: string;
+    signatoryName: string | null;
+    signatoryTitle: string | null;
+    hasSignature: boolean;
+    hasStamp: boolean;
+  };
+  salary: { hasSalary: boolean; currency?: string };
+}
 const LANGUAGE_LABEL: Record<string, string> = {
   en: "English",
   ar: "Arabic",
@@ -314,43 +331,88 @@ function RequestLetterForm({
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [issued, setIssued] = React.useState<LetterWire | null>(null);
+  // Confirm step (Task #862): preview result held here means "awaiting confirm".
+  const [preview, setPreview] = React.useState<LetterPreview | null>(null);
 
   const def = catalog.find((t) => t.id === letterType) ?? null;
   const needsTravel = !!def?.travelDates;
   const travelMissing = needsTravel && (!travelStart || !travelEnd);
 
+  const buildBody = React.useCallback((): Record<string, string> => {
+    const body: Record<string, string> = { letterType, language, deliveryMode };
+    if (addresseeName.trim()) body.addresseeName = addresseeName.trim();
+    if (addresseeInstitution.trim()) body.addresseeInstitution = addresseeInstitution.trim();
+    if (purpose.trim()) body.purpose = purpose.trim();
+    if (needsTravel) {
+      body.travelStart = travelStart;
+      body.travelEnd = travelEnd;
+      if (destination.trim()) body.destination = destination.trim();
+    }
+    return body;
+  }, [
+    letterType,
+    language,
+    deliveryMode,
+    addresseeName,
+    addresseeInstitution,
+    purpose,
+    needsTravel,
+    travelStart,
+    travelEnd,
+    destination,
+  ]);
+
+  // Step 1 — form submit calls the preview endpoint so the employee sees
+  // who signs and whether salary figures will appear before anything is
+  // generated or emailed (parity with the chat confirm card).
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!letterType || busy || travelMissing) return;
     setBusy(true);
     setErr(null);
     try {
-      const body: Record<string, string> = { letterType, language, deliveryMode };
-      if (addresseeName.trim()) body.addresseeName = addresseeName.trim();
-      if (addresseeInstitution.trim()) body.addresseeInstitution = addresseeInstitution.trim();
-      if (purpose.trim()) body.purpose = purpose.trim();
-      if (needsTravel) {
-        body.travelStart = travelStart;
-        body.travelEnd = travelEnd;
-        if (destination.trim()) body.destination = destination.trim();
-      }
+      const res = await fetch(`${API_BASE}/me/letters/preview`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(buildBody()),
+      });
+      const j = (await res.json().catch(() => null)) as
+        | (LetterPreview & { message?: string; error?: string })
+        | null;
+      if (!res.ok || !j?.ok)
+        throw new Error(j?.message ?? j?.error ?? `Preview failed (${res.status})`);
+      setPreview(j);
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 2 — confirmed: actually issue the letter.
+  const confirmIssue = async () => {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
       const res = await fetch(`${API_BASE}/me/letters`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody()),
       });
       const j = (await res.json().catch(() => null)) as
         | { letter?: LetterWire; message?: string; error?: string }
         | null;
       if (!res.ok) throw new Error(j?.message ?? j?.error ?? `Request failed (${res.status})`);
       setIssued(j?.letter ?? null);
+      setPreview(null);
     } catch (e2) {
       setErr((e2 as Error).message);
+    } finally {
       setBusy(false);
-      return;
     }
-    setBusy(false);
   };
 
   if (issued) {
@@ -364,6 +426,93 @@ function RequestLetterForm({
         <PillButton type="button" variant="ghost" onClick={onDone}>
           Done
         </PillButton>
+      </div>
+    );
+  }
+
+  // Confirm step — show who signs and whether salary figures will appear
+  // before anything is generated or emailed.
+  if (preview) {
+    const salaryBearing = !!def?.salaryBearing;
+    return (
+      <div className="space-y-4" data-testid="me-letters-confirm">
+        <div>
+          <h3 className="text-sm font-semibold text-text">Confirm before issuing</h3>
+          <p className="mt-1 text-xs text-text-mute">
+            Nothing has been generated or emailed yet — review the details below.
+          </p>
+        </div>
+        <dl className="space-y-2 text-sm">
+          <div className="flex gap-2">
+            <dt className="w-32 shrink-0 text-text-mute">Letter</dt>
+            <dd className="text-text">
+              {def?.label ?? letterType} · {LANGUAGE_LABEL[language] ?? language} ·{" "}
+              {deliveryMode === "wet_signature" ? "Wet signature" : "Digital"}
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-32 shrink-0 text-text-mute">Issued by</dt>
+            <dd className="text-text" data-testid="me-letters-confirm-entity">
+              {preview.entity.name}
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-32 shrink-0 text-text-mute">Signed by</dt>
+            <dd className="text-text" data-testid="me-letters-confirm-signatory">
+              {preview.entity.signatoryName
+                ? `${preview.entity.signatoryName}${preview.entity.signatoryTitle ? `, ${preview.entity.signatoryTitle}` : ""}`
+                : "No named signatory on file"}
+            </dd>
+          </div>
+          {salaryBearing && (
+            <div className="flex gap-2">
+              <dt className="w-32 shrink-0 text-text-mute">Salary figures</dt>
+              <dd
+                className={preview.salary.hasSalary ? "text-text" : "text-amber-700"}
+                data-testid="me-letters-confirm-salary"
+              >
+                {preview.salary.hasSalary
+                  ? `Will appear${preview.salary.currency ? ` (${preview.salary.currency})` : ""} — from your compensation record`
+                  : "No salary data on file — the letter will omit salary figures"}
+              </dd>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <dt className="w-32 shrink-0 text-text-mute">Delivery</dt>
+            <dd className="text-text">
+              {deliveryMode === "wet_signature"
+                ? `Sent to ${preview.entity.signatoryName ?? "the signatory"} to print, sign and hand over`
+                : "Emailed to your Cognirise inbox"}
+            </dd>
+          </div>
+        </dl>
+        {err && (
+          <p className="text-sm text-red-700" data-testid="me-letters-confirm-error">
+            {err}
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <PillButton
+            type="button"
+            onClick={() => void confirmIssue()}
+            disabled={busy}
+            data-testid="me-letters-confirm-issue"
+          >
+            {busy ? "Issuing…" : "Confirm & issue"}
+          </PillButton>
+          <PillButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setPreview(null);
+              setErr(null);
+            }}
+            disabled={busy}
+            data-testid="me-letters-confirm-back"
+          >
+            Back to edit
+          </PillButton>
+        </div>
       </div>
     );
   }
@@ -503,7 +652,7 @@ function RequestLetterForm({
           disabled={busy || !letterType || travelMissing}
           data-testid="me-letters-submit"
         >
-          {busy ? "Issuing…" : "Issue letter"}
+          {busy ? "Checking…" : "Review & issue"}
         </PillButton>
         {travelMissing && (
           <span className="text-xs text-text-mute">Visa letters need a travel window.</span>
