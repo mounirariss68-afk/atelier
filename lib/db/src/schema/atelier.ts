@@ -3978,7 +3978,10 @@ export const atelierPartnerFirmInvoices = pgTable(
     orgId: ORG("org_id"),
     partnerFirmId: text("partner_firm_id").notNull(),
     partnerFirmName: text("partner_firm_name").notNull(),
-    engagementId: text("engagement_id").notNull(),
+    // Task #875 — nullable: partner-submitted AP invoices (source
+    // "partner_submitted") arrive from the portal without an engagement.
+    // Weekly RCTI proposal rows (source "proposal") always set it.
+    engagementId: text("engagement_id"),
     // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
     legalEntityId: text("legal_entity_id"),
     weekIso: text("week_iso").notNull(),
@@ -3987,7 +3990,29 @@ export const atelierPartnerFirmInvoices = pgTable(
     costCurrency: text("cost_currency").notNull().default("USD"),
     fxRate: doublePrecision("fx_rate").notNull().default(1),
     usdAmount: doublePrecision("usd_amount").notNull().default(0),
-    status: text("status").notNull().default("proposed"), // proposed | partner_approved | paid | rejected
+    // Proposal rows: proposed | partner_approved | paid | rejected.
+    // Partner-submitted AP rows (Task #875, source "partner_submitted"):
+    //   submitted | under_review | approved | scheduled | paid | rejected.
+    status: text("status").notNull().default("proposed"),
+    // Task #875 — where this row came from. "proposal" = weekly RCTI
+    // proposal composed from partner-firm hours; "partner_submitted" =
+    // AP invoice submitted by the firm through the partner portal.
+    source: text("source").notNull().default("proposal"),
+    // Task #875 — partner-submitted invoice metadata + PDF blob.
+    reference: text("reference"),
+    periodLabel: text("period_label"),
+    invoiceDate: text("invoice_date"),
+    submittedByUserId: text("submitted_by_user_id"),
+    submittedAt: timestamp("submitted_at"),
+    fileName: text("file_name"),
+    mime: text("mime"),
+    sizeBytes: integer("size_bytes"),
+    sha256: text("sha256"),
+    blobRef: text("blob_ref"),
+    reviewedByUserId: text("reviewed_by_user_id"),
+    reviewedAt: timestamp("reviewed_at"),
+    paymentRunId: text("payment_run_id"),
+    remittanceRef: text("remittance_ref"),
     proposalRunId: text("proposal_run_id"),
     evidenceFirmHourIds: jsonb("evidence_firm_hour_ids").$type<string[]>().notNull().default([]),
     notes: text("notes"),

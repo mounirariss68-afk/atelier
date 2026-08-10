@@ -1673,79 +1673,94 @@ router.post("/partners/conflicts/:id/archive", async (req, res, next) => {
 // counterparties. NDA status in Qualify and framework agreements in
 // Govern both derive from this — never a hand-toggled field.
 // @cli-skip: Task #513 REST surface; chat parity tracked in docs/PARTNERS_BACKLOG.md
+/**
+ * Task #875 — shared agreement join, also consumed by the partner-portal
+ * contracts tab (firm-scoped). Returns e-sign registry contracts with
+ * partner-firm counterparties, each resolved to a partnerFirmId via the
+ * deterministic normalized-name join (there is NO FK between contract
+ * counterparties and the partner-firm registry — never name-match in UIs).
+ */
+export async function partnerAgreementItems(orgId: string): Promise<
+  Array<{
+    id: string;
+    instrumentType: string;
+    counterpartyId: string;
+    title: string;
+    status: string;
+    governingLaw: string;
+    termStart: string | null;
+    termEnd: string | null;
+    fullyExecutedAt: Date | null;
+    counterpartyName: string | null;
+    partnerFirmId: string | null;
+  }>
+> {
+  const counterparties = await db
+    .select({
+      id: atelierCounterparty.id,
+      legalName: atelierCounterparty.legalName,
+      displayName: atelierCounterparty.displayName,
+    })
+    .from(atelierCounterparty)
+    .where(
+      and(
+        eq(atelierCounterparty.orgId, orgId),
+        eq(atelierCounterparty.kind, "partner_firm"),
+        isNull(atelierCounterparty.deletedAt),
+      ),
+    );
+  if (counterparties.length === 0) return [];
+  const cpIds = counterparties.map((c) => c.id);
+  const contracts = await db
+    .select({
+      id: atelierContract.id,
+      instrumentType: atelierContract.instrumentType,
+      counterpartyId: atelierContract.counterpartyId,
+      title: atelierContract.title,
+      status: atelierContract.status,
+      governingLaw: atelierContract.governingLaw,
+      termStart: atelierContract.termStart,
+      termEnd: atelierContract.termEnd,
+      fullyExecutedAt: atelierContract.fullyExecutedAt,
+    })
+    .from(atelierContract)
+    .where(
+      and(
+        eq(atelierContract.orgId, orgId),
+        inArray(atelierContract.counterpartyId, cpIds),
+        isNull(atelierContract.deletedAt),
+      ),
+    );
+  const cpById = new Map(counterparties.map((c) => [c.id, c]));
+  // Deterministic counterparty→partner-firm linkage by normalized name.
+  // There is no FK between contracts' counterparties and the partner-firm
+  // registry, so we join on trimmed, case-folded names.
+  const firms = await db
+    .select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
+    .from(atelierPartnerFirms)
+    .where(and(eq(atelierPartnerFirms.orgId, orgId), isNull(atelierPartnerFirms.deletedAt)));
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  const firmByName = new Map(firms.map((f) => [norm(f.name), f.id]));
+  const firmIdForCp = (cpId: string): string | null => {
+    const cp = cpById.get(cpId);
+    if (!cp) return null;
+    return firmByName.get(norm(cp.displayName)) ?? firmByName.get(norm(cp.legalName)) ?? null;
+  };
+  return contracts.map((c) => ({
+    ...c,
+    counterpartyName:
+      cpById.get(c.counterpartyId)?.displayName ??
+      cpById.get(c.counterpartyId)?.legalName ??
+      null,
+    partnerFirmId: firmIdForCp(c.counterpartyId),
+  }));
+}
+
 router.get("/partners/agreements", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const counterparties = await db
-      .select({
-        id: atelierCounterparty.id,
-        legalName: atelierCounterparty.legalName,
-        displayName: atelierCounterparty.displayName,
-      })
-      .from(atelierCounterparty)
-      .where(
-        and(
-          eq(atelierCounterparty.orgId, me.orgId),
-          eq(atelierCounterparty.kind, "partner_firm"),
-          isNull(atelierCounterparty.deletedAt),
-        ),
-      );
-    if (counterparties.length === 0) {
-      res.json({ items: [] });
-      return;
-    }
-    const cpIds = counterparties.map((c) => c.id);
-    const contracts = await db
-      .select({
-        id: atelierContract.id,
-        instrumentType: atelierContract.instrumentType,
-        counterpartyId: atelierContract.counterpartyId,
-        title: atelierContract.title,
-        status: atelierContract.status,
-        governingLaw: atelierContract.governingLaw,
-        termStart: atelierContract.termStart,
-        termEnd: atelierContract.termEnd,
-        fullyExecutedAt: atelierContract.fullyExecutedAt,
-      })
-      .from(atelierContract)
-      .where(
-        and(
-          eq(atelierContract.orgId, me.orgId),
-          inArray(atelierContract.counterpartyId, cpIds),
-          isNull(atelierContract.deletedAt),
-        ),
-      );
-    const cpById = new Map(counterparties.map((c) => [c.id, c]));
-    // Deterministic counterparty→partner-firm linkage by normalized name.
-    // There is no FK between contracts' counterparties and the partner-firm
-    // registry, so we join on trimmed, case-folded names.
-    const firms = await db
-      .select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
-      .from(atelierPartnerFirms)
-      .where(
-        and(
-          eq(atelierPartnerFirms.orgId, me.orgId),
-          isNull(atelierPartnerFirms.deletedAt),
-        ),
-      );
-    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
-    const firmByName = new Map(firms.map((f) => [norm(f.name), f.id]));
-    const firmIdForCp = (cpId: string): string | null => {
-      const cp = cpById.get(cpId);
-      if (!cp) return null;
-      return firmByName.get(norm(cp.displayName)) ?? firmByName.get(norm(cp.legalName)) ?? null;
-    };
-    res.json({
-      items: contracts.map((c) => ({
-        ...c,
-        counterpartyName:
-          cpById.get(c.counterpartyId)?.displayName ??
-          cpById.get(c.counterpartyId)?.legalName ??
-          null,
-        partnerFirmId: firmIdForCp(c.counterpartyId),
-      })),
-    });
+    res.json({ items: await partnerAgreementItems(me.orgId) });
   } catch (err) {
     next(err);
   }

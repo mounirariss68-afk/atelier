@@ -24,6 +24,7 @@ import {
   atelierBankSignatories,
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
+  atelierPartnerFirms,
   atelierExpenses,
   type PaymentRunSignature,
 } from "@workspace/db";
@@ -31,6 +32,7 @@ import { runSelfBillingClerk } from "../../lib/atelier-agents/selfBillingClerk.j
 import { nextRunNumber } from "../../lib/atelier-agents/selfBillingClerk.js";
 import { notifySupplierOfInvoice } from "../../lib/selfBilledInvoiceEmail.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import { loadContractBytes } from "../../lib/atelier-contracts.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -471,14 +473,41 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
     expenses = expenses.filter((e) => !lockedExpenseIds.has(e.id));
     if (wantExpenseIds) expenses = expenses.filter((e) => wantExpenseIds.includes(e.id));
 
-    if (invoices.length === 0 && expenses.length === 0) {
-      res.status(409).json({ error: "no-eligible-items", message: "No approved self-billed invoices or unreimbursed approved expenses available." });
+    // Task #875 — eligible partner-submitted AP invoices: APPROVED, not yet
+    // scheduled into a run. Payments only ever go to finance-approved firm
+    // bank details, so firms without an IBAN are skipped (surfaced in the
+    // response so finance can chase onboarding).
+    const wantPartnerInvoiceIds = Array.isArray(req.body?.partnerInvoiceIds)
+      ? (req.body.partnerInvoiceIds as unknown[]).filter((x): x is string => typeof x === "string")
+      : null;
+    let partnerInvoices = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      eq(atelierPartnerFirmInvoices.source, "partner_submitted"),
+      eq(atelierPartnerFirmInvoices.status, "approved"),
+      isNull(atelierPartnerFirmInvoices.paymentRunId),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+    ));
+    if (wantPartnerInvoiceIds) partnerInvoices = partnerInvoices.filter((p) => wantPartnerInvoiceIds.includes(p.id));
+    const pfIds = [...new Set(partnerInvoices.map((p) => p.partnerFirmId))];
+    const pfRows = pfIds.length
+      ? await db.select({ id: atelierPartnerFirms.id, bankIban: atelierPartnerFirms.bankIban })
+          .from(atelierPartnerFirms)
+          .where(and(eq(atelierPartnerFirms.orgId, me.orgId), inArray(atelierPartnerFirms.id, pfIds)))
+      : [];
+    const firmHasBank = new Set(pfRows.filter((f) => (f.bankIban ?? "").trim()).map((f) => f.id));
+    const skippedMissingBank = partnerInvoices.filter((p) => !firmHasBank.has(p.partnerFirmId)).map((p) => p.id);
+    partnerInvoices = partnerInvoices.filter((p) => firmHasBank.has(p.partnerFirmId));
+
+    if (invoices.length === 0 && expenses.length === 0 && partnerInvoices.length === 0) {
+      res.status(409).json({ error: "no-eligible-items", message: "No approved self-billed invoices, partner invoices or unreimbursed approved expenses available." });
       return;
     }
 
     const runId = rid("payrun");
     const totalUsd = +(
-      invoices.reduce((s, i) => s + i.totalUsd, 0) + expenses.reduce((s, e) => s + (e.usdAmount ?? 0), 0)
+      invoices.reduce((s, i) => s + i.totalUsd, 0) +
+      expenses.reduce((s, e) => s + (e.usdAmount ?? 0), 0) +
+      partnerInvoices.reduce((s, p) => s + (p.usdAmount ?? 0), 0)
     ).toFixed(2);
     const runNumber = await nextRunNumber();
     await db.insert(atelierPaymentRuns).values({
@@ -490,7 +519,7 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
       legalEntityId: bank.legalEntityId ?? null,
       currency: bank.currency,
       status: "pending_signatures",
-      itemCount: invoices.length + expenses.length,
+      itemCount: invoices.length + expenses.length + partnerInvoices.length,
       totalUsd,
       makerUserId: me.id,
       makerName: me.name,
@@ -527,15 +556,33 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
         amountUsd: e.usdAmount ?? 0,
       });
     }
+    // Task #875 — directly-submitted partner AP invoices join the run.
+    for (const p of partnerInvoices) {
+      await db.insert(atelierPaymentRunItems).values({
+        id: rid("pri"),
+        orgId: me.orgId,
+        runId,
+        itemType: "partner_firm_invoice",
+        refId: p.id,
+        payeeName: p.partnerFirmName,
+        description: `Partner invoice ${p.reference ?? p.id}${p.periodLabel ? ` · ${p.periodLabel}` : ""}`,
+        amount: p.costAmount,
+        currency: p.costCurrency,
+        amountUsd: p.usdAmount ?? 0,
+      });
+      await db.update(atelierPartnerFirmInvoices).set({
+        status: "scheduled", paymentRunId: runId, updatedAt: new Date(),
+      }).where(eq(atelierPartnerFirmInvoices.id, p.id));
+    }
     await audit({
       entityType: "payment_run", entityId: runId, actor: me,
       action: "finance.payment_run.build",
-      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), totalUsd },
-      summary: `Built payment run ${runNumber}: ${invoices.length} invoice(s) + ${expenses.length} reimbursement(s), $${totalUsd.toFixed(2)}.`,
+      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), partnerInvoices: partnerInvoices.map((p) => p.id), skippedMissingBank, totalUsd },
+      summary: `Built payment run ${runNumber}: ${invoices.length} invoice(s) + ${expenses.length} reimbursement(s) + ${partnerInvoices.length} partner invoice(s), $${totalUsd.toFixed(2)}.`,
     });
     const [run] = await db.select().from(atelierPaymentRuns).where(eq(atelierPaymentRuns.id, runId));
     const items = await db.select().from(atelierPaymentRunItems).where(eq(atelierPaymentRunItems.runId, runId));
-    res.status(201).json({ ok: true, run: runWire(run, items) });
+    res.status(201).json({ ok: true, run: runWire(run, items), skippedMissingBank });
   } catch (err) { next(err); }
 });
 
@@ -726,6 +773,11 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
         await db.update(atelierExpenses).set({
           status: "reimbursed", reimbursedAt: now, updatedAt: now,
         }).where(and(eq(atelierExpenses.id, it.refId), eq(atelierExpenses.status, "approved")));
+      } else if (it.itemType === "partner_firm_invoice") {
+        // Task #875 — partner-submitted AP invoice settled with the run.
+        await db.update(atelierPartnerFirmInvoices).set({
+          status: "paid", paidAt: now, paidByUserId: me.id, remittanceRef: ref, updatedAt: now,
+        }).where(and(eq(atelierPartnerFirmInvoices.id, it.refId), eq(atelierPartnerFirmInvoices.status, "scheduled")));
       }
     }
     await db.update(atelierPaymentRuns).set({ status: "paid", paidAt: now, updatedAt: now })
@@ -773,6 +825,11 @@ router.post("/finance/payables/payment-runs/:id/cancel", async (req, res, next) 
         await db.update(atelierSelfBilledInvoices).set({
           status: "approved", paymentRunId: null, updatedAt: now,
         }).where(and(eq(atelierSelfBilledInvoices.id, it.refId), eq(atelierSelfBilledInvoices.status, "scheduled")));
+      } else if (it.itemType === "partner_firm_invoice") {
+        // Task #875 — release the partner invoice back to approved.
+        await db.update(atelierPartnerFirmInvoices).set({
+          status: "approved", paymentRunId: null, updatedAt: now,
+        }).where(and(eq(atelierPartnerFirmInvoices.id, it.refId), eq(atelierPartnerFirmInvoices.status, "scheduled")));
       }
     }
     await db.update(atelierPaymentRuns).set({
@@ -862,6 +919,145 @@ router.post("/finance/payables/subcontractors/links/:id/ar-receipt", (req, res) 
 router.get("/finance/payables/audit", (req, res) => {
   if (!readGate(req, res)) return;
   res.json({ items: [] });
+});
+
+// ============================================================
+// Task #875 — Partner-submitted AP invoices (finance review surface)
+// ============================================================
+
+function partnerInvoiceWire(
+  row: typeof atelierPartnerFirmInvoices.$inferSelect,
+  hasBankDetails?: boolean,
+) {
+  return {
+    id: row.id,
+    partnerFirmId: row.partnerFirmId,
+    partnerFirmName: row.partnerFirmName,
+    reference: row.reference,
+    periodLabel: row.periodLabel,
+    invoiceDate: row.invoiceDate,
+    amount: row.costAmount,
+    currency: row.costCurrency,
+    usdAmount: row.usdAmount,
+    status: row.status,
+    notes: row.notes,
+    fileName: row.fileName,
+    sizeBytes: row.sizeBytes,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    rejectedReason: row.rejectedReason,
+    paymentRunId: row.paymentRunId,
+    remittanceRef: row.remittanceRef,
+    paidAt: row.paidAt?.toISOString() ?? null,
+    ...(hasBankDetails === undefined ? {} : { hasBankDetails }),
+  };
+}
+
+// @cli-skip: Task #875 finance review surface; UI-only raw-fetch wiring
+router.get("/finance/payables/partner-invoices", async (req, res, next) => {
+  try {
+    const me = readGate(req, res);
+    if (!me) return;
+    const rows = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      eq(atelierPartnerFirmInvoices.source, "partner_submitted"),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+    )).orderBy(desc(atelierPartnerFirmInvoices.createdAt));
+    const firmIds = [...new Set(rows.map((r) => r.partnerFirmId))];
+    const firms = firmIds.length
+      ? await db.select({ id: atelierPartnerFirms.id, bankIban: atelierPartnerFirms.bankIban })
+          .from(atelierPartnerFirms)
+          .where(and(eq(atelierPartnerFirms.orgId, me.orgId), inArray(atelierPartnerFirms.id, firmIds)))
+      : [];
+    const bankById = new Map(firms.map((f) => [f.id, Boolean((f.bankIban ?? "").trim())]));
+    res.json({ items: rows.map((r) => partnerInvoiceWire(r, bankById.get(r.partnerFirmId) ?? false)) });
+  } catch (err) { next(err); }
+});
+
+async function loadPartnerInvoice(orgId: string, id: string) {
+  const [row] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+    eq(atelierPartnerFirmInvoices.id, id),
+    eq(atelierPartnerFirmInvoices.orgId, orgId),
+    eq(atelierPartnerFirmInvoices.source, "partner_submitted"),
+    isNull(atelierPartnerFirmInvoices.deletedAt),
+  ));
+  return row ?? null;
+}
+
+// @cli-skip: Task #875 binary download; not CLI-exposable
+router.get("/finance/payables/partner-invoices/:id/file", async (req, res, next) => {
+  try {
+    const me = readGate(req, res);
+    if (!me) return;
+    const row = await loadPartnerInvoice(me.orgId, req.params.id);
+    if (!row || !row.blobRef) { res.status(404).json({ error: "not-found" }); return; }
+    const bytes = await loadContractBytes(row.blobRef);
+    if (!bytes) { res.status(404).json({ error: "file-missing" }); return; }
+    res.setHeader("Content-Type", row.mime ?? "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      contentDispositionFilename("attachment", row.fileName ?? `${row.id}.pdf`),
+    );
+    res.send(bytes);
+  } catch (err) { next(err); }
+});
+
+/** Legal review transitions for partner-submitted invoices. */
+const PARTNER_INVOICE_REVIEW: Record<string, string[]> = {
+  start_review: ["submitted"],
+  approve: ["submitted", "under_review"],
+  reject: ["submitted", "under_review"],
+};
+
+// @cli-skip: Task #875 audited finance write; UI-workflow only
+router.post("/finance/payables/partner-invoices/:id/review", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res);
+    if (!me) return;
+    const decision = typeof req.body?.decision === "string" ? req.body.decision : "";
+    const allowedFrom = PARTNER_INVOICE_REVIEW[decision];
+    if (!allowedFrom) { res.status(400).json({ error: "invalid-decision" }); return; }
+    const row = await loadPartnerInvoice(me.orgId, req.params.id);
+    if (!row) { res.status(404).json({ error: "not-found" }); return; }
+    if (!allowedFrom.includes(row.status)) {
+      res.status(409).json({ error: "invalid-status", status: row.status });
+      return;
+    }
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 2000).trim() : "";
+    const now = new Date();
+    if (decision === "start_review") {
+      await db.update(atelierPartnerFirmInvoices).set({
+        status: "under_review", reviewedByUserId: me.id, updatedAt: now,
+      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+    } else if (decision === "approve") {
+      // Payments only ever go to finance-approved firm bank details —
+      // block approval until onboarding recorded an IBAN for the firm.
+      const [firm] = await db.select({ bankIban: atelierPartnerFirms.bankIban })
+        .from(atelierPartnerFirms)
+        .where(and(eq(atelierPartnerFirms.id, row.partnerFirmId), eq(atelierPartnerFirms.orgId, me.orgId)));
+      if (!firm || !(firm.bankIban ?? "").trim()) {
+        res.status(409).json({ error: "bank-details-missing", message: "The firm has no finance-approved bank details yet; approve is blocked until onboarding records them." });
+        return;
+      }
+      await db.update(atelierPartnerFirmInvoices).set({
+        status: "approved", reviewedByUserId: me.id, reviewedAt: now, updatedAt: now,
+      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+    } else {
+      if (!reason) { res.status(400).json({ error: "reason-required", message: "A rejection reason is required." }); return; }
+      await db.update(atelierPartnerFirmInvoices).set({
+        status: "rejected", reviewedByUserId: me.id, reviewedAt: now,
+        rejectedAt: now, rejectedReason: reason, updatedAt: now,
+      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+    }
+    await audit({
+      entityType: "partner_firm_invoice", entityId: row.id, actor: me,
+      action: `finance.partner_invoice.${decision}`,
+      payload: { partnerFirmId: row.partnerFirmId, reference: row.reference, amount: row.costAmount, currency: row.costCurrency, ...(reason ? { reason } : {}) },
+      summary: `${decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : "Rejected"} partner invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
+    });
+    const updated = await loadPartnerInvoice(me.orgId, row.id);
+    res.json({ ok: true, invoice: updated ? partnerInvoiceWire(updated) : null });
+  } catch (err) { next(err); }
 });
 
 // ============================================================

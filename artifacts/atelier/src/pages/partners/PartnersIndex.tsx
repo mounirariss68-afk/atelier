@@ -2224,6 +2224,216 @@ function ConflictForm({
   );
 }
 
+// ===========================================================================
+// Task #875 — Portal sharing: contract shares + partner doc-inbox review.
+// Raw-fetch backed (bespoke /partners routes, not in the OpenAPI spec).
+// ===========================================================================
+
+type DocInboxRow = {
+  id: string;
+  partnerFirmId: string;
+  partnerFirmName: string;
+  fileName: string;
+  note: string | null;
+  status: "pending" | "accepted" | "rejected";
+  reviewNote: string | null;
+  contractId: string | null;
+  uploadedByLabel: string;
+  createdAt: string;
+};
+type ShareRow = {
+  id: string;
+  contractId: string;
+  contract: { id: string; title: string; contractType: string; status: string } | null;
+  note: string | null;
+  sharedByLabel: string;
+  createdAt: string;
+  revokedAt: string | null;
+};
+
+function PortalSharingSection({ firms, canEdit }: { firms: Array<{ id: string; name: string }>; canEdit: boolean }) {
+  const [inbox, setInbox] = React.useState<DocInboxRow[]>([]);
+  const [firmId, setFirmId] = React.useState("");
+  const [shares, setShares] = React.useState<ShareRow[]>([]);
+  const [contractId, setContractId] = React.useState("");
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [tick, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    let alive = true;
+    void fetch(`${QUALIFY_API}/partners/doc-inbox`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setInbox(d.items ?? []); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [tick]);
+
+  React.useEffect(() => {
+    if (!firmId) { setShares([]); return; }
+    let alive = true;
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/contract-shares`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setShares(d.items ?? []); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [firmId, tick]);
+
+  const post = async (path: string, body: unknown) => {
+    setErr(null);
+    const r = await fetch(`${QUALIFY_API}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(d?.message ?? d?.error ?? `request-failed:${r.status}`);
+    setTick((t) => t + 1);
+  };
+  const act = (key: string, fn: () => Promise<void>) => {
+    setBusy(key);
+    void fn().catch((e) => setErr((e as Error).message)).finally(() => setBusy(null));
+  };
+
+  const pending = inbox.filter((i) => i.status === "pending");
+
+  return (
+    <section className="space-y-3" data-testid="portal-sharing-section">
+      <header className="flex items-center justify-between">
+        <h3 className="section-label">Partner portal · shared contracts & document inbox</h3>
+      </header>
+      {err && <p className="text-xs text-danger">⚠ {err}</p>}
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-medium text-text">Document inbox {pending.length > 0 && <span className="text-gold">· {pending.length} pending</span>}</div>
+        {inbox.length === 0 && (
+          <p className="text-sm text-text-mute" data-testid="doc-inbox-empty">
+            Nothing uploaded by partner firms yet. Documents partners send from their portal land here for review.
+          </p>
+        )}
+        <div className="space-y-2">
+          {inbox.map((d) => (
+            <div key={d.id} className="rounded-md border border-border p-3 text-sm" data-testid={`doc-inbox-${d.id}`}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <span className="font-medium text-text">{d.fileName}</span>
+                  <span className="text-text-mute"> · {d.partnerFirmName} · {d.uploadedByLabel}</span>
+                  {d.note && <div className="text-xs text-text-mute mt-0.5">{d.note}</div>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <MonoChip tone={d.status === "pending" ? "amber" : d.status === "accepted" ? "green" : "red"}>{d.status}</MonoChip>
+                  <a href={`${QUALIFY_API}/partners/doc-inbox/${d.id}/download`} className="text-xs text-gold hover:text-gold/80">download</a>
+                  {canEdit && d.status === "pending" && (
+                    <>
+                      <PillButton
+                        variant="ghost"
+                        disabled={!!busy}
+                        onClick={() => {
+                          const title = window.prompt("Contract title for the accepted document?", d.fileName.replace(/\.(pdf|docx)$/i, ""));
+                          if (title === null) return;
+                          act(`a:${d.id}`, () => post(`/partners/doc-inbox/${d.id}/review`, { decision: "accept", title }));
+                        }}
+                        data-testid={`btn-inbox-accept-${d.id}`}
+                      >
+                        Accept
+                      </PillButton>
+                      <PillButton
+                        variant="ghost"
+                        disabled={!!busy}
+                        onClick={() => {
+                          const note = window.prompt("Rejection note (shown to the partner)?");
+                          if (note === null || !note.trim()) return;
+                          act(`r:${d.id}`, () => post(`/partners/doc-inbox/${d.id}/review`, { decision: "reject", note: note.trim() }));
+                        }}
+                        data-testid={`btn-inbox-reject-${d.id}`}
+                      >
+                        Reject
+                      </PillButton>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-medium text-text">Contracts shared to a firm's portal</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={firmId}
+            onChange={(e) => setFirmId(e.target.value)}
+            className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+            data-testid="select-share-firm"
+          >
+            <option value="">Select a partner firm…</option>
+            {firms.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+          {canEdit && firmId && (
+            <>
+              <input
+                type="text"
+                value={contractId}
+                onChange={(e) => setContractId(e.target.value)}
+                placeholder="Contract record id (ctr_…)"
+                className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm font-mono"
+                data-testid="input-share-contract-id"
+              />
+              <PillButton
+                variant="ghost"
+                disabled={!!busy || !contractId.trim()}
+                onClick={() => act("share", async () => {
+                  await post(`/partners/firms/${firmId}/contract-shares`, { contractId: contractId.trim() });
+                  setContractId("");
+                })}
+                data-testid="btn-share-contract"
+              >
+                Share
+              </PillButton>
+            </>
+          )}
+        </div>
+        {firmId && shares.length === 0 && (
+          <p className="text-sm text-text-mute" data-testid="shares-empty">No contracts shared with this firm yet.</p>
+        )}
+        <div className="space-y-2">
+          {shares.map((s) => (
+            <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm" data-testid={`share-${s.id}`}>
+              <div>
+                <span className="font-medium text-text">{s.contract?.title ?? s.contractId}</span>
+                <span className="text-text-mute"> · shared by {s.sharedByLabel} · {s.createdAt.slice(0, 10)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {s.revokedAt ? (
+                  <MonoChip tone="red">revoked</MonoChip>
+                ) : (
+                  <>
+                    <MonoChip tone="green">active</MonoChip>
+                    {canEdit && (
+                      <PillButton
+                        variant="ghost"
+                        disabled={!!busy}
+                        onClick={() => act(`rv:${s.id}`, () => post(`/partners/firms/${firmId}/contract-shares/${s.id}/revoke`, {}))}
+                        data-testid={`btn-revoke-${s.id}`}
+                      >
+                        Revoke
+                      </PillButton>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
 function GovernView() {
   const canEdit = useCanEdit();
   const qc = useQueryClient();
@@ -2314,6 +2524,8 @@ function GovernView() {
           ))}
         </div>
       </section>
+
+      <PortalSharingSection firms={firms.map((f) => ({ id: f.id, name: f.name }))} canEdit={canEdit} />
 
       <section className="space-y-3">
         <header className="flex items-center justify-between">

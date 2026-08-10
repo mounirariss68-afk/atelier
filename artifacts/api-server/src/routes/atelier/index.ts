@@ -99,6 +99,7 @@ import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import partnersRoutes from "./partnersRoutes";
 import partnerPortalRoutes from "./partnerPortalRoutes";
+import partnerBillingRoutes from "./partnerBillingRoutes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
@@ -422,6 +423,8 @@ router.use(partnersRoutes);
 // Task #873 — alliance-partner portal: grant-scoped partner reads
 // (/partner-portal/*) + leadership grant/login admin surfaces.
 router.use(partnerPortalRoutes);
+// Task #875 — partner contracts & billing hub (portal + internal surfaces).
+router.use(partnerBillingRoutes);
 router.use(financeEntitiesRoutes);
 // Task #383 — expense taxonomy, categorization suggestions, GL/VAT
 // mappings, bank signatory register, client-ready exports.

@@ -60,6 +60,7 @@ function useMutate() {
 
 const TABS = [
   { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing" },
+  { id: "partner-invoices", label: "Partner invoices", href: "/finance/payables/partner-invoices" },
   { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
   { id: "run-history", label: "Run history", href: "/finance/payables/run-history" },
   { id: "vendors", label: "Vendors", href: "/finance/payables/vendors" },
@@ -570,6 +571,141 @@ function runStatusTone(s: PaymentRunRow["status"]): "default" | "amber" | "green
   if (s === "cancelled") return "red";
   if (s === "draft" || s === "pending_signatures") return "amber";
   return "default";
+}
+
+// ============================================================
+// Task #875 — Partner-submitted invoices (AP review)
+// ============================================================
+
+type PartnerInvoiceRow = {
+  id: string;
+  partnerFirmId: string;
+  partnerFirmName: string;
+  reference: string | null;
+  periodLabel: string | null;
+  amount: number;
+  currency: string;
+  usdAmount: number;
+  status: string;
+  notes: string | null;
+  fileName: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  rejectedReason: string | null;
+  paymentRunId: string | null;
+  paidAt: string | null;
+  hasBankDetails: boolean;
+};
+
+function usePartnerInvoices(): { items: PartnerInvoiceRow[]; refetch: () => void } {
+  const [items, setItems] = React.useState<PartnerInvoiceRow[]>([]);
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    let alive = true;
+    void fetch(`${API_BASE}/finance/payables/partner-invoices`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setItems(d.items ?? []); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [tick]);
+  return { items, refetch: () => setTick((t) => t + 1) };
+}
+
+function partnerInvoiceTone(s: string): "default" | "amber" | "red" | "green" {
+  if (s === "rejected") return "red";
+  if (s === "submitted" || s === "under_review") return "amber";
+  if (s === "approved" || s === "paid") return "green";
+  return "default";
+}
+
+export function FinancePayablesPartnerInvoices() {
+  const { items, refetch } = usePartnerInvoices();
+  const { busy, error, run } = useMutate();
+  const act = (id: string, decision: string, reason?: string) =>
+    run(`${decision}:${id}`, async () => {
+      await postJson(`/finance/payables/partner-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}) });
+      refetch();
+    });
+  const pending = items.filter((i) => i.status === "submitted" || i.status === "under_review");
+  return (
+    <PayablesShell
+      eyebrow="Manage · Finance · Pay · Partner invoices"
+      headline="Partner-submitted invoices"
+      lede="Invoices partner firms submit through their portal. Review and approve or reject with a reason; approved invoices join the next payment run automatically (firms without finance-approved bank details are held back)."
+    >
+      <div className="flex flex-wrap gap-2 text-xs font-mono">
+        <MonoChip>{items.length} invoice(s)</MonoChip>
+        <MonoChip tone={pending.length > 0 ? "amber" : "default"}>{pending.length} awaiting review</MonoChip>
+      </div>
+      {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      <div className="grid gap-3" data-testid="partner-invoices-list">
+        {items.length === 0 && (
+          <EmptyCard testId="partner-invoices-empty">
+            No partner-submitted invoices yet. They appear here as soon as a partner firm submits one from its portal.
+          </EmptyCard>
+        )}
+        {items.map((inv) => (
+          <Card key={inv.id} className="p-4" data-testid={`partner-invoice-${inv.id}`}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <Eyebrow>{inv.partnerFirmName}</Eyebrow>
+                <div className="text-base font-medium mt-1">
+                  {inv.reference ?? inv.id} · {inv.currency} {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-text-mute mt-1">
+                  {inv.periodLabel ? `Period ${inv.periodLabel} · ` : ""}
+                  {inv.submittedAt ? `Submitted ${inv.submittedAt.slice(0, 10)} · ` : ""}
+                  ≈ {fmtUsd(inv.usdAmount)}
+                </div>
+                {inv.notes && <div className="text-xs text-text-mute mt-1">{inv.notes}</div>}
+                {inv.status === "rejected" && inv.rejectedReason && (
+                  <div className="text-xs text-danger mt-1">Rejected: {inv.rejectedReason}</div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <MonoChip tone={partnerInvoiceTone(inv.status)}>{inv.status.replace(/_/g, " ")}</MonoChip>
+                {!inv.hasBankDetails && <MonoChip tone="amber">no bank details</MonoChip>}
+                {inv.fileName && (
+                  <a
+                    href={`${API_BASE}/finance/payables/partner-invoices/${inv.id}/file`}
+                    className="text-xs text-gold hover:text-gold/80"
+                    data-testid={`link-partner-invoice-file-${inv.id}`}
+                  >
+                    download PDF
+                  </a>
+                )}
+              </div>
+            </div>
+            {(inv.status === "submitted" || inv.status === "under_review") && (
+              <div className="flex gap-2 mt-4">
+                {inv.status === "submitted" && (
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => act(inv.id, "start_review")} data-testid={`btn-start-review-${inv.id}`}>
+                    Start review
+                  </Button>
+                )}
+                <Button size="sm" disabled={!!busy || !inv.hasBankDetails} onClick={() => act(inv.id, "approve")} data-testid={`btn-approve-${inv.id}`}>
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={!!busy}
+                  onClick={() => {
+                    const reason = window.prompt(`Reject invoice ${inv.reference ?? inv.id}. Reason?`);
+                    if (reason === null || !reason.trim()) return;
+                    act(inv.id, "reject", reason.trim());
+                  }}
+                  data-testid={`btn-reject-${inv.id}`}
+                >
+                  Reject
+                </Button>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    </PayablesShell>
+  );
 }
 
 export function FinancePayablesPaymentRuns() {
