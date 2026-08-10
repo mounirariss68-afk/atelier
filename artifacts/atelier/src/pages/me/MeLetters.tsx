@@ -78,6 +78,10 @@ function statusText(l: LetterWire): { label: string; tone: "ok" | "pending" | "m
         label: `Sent to ${l.signatoryName ?? "signatory"} — awaiting hand-over`,
         tone: "pending",
       };
+    // Task #863 — final state once the signatory/HR marks the signed hard
+    // copy as handed to the employee.
+    if (l.status === "handed_over")
+      return { label: "Signed and handed over", tone: "ok" };
     return { label: l.status.replace(/_/g, " "), tone: "muted" };
   }
   if (l.delivered) return { label: `Emailed to ${l.emailTo ?? "you"}`, tone: "ok" };

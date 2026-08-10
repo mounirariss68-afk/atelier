@@ -9,3 +9,8 @@ description: Letter templates, PDF RTL rendering, entity letter-signing overlay,
 - Letter-signing seed (Dubai entity signatory + signature/stamp assets) must be re-run on prod at go-live — DB data never merges from task envs.
 - Digital issuance hard-requires configured signatory + signature AND stamp assets (never issue an unsigned letter described as signed); letter assets accept PNG/JPEG only — PDFKit cannot embed WebP.
 - Issued letters are person-doc kind `employment_letter`, deliberately visible in /me/documents.
+
+## Wet-signature hand-over close-out (2026-08-09)
+- Wet issuances end at `sent_to_signatory` until someone posts the close-out route: `POST /letters/issuances/:id/handed-over` (in meLetterRoutes but NOT under /me — signatory/HR act, roles founding_partner|partner|hr; self-only personas blocked by the central gate).
+- Transition is CAS-guarded (`status='sent_to_signatory'` predicate) + idempotent 200 `alreadyHandedOver` for repeats; digital letters 409.
+- **Why:** the Me pages render raw status strings — any new status must be added to BOTH web statusText (MeLetters.tsx) and mobile letterStatusText (me.tsx) or it shows as ugly snake_case.

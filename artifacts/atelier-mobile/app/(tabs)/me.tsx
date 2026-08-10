@@ -317,6 +317,10 @@ function letterStatusText(l: MyLetter): { label: string; pending: boolean } {
         label: `Sent to ${l.signatoryName ?? "signatory"} — awaiting hand-over`,
         pending: true,
       };
+    // Task #863 — final state once the signatory/HR marks the signed hard
+    // copy as handed to the employee.
+    if (l.status === "handed_over")
+      return { label: "Signed and handed over", pending: false };
     return { label: l.status.replace(/_/g, " "), pending: false };
   }
   if (l.delivered) return { label: `Emailed to ${l.emailTo ?? "you"}`, pending: false };

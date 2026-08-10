@@ -241,4 +241,89 @@ router.post("/me/letters/preview", async (req, res) => {
   });
 });
 
+// Task #863 — close out a wet-signature letter once the signed hard copy
+// has been handed to the employee. Wet issuances otherwise stay at
+// sent_to_signatory forever. This is NOT a self-scope route: the person
+// closing the loop is the signatory/HR (the employee only receives the
+// paper), so it lives outside /me/* and the self-only persona gate keeps
+// employees/contractors away. Roles: founding partners, partners
+// (signatories) and HR.
+// @cli-skip: administrative close-out of a wet-signature letter; no chat surface (Task #863)
+router.post("/letters/issuances/:id/handed-over", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "founding_partner" && me.role !== "partner" && me.role !== "hr") {
+    res.status(403).json({
+      error: "forbidden",
+      message:
+        "Only the signatory (a partner) or HR can mark a letter as handed over.",
+    });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierLetterIssuances)
+    .where(
+      and(
+        eq(atelierLetterIssuances.orgId, me.orgId),
+        eq(atelierLetterIssuances.id, req.params.id),
+        isNull(atelierLetterIssuances.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (row.deliveryMode !== "wet_signature") {
+    res.status(409).json({
+      error: "not-wet-signature",
+      message: "Only wet-signature letters have a hand-over step.",
+    });
+    return;
+  }
+  // Idempotent: re-marking an already handed-over letter is a no-op 200.
+  if (row.status === "handed_over") {
+    res.json({ letter: issuanceWire(row), alreadyHandedOver: true });
+    return;
+  }
+  if (row.status !== "sent_to_signatory") {
+    res.status(409).json({
+      error: "invalid-status",
+      message: `Letter is in status "${row.status}" — only letters awaiting hand-over can be marked handed over.`,
+    });
+    return;
+  }
+  const [updated] = await db
+    .update(atelierLetterIssuances)
+    .set({ status: "handed_over", updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierLetterIssuances.id, row.id),
+        eq(atelierLetterIssuances.orgId, me.orgId),
+        // CAS guard: a concurrent marker loses cleanly (idempotent anyway).
+        eq(atelierLetterIssuances.status, "sent_to_signatory"),
+      ),
+    )
+    .returning();
+  const finalRow = updated ?? { ...row, status: "handed_over" };
+  if (updated) {
+    await audit({
+      entityType: "letter_issuance",
+      entityId: row.id,
+      actor: me,
+      action: "letter.handed_over",
+      payload: {
+        letterType: row.letterType,
+        refNumber: row.refNumber,
+        deliveryMode: row.deliveryMode,
+        previousStatus: row.status,
+        status: "handed_over",
+        signatoryName: row.signatoryName,
+      },
+      summary: `Marked ${letterTypeById(row.letterType)?.label ?? row.letterType} (${row.refNumber}) as signed and handed over`,
+    });
+  }
+  res.json({ letter: issuanceWire(finalRow), alreadyHandedOver: !updated });
+});
+
 export default router;
