@@ -266,8 +266,19 @@ async function main(): Promise<void> {
         !oppKeys.some((k) => /deal|probab|forecast|rubric|owner|lead/i.test(k)),
         oppKeys.join(","),
       );
+      check(
+        "opportunity wire carries a sharedAt stamp (Task #886)",
+        typeof listA.body?.opportunities?.[0]?.sharedAt === "string",
+        JSON.stringify(listA.body?.opportunities?.[0]?.sharedAt),
+      );
       const detailA = await call("GET", `/partner-portal/opportunities/${oppAId}`, PA_ID);
       check("firm A detail \u2192 200", detailA.status === 200 && detailA.body?.opportunity?.id === oppAId);
+      check(
+        "detail carries firm context + sharedAt (Task #886)",
+        typeof detailA.body?.firm?.name === "string" &&
+          typeof detailA.body?.opportunity?.sharedAt === "string",
+        JSON.stringify({ firm: detailA.body?.firm, sharedAt: detailA.body?.opportunity?.sharedAt }),
+      );
 
       const listB = await call("GET", "/partner-portal/opportunities", PB_ID);
       check(

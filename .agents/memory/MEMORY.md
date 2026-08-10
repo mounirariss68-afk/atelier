@@ -6,7 +6,6 @@
 - [Cognirise rebrand keeps](cognirise-rebrand-keeps.md) — after AICo→Cognirise, the tenant key "aico" + opaque record IDs are deliberately KEPT; quoted "aico" may be an enum literal to rename, not always the org key.
 - [Founder titles are data-only](founder-titles.md) — Mounir="CEO and Co-founder", Gökhan="Co-founder" live only in users/employees title columns; role_label stays "Founding Partner"; no route edits titles.
 - [Atelier RLS test scoping](atelier-rls-test-scoping.md) — DATABASE_URL is BYPASSRLS superuser so table policies aren't enforced; assert scoping via RLS helper fns + app ACL; restricted personas get 403, not filtered rows.
-- [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
 - [CLI action-turn UX](cli-action-turn-ux.md) — write turns render via `shape:"write_success"`; deletes carry `diff.impact` + parent nav.
 - [Account strategy objectives not seeded](atelier-account-strategy-objectives.md) — accountStrategy.objectives is agent-generated, empty on cold/test DB; goal-progress upsert 404s unless obj ids are backfilled.
 - [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk scope stamped at ingest-LINK time; purge rides on account delete; retrieval fail-loud; chunk text only via inert safeBlocks.
@@ -22,6 +21,7 @@
 - [Launch deck-graphics policy](launch-deck-graphics.md) — launch site ships from separate project (cognirise.ai); render quirks in launch-*.md topic files.
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; drafts stash in partial.input.__researchedDraft; multi-field details in [cli-multifield-clarification.md](cli-multifield-clarification.md).
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors; diff against HEAD to attribute.
+- [Stale lib dist fails typecheck/review](stale-lib-dist-review.md) — gitignored lib/db + api-zod + api-client-react dist lag schema edits AND merged-in commits; `tsc -b --force` them after Drizzle edits and before markTaskComplete.
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.
 - [Running the CRM test harness](crm-harness-run.md) — isolated crm_test DB, >120s one-shot; never a workflow; flake/cleanup notes in crm-harness-*.md topic files.
 - [Atelier expense taxonomy surfaces](atelier-expense-taxonomy.md) — new non-/me endpoints for Me-lens UIs must be allowlisted in EVERY persona branch of the central gate; fresh scratch DBs need `CREATE EXTENSION vector` before drizzle push.

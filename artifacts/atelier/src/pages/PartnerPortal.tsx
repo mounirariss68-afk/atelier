@@ -35,6 +35,8 @@ type PartnerOpp = {
   closeDate: string | null;
   accountId: string;
   createdAt: string;
+  /** When the opportunity was shared with the firm (grant record). */
+  sharedAt: string | null;
 };
 
 type OppListResponse = {
@@ -97,8 +99,24 @@ export function PartnerPortalHome() {
         </div>
       )}
       {q.data && q.data.opportunities.length === 0 && (
-        <div className="mt-8 rounded-md border border-border p-6 text-sm text-muted-foreground">
-          No opportunities are currently assigned to your firm.
+        <div
+          className="mt-8 rounded-lg border border-border p-8 text-center"
+          data-testid="partner-portal-empty"
+        >
+          <div className="text-base font-medium">
+            {q.data.firm
+              ? `Nothing is shared with ${q.data.firm.name} right now`
+              : "Nothing is shared with your firm right now"}
+          </div>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            This portal is where Cognirise shares the opportunities your firm is
+            collaborating on. When an opportunity is assigned to your firm it
+            will appear here automatically — there's nothing you need to set up.
+          </p>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+            Expecting to see something? Contact your Cognirise counterpart and
+            ask them to share the opportunity with your firm.
+          </p>
         </div>
       )}
       <div className="mt-6 space-y-3">
@@ -117,6 +135,14 @@ export function PartnerPortalHome() {
               Next milestone: {o.nextMilestone || "—"}
               {o.nextMilestoneDate ? ` · ${fmtDate(o.nextMilestoneDate)}` : ""}
             </div>
+            {o.sharedAt && (
+              <div
+                className="mt-1 text-xs text-muted-foreground"
+                data-testid={`text-shared-at-${o.id}`}
+              >
+                Shared with you on {fmtDate(o.sharedAt)}
+              </div>
+            )}
           </Link>
         ))}
       </div>
@@ -131,7 +157,10 @@ export function PartnerPortalOpportunity() {
 
   const oppQ = useQuery({
     queryKey: ["partner-portal", "opportunity", oppId],
-    queryFn: () => getJson<{ opportunity: PartnerOpp }>(`/opportunities/${oppId}`),
+    queryFn: () =>
+      getJson<{ firm?: { id: string; name: string }; opportunity: PartnerOpp }>(
+        `/opportunities/${oppId}`,
+      ),
     enabled: !!oppId,
   });
   const acctQ = useQuery({
@@ -160,6 +189,10 @@ export function PartnerPortalOpportunity() {
           <div className="mt-4 flex items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold">{o.name}</h1>
             <StageBadge stage={o.salesStage} />
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground" data-testid="text-opp-shared-context">
+            {oppQ.data?.firm ? `Shared with ${oppQ.data.firm.name}` : "Shared with your firm"}
+            {o.sharedAt ? ` on ${fmtDate(o.sharedAt)}` : ""}
           </div>
           <div className="mt-4 flex gap-2 border-b border-border">
             {(["opportunity", "client"] as const).map((t) => (

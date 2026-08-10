@@ -109,7 +109,10 @@ export async function activeGrantedOppIds(
  * Deliberately EXCLUDES: deal size, probability, forecast category,
  * qualification rubric, go/no-go, owner identities, source lead.
  */
-export function partnerOppWire(o: typeof atelierOpportunities.$inferSelect): {
+export function partnerOppWire(
+  o: typeof atelierOpportunities.$inferSelect,
+  sharedAt?: Date | null,
+): {
   id: string;
   name: string;
   salesStage: string;
@@ -119,6 +122,7 @@ export function partnerOppWire(o: typeof atelierOpportunities.$inferSelect): {
   closeDate: string | null;
   accountId: string;
   createdAt: string;
+  sharedAt: string | null;
 } {
   return {
     id: o.id,
@@ -130,6 +134,10 @@ export function partnerOppWire(o: typeof atelierOpportunities.$inferSelect): {
     closeDate: o.closeDate ?? null,
     accountId: o.accountId,
     createdAt: o.createdAt.toISOString(),
+    // Task #886 — when the (earliest active) grant shared this
+    // opportunity with the partner firm. Read-only stamp from the
+    // existing grant row; no new data exposure.
+    sharedAt: sharedAt ? sharedAt.toISOString() : null,
   };
 }
 
@@ -168,11 +176,31 @@ export async function grantedOpportunitiesForPartner(me: {
 }): Promise<{
   firm: typeof atelierPartnerFirms.$inferSelect;
   opps: Array<typeof atelierOpportunities.$inferSelect>;
+  /** Earliest ACTIVE grant createdAt per opportunity id (Task #886). */
+  sharedAtByOppId: Map<string, Date>;
 } | null> {
   const firm = await resolveAlliancePartnerFirm(me);
   if (!firm) return null;
-  const oppIds = await activeGrantedOppIds(me.orgId, firm.id);
-  if (oppIds.length === 0) return { firm, opps: [] };
+  const grantRows = await db
+    .select({
+      opportunityId: atelierPartnerOppGrants.opportunityId,
+      createdAt: atelierPartnerOppGrants.createdAt,
+    })
+    .from(atelierPartnerOppGrants)
+    .where(
+      and(
+        eq(atelierPartnerOppGrants.orgId, me.orgId),
+        eq(atelierPartnerOppGrants.partnerFirmId, firm.id),
+        isNull(atelierPartnerOppGrants.revokedAt),
+      ),
+    );
+  const sharedAtByOppId = new Map<string, Date>();
+  for (const r of grantRows) {
+    const prev = sharedAtByOppId.get(r.opportunityId);
+    if (!prev || r.createdAt < prev) sharedAtByOppId.set(r.opportunityId, r.createdAt);
+  }
+  const oppIds = [...sharedAtByOppId.keys()];
+  if (oppIds.length === 0) return { firm, opps: [], sharedAtByOppId };
   const opps = await db
     .select()
     .from(atelierOpportunities)
@@ -183,7 +211,7 @@ export async function grantedOpportunitiesForPartner(me: {
         isNull(atelierOpportunities.deletedAt),
       ),
     );
-  return { firm, opps };
+  return { firm, opps, sharedAtByOppId };
 }
 
 function requireAlliancePartner(req: Request, res: Response): Me | null {
@@ -214,7 +242,7 @@ router.get("/partner-portal/opportunities", async (req, res, next) => {
     res.json({
       firm: { id: scope.firm.id, name: scope.firm.name },
       opportunities: scope.opps
-        .map(partnerOppWire)
+        .map((o) => partnerOppWire(o, scope.sharedAtByOppId.get(o.id) ?? null))
         .sort((a, b) => a.name.localeCompare(b.name)),
     });
   } catch (err) {
@@ -238,7 +266,10 @@ router.get("/partner-portal/opportunities/:oppId", async (req, res, next) => {
       res.status(404).json({ error: "not-found" });
       return;
     }
-    res.json({ opportunity: partnerOppWire(opp) });
+    res.json({
+      firm: { id: scope.firm.id, name: scope.firm.name },
+      opportunity: partnerOppWire(opp, scope.sharedAtByOppId.get(opp.id) ?? null),
+    });
   } catch (err) {
     next(err);
   }
