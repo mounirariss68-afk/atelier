@@ -68,6 +68,7 @@ async function main(): Promise<void> {
     atelierPartnerFirms,
     atelierPartnerOppGrants,
     atelierAuditEvents,
+    atelierLoginActivationTokens,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -693,6 +694,61 @@ async function main(): Promise<void> {
           listLogins.status === 200 &&
             listLogins.body?.logins?.some((l: any) => l.id === provisionedUserId && l.active),
         );
+        // Task #885 — leadership regenerates an activation link.
+        const rlCons = await call(
+          "POST",
+          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          CONS_ID,
+        );
+        check("consultant reset-link \u2192 403", rlCons.status === 403, `status=${rlCons.status}`);
+        const rlWrongFirm = await call(
+          "POST",
+          `/partners/firms/${firmAId}/logins/${provisionedUserId}/reset-link`,
+          FP_ID,
+        );
+        check("reset-link wrong firm \u2192 404", rlWrongFirm.status === 404, `status=${rlWrongFirm.status}`);
+        // Hostile cross-site Origin must be rejected — never answered with
+        // a credential-bearing activation URL.
+        const rlHostile = await fetch(
+          `${API}/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              cookie: `atelier_persona=${FP_ID}`,
+              origin: "https://evil.example.com",
+            },
+          },
+        );
+        const rlHostileBody = await rlHostile.json().catch(() => null);
+        check(
+          "reset-link with untrusted Origin \u2192 403, no token leaked",
+          rlHostile.status === 403 && !rlHostileBody?.activationUrl,
+          `status=${rlHostile.status}`,
+        );
+        const rl = await call(
+          "POST",
+          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          FP_ID,
+        );
+        check(
+          "FP reset-link \u2192 200 with fresh activation link",
+          rl.status === 200 && !!rl.body?.activationUrl && !!rl.body?.activationExpiresAt,
+          JSON.stringify(rl.body)?.slice(0, 160),
+        );
+        {
+          const email = `pp_prov_${STAMP}@example.com`;
+          const tokens = await db
+            .select()
+            .from(atelierLoginActivationTokens)
+            .where(eq(atelierLoginActivationTokens.email, email));
+          const unused = tokens.filter((t) => t.usedAt == null);
+          check(
+            "reset-link invalidates prior activation tokens (exactly one live)",
+            unused.length === 1 && tokens.length >= 2,
+            JSON.stringify({ total: tokens.length, unused: unused.length }),
+          );
+        }
         const deact = await call(
           "POST",
           `/partners/firms/${firmBId}/logins/${provisionedUserId}/deactivate`,
@@ -704,6 +760,16 @@ async function main(): Promise<void> {
           "deactivated login \u2192 401 (persona no longer resolves)",
           after.status === 401,
           `status=${after.status}`,
+        );
+        const rlDeact = await call(
+          "POST",
+          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          FP_ID,
+        );
+        check(
+          "reset-link on deactivated login \u2192 409",
+          rlDeact.status === 409,
+          `status=${rlDeact.status}`,
         );
       }
     }

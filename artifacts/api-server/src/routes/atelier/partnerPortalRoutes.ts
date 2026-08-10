@@ -21,7 +21,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNull, desc, inArray } from "drizzle-orm";
 import {
   db,
@@ -30,10 +30,13 @@ import {
   atelierPartnerOppGrants,
   atelierOpportunities,
   atelierAccounts,
+  atelierAuthCredentials,
+  atelierLoginActivationTokens,
 } from "@workspace/db";
 import { audit } from "./engagementRoutes";
 import { isLeadership, isAlliancePartner } from "./personaRoles";
 import { revokeAllSessions } from "../../lib/auth/session.js";
+import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { provisionPortalLogin } from "./rosterLifecycleRoutes";
 
 const router: IRouter = Router();
@@ -591,6 +594,119 @@ router.post("/partners/firms/:firmId/logins", async (req, res, next) => {
     next(err);
   }
 });
+
+// Task #885 — leadership regenerates an activation link for an existing
+// partner login (forgotten password / expired original link). Fixes the
+// login WITHOUT deleting it: mints a fresh single-use 72h activation
+// token (invalidating any earlier unused ones for the email) and revokes
+// every existing session immediately. The partner chooses a new password
+// via the same /activate page as first-time activation. Self-serve
+// /forgot-password also covers alliance_partner logins (no role gate).
+// @cli-skip: security-sensitive credential reset — deliberate UI-only write
+router.post(
+  "/partners/firms/:firmId/logins/:userId/reset-link",
+  async (req, res, next) => {
+    try {
+      const me = requireLeadership(req, res);
+      if (!me) return;
+      // CSRF / token-exfiltration guard: this response carries a
+      // credential-bearing activation URL, so a cross-site request from a
+      // hostile origin must be rejected outright — never answered with a
+      // token. An explicit Origin header is only accepted when it resolves
+      // to a trusted app origin (same policy as the auth routes).
+      const explicitOrigin = req.get("origin");
+      const trustedOrigin = trustedRequestOrigin(req);
+      if (explicitOrigin) {
+        let originAllowed = false;
+        try {
+          originAllowed = new URL(explicitOrigin).origin === trustedOrigin;
+        } catch {
+          originAllowed = false;
+        }
+        if (!originAllowed) {
+          res.status(403).json({ error: "untrusted-origin" });
+          return;
+        }
+      }
+      const [user] = await db
+        .select()
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.id, req.params.userId),
+            eq(atelierUsers.orgId, me.orgId),
+            eq(atelierUsers.role, "alliance_partner"),
+            eq(atelierUsers.partnerFirmId, req.params.firmId),
+          ),
+        );
+      if (!user) {
+        res.status(404).json({ error: "login-not-found" });
+        return;
+      }
+      if (user.deletedAt != null) {
+        res.status(409).json({
+          error: "login-deactivated",
+          message: "This login is deactivated. Provision a new login instead.",
+        });
+        return;
+      }
+      const [cred] = await db
+        .select()
+        .from(atelierAuthCredentials)
+        .where(eq(atelierAuthCredentials.userId, user.id));
+      if (!cred || cred.disabled) {
+        res.status(409).json({
+          error: "credential-unavailable",
+          message: "No usable credential exists for this login.",
+        });
+        return;
+      }
+      // Single-use 72h activation token; only the newest link works.
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(atelierLoginActivationTokens)
+          .set({ usedAt: new Date() })
+          .where(
+            and(
+              eq(atelierLoginActivationTokens.email, cred.email),
+              eq(atelierLoginActivationTokens.purpose, "activation"),
+              isNull(atelierLoginActivationTokens.usedAt),
+            ),
+          );
+        await tx.insert(atelierLoginActivationTokens).values({
+          tokenHash,
+          email: cred.email,
+          userId: user.id,
+          purpose: "activation",
+          createdByUserId: me.id,
+          expiresAt,
+        });
+      });
+      // A reset always revokes existing sessions immediately.
+      await revokeAllSessions(user.id);
+      await audit({
+        entityType: "partner_firm",
+        entityId: req.params.firmId,
+        actor: me,
+        action: "partner_login.reset_link_issued",
+        payload: { userId: user.id, email: cred.email },
+        summary: `${me.name} issued a new activation link for the partner-portal login of ${user.name} (sessions revoked).`,
+      });
+      res.json({
+        ok: true,
+        // trustedRequestOrigin only honours allow-listed hostnames (else
+        // the canonical origin / relative), never a raw Origin header.
+        activationUrl: `${trustedOrigin ?? ""}/activate?token=${rawToken}`,
+        activationExpiresAt: expiresAt.toISOString(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // @cli-skip: security-sensitive login deactivation — deliberate UI-only write
 router.post(

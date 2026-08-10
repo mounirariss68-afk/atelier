@@ -797,6 +797,26 @@ function PortalLoginsPanel({ firmId }: { firmId: string }) {
       .finally(() => setBusy(false));
   };
 
+  // Task #885 — regenerate a single-use 72h activation link for an existing
+  // login (forgotten password / expired original link). Revokes sessions.
+  const resetLink = (userId: string) => {
+    setBusy(true);
+    setMsg(null);
+    setActivationUrl(null);
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins/${userId}/reset-link`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : "Couldn't issue a new link.");
+        if (typeof j.activationUrl === "string") setActivationUrl(j.activationUrl);
+        setMsg("New activation link issued (valid 72h); their sessions were revoked. Share it with the partner.");
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
   const deactivate = (userId: string) => {
     setBusy(true);
     void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins/${userId}/deactivate`, {
@@ -832,6 +852,17 @@ function PortalLoginsPanel({ firmId }: { firmId: string }) {
               <span className="text-text font-medium">{u.name}</span>
               <span className="text-text-faint">{u.email}</span>
               <MonoChip tone={u.active ? "green" : "default"}>{u.active ? "active" : "deactivated"}</MonoChip>
+              {u.active && (
+                <button
+                  type="button"
+                  className="text-gold hover:underline"
+                  disabled={busy}
+                  onClick={() => resetLink(u.id)}
+                  data-testid={`button-reset-link-${u.id}`}
+                >
+                  reset link
+                </button>
+              )}
               {u.active && (
                 <button
                   type="button"
