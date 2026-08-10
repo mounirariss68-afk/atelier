@@ -445,6 +445,142 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
+    group("Task #887 ratchet \u2014 catalog slice pinned to registered partnerportal.*");
+    // =====================================================================
+    {
+      const cat = await import("../../src/lib/atelier-cli/capability-catalog.js");
+      const cli = await import("../../src/lib/atelier-cli/index.js");
+      const persona = { id: PA_ID, name: "PP Partner A", role: "alliance_partner", orgId: ORG };
+      const all = cat.listCapabilities();
+      const registeredPortalIds = all
+        .filter((c: any) => c.id.startsWith("partnerportal."))
+        .map((c: any) => c.id)
+        .sort();
+      const sliceIds = cat
+        .capabilitiesForPersona(persona as any)
+        .map((c: any) => c.id)
+        .sort();
+      // (a) The alliance_partner slice must be EXACTLY the registered
+      // partnerportal.* set — nothing extra in the slice, and no
+      // registered partnerportal.* entry silently excluded (a registered
+      // partnerportal WRITE would diverge here and fail).
+      check(
+        "ratchet: slice ids === all registered partnerportal.* ids",
+        JSON.stringify(sliceIds) === JSON.stringify(registeredPortalIds),
+        `slice=${sliceIds.join(",")} registered=${registeredPortalIds.join(",")}`,
+      );
+      check(
+        "ratchet: every registered partnerportal.* capability is a read",
+        all.filter((c: any) => c.id.startsWith("partnerportal.")).every((c: any) => !c.isWrite),
+      );
+      // Pinned snapshot: widening the partner chat surface requires a
+      // conscious update of this list (the ratchet).
+      const PINNED = [
+        "partnerportal.account_overview",
+        "partnerportal.opportunities",
+        "partnerportal.opportunity_detail",
+      ];
+      check(
+        "ratchet: slice matches the pinned snapshot (update deliberately)",
+        JSON.stringify(sliceIds) === JSON.stringify(PINNED),
+        sliceIds.join(","),
+      );
+      // Dispatch clamp sweep: NO catalog tool outside partnerportal.*
+      // resolves for the role, and the meta allow-set is pinned.
+      const META_ALLOW = [
+        "explain_last",
+        "present_choices",
+        "recap",
+        "refine_last",
+        "request_feature",
+        "undo_last",
+      ];
+      const leaked: string[] = [];
+      for (const entry of all) {
+        if (entry.id.startsWith("partnerportal.")) continue;
+        if (!entry.toolName) continue;
+        if (META_ALLOW.includes(entry.toolName)) continue;
+        if (cli.findToolByName(entry.toolName, persona as any) !== undefined) {
+          leaked.push(entry.toolName);
+        }
+      }
+      check(
+        "ratchet: findToolByName resolves NO non-partnerportal catalog tool",
+        leaked.length === 0,
+        leaked.slice(0, 10).join(","),
+      );
+    }
+
+    // =====================================================================
+    group("Task #887 ratchet \u2014 every /cli route annotated for the partner gate");
+    // =====================================================================
+    {
+      const surf = await import("../../src/routes/atelier/partnerPortalCliSurface.js");
+      const routers = [
+        (await import("../../src/routes/atelier/cliRoutes.js")).default,
+        (await import("../../src/routes/atelier/cliAttachmentRoutes.js")).default,
+        (await import("../../src/routes/atelier/cliAdminRoutes.js")).default,
+      ];
+      // Enumerate concrete (method, path) routes from the live express
+      // routers so a newly mounted /cli sub-route can never dodge review.
+      const liveRoutes: Array<{ method: string; path: string }> = [];
+      for (const r of routers) {
+        for (const layer of (r as any).stack ?? []) {
+          const route = layer?.route;
+          if (!route) continue;
+          const paths: string[] = Array.isArray(route.path) ? route.path : [route.path];
+          const methods = new Set<string>(
+            (route.stack ?? [])
+              .map((l: any) => String(l.method ?? "").toUpperCase())
+              .filter(Boolean),
+          );
+          for (const p of paths) {
+            if (!String(p).startsWith("/cli")) continue;
+            for (const m of methods) liveRoutes.push({ method: m, path: String(p) });
+          }
+        }
+      }
+      check("route enumeration found the /cli surface", liveRoutes.length >= 15, `found=${liveRoutes.length}`);
+      const annKey = (m: string, p: string) => `${m} ${p}`;
+      const annotations = new Map<string, any>(
+        surf.PARTNER_CLI_ROUTE_ANNOTATIONS.map((a: any) => [annKey(a.method, a.path), a]),
+      );
+      const unannotated = liveRoutes.filter((r) => !annotations.has(annKey(r.method, r.path)));
+      check(
+        "every mounted /cli route has a partner-gate annotation",
+        unannotated.length === 0,
+        unannotated.map((r) => annKey(r.method, r.path)).join(","),
+      );
+      const stale = [...annotations.keys()].filter(
+        (k) => !liveRoutes.some((r) => annKey(r.method, r.path) === k),
+      );
+      check("no stale annotations for removed routes", stale.length === 0, stale.join(","));
+      // Annotation ⇔ gate-predicate consistency, and content-serving
+      // routes must be denied.
+      for (const a of surf.PARTNER_CLI_ROUTE_ANNOTATIONS) {
+        const sample = surf.samplePathFor(a.path);
+        const gateAllows = surf.isPartnerCliPathAllowed(sample);
+        check(
+          `annotation matches gate: ${a.method} ${a.path} \u2192 ${a.access}`,
+          gateAllows === (a.access === "allowed"),
+          `gateAllows=${gateAllows}`,
+        );
+        if (a.servesContent) {
+          check(
+            `content-serving route is denied: ${a.method} ${a.path}`,
+            a.access === "denied",
+          );
+        }
+      }
+      // Live probe: every denied route 403s for an alliance-partner login.
+      for (const a of surf.PARTNER_CLI_ROUTE_ANNOTATIONS.filter((x: any) => x.access === "denied")) {
+        const sample = surf.samplePathFor(a.path);
+        const rr = await call(a.method, sample, PA_ID, a.method === "GET" ? undefined : {});
+        check(`live gate: ${a.method} ${sample} \u2192 403`, rr.status === 403, `status=${rr.status}`);
+      }
+    }
+
+    // =====================================================================
     group("provisioning hardening \u2014 no identity reuse");
     // =====================================================================
     {

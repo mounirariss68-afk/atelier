@@ -88,6 +88,8 @@ import referenceRoutes from "./referenceRoutes";
 import principleOverrideRoutes from "./principleOverrideRoutes";
 import firmProfileRoutes from "./firmProfileRoutes";
 import cliRoutes from "./cliRoutes";
+// Task #887 — shared alliance-partner /cli allowlist + route annotations.
+import { isPartnerCliPathAllowed } from "./partnerPortalCliSurface";
 import cliAttachmentRoutes from "./cliAttachmentRoutes";
 import documentRoutes from "./documentRoutes";
 // Task #62 — E-signing via DocuSeal (signature requests).
@@ -207,18 +209,11 @@ router.use((req, res, next) => {
     // is clamped to partnerportal.* in getToolsForPersona). Everything else
     // under /cli — attachments (internal-document side channel), admin
     // metrics, help/suggestion indexes, turn recordings — stays 403.
+    // Task #887 — the sub-path allowlist lives in partnerPortalCliSurface
+    // (single source of truth shared with the partner-portal probe suite,
+    // which ratchets every /cli route against the annotation registry).
     if (p === "/cli" || p.startsWith("/cli/")) {
-      const cliAllowed =
-        p === "/cli/turn" ||
-        /^\/cli\/turn\/[^/]+\/(cancel|confirm)$/.test(p) ||
-        p === "/cli/sessions" ||
-        /^\/cli\/sessions\/[^/]+$/.test(p) ||
-        p === "/cli/events" ||
-        p === "/cli/capabilities" ||
-        p === "/cli/turns/pending-clarification" ||
-        p === "/cli/turns/recent" ||
-        /^\/cli\/turns\/[^/]+\/feedback$/.test(p);
-      if (cliAllowed) return next();
+      if (isPartnerCliPathAllowed(p)) return next();
       res.status(403).json({
         error: "alliance-partner-scope",
         message: "This chat feature is not available to alliance-partner logins.",
