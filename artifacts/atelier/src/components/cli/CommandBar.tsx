@@ -975,7 +975,7 @@ function Header({
         aria-hidden
       />
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-semibold leading-tight">Atelier</div>
+        <div className="text-xs font-semibold leading-tight">Riser</div>
         <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider truncate">
           {surface.replaceAll("_", " ")} · {status}
         </div>

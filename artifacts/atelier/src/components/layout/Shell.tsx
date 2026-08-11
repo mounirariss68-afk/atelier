@@ -791,7 +791,7 @@ export function RightRail() {
         >
           <Sparkles className="w-3 h-3 text-gold/70 shrink-0" aria-hidden />
           <span className="truncate">
-            Atelier routes each request to the right specialist
+            Riser routes each request to the right specialist
           </span>
         </div>
       )}
