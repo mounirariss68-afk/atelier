@@ -261,23 +261,36 @@
      Fixed pseudo-element (not background-attachment: fixed, which is
      broken/slow on iOS Safari) so the backdrop stays put while the
      document scrolls. */
+  /* Task #966: the backdrop is now split across three fixed layers so the
+     artwork can drift without repainting anything else. Paint order
+     (bottom → top): body::before (color fallback) → #bg-art (scrim +
+     artwork, animated) → #bg-texture (grid/dots/glows, static) →
+     #bg-breathe → body::after (noise) → #root. */
   body::before {
     content: "";
     position: fixed;
     inset: 0;
-    /* Dark mode (Task #904): the branded navy/purple network image sits at
-       the bottom of the stack, covering the viewport (no tiling), with a
-       subtle navy scrim layered over it so text and glass stay readable.
-       The final linear-gradient is retained UNDER the image as the color
-       fallback while it loads (or if it fails). */
+    /* Color fallback while the artwork loads (or if it fails). */
     background-image:
-      repeating-linear-gradient(
-        to right,
-        transparent 0,
-        transparent calc((100vw - 32px) / 12 - 1px),
-        var(--grid-line) calc((100vw - 32px) / 12 - 1px),
-        var(--grid-line) calc((100vw - 32px) / 12)
-      ),
+      linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 45%, var(--bg-elevate) 130%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  [data-theme="light"] body::before {
+    background-image:
+      linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
+  }
+  /* Dark mode (Task #904): the branded navy/purple network image covers the
+     viewport (no tiling) with a subtle navy scrim layered over it so text
+     and glass stay readable. The scrim rides on the same element as the
+     artwork — it is a smooth gradient, so the tiny drift is imperceptible
+     on it while keeping it perfectly aligned over the image. */
+  #bg-art {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
       /* Task #954: the artwork itself now carries wave/network detail on its
          left side, so the old left-edge compensation glows (Task #928) are
          gone — they were reading as "just a set of gradients". */
@@ -285,15 +298,59 @@
         color-mix(in srgb, var(--bg-deep) 72%, transparent) 0%,
         color-mix(in srgb, var(--bg) 55%, transparent) 55%,
         color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%),
-      url("/dark-bg.webp"),
-      linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 45%, var(--bg-elevate) 130%);
-    background-size: auto, auto, cover, auto;
-    background-position: center, center, center, center;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+      url("/dark-bg.webp");
+    background-size: auto, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    /* Task #966: very slow drift/sway. The resting 1.05 scale gives ~2.5%
+       headroom on every edge so the ±0.8vw/±0.6vh pan never exposes an
+       edge. Transform-only — GPU-composited, no repaints. */
+    will-change: transform;
+    transform: scale(1.05);
+    animation: bg-drift 52s ease-in-out infinite alternate;
+  }
+  [data-theme="light"] #bg-art {
+    /* Task #911: light-mode companion of the dark network image, under a
+       pale scrim so text/cards stay readable. Task #942: scrim lightened
+       slightly so the artwork's pattern reads through the glass. */
+    background-image:
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--bg) 56%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 36%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 30%, transparent) 100%),
+      url("/light-bg.webp");
+    background-size: auto, cover;
+    /* Task #932: the artwork layer anchors LEFT so its content reaches the
+       left screen edge (cover keeps full coverage — any crop falls on the
+       right). */
+    background-position: center, left center;
+    background-repeat: no-repeat, no-repeat;
+  }
+  @keyframes bg-drift {
+    0%   { transform: scale(1.05) translate3d(0, 0, 0); }
+    50%  { transform: scale(1.07) translate3d(-0.8vw, 0.6vh, 0); }
+    100% { transform: scale(1.05) translate3d(0.8vw, -0.5vh, 0); }
+  }
+  /* Static (non-drifting) texture above the artwork: the 12-column faint
+     vertical grid (Task #897) plus, in light mode, the dot lattice and
+     soft brand glows (Task #942). These sat above the scrim before the
+     Task #966 split too, so the visual stack is unchanged. */
+  #bg-texture {
+    position: fixed;
+    inset: 0;
     pointer-events: none;
     z-index: 0;
+    background-image:
+      repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc((100vw - 32px) / 12 - 1px),
+        var(--grid-line) calc((100vw - 32px) / 12 - 1px),
+        var(--grid-line) calc((100vw - 32px) / 12)
+      );
+    background-repeat: repeat;
   }
-  [data-theme="light"] body::before {
+  [data-theme="light"] #bg-texture {
     background-image:
       repeating-linear-gradient(
         to right,
@@ -305,14 +362,11 @@
       /* Task #942: a faint navy dot lattice tiled across the whole light
          backdrop so the frosted panels always have fine texture to blur,
          even over the near-white regions of the artwork. */
-      /* Task #954: the light artwork now has left-side wave detail baked in,
-         so the light-mode left-edge compensation glows (Task #929) are gone. */
       radial-gradient(circle at 1px 1px,
         rgba(10, 18, 48, 0.055) 1px,
         transparent 1.5px),
       /* Task #942: extra soft brand glows across the top-right and centre
-         so the pale upper-left of the artwork is no longer a blank wash.
-         Smooth low-alpha color, not busy texture — text stays AA. */
+         so the pale upper-left of the artwork is no longer a blank wash. */
       radial-gradient(70vh 60vh at 78% 8%,
         color-mix(in srgb, #5B7CFF 13%, transparent) 0%,
         color-mix(in srgb, #5B7CFF 5%, transparent) 45%,
@@ -324,24 +378,31 @@
       radial-gradient(60vh 52vh at 96% 68%,
         color-mix(in srgb, var(--gold-soft) 10%, transparent) 0%,
         color-mix(in srgb, var(--gold-soft) 4%, transparent) 45%,
-        transparent 70%),
-      /* Task #911: light-mode companion of the dark network image, under a
-         pale scrim so text/cards stay readable. The final linear-gradient
-         is retained UNDER the image as the color fallback while it loads.
-         Task #942: scrim lightened slightly so the artwork's pattern reads
-         through the glass instead of washing out. */
-      linear-gradient(160deg,
-        color-mix(in srgb, var(--bg) 56%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 36%, transparent) 55%,
-        color-mix(in srgb, var(--bg-deep) 30%, transparent) 100%),
-      url("/light-bg.webp"),
-      linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
-    background-size: auto, 26px 26px, auto, auto, auto, auto, cover, auto;
-    /* Task #932: the artwork layer anchors LEFT so its content reaches the
-       left screen edge (cover keeps full coverage — any crop falls on the
-       right). Other layers unchanged. */
-    background-position: center, center, center, center, center, center, left center, center;
-    background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+        transparent 70%);
+    background-size: auto, 26px 26px, auto, auto, auto;
+    background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
+  }
+  /* Static backdrop when motion is off (in-app toggle, OS reduced motion):
+     transform reset entirely so the artwork sits exactly as before. */
+  [data-motion="off"] #bg-art {
+    animation: none;
+    transform: none;
+    will-change: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #bg-art {
+      animation: none;
+      transform: none;
+      will-change: auto;
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    /* Surfaces are opaque here — motion would only flicker in gutters. */
+    #bg-art {
+      animation: none;
+      transform: none;
+      will-change: auto;
+    }
   }
   body::after {
     content: "";
