@@ -233,7 +233,7 @@ export async function accountPlanPdfHandler(
   };
 
   // Header band.
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(20).text("THE ATELIER", LEFT);
+  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(20).text("ATELIER", LEFT);
   doc
     .fillColor(GOLD)
     .font("Helvetica")
@@ -489,7 +489,7 @@ export async function accountPlanPdfHandler(
       .font("Helvetica")
       .fontSize(7.5)
       .text(
-        `Cognirise · The Atelier · ${brand} account plan · confidential · page ${i + 1} of ${range.count}`,
+        `Cognirise · Atelier · ${brand} account plan · confidential · page ${i + 1} of ${range.count}`,
         LEFT,
         805,
         { width: WIDTH, align: "center" },

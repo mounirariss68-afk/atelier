@@ -1,1 +1,1 @@
-export const FIRM_NAME = "COGNIRISE · THE ATELIER";
+export const FIRM_NAME = "COGNIRISE · ATELIER";

@@ -44,7 +44,7 @@ function approvalEmail(inv: SelfBilledInvoice): { subject: string; built: BuiltE
         `Total: ${inv.currency} ${inv.totalAmount.toFixed(2)}`,
         "The invoice PDF is attached for your records. You can also view it any time in the Cognirise portal under My Pay → Self-billing.",
       ],
-      footerText: "Cognirise Finance — The Atelier",
+      footerText: "Cognirise Finance — Atelier",
     }),
   };
 }
@@ -61,7 +61,7 @@ function remittanceEmail(inv: SelfBilledInvoice): { subject: string; built: Buil
         `Amount: ${inv.currency} ${inv.totalAmount.toFixed(2)}${inv.remittanceRef ? ` · Remittance reference: ${inv.remittanceRef}` : ""}`,
         "The updated invoice PDF is attached as your remittance advice.",
       ],
-      footerText: "Cognirise Finance — The Atelier",
+      footerText: "Cognirise Finance — Atelier",
     }),
   };
 }

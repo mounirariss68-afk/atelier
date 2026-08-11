@@ -1,5 +1,5 @@
 /**
- * The Atelier — country reference data (Task #290).
+ * Atelier — country reference data (Task #290).
  *
  * Per-ISO metadata that augments the canonical ISO 3166-1 list pulled from
  * `i18n-iso-countries`. The seed merges this table with the EN/AR/TR

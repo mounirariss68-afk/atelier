@@ -410,7 +410,7 @@ export async function issueLetter(
       greeting: `Dear ${emp.preferredName || emp.fullName},`,
       paragraphs: [
         `Your ${def.label.toLowerCase()} (reference ${refNumber}) is attached, signed on behalf of ${entity.name}.`,
-        "A copy is also stored with your documents in The Atelier, so you can re-download it any time.",
+        "A copy is also stored with your documents in Atelier, so you can re-download it any time.",
       ],
     });
     const sent = await sendEmail({

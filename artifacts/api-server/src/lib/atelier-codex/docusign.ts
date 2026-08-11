@@ -1,5 +1,5 @@
 /**
- * DocuSign adapter stub for The Atelier — Codex (CLM).
+ * DocuSign adapter stub for Atelier — Codex (CLM).
  *
  * Lives behind the E-Sign Orchestrator. Real DocuSign integration is
  * out of scope for L2C Wave 1 — this stub returns synthetic envelope

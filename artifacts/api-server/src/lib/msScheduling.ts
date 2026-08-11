@@ -6,7 +6,7 @@
  * colleague's busy times we use that colleague's OWN stored connection
  * (never application-level access). The invite itself is created on the
  * requester's calendar, so attendees receive a normal Outlook invite
- * whether or not they connected the Atelier.
+ * whether or not they connected Atelier.
  *
  * Time zone: the firm default is Asia/Dubai (fixed UTC+4, no DST).
  * Working hours for auto-found slots are 08:00–18:00 Dubai.
@@ -377,7 +377,7 @@ export async function updateInternalInvite(args: {
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 404) {
       // Event vanished from the organizer's mailbox (deleted in Outlook).
-      // The Atelier row is being brought in line — nothing to move.
+      // Atelier row is being brought in line — nothing to move.
       logger.warn(
         { msEventId: args.msEventId },
         "[ms-scheduling] reschedule: event already gone from organizer mailbox",

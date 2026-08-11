@@ -753,9 +753,9 @@ export default function Home() {
             </Card>
           </div>
 
-          {/* PANE C: From the Atelier */}
+          {/* PANE C: From Atelier */}
           <div className="space-y-6">
-            <SectionLabel>From the Atelier</SectionLabel>
+            <SectionLabel>From Atelier</SectionLabel>
 
             <div className="space-y-4">
               {home.paneC.map((asset) => (

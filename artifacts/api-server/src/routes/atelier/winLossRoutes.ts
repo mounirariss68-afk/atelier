@@ -245,7 +245,7 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     return;
   }
   // Task #653 — lessons verification gate. Approval publishes the debrief's
-  // suggested lessons to the Atelier library, so a debrief with no captured
+  // suggested lessons to Atelier library, so a debrief with no captured
   // lessons cannot be approved/closed — that would close the loop without
   // banking any institutional learning. Require at least one lesson with a
   // non-empty title before approval.

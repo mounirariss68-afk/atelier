@@ -589,7 +589,7 @@ interface WireMeeting {
 }
 
 /**
- * Task #553 — internal meetings booked via the Atelier that fall in the
+ * Task #553 — internal meetings booked via Atelier that fall in the
  * window and are visible to `me` (creator, attendee, or founding partner).
  * Also returns the org-wide iCalUId set for the window so Graph copies of
  * these meetings can be de-duplicated out of the calendar view.
@@ -959,7 +959,7 @@ router.get("/me/calendar/changed", async (req, res, next) => {
 // Task #559 — reschedule / cancel internal meetings (organizer or
 // founding partner). Graph PATCH/DELETE happens on the ORGANIZER's
 // event first, so Outlook attendees get standard update/cancellation
-// notifications; only then does the Atelier row change (+ audit).
+// notifications; only then does Atelier row change (+ audit).
 // ------------------------------------------------------------------
 
 function meetingActor(me: typeof atelierUsers.$inferSelect) {

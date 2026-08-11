@@ -36,7 +36,7 @@ export function demoReadOnlyGuard(
     return;
   }
   // Per user request (2026-07-23): the demo persona may POST a chat turn so
-  // the reviewer can ask "what can I do with the Atelier?". The /cli/turn
+  // the reviewer can ask "what can I do with Atelier?". The /cli/turn
   // route short-circuits demo turns into a canned, read-only capability
   // showcase (see runDemoShowcaseTurn) — the orchestrator/LLM and every
   // write tool are never invoked for this user.

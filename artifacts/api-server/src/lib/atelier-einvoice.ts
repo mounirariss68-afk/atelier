@@ -3,7 +3,7 @@
  *
  * Live ZATCA / FTA / Peppol crypto + access points are out of scope for
  * Wave 3; we ship deterministic sandbox adapters that:
- *   - Build a canonical payload from the Atelier invoice header + lines.
+ *   - Build a canonical payload from Atelier invoice header + lines.
  *   - Persist payloads under the application-layer `enc:wallet:<key>` ref
  *     (no live KMS) so the schema columns are exercised end-to-end.
  *   - Return a clearance UUID + QR-code stub the route persists onto

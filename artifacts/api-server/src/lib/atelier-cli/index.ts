@@ -304,7 +304,7 @@ if (
   !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY
 ) {
   throw new Error(
-    "[atelier-cli] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. The Atelier chat orchestrator does not support mock mode.",
+    "[atelier-cli] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. Atelier chat orchestrator does not support mock mode.",
   );
 }
 

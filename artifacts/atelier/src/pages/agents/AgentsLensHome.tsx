@@ -10,7 +10,7 @@
  * `agentsMetrics.ts` for the honesty contract.
  *
  * The `AGENTS_LIFECYCLE_STAGES` export is preserved so other modules
- * importing it (e.g. the Atelier Library "fork to Design" CTA) keep
+ * importing it (e.g. Atelier Library "fork to Design" CTA) keep
  * working.
  */
 import * as React from "react";

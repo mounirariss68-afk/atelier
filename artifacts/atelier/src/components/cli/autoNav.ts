@@ -1,7 +1,7 @@
 /**
  * Task #498 — auto-navigation preference + helpers.
  *
- * The chat agent (Task #495) auto-navigates the Atelier app to the
+ * The chat agent (Task #495) auto-navigates Atelier app to the
  * relevant screen when it proposes or commits a write. Some users find
  * the silent jump jarring, so:
  *   - we surface a non-blocking toast with a "Stay here" affordance

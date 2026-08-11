@@ -154,7 +154,7 @@ export const AuthGetAppMetaResponse = zod.object({
 });
 
 /**
- * @summary Current persona for The Atelier session
+ * @summary Current persona for Atelier session
  */
 export const AtelierGetMeResponse = zod.object({
   id: zod.string(),
@@ -7595,7 +7595,7 @@ export const AtelierSwitchPersonaResponse = zod.object({
 });
 
 /**
- * @summary The Atelier Home — Pane A / B / C bundle for the active persona
+ * @summary Atelier Home — Pane A / B / C bundle for the active persona
  */
 export const AtelierGetHomeResponse = zod.object({
   eyebrowDate: zod.string(),
@@ -35678,7 +35678,7 @@ export const AtelierAgentsUsageCountsResponse = zod.array(
 );
 
 /**
- * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ * @summary Partner-only — promote an approved engagement design into the Atelier design registry
  */
 export const AtelierPromoteAgentDesignParams = zod.object({
   engId: zod.coerce.string(),

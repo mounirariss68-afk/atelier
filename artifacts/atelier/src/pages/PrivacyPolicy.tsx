@@ -50,11 +50,11 @@ export default function PrivacyPolicy() {
         </div>
         <h1 className="text-2xl font-semibold text-text">Privacy Policy</h1>
         <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-faint">
-          The Atelier — Cognirise · Effective July 23, 2026
+          Atelier — Cognirise · Effective July 23, 2026
         </p>
 
         <P>
-          The Atelier is a private, invite-only internal portal for Cognirise's
+          Atelier is a private, invite-only internal portal for Cognirise's
           partners, employees, and contractors — available on the web and as
           the Atelier iOS app. There is no public sign-up: every account is
           created and managed by Cognirise for its own workforce. This policy
@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
 
         <H2>Who we are</H2>
         <P>
-          Cognirise operates The Atelier for its own internal business use.
+          Cognirise operates Atelier for its own internal business use.
           For anything related to your data or this policy, contact{" "}
           <a className="underline" href="mailto:support@cognirise.ai">
             support@cognirise.ai
@@ -213,7 +213,7 @@ export default function PrivacyPolicy() {
 
         <H2>Children</H2>
         <P>
-          The Atelier is a workplace tool for Cognirise's workforce and is not
+          Atelier is a workplace tool for Cognirise's workforce and is not
           directed at, or available to, children.
         </P>
 

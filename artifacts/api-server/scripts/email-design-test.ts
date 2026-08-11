@@ -21,11 +21,11 @@ async function main() {
     title: "Your Q3 engagement review is ready",
     greeting: "Dear Mounir,",
     paragraphs: [
-      "The quarterly review pack for your active engagements has been prepared and is ready in The Atelier. It covers delivery status, commercial performance and the outlook for the next quarter across all workstreams.",
+      "The quarterly review pack for your active engagements has been prepared and is ready in Atelier. It covers delivery status, commercial performance and the outlook for the next quarter across all workstreams.",
       "Please take a moment to review it before Thursday's partner meeting so any adjustments can be discussed with the team in advance.",
     ],
     cta: { label: "Open the review", url: "https://www.cognirise.ai" },
-    footerText: "Cognirise — The Atelier · This is a design test email.",
+    footerText: "Cognirise — Atelier · This is a design test email.",
   });
   const res = await sendEmail({
     sender: "system",

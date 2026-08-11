@@ -17,7 +17,7 @@ export default function Agents() {
       <PageHero>
         <SectionHead 
           headline="Agent Registry"
-          lede="The named AI agents available in The Atelier."
+          lede="The named AI agents available in Atelier."
         />
       </PageHero>
 

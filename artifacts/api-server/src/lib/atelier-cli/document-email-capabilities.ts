@@ -550,7 +550,7 @@ defineCapability({
     const bodyText =
       typeof input.message === "string" && input.message.trim()
         ? input.message.trim().slice(0, 5000)
-        : `Please find attached: ${selected.map(({ doc }) => doc.title).join(", ")}.\n\nSent from The Atelier on behalf of ${ctx.persona.name}.`;
+        : `Please find attached: ${selected.map(({ doc }) => doc.title).join(", ")}.\n\nSent from Atelier on behalf of ${ctx.persona.name}.`;
     const toWire = recipients.map((email) => ({ email }));
 
     let draftLink: string | null = null;

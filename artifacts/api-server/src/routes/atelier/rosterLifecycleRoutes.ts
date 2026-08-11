@@ -225,7 +225,7 @@ const ONBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
     { code: "policies.acknowledged", title: "Policies acknowledged", description: "Code of conduct, confidentiality, IT security and expenses policies signed off.", ownerRole: "hr", daysFromStart: 3 },
     { code: "buddy.manager.intro", title: "Buddy & manager introductions", description: "Buddy assigned; manager intro and first-week schedule booked.", ownerRole: "senior_manager", daysFromStart: 5 },
     { code: "workspace.ready", title: "Workspace ready", description: "Equipment issued/shipped and desk or remote setup confirmed.", ownerRole: "hr", daysFromStart: 5 },
-    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 7 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the portal login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 7 },
   ],
   contractor: [
     { code: "nda.msa.signed", title: "NDA & MSA signed", description: "Non-disclosure and master services agreements executed.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
@@ -234,14 +234,14 @@ const ONBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
     { code: "sso.limited", title: "Limited SSO provisioned", description: "Scoped access to the tools required for the engagement only.", ownerRole: "hr", daysFromStart: 2 },
     { code: "invoice.cadence", title: "Invoice cadence agreed", description: "Invoicing schedule, rate and approval chain confirmed.", ownerRole: "hr", daysFromStart: 3 },
     { code: "scope.briefed", title: "Engagement scope briefed", description: "Scope of work, deliverables and ways of working walked through.", ownerRole: "senior_manager", daysFromStart: 3 },
-    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 4 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the portal login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 4 },
   ],
   partner_firm_resource: [
     { code: "firm.agreement.verified", title: "Partner-firm agreement verified", description: "Firm MSA and NDA verified active and covering this resource.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
     { code: "conflict.disclosed", title: "Resource conflicts disclosed", description: "Conflict disclosure for this resource captured and cleared.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
     { code: "access.limited", title: "Limited access provisioned", description: "Guest access scoped to the assigned engagement only.", ownerRole: "hr", daysFromStart: 1 },
     { code: "engagement.briefed", title: "Engagement brief delivered", description: "Engagement context, client protocols and deliverables briefed.", ownerRole: "senior_manager", daysFromStart: 2 },
-    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 3 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the portal login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 3 },
   ],
 };
 

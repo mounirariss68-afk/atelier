@@ -260,7 +260,7 @@ router.get("/engagements/:engId/agent-designs", async (req, res) => {
   res.json(rows);
 });
 
-// Promote an approved engagement-scoped design to the Atelier registry.
+// Promote an approved engagement-scoped design to the Atelier design registry.
 // Partner-only (per requirement: "Partner-gated promote to Atelier").
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, res) => {
@@ -289,7 +289,7 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
   };
   // Mark the engagement-bound design as promoted so the engagement
   // /agents view can clearly distinguish "engagement runtime (still
-  // engagement-bound)" from "promoted to global Atelier registry".
+  // engagement-bound)" from "promoted to the global Atelier registry".
   const agentId = `agent_${rid("eng").slice(4)}`;
   await db
     .update(atelierAgentDesigns)
@@ -322,7 +322,7 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
     actor: me,
     action: "agent_design.promote",
     payload: { designId: design.id, agentId },
-    summary: `${me.name} promoted "${d.name ?? "design"}" into the Atelier registry`,
+    summary: `${me.name} promoted "${d.name ?? "design"}" into the Atelier design registry`,
   });
   res.json({ agentId });
 });

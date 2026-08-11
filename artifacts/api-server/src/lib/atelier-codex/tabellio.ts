@@ -1,5 +1,5 @@
 /**
- * Tabellio adapter stub for The Atelier — Codex (CLM).
+ * Tabellio adapter stub for Atelier — Codex (CLM).
  *
  * Tabellio is the regional (GCC) e-sign provider Cognirise uses when a
  * counterparty refuses DocuSign or when a deal mandates UAE-PASS

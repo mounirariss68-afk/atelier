@@ -10,7 +10,7 @@ purpose: |
   RECRUITING mode of Pursuit Scout (v5). Same trigger-detection +
   evidence-citation logic as v1, but the target is a candidate (person)
   rather than a prospect (account). Scans LinkedIn, GitHub, conference
-  speaker lists, and the Atelier's own referral graph. Output lands in
+  speaker lists, and Atelier's own referral graph. Output lands in
   /studio, not /opportunities.
 inputs:
   - role_id

@@ -7,7 +7,7 @@ export {
   getChatUrl,
   chat,
   getChatMutationOptions,
-  // ---- The Atelier (employee portal) ----
+  // ---- Atelier (employee portal) ----
   getAtelierGetMeUrl,
   getAtelierGetMeQueryKey,
   getAtelierGetMeQueryOptions,

@@ -1,5 +1,5 @@
 /**
- * Canonical renewal financial math for the Atelier domain.
+ * Canonical renewal financial math for Atelier domain.
  *
  * Net Revenue Retention (NRR) delta percentage is computed from the
  * current vs. proposed annual recurring revenue. Every surface that

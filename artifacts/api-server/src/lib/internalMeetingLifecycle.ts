@@ -1,10 +1,10 @@
 /**
  * Task #559 — reschedule / cancel of standalone internal meetings booked
- * via the Atelier (Task #553).
+ * via Atelier (Task #553).
  *
  * One shared implementation used by BOTH the REST routes
  * (PATCH/DELETE /me/calendar/internal/:id) and the chat capabilities, so
- * the Graph call, the Atelier row update, and the audit entry can never
+ * the Graph call, Atelier row update, and the audit entry can never
  * drift between surfaces.
  *
  * Authorization: the ORGANIZER (createdByUserId) of a meeting, or a
@@ -13,7 +13,7 @@
  * when a founding partner performs the action.
  *
  * Graph-first ordering: the Outlook update/cancellation is attempted
- * BEFORE the Atelier row changes. If Graph fails, nothing changes locally
+ * BEFORE Atelier row changes. If Graph fails, nothing changes locally
  * and the caller gets an explicit error — the row and the mailbox are
  * never silently out of sync. Meetings whose organizer never had a Graph
  * event (msEventId null) update locally only.
@@ -135,7 +135,7 @@ async function auditMeeting(args: {
 
 /**
  * Reschedule: Graph PATCH on the organizer's event (attendees get a
- * standard Outlook update), then update the Atelier row + audit.
+ * standard Outlook update), then update Atelier row + audit.
  * Throws SchedulingError (Graph/connection problems) or
  * MeetingLifecycleError (auth/state problems).
  */
@@ -207,7 +207,7 @@ export async function rescheduleInternalMeeting(args: {
  * Task #568 — edit an internal meeting's topic and/or attendee list.
  * Graph-first: PATCHes the ORGANIZER's event (subject and/or replacement
  * attendee list — Outlook sends attendees a standard meeting update, and
- * newly added people receive the invite), then updates the Atelier row
+ * newly added people receive the invite), then updates Atelier row
  * and audits. Time is untouched — use rescheduleInternalMeeting for that.
  */
 export async function updateInternalMeetingDetails(args: {
@@ -297,7 +297,7 @@ export async function updateInternalMeetingDetails(args: {
 
 /**
  * Cancel: Graph DELETE on the organizer's event (attendees get a standard
- * Outlook cancellation), then soft-cancel the Atelier row + audit.
+ * Outlook cancellation), then soft-cancel Atelier row + audit.
  */
 export async function cancelInternalMeeting(args: {
   actor: MeetingActor;

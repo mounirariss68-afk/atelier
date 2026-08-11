@@ -642,8 +642,8 @@ defineCapability({
         requesterUserId: ctx.persona.id,
         subject: topic,
         bodyText: agenda
-          ? `Agenda:\n${agenda}\n\nClient meeting on ${parent.accountName} scheduled via the Atelier by ${ctx.persona.name}.`
-          : `Client meeting on ${parent.accountName} (${parent.kind} "${parent.name}") scheduled via the Atelier by ${ctx.persona.name}.`,
+          ? `Agenda:\n${agenda}\n\nClient meeting on ${parent.accountName} scheduled via Atelier by ${ctx.persona.name}.`
+          : `Client meeting on ${parent.accountName} (${parent.kind} "${parent.name}") scheduled via Atelier by ${ctx.persona.name}.`,
         start: slotStart,
         end: slotEnd,
         attendees: [
@@ -687,7 +687,7 @@ defineCapability({
         createdByUserId: ctx.persona.id,
       });
     } catch (err) {
-      // Task #570 — never leave an orphaned Outlook event: if the Atelier
+      // Task #570 — never leave an orphaned Outlook event: if Atelier
       // row can't be written, best-effort delete the Graph event we just
       // created and fail loudly.
       if (eventId) {
@@ -705,7 +705,7 @@ defineCapability({
         ok: false,
         errorCode: "internal",
         errorMessage:
-          "The Outlook invite couldn't be recorded in the Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
+          "The Outlook invite couldn't be recorded in Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
       };
     }
     await db.insert(atelierAuditEvents).values({

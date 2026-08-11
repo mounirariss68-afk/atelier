@@ -4,7 +4,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { isBoardObserverRestricted, isRestrictedPersona } from "./personaRoles.js";
 
 /**
- * Per-request Row-Level-Security context for The Atelier.
+ * Per-request Row-Level-Security context for Atelier.
  *
  * Postgres RLS policies on `atelier_*` tables read three GUCs:
  *   app.org_id           — tenant scope (matches atelier_*.org_id)
@@ -75,7 +75,7 @@ function ctxFromReq(req: Request): AtelierRlsContext {
 }
 
 /**
- * Run `fn` inside a Drizzle transaction with the Atelier RLS GUCs bound
+ * Run `fn` inside a Drizzle transaction with Atelier RLS GUCs bound
  * to that transaction. The third arg to set_config (`true`) makes the
  * setting transaction-local, so it cannot leak to subsequent requests
  * sharing the same pooled connection.

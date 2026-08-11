@@ -938,7 +938,7 @@ export function useAuthGetAppMeta<
 }
 
 /**
- * @summary Current persona for The Atelier session
+ * @summary Current persona for Atelier session
  */
 export const getAtelierGetMeUrl = () => {
   return `/api/atelier/me`;
@@ -989,7 +989,7 @@ export type AtelierGetMeQueryResult = NonNullable<
 export type AtelierGetMeQueryError = ErrorType<unknown>;
 
 /**
- * @summary Current persona for The Atelier session
+ * @summary Current persona for Atelier session
  */
 
 export function useAtelierGetMe<
@@ -12435,7 +12435,7 @@ export const useAtelierSwitchPersona = <
 };
 
 /**
- * @summary The Atelier Home — Pane A / B / C bundle for the active persona
+ * @summary Atelier Home — Pane A / B / C bundle for the active persona
  */
 export const getAtelierGetHomeUrl = () => {
   return `/api/atelier/home`;
@@ -12486,7 +12486,7 @@ export type AtelierGetHomeQueryResult = NonNullable<
 export type AtelierGetHomeQueryError = ErrorType<unknown>;
 
 /**
- * @summary The Atelier Home — Pane A / B / C bundle for the active persona
+ * @summary Atelier Home — Pane A / B / C bundle for the active persona
  */
 
 export function useAtelierGetHome<
@@ -22158,7 +22158,7 @@ export function useAtelierAgentsUsageCounts<
 }
 
 /**
- * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ * @summary Partner-only — promote an approved engagement design into the Atelier design registry
  */
 export const getAtelierPromoteAgentDesignUrl = (
   engId: string,
@@ -22226,7 +22226,7 @@ export type AtelierPromoteAgentDesignMutationResult = NonNullable<
 export type AtelierPromoteAgentDesignMutationError = ErrorType<unknown>;
 
 /**
- * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ * @summary Partner-only — promote an approved engagement design into the Atelier design registry
  */
 export const useAtelierPromoteAgentDesign = <
   TError = ErrorType<unknown>,

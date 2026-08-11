@@ -55,7 +55,7 @@ const MEETINGS_VIEW_STORAGE_KEY = "atelier-meetings-view";
 // defensively so an unknown code still reads sensibly.
 const MS_ERROR_MESSAGES: Record<string, string> = {
   "admin-consent":
-    "Your Microsoft 365 administrator needs to grant consent for the Atelier before you can connect. Please ask your admin to approve the Cognirise app in Microsoft Entra.",
+    "Your Microsoft 365 administrator needs to grant consent for Atelier before you can connect. Please ask your admin to approve the Cognirise app in Microsoft Entra.",
   "not-configured":
     "Microsoft 365 sign-in isn't set up for this workspace yet. Ask an administrator to configure it.",
   "state-mismatch":
@@ -1283,7 +1283,7 @@ export function ConnectedAccountsCard() {
       ) : (
         <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <p className="text-sm text-text-mute">
-            Connect your Microsoft 365 account to see your Outlook calendar inside the Atelier.
+            Connect your Microsoft 365 account to see your Outlook calendar inside Atelier.
           </p>
           <PillButton
             className="shrink-0"

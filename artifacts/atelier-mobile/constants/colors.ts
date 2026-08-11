@@ -1,7 +1,7 @@
 /**
- * Semantic design tokens for the Atelier mobile app.
+ * Semantic design tokens for Atelier mobile app.
  *
- * Fully synced from the Atelier web artifact's index.css (Cognirise brand):
+ * Fully synced from Atelier web artifact's index.css (Cognirise brand):
  * deep navy surfaces, magenta accent, cool near-white text, accent tints and
  * the brand easing. Dark is the brand-default theme; light mirrors the web
  * light theme.

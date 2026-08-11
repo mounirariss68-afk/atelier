@@ -3415,7 +3415,7 @@ defineCapability({
     const bodyText =
       typeof input.message === "string" && input.message.trim()
         ? input.message.trim().slice(0, 5000)
-        : `Please find attached: ${selected.map((d) => d.title).join(", ")}.\n\nSent from The Atelier on behalf of ${subject.user.name}.`;
+        : `Please find attached: ${selected.map((d) => d.title).join(", ")}.\n\nSent from Atelier on behalf of ${subject.user.name}.`;
     const toWire = recipients.map((email) => ({ email }));
 
     try {

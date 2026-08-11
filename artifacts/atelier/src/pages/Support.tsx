@@ -14,11 +14,11 @@ export default function Support() {
         </div>
         <h1 className="text-2xl font-semibold text-text">Support</h1>
         <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-faint">
-          The Atelier — Cognirise
+          Atelier — Cognirise
         </p>
 
         <p className="mt-6 text-sm leading-relaxed text-text">
-          The Atelier is Cognirise's internal portal for its partners,
+          Atelier is Cognirise's internal portal for its partners,
           employees, and contractors. Accounts are provisioned by the firm —
           there is no public sign-up.
         </p>

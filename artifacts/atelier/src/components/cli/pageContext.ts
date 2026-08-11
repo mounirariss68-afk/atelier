@@ -154,7 +154,7 @@ const AGENTS: Suggestion[] = [
 
 const ATELIER: Suggestion[] = [
   { en: "Show the prompt library", ar: "اعرض مكتبة المطالبات" },
-  { en: "What can The Atelier do for me?", ar: "ماذا يستطيع The Atelier أن يفعل لي؟" },
+  { en: "What can Atelier do for me?", ar: "ماذا يستطيع Atelier أن يفعل لي؟" },
 ];
 
 const GLOBAL: Suggestion[] = [

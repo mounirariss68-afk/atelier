@@ -41,7 +41,7 @@ export function writeClientInvoicePdf(doc: PDFKit.PDFDocument, args: ClientInvoi
 
   // Header
   doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(20).text("COGNIRISE", LEFT, 56);
-  doc.fillColor(GOLD).font("Helvetica").fontSize(10).text("The Atelier — Professional Services", LEFT);
+  doc.fillColor(GOLD).font("Helvetica").fontSize(10).text("Atelier — Professional Services", LEFT);
   doc.moveDown(0.8);
 
   doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text(

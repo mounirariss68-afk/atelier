@@ -46,7 +46,7 @@ export function buildWelcomeEmail(args: WelcomeEmailArgs): {
     : `<p style="margin:0 0 8px;font-family:${SANS};font-size:14px;color:#3a4360;">Your onboarding contact will share a one-time activation link with you so you can choose your own password — we never send passwords by email.</p>`;
   const signInLine = args.signInUrl
     ? `<p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">You can sign in any time at <a href="${esc(args.signInUrl)}" style="color:#8A5BD6;">${esc(args.signInUrl)}</a>.</p>`
-    : `<p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">Sign in to The Atelier — the Cognirise portal — using the link your onboarding contact shares with you.</p>`;
+    : `<p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">Sign in to Atelier — the Cognirise portal — using the link your onboarding contact shares with you.</p>`;
   const bodyHtml = `
     <div style="background:#F3F4F8;border:1px solid #E4E7F0;border-radius:8px;padding:16px 20px;margin:0 0 20px;font-family:Menlo,Consolas,monospace;font-size:14px;color:#1c2440;">
       <span style="color:#6b7490;">Email:</span> ${esc(args.email)}
@@ -82,13 +82,13 @@ export function buildWelcomeEmail(args: WelcomeEmailArgs): {
     greeting: `Dear ${firstName},`,
     paragraphs: [
       `Welcome to Cognirise. ${roleLine}`,
-      "Your workspace in The Atelier is ready. Your sign-in email is:",
+      "Your workspace in Atelier is ready. Your sign-in email is:",
     ],
     bodyHtml,
     cta: args.activationUrl
       ? { label: "Activate your account", url: args.activationUrl }
       : args.signInUrl
-        ? { label: "Sign in to The Atelier", url: args.signInUrl }
+        ? { label: "Sign in to Atelier", url: args.signInUrl }
         : undefined,
     bodyText: textLines.join("\n"),
   });

@@ -622,7 +622,7 @@ router.get("/admin/founder-todos", async (req, res) => {
       "Tighten per-role utilization targets (Partner 50% · EL 65% · SC/Sr.SC 70% · AI Eng 75%) and ratify the firm default.",
       "Lock default markup on client-billable expenses (proposed 10% · founder to ratify).",
       "Approve partner-economics model (firm-share %, ramp, founder buy-in, vesting cliffs).",
-      "Approve contractor Atelier-reuse pathway (which contractors join the Atelier and on what terms).",
+      "Approve contractor Atelier-reuse pathway (which contractors join Atelier and on what terms).",
       "Decide single-vs-two card-platform strategy (Pleo + Brex both, or consolidate on one).",
       "Lock VAT-reclaim philosophy (claim everywhere eligible · or restrict by jurisdiction).",
       "Select e-signature provider (DocuSign vs Adobe Sign vs in-house) and contract.",

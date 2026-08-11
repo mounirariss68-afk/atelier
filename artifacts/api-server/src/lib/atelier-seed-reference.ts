@@ -1,5 +1,5 @@
 /**
- * The Atelier — reference-data boot seed.
+ * Atelier — reference-data boot seed.
  *
  * Ensures `atelier_countries` (249 ISO 3166-1 alpha-2 entries with EN/AR/TR
  * display names from `i18n-iso-countries` plus firm-specific extras),

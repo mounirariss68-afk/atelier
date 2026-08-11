@@ -79,7 +79,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
     .fillColor("#0E1F3D")
     .font("Helvetica-Bold")
     .fontSize(20)
-    .text("THE ATELIER", { align: "left" });
+    .text("ATELIER", { align: "left" });
   doc
     .fillColor("#E89E2C")
     .font("Helvetica")
@@ -123,7 +123,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
       .font("Helvetica")
       .fontSize(8)
       .text(
-        `Cognirise · The Atelier · ${entityType}/${entityId} · page ${i + 1} of ${range.count}`,
+        `Cognirise · Atelier · ${entityType}/${entityId} · page ${i + 1} of ${range.count}`,
         56,
         780,
         { width: 483, align: "center" },
@@ -255,7 +255,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     .fillColor("#0E1F3D")
     .font("Helvetica-Bold")
     .fontSize(20)
-    .text("THE ATELIER", { align: "left" });
+    .text("ATELIER", { align: "left" });
   doc
     .fillColor("#E89E2C")
     .font("Helvetica")
@@ -303,7 +303,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
       .font("Helvetica")
       .fontSize(8)
       .text(
-        `Cognirise · The Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""} · page ${i + 1} of ${range.count}`,
+        `Cognirise · Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""} · page ${i + 1} of ${range.count}`,
         56,
         780,
         { width: 483, align: "center" },

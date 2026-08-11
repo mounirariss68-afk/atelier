@@ -101,7 +101,7 @@ export function classifyMarginStatus(
 }
 
 /**
- * Single source of truth for the Atelier v2 margin-lock workflow.
+ * Single source of truth for Atelier v2 margin-lock workflow.
  *
  * - `status` — chip colour (uses targetMarginPct + redThresholdPct).
  * - `partnerOverrideRequired` — true when the deal is below target margin

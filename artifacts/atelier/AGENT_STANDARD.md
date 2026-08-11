@@ -1,6 +1,6 @@
 # Atelier Agent Standard
 
-> **The single source of truth for how an agent in The Atelier is structured,
+> **The single source of truth for how an agent in Atelier is structured,
 > built, registered, run, and audited.** Every Layer 2 (design) and Layer 3
 > (implementation) agent task references this document. New agent code that
 > deviates from this contract should be rejected at review.
@@ -172,7 +172,7 @@ Common domain tables: `atelier_briefs`, `atelier_research_facts`,
 
 ## 8. UI contract
 
-- The Atelier UI (`Agents.tsx`, `AgentProfile.tsx`, `AgentRun.tsx`) is
+- Atelier UI (`Agents.tsx`, `AgentProfile.tsx`, `AgentRun.tsx`) is
   **registry-driven by default**. Adding a new entry to `ATELIER_AGENTS`
   automatically:
   - lists it on the Agents page (grouped by `group`),
@@ -183,7 +183,7 @@ Common domain tables: `atelier_briefs`, `atelier_research_facts`,
 - **Bespoke UI is opt-in.** When the standard view is insufficient
   (e.g. POV Author's three-step chain; Pricing Strategist's table view),
   add `uiComponent: "<route>"` and a one-line `uiRationale` to the
-  registry entry. The Atelier `AgentRun.tsx` will render a link to that
+  registry entry. Atelier `AgentRun.tsx` will render a link to that
   route instead of the generic shell.
 
 ---

@@ -304,7 +304,7 @@ export async function applyLeaveOoo(leaveId: string): Promise<void> {
         subject: `Out of office — ${personName}`,
         startDate: leave.startDate,
         endDateExclusive: addDaysYmd(leave.endDate, 1),
-        bodyText: "Automatically added by the Atelier when leave was approved.",
+        bodyText: "Automatically added by Atelier when leave was approved.",
         timeZone: timezoneFor(personCountryName),
       });
       eventId = ev.id;
@@ -379,7 +379,7 @@ export async function clearLeaveOoo(
           subject: `Out of office — ${personName}`,
           startDate: leave.startDate,
           endDateExclusive: addDaysYmd(leave.endDate, 1),
-          bodyText: "Automatically added by the Atelier when leave was approved.",
+          bodyText: "Automatically added by Atelier when leave was approved.",
         });
         await db
           .update(atelierLeaveRequests)

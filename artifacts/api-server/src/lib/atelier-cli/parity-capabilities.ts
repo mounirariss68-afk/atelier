@@ -1,7 +1,7 @@
 /**
  * Task #338 — UI parity capability registrations.
  *
- * Every write action exposed by the Atelier UI gets a matching CLI
+ * Every write action exposed by Atelier UI gets a matching CLI
  * capability so the assistant can perform it from plain language.
  * Each executor mirrors the route handler's auth + minimal DB write +
  * audit row; the same Zod-shaped fields the UI sends are accepted.

@@ -799,7 +799,7 @@ async function setDisabled(
   // Task #628 — Microsoft 365 offboarding rides on deactivation: block
   // tenant sign-in + revoke Microsoft sessions, and free the license when
   // HR chose "remove mailbox" (retain keeps the seat for handover). Always
-  // best-effort: a Graph refusal never blocks the Atelier-side deactivation
+  // best-effort: a Graph refusal never blocks Atelier-side deactivation
   // (the ledger row is flagged and founders/HR get a card instead).
   const msMailboxAction: "retain" | "remove" =
     (req.body as { msMailboxAction?: string } | undefined)?.msMailboxAction === "remove"

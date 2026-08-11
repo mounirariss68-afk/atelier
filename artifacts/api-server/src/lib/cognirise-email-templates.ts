@@ -25,7 +25,7 @@ export interface CogniriseEmailOptions {
   bodyHtml?: string;
   /** Optional call-to-action button. */
   cta?: { label: string; url: string };
-  /** Footer line. Defaults to "Cognirise — The Atelier". */
+  /** Footer line. Defaults to "Cognirise — Atelier". */
   footerText?: string;
   /**
    * Plain-text body override. Required for a faithful fallback when
@@ -79,7 +79,7 @@ export function renderCogniriseEmail(o: CogniriseEmailOptions): {
   html: string;
   text: string;
 } {
-  const footer = o.footerText ?? "Cognirise — The Atelier";
+  const footer = o.footerText ?? "Cognirise — Atelier";
   const paras = (o.paragraphs ?? [])
     .map(
       (p) =>

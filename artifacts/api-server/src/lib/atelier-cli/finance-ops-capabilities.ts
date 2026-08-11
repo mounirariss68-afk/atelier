@@ -18,7 +18,7 @@
  *   - recruiter → refused everywhere here ("recruiter-scope").
  *   - employee / contractor / partner_firm_resource → self-scope
  *     personas; refused on org-wide finance / win-loss / leave-queue
- *     surfaces (the Atelier router locks them to /me/*). The contract
+ *     surfaces (Atelier router locks them to /me/*). The contract
  *     list degrades to the caller's OWN contracts (like /me/contracts)
  *     instead of refusing outright.
  *   - leave queue/calendar → canApproveAsLead || isHr (same gate as

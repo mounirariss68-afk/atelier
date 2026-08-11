@@ -72,7 +72,7 @@ function coverPage(
     y += 30;
   }
 
-  doc.font("Helvetica").fontSize(10).fillColor(GOLD).text("The Atelier — Professional Services", LEFT, y);
+  doc.font("Helvetica").fontSize(10).fillColor(GOLD).text("Atelier — Professional Services", LEFT, y);
   y += 18;
 
   // Thin gold rule

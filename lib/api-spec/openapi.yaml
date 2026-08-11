@@ -13,7 +13,7 @@ tags:
   - name: chat
     description: Site-wide AI chat assistant
   - name: atelier
-    description: The Atelier — Cognirise Employee Portal
+    description: Atelier — Cognirise Employee Portal
 paths:
   /healthz:
     get:
@@ -175,7 +175,7 @@ paths:
     get:
       operationId: atelierGetMe
       tags: [atelier]
-      summary: Current persona for The Atelier session
+      summary: Current persona for Atelier session
       responses:
         "200":
           description: Current persona
@@ -2951,7 +2951,7 @@ paths:
     get:
       operationId: atelierGetHome
       tags: [atelier]
-      summary: The Atelier Home — Pane A / B / C bundle for the active persona
+      summary: Atelier Home — Pane A / B / C bundle for the active persona
       responses:
         "200":
           description: Home dashboard payload
@@ -5360,7 +5360,7 @@ paths:
     post:
       operationId: atelierPromoteAgentDesign
       tags: [atelier]
-      summary: Partner-only — promote an approved engagement design into the Atelier registry
+      summary: Partner-only — promote an approved engagement design into the Atelier design registry
       parameters:
         - in: path
           name: engId

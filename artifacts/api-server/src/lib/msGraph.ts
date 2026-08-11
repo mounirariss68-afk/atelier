@@ -138,7 +138,7 @@ export function decryptToken(ciphertext: string): string {
 }
 
 // ------------------------------------------------------------------
-// OAuth state — HMAC-signed, short-lived, bound to the Atelier user.
+// OAuth state — HMAC-signed, short-lived, bound to Atelier user.
 // Stored in an httpOnly cookie alongside the PKCE verifier so the
 // callback can validate without a server-side session store.
 // ------------------------------------------------------------------
@@ -393,7 +393,7 @@ async function graphPost<T>(
 /**
  * Task #553 — create a calendar event on the caller's own calendar
  * (delegated). Attendees receive a normal Outlook invite whether or not
- * they connected the Atelier. Online meetings get a Teams join link.
+ * they connected Atelier. Online meetings get a Teams join link.
  */
 export async function createCalendarEvent(
   accessToken: string,

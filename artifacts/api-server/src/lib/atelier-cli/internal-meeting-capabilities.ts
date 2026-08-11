@@ -373,8 +373,8 @@ defineCapability({
         requesterUserId: ctx.persona.id,
         subject: topic,
         bodyText: agenda
-          ? `Agenda:\n${agenda}\n\nScheduled via the Atelier by ${ctx.persona.name}.`
-          : `Internal meeting scheduled via the Atelier by ${ctx.persona.name}.`,
+          ? `Agenda:\n${agenda}\n\nScheduled via Atelier by ${ctx.persona.name}.`
+          : `Internal meeting scheduled via Atelier by ${ctx.persona.name}.`,
         start: slotStart,
         end: slotEnd,
         attendees: resolved.map((r) => ({ email: r.email, name: r.name })),
@@ -414,7 +414,7 @@ defineCapability({
         createdByUserId: ctx.persona.id,
       });
     } catch (err) {
-      // Task #570 — never leave an orphaned Outlook event: if the Atelier
+      // Task #570 — never leave an orphaned Outlook event: if Atelier
       // row can't be written, best-effort delete the Graph event we just
       // created and fail loudly.
       if (eventId) {
@@ -432,7 +432,7 @@ defineCapability({
         ok: false,
         errorCode: "internal",
         errorMessage:
-          "The Outlook invite couldn't be recorded in the Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
+          "The Outlook invite couldn't be recorded in Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
       };
     }
     await db.insert(atelierAuditEvents).values({
@@ -817,7 +817,7 @@ async function resolveTargetMeeting(
             },
           };
         }
-        // Nothing in the Atelier at/near that time. If the user's own
+        // Nothing in Atelier at/near that time. If the user's own
         // Outlook calendar has an event then, say so honestly.
         const known = new Set<string>();
         for (const m of all) {
@@ -830,7 +830,7 @@ async function resolveTargetMeeting(
             result: {
               ok: false,
               errorCode: "not_managed_here",
-              errorMessage: `"${outlook.subject}" at ${fmtInTz(outlook.start, tz)} (${tzShortLabel(tz)}) is on your Outlook calendar but wasn't scheduled through the Atelier, so I can't change it here — please edit it in Outlook.`,
+              errorMessage: `"${outlook.subject}" at ${fmtInTz(outlook.start, tz)} (${tzShortLabel(tz)}) is on your Outlook calendar but wasn't scheduled through Atelier, so I can't change it here — please edit it in Outlook.`,
             },
           };
         }
@@ -969,7 +969,7 @@ defineCapability({
   module: "engagement",
   toolName: "reschedule_internal_meeting",
   description:
-    "Move a meeting you organized via the Atelier — internal OR client (founding partners can move anyone's) — to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\"). For \"move the X meeting to Y\" phrasings, the FIRST time identifies the meeting (put it in `meeting`) and the SECOND is the new start (put it in `time`). date must be an absolute YYYY-MM-DD and time HH:MM, both in the user's local timezone.",
+    "Move a meeting you organized via Atelier — internal OR client (founding partners can move anyone's) — to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\"). For \"move the X meeting to Y\" phrasings, the FIRST time identifies the meeting (put it in `meeting`) and the SECOND is the new start (put it in `time`). date must be an absolute YYYY-MM-DD and time HH:MM, both in the user's local timezone.",
   slashAliases: { en: ["/reschedule"], fr: ["/replanifier"] },
   inputSchema: {
     type: "object",
@@ -1094,7 +1094,7 @@ defineCapability({
             whenLabel,
             summary: graphUpdated
               ? "Rescheduled — attendees get an Outlook meeting update."
-              : "Rescheduled in the Atelier (no linked Outlook event to update).",
+              : "Rescheduled in Atelier (no linked Outlook event to update).",
             decisions: [],
             actionItems: [],
           },
@@ -1121,7 +1121,7 @@ defineCapability({
   module: "engagement",
   toolName: "cancel_internal_meeting",
   description:
-    "Cancel a meeting you organized via the Atelier — internal OR client (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\", meeting:\"my 3pm\").",
+    "Cancel a meeting you organized via Atelier — internal OR client (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the meeting record in Atelier is marked cancelled. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\", meeting:\"my 3pm\").",
   slashAliases: { en: ["/cancel-meeting"], fr: ["/annuler-reunion"] },
   inputSchema: {
     type: "object",
@@ -1201,7 +1201,7 @@ defineCapability({
             endAt: row.endAt?.toISOString() ?? null,
             summary: graphCancelled
               ? "Cancelled — attendees get an Outlook cancellation notice."
-              : "Cancelled in the Atelier (no linked Outlook event to remove).",
+              : "Cancelled in Atelier (no linked Outlook event to remove).",
             decisions: [],
             actionItems: [],
           },
@@ -1232,7 +1232,7 @@ defineCapability({
   module: "engagement",
   toolName: "update_internal_meeting",
   description:
-    "Change a meeting you organized via the Atelier (founding partners can change anyone's): rename the topic and/or — for INTERNAL meetings only — add or remove roster attendees (client-meeting attendee lists can't be edited from chat; say so honestly). Updates the real Outlook invite — attendees get a standard meeting update, newly added colleagues receive the invite. Identify the meeting by topic words. Time changes go through reschedule_internal_meeting instead. Recurring meetings are NOT supported — say so honestly.",
+    "Change a meeting you organized via Atelier (founding partners can change anyone's): rename the topic and/or — for INTERNAL meetings only — add or remove roster attendees (client-meeting attendee lists can't be edited from chat; say so honestly). Updates the real Outlook invite — attendees get a standard meeting update, newly added colleagues receive the invite. Identify the meeting by topic words. Time changes go through reschedule_internal_meeting instead. Recurring meetings are NOT supported — say so honestly.",
   slashAliases: { en: ["/edit-meeting"], fr: ["/modifier-reunion"] },
   inputSchema: {
     type: "object",
@@ -1437,7 +1437,7 @@ defineCapability({
             endAt: meeting.endAt?.toISOString() ?? null,
             summary: graphUpdated
               ? "Updated — attendees get an Outlook meeting update."
-              : "Updated in the Atelier (no linked Outlook event to update).",
+              : "Updated in Atelier (no linked Outlook event to update).",
             decisions: [],
             actionItems: [],
           },

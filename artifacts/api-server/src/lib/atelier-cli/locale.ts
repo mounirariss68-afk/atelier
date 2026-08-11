@@ -1,7 +1,7 @@
 /**
  * Task #484 — server-side locale preamble strip.
  *
- * The Atelier client wraps every chat prompt with a locale instruction
+ * Atelier client wraps every chat prompt with a locale instruction
  * ("Respond in English." / "أجب بالعربيّة.") followed by a blank line so
  * the model picks the response language. That preamble is transport
  * metadata — it must never reach a content consumer (entity-hint

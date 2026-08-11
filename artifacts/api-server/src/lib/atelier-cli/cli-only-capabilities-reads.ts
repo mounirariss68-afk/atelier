@@ -1,7 +1,7 @@
 /**
  * Task #341 — CLI read parity for every UI view.
  *
- * Every view the Atelier UI renders gets a matching read-only CLI
+ * Every view Atelier UI renders gets a matching read-only CLI
  * capability so the assistant can answer plain-language questions
  * about it ("show pipeline by stage", "who's over-utilised", "burn
  * vs budget on DEWA", "what changed on Acme this week", etc).

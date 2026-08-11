@@ -470,7 +470,7 @@ if (
   !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY
 ) {
   throw new Error(
-    "[atelier-agents] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. The Atelier agent runner does not support mock mode.",
+    "[atelier-agents] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. Atelier agent runner does not support mock mode.",
   );
 }
 

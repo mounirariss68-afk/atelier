@@ -3,7 +3,7 @@ import { db, atelierUsers } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 
 /**
- * Mock persona-based auth for the Atelier MVP shell.
+ * Mock persona-based auth for Atelier MVP shell.
  *
  * The single source of truth for the active persona is the `atelier_persona`
  * cookie. Real OAuth (Replit Auth or Clerk + Google/Microsoft) is the
@@ -119,7 +119,7 @@ export async function attachPersona(
 /**
  * Realm guard for /api/atelier/* — Task #242.
  *
- * The Atelier (internal) realm and the Salon (client) realm share schemas
+ * Atelier (internal) realm and the Salon (client) realm share schemas
  * but never share users. A client_user persona cookie must NOT be able to
  * read internal atelier endpoints, even by accident (or by hand-pasted
  * cookie). Conversely the Salon router applies a mirror guard rejecting
