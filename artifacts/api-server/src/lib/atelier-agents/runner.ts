@@ -3892,7 +3892,17 @@ export function buildExecutiveMapperProposals(args: {
       proposedBy: "ag_executive_mapper",
       proposedAt: now,
       field: "contact",
-      fromValue: null,
+      // Task #972 — for an enrichment of a known contact, snapshot the
+      // CURRENT values so the review card can render a before → after diff
+      // (title, LinkedIn, critical-role tag) without opening the contact.
+      fromValue: existing
+        ? {
+            fullName: existing.fullName,
+            title: existing.title ?? null,
+            linkedinUrl: existing.linkedinUrl ?? null,
+            criticalRole: classifyCriticalRole(existing.title),
+          }
+        : null,
       toValue,
       rationale: `Executive Mapper ${what}.`,
       status: "pending",

@@ -1754,7 +1754,48 @@ function PendingProposalCard({
     seniority?: string | null;
     buyerPersona?: string | null;
     criticalRole?: string | null;
+    linkedinUrl?: string | null;
   };
+  // Task #972 — for an enrichment of a known contact the server snapshots the
+  // CURRENT values in fromValue so the partner can judge "is this genuinely
+  // new info?" without opening the contact. Build a compact before → after
+  // diff for just the fields that differ.
+  const beforeObj =
+    isEnrichment && p.fromValue && typeof p.fromValue === "object"
+      ? (p.fromValue as {
+          title?: string | null;
+          linkedinUrl?: string | null;
+          criticalRole?: string | null;
+        })
+      : null;
+  const roleLabel = (r: string | null | undefined) =>
+    r ? (CRITICAL_ROLE_LABELS[r] ?? r) : null;
+  const enrichmentDiff: Array<{ field: string; before: string | null; after: string | null }> =
+    beforeObj
+      ? [
+          {
+            field: "Title",
+            before: beforeObj.title?.trim() || null,
+            after: contactObj.title?.trim() || null,
+          },
+          {
+            field: "LinkedIn",
+            before: beforeObj.linkedinUrl?.trim() || null,
+            after: contactObj.linkedinUrl?.trim() || null,
+          },
+          {
+            field: "Critical role",
+            before: roleLabel(beforeObj.criticalRole),
+            after: roleLabel(contactObj.criticalRole),
+          },
+        ].filter(
+          (d) =>
+            (d.before ?? "") !== (d.after ?? "") &&
+            // Enrichment never clears a value — an absent proposed value just
+            // means "no change", so don't show a misleading "→ (none)" row.
+            d.after !== null,
+        )
+      : [];
   const [contactName, setContactName] = useState(contactObj.fullName ?? "");
   const [contactTitle, setContactTitle] = useState(contactObj.title ?? "");
   const [contactSeniority, setContactSeniority] = useState(contactObj.seniority ?? "");
@@ -1820,6 +1861,29 @@ function PendingProposalCard({
                 </MonoChip>
               )}
               {contactObj.title && <div className="text-text-mute text-xs">{contactObj.title}</div>}
+              {enrichmentDiff.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1 border border-border-soft rounded p-2 bg-bg-soft"
+                  data-testid={`diff-enrichment-${p.id}`}
+                >
+                  {enrichmentDiff.map((d) => (
+                    <div
+                      key={d.field}
+                      className="text-xs font-mono flex items-baseline gap-1.5 flex-wrap"
+                      data-testid={`diff-row-${d.field.toLowerCase().replace(/\s+/g, "-")}-${p.id}`}
+                    >
+                      <span className="uppercase tracking-wider text-[10px] text-text-faint">
+                        {d.field}
+                      </span>
+                      <span className="text-text-mute line-through break-all">
+                        {d.before ?? "(none)"}
+                      </span>
+                      <span className="text-text-faint">→</span>
+                      <span className="text-text break-all">{d.after}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {contactObj.criticalRole && CRITICAL_ROLE_LABELS[contactObj.criticalRole] && (
                 <MonoChip tone="gold" data-testid={`chip-critical-role-${p.id}`}>
                   Covers: {CRITICAL_ROLE_LABELS[contactObj.criticalRole]}

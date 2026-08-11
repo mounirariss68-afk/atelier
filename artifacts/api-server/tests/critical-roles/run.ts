@@ -285,6 +285,34 @@ const account = {
     "re-listed proposal carries the tag",
     (proposals[0]?.toValue as { criticalRole?: string })?.criticalRole === "head_of_transformation",
   );
+  // Task #972 — enrichment snapshots the CURRENT contact values in fromValue
+  // so the review card can render a before → after diff.
+  const from = proposals[0]?.fromValue as {
+    fullName?: string;
+    title?: string | null;
+    linkedinUrl?: string | null;
+    criticalRole?: string | null;
+  } | null;
+  check("enrichment fromValue carries current title", from?.title === "Strategy Advisor");
+  check(
+    "enrichment fromValue carries current linkedin",
+    from?.linkedinUrl === "https://www.linkedin.com/in/lina",
+  );
+  check("enrichment fromValue carries current role classification", from?.criticalRole === null);
+}
+
+// New-contact proposals keep fromValue null (unchanged card).
+{
+  const proposals = buildExecutiveMapperProposals({
+    output: {
+      decisionMakers: [dm({ fullName: "Farah Fresh", title: "Group CIO", criticalRole: "cio" })],
+      sourceSignals: [],
+      openQuestions: [],
+    },
+    account,
+    existingContacts: [],
+  });
+  check("new-contact fromValue stays null", proposals[0]?.fromValue === null);
 }
 
 console.log("");
