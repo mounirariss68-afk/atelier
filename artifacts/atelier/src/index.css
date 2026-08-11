@@ -62,7 +62,8 @@
      Rollback: set the three alphas to 100% and borders to var(--border). */
   --glass-card-alpha:    42%;
   --glass-popover-alpha: 68%;
-  --glass-panel-alpha:   34%;
+  /* Task #921 — lighter panel so the backdrop artwork reads through. */
+  --glass-panel-alpha:   22%;
   --card-border:    rgba(255, 255, 255, 0.14);
   --popover-border: rgba(255, 255, 255, 0.18);
   --container:    1240px;
@@ -111,7 +112,8 @@
   /* Light glass: whiter fill carries more alpha for readability. */
   --glass-card-alpha:    62%;
   --glass-popover-alpha: 80%;
-  --glass-panel-alpha:   55%;
+  /* Task #921 — lighter panel so the backdrop artwork reads through. */
+  --glass-panel-alpha:   40%;
   --card-border:    rgba(10, 18, 48, 0.10);
   --popover-border: rgba(10, 18, 48, 0.12);
 }
@@ -635,7 +637,14 @@
 }
 
 @layer utilities {
-  .container-atelier { max-width: var(--container); margin-inline: auto; padding-inline: clamp(16px, 3vw, 32px); }
+  /* Task #921 — no centered max-width: page content spans the full column
+     width so panels line up with the title/menu bar cards above (which use
+     px-3 / md:px-4 side padding). */
+  .container-atelier { width: 100%; padding-inline: 0.75rem; }
+  @media (min-width: 768px) { .container-atelier { padding-inline: 1rem; } }
+  /* Some pages nest a container inside PageHero's own container; the
+     nested one must not double the side inset. */
+  .container-atelier .container-atelier { padding-inline: 0; }
   .text-text { color: var(--text); }
   .text-mute { color: var(--text-mute); }
   .text-faint { color: var(--text-faint); }
