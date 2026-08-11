@@ -1205,7 +1205,9 @@ function Composer({
             disabled={!input.trim() || status === "streaming" || overLimit}
             className={cn(
               "shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors",
-              "bg-gold text-bg-deep hover:bg-gold/90 disabled:bg-bg-elevate-2 disabled:text-text-faint",
+              // Task #915 — send stays brand-purple even when idle/disabled
+              // (softer tint), instead of the old grey disabled state.
+              "bg-gold text-white hover:bg-gold/90 disabled:bg-gold/15 disabled:text-gold/70",
             )}
             aria-label={s("send", locale)}
             title={s("send", locale)}
