@@ -23,6 +23,7 @@
  */
 
 import * as React from "react";
+import { LayoutDashboard } from "lucide-react";
 import { useLocation } from "wouter";
 import { LENSES, type LensId, type LensSection } from "./lens";
 
@@ -117,6 +118,7 @@ function findLensSection(
           id: "overview",
           label: "Overview",
           href: lens.prefix,
+          icon: LayoutDashboard,
         };
     }
     return { lens: lens.id, lensLabel: lens.label, section: best };

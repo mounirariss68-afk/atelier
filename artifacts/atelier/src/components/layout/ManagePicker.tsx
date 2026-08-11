@@ -88,7 +88,10 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
             )}
             data-testid={`lens-section-${active}-${s.id}`}
           >
-            {s.label}
+            <span className="inline-flex items-center gap-1.5">
+              <s.icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              {s.label}
+            </span>
           </Link>
         );
       })}
@@ -129,12 +132,15 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
                     href={s.href}
                     onClick={() => setMoreOpen(false)}
                     className={cn(
-                      "block w-full text-sm",
+                      "flex w-full items-center text-sm",
                       isActive ? "text-gold" : "text-text",
                     )}
                     data-testid={`lens-section-${active}-${s.id}`}
                   >
-                    {s.label}
+                    <span className="inline-flex items-center gap-2">
+                      <s.icon className="w-3.5 h-3.5 shrink-0 text-text-mute" aria-hidden="true" />
+                      {s.label}
+                    </span>
                   </Link>
                 </DropdownMenuItem>
               );

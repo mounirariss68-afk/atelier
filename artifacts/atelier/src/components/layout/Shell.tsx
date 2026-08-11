@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay, Palette, Newspaper, Shield, BarChart3, FolderOpen, Wallet, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
@@ -188,17 +188,17 @@ export function TopNav() {
 
   // Items shown under avatar → Firm submenu. Admin Console is gated to the
   // same roles as before (founding_partner | hr).
-  const firmMenuItems: Array<{ href: string; label: string; gated?: boolean }> = [
-    { href: "/atelier", label: "Atelier" },
-    { href: "/press", label: "Press" },
-    { href: "/guardhouse", label: "Guardhouse" },
-    { href: "/reports", label: "Reports" },
-    { href: "/documents", label: "Documents" },
+  const firmMenuItems: Array<{ href: string; label: string; icon: LucideIcon; gated?: boolean }> = [
+    { href: "/atelier", label: "Atelier", icon: Palette },
+    { href: "/press", label: "Press", icon: Newspaper },
+    { href: "/guardhouse", label: "Guardhouse", icon: Shield },
+    { href: "/reports", label: "Reports", icon: BarChart3 },
+    { href: "/documents", label: "Documents", icon: FolderOpen },
     // Task #274 — Agreements + Contracts moved into the top-level
     // Contracts lens (Manage picker), out of the Firm menu.
-    { href: "/wallet", label: "Wallet" },
-    { href: "/settings", label: "Settings" },
-    { href: "/admin", label: "Admin", gated: true },
+    { href: "/wallet", label: "Wallet", icon: Wallet },
+    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/admin", label: "Admin", icon: SlidersHorizontal, gated: true },
   ];
 
   return (
@@ -303,7 +303,10 @@ export function TopNav() {
                               asChild
                               className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer"
                             >
-                              <Link href={item.href}>{item.label}</Link>
+                              <Link href={item.href} className="flex items-center gap-2">
+                                <item.icon className="w-3.5 h-3.5 shrink-0 text-text-mute" aria-hidden="true" />
+                                {item.label}
+                              </Link>
                             </DropdownMenuItem>
                           );
                         })}

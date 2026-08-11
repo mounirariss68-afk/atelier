@@ -13,6 +13,70 @@
  */
 
 import { STAGES as PEOPLE_STAGES } from "@/pages/people/peopleLifecycle";
+import {
+  Archive,
+  Banknote,
+  BarChart3,
+  BookMarked,
+  BookOpen,
+  Briefcase,
+  Building2,
+  CalendarRange,
+  ClipboardCheck,
+  Clock,
+  DoorOpen,
+  FileCheck2,
+  FilePen,
+  FileText,
+  Filter,
+  FlaskConical,
+  Gauge,
+  Gift,
+  GraduationCap,
+  Hammer,
+  Handshake,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  Lock,
+  Magnet,
+  Network,
+  Package,
+  PenLine,
+  PenTool,
+  Quote,
+  RefreshCw,
+  Rocket,
+  Scale,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+  User,
+  UserMinus,
+  UserPlus,
+  Users,
+  Wallet,
+  Receipt,
+  Activity,
+  type LucideIcon,
+} from "lucide-react";
+
+/**
+ * Task #956 — icons for the People lifecycle strip. The strip itself is
+ * generated from `peopleLifecycle.STAGES`, so icons are keyed by stage id
+ * here (nav concerns stay in lens.ts; peopleLifecycle stays icon-free).
+ */
+const PEOPLE_STAGE_ICONS: Record<string, LucideIcon> = {
+  attract: Magnet,
+  hire: UserPlus,
+  onboard: DoorOpen,
+  develop: GraduationCap,
+  perform: Gauge,
+  reward: Gift,
+  offboard: UserMinus,
+};
 
 export type LensId =
   | "clients"
@@ -30,6 +94,8 @@ export interface LensSection {
   label: string;
   /** URL the tab navigates to (lives under the lens prefix). */
   href: string;
+  /** Task #956 — lucide icon rendered before the label in the nav. */
+  icon: LucideIcon;
 }
 
 export interface LensDef {
@@ -66,12 +132,12 @@ export const LENSES: readonly LensDef[] = [
       // Flat section IA: Overview · Accounts · Opportunities · Engagements
       // · Billing · References. Renewals/expansions live as a flag on each
       // opportunity, not a separate tab.
-      { id: "overview", label: "Overview", href: "/clients" },
-      { id: "accounts", label: "Accounts", href: "/clients/accounts" },
-      { id: "opportunities", label: "Opportunities", href: "/clients/opportunities" },
-      { id: "engagements", label: "Engagements", href: "/clients/deliver/engagements" },
-      { id: "billing", label: "Billing", href: "/clients/billing" },
-      { id: "references", label: "References", href: "/clients/references" },
+      { id: "overview", label: "Overview", href: "/clients", icon: LayoutDashboard },
+      { id: "accounts", label: "Accounts", href: "/clients/accounts", icon: Building2 },
+      { id: "opportunities", label: "Opportunities", href: "/clients/opportunities", icon: Target },
+      { id: "engagements", label: "Engagements", href: "/clients/deliver/engagements", icon: Briefcase },
+      { id: "billing", label: "Billing", href: "/clients/billing", icon: Receipt },
+      { id: "references", label: "References", href: "/clients/references", icon: Quote },
     ],
   },
   {
@@ -84,18 +150,23 @@ export const LENSES: readonly LensDef[] = [
     // Nav defined once (Task #509): the lifecycle strip derives from
     // peopleLifecycle.STAGES so the two nav configs can't drift.
     sections: [
-      { id: "overview", label: "Overview", href: "/people" },
-      { id: "roster", label: "Roster", href: "/people/people" },
-      ...PEOPLE_STAGES.map((s) => ({ id: s.id, label: s.label, href: s.href })),
+      { id: "overview", label: "Overview", href: "/people", icon: LayoutDashboard },
+      { id: "roster", label: "Roster", href: "/people/people", icon: Users },
+      ...PEOPLE_STAGES.map((s) => ({
+        id: s.id,
+        label: s.label,
+        href: s.href,
+        icon: PEOPLE_STAGE_ICONS[s.id] ?? Users,
+      })),
     ],
     // Cross-cutting People modules — reachable but out of the primary
     // lifecycle strip so it doesn't overcrowd.
     more: [
-      { id: "access", label: "Access", href: "/people/access" },
-      { id: "skills", label: "Skills", href: "/people/skills" },
-      { id: "time", label: "Time", href: "/people/time" },
-      { id: "compliance", label: "Compliance", href: "/people/compliance" },
-      { id: "approvals", label: "Approvals", href: "/people/approvals" },
+      { id: "access", label: "Access", href: "/people/access", icon: KeyRound },
+      { id: "skills", label: "Skills", href: "/people/skills", icon: Network },
+      { id: "time", label: "Time", href: "/people/time", icon: Clock },
+      { id: "compliance", label: "Compliance", href: "/people/compliance", icon: ShieldCheck },
+      { id: "approvals", label: "Approvals", href: "/people/approvals", icon: ClipboardCheck },
     ],
   },
   {
@@ -106,13 +177,13 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘3",
     shortcutKey: "3",
     sections: [
-      { id: "design", label: "Design", href: "/agents/design" },
-      { id: "build", label: "Build", href: "/agents/build" },
-      { id: "evaluate", label: "Evaluate", href: "/agents/evaluate" },
-      { id: "deploy", label: "Deploy", href: "/agents/deploy" },
-      { id: "monitor", label: "Monitor", href: "/agents/monitor" },
-      { id: "improve", label: "Improve", href: "/agents/improve" },
-      { id: "retire", label: "Retire", href: "/agents/retire" },
+      { id: "design", label: "Design", href: "/agents/design", icon: PenTool },
+      { id: "build", label: "Build", href: "/agents/build", icon: Hammer },
+      { id: "evaluate", label: "Evaluate", href: "/agents/evaluate", icon: FlaskConical },
+      { id: "deploy", label: "Deploy", href: "/agents/deploy", icon: Rocket },
+      { id: "monitor", label: "Monitor", href: "/agents/monitor", icon: Activity },
+      { id: "improve", label: "Improve", href: "/agents/improve", icon: TrendingUp },
+      { id: "retire", label: "Retire", href: "/agents/retire", icon: Archive },
     ],
   },
   {
@@ -123,12 +194,12 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘4",
     shortcutKey: "4",
     sections: [
-      { id: "identify", label: "Identify", href: "/partners/identify" },
-      { id: "qualify", label: "Qualify", href: "/partners/qualify" },
-      { id: "co-sell", label: "Co-sell", href: "/partners/co-sell" },
-      { id: "co-deliver", label: "Co-deliver", href: "/partners/co-deliver" },
-      { id: "govern", label: "Govern", href: "/partners/govern" },
-      { id: "renew", label: "Renew", href: "/partners/renew" },
+      { id: "identify", label: "Identify", href: "/partners/identify", icon: Search },
+      { id: "qualify", label: "Qualify", href: "/partners/qualify", icon: Filter },
+      { id: "co-sell", label: "Co-sell", href: "/partners/co-sell", icon: Handshake },
+      { id: "co-deliver", label: "Co-deliver", href: "/partners/co-deliver", icon: Package },
+      { id: "govern", label: "Govern", href: "/partners/govern", icon: Scale },
+      { id: "renew", label: "Renew", href: "/partners/renew", icon: RefreshCw },
     ],
   },
   {
@@ -139,15 +210,15 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘5",
     shortcutKey: "5",
     sections: [
-      { id: "overview", label: "Overview", href: "/finance" },
-      { id: "entities", label: "Entities", href: "/finance/entities" },
-      { id: "ledger", label: "Record", href: "/finance/ledger" },
-      { id: "billing", label: "Bill & Collect", href: "/finance/billing" },
-      { id: "payables", label: "Pay", href: "/finance/payables" },
-      { id: "close", label: "Close", href: "/finance/close" },
-      { id: "plan", label: "Plan", href: "/finance/plan" },
-      { id: "reports", label: "Report", href: "/finance/reports" },
-      { id: "comply", label: "Comply", href: "/finance/comply" },
+      { id: "overview", label: "Overview", href: "/finance", icon: LayoutDashboard },
+      { id: "entities", label: "Entities", href: "/finance/entities", icon: Landmark },
+      { id: "ledger", label: "Record", href: "/finance/ledger", icon: BookOpen },
+      { id: "billing", label: "Bill & Collect", href: "/finance/billing", icon: Receipt },
+      { id: "payables", label: "Pay", href: "/finance/payables", icon: Banknote },
+      { id: "close", label: "Close", href: "/finance/close", icon: Lock },
+      { id: "plan", label: "Plan", href: "/finance/plan", icon: CalendarRange },
+      { id: "reports", label: "Report", href: "/finance/reports", icon: BarChart3 },
+      { id: "comply", label: "Comply", href: "/finance/comply", icon: ShieldCheck },
     ],
   },
   {
@@ -164,17 +235,17 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘6",
     shortcutKey: "6",
     sections: [
-      { id: "overview", label: "Overview", href: "/contracts" },
-      { id: "templates", label: "Templates", href: "/contracts/templates" },
-      { id: "drafts", label: "Drafts", href: "/contracts/drafts" },
-      { id: "signatures", label: "Out for Signature", href: "/contracts/signatures" },
-      { id: "active", label: "Active", href: "/contracts/active" },
-      { id: "archive", label: "Archive", href: "/contracts/archive" },
+      { id: "overview", label: "Overview", href: "/contracts", icon: LayoutDashboard },
+      { id: "templates", label: "Templates", href: "/contracts/templates", icon: FileText },
+      { id: "drafts", label: "Drafts", href: "/contracts/drafts", icon: FilePen },
+      { id: "signatures", label: "Out for Signature", href: "/contracts/signatures", icon: PenLine },
+      { id: "active", label: "Active", href: "/contracts/active", icon: FileCheck2 },
+      { id: "archive", label: "Archive", href: "/contracts/archive", icon: Archive },
     ],
     more: [
-      { id: "codex", label: "CLM Register", href: "/contracts/codex" },
-      { id: "dpas", label: "DPAs", href: "/contracts/codex/dpas" },
-      { id: "renewals", label: "Renewals", href: "/contracts/codex/renewals" },
+      { id: "codex", label: "CLM Register", href: "/contracts/codex", icon: BookMarked },
+      { id: "dpas", label: "DPAs", href: "/contracts/codex/dpas", icon: ShieldCheck },
+      { id: "renewals", label: "Renewals", href: "/contracts/codex/renewals", icon: RefreshCw },
     ],
   },
   {
@@ -187,17 +258,17 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘7",
     shortcutKey: "7",
     sections: [
-      { id: "overview", label: "Overview", href: "/me" },
-      { id: "profile", label: "Profile", href: "/me/profile" },
-      { id: "time", label: "Time", href: "/me/time" },
-      { id: "expenses", label: "Expenses", href: "/me/expenses" },
-      { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
-      { id: "performance", label: "Performance", href: "/me/performance" },
-      { id: "learning", label: "Learning", href: "/me/learning" },
+      { id: "overview", label: "Overview", href: "/me", icon: LayoutDashboard },
+      { id: "profile", label: "Profile", href: "/me/profile", icon: User },
+      { id: "time", label: "Time", href: "/me/time", icon: Clock },
+      { id: "expenses", label: "Expenses", href: "/me/expenses", icon: Receipt },
+      { id: "pay", label: "Pay & Benefits", href: "/me/pay", icon: Wallet },
+      { id: "performance", label: "Performance", href: "/me/performance", icon: Gauge },
+      { id: "learning", label: "Learning", href: "/me/learning", icon: GraduationCap },
       // Task #386 — role-gated in LensSectionTabs: Delegates is
       // partner-tier only; Assist is the EA workspace (self-only roles).
-      { id: "delegates", label: "Delegates", href: "/me/delegates" },
-      { id: "assist", label: "Assist", href: "/me/assist" },
+      { id: "delegates", label: "Delegates", href: "/me/delegates", icon: Users },
+      { id: "assist", label: "Assist", href: "/me/assist", icon: Sparkles },
     ],
   },
 ] as const;
