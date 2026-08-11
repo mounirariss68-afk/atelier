@@ -287,16 +287,18 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
-      radial-gradient(120vmax 80vmax at 82% -12%,
-        color-mix(in srgb, var(--gold) 10%, transparent), transparent 55%),
-      radial-gradient(100vmax 70vmax at -8% 108%,
-        color-mix(in srgb, var(--gold-deep) 9%, transparent), transparent 52%),
+      /* Task #911: light-mode companion of the dark network image, under a
+         pale scrim so text/cards stay readable. The final linear-gradient
+         is retained UNDER the image as the color fallback while it loads. */
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--bg) 68%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 46%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 38%, transparent) 100%),
+      url("/light-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
-    /* Light mode has no image layer — reset the per-layer sizing the dark
-       stack needs so light mode is pixel-identical to before Task #904. */
-    background-size: auto;
-    background-position: 0% 0%;
-    background-repeat: repeat;
+    background-size: auto, auto, cover, auto;
+    background-position: center, center, center, center;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
   }
   body::after {
     content: "";
