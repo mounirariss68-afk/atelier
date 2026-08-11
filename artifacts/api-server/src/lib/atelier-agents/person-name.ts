@@ -255,6 +255,30 @@ export function findPersonMatchLoose<T>(
   return undefined;
 }
 
+/**
+ * Collapse duplicate spellings of the same human within one research sweep
+ * (Task #975). Uses findPersonMatchLoose so near-miss spellings the
+ * structural matcher can't see ("Al-Falih" vs "Al-Faleh") also collapse —
+ * high-confidence only, same net as the proposal builders. First sighting
+ * wins position; `merge(existing, dup)` folds the duplicate's fields in.
+ */
+export function dedupeSweepRoster<T>(
+  entries: readonly T[],
+  getName: (e: T) => string,
+  merge: (existing: T, dup: T) => void,
+): T[] {
+  const deduped: T[] = [];
+  for (const d of entries) {
+    const existing = findPersonMatchLoose(getName(d), deduped, getName);
+    if (!existing) {
+      deduped.push(d);
+      continue;
+    }
+    merge(existing, d);
+  }
+  return deduped;
+}
+
 /** The "richer" of two name spellings: more tokens wins, then longer string. */
 export function richerPersonName(a: string, b: string): string {
   const ta = personNameTokens(a).length;

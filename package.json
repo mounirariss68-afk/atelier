@@ -11,6 +11,7 @@
   "private": true,
   "devDependencies": {
     "prettier": "^3.8.1",
+    "puppeteer-core": "^25.5.0",
     "typescript": "~5.9.2"
   },
   "dependencies": {

@@ -11,6 +11,8 @@ import {
   normalisePersonName,
   samePersonName,
   findPersonMatch,
+  findPersonMatchLoose,
+  dedupeSweepRoster,
   richerPersonName,
 } from "../../src/lib/atelier-agents/person-name.js";
 import {
@@ -165,6 +167,51 @@ console.log("findPersonMatch");
 {
   const hit = findPersonMatch("  ", [{ fullName: "Jane Doe" }], (e) => e.fullName);
   check("blank query returns undefined", hit === undefined);
+}
+
+// ---------------------------------------------------------------------------
+console.log("dedupeSweepRoster — in-sweep merge (Task #975)");
+
+{
+  // Near-miss spelling the structural matcher can't see collapses during the
+  // sweep merge via the high-confidence scorer fallback.
+  type Row = { fullName: string; title: string | null; linkedinUrl: string | null };
+  const merge = (existing: Row, d: Row) => {
+    existing.fullName = richerPersonName(existing.fullName, d.fullName);
+    if (!existing.title && d.title) existing.title = d.title;
+    if (!existing.linkedinUrl && d.linkedinUrl) existing.linkedinUrl = d.linkedinUrl;
+  };
+  const out = dedupeSweepRoster(
+    [
+      { fullName: "Khalid Al-Falih", title: "CEO", linkedinUrl: null },
+      { fullName: "Khalid Al-Faleh", title: null, linkedinUrl: "https://li/k" },
+    ],
+    (x) => x.fullName,
+    merge,
+  );
+  check("sweep: near-miss spelling pair collapses to one entry", out.length === 1, String(out.length));
+  check("sweep: first sighting's spelling kept (equal richness)", out[0]?.fullName === "Khalid Al-Falih", out[0]?.fullName);
+  check("sweep: duplicate's fields folded in", out[0]?.linkedinUrl === "https://li/k" && out[0]?.title === "CEO");
+
+  // Structural variants still collapse; distinct humans stay distinct.
+  const out2 = dedupeSweepRoster(
+    [
+      { fullName: "Eng. Khalid AlFalih", title: "CEO", linkedinUrl: null },
+      { fullName: "Khalid Al-Falih", title: null, linkedinUrl: null },
+      { fullName: "Ahmed Al Jasser", title: "CFO", linkedinUrl: null },
+      { fullName: "Mohammed Al Jasser", title: "COO", linkedinUrl: null },
+    ],
+    (x) => x.fullName,
+    merge,
+  );
+  check("sweep: structural dupe collapses, distinct people preserved", out2.length === 3, String(out2.length));
+
+  // PDL-merge path: findPersonMatchLoose finds the near-miss in the roster.
+  const roster = [{ fullName: "Khalid Al-Falih" }];
+  const hit = findPersonMatchLoose("Khalid Al-Faleh", roster, (e) => e.fullName);
+  check("PDL merge: near-miss spelling matches existing roster entry", hit === roster[0]);
+  const miss = findPersonMatchLoose("Khalid Al-Otaibi", roster, (e) => e.fullName);
+  check("PDL merge: different surname does not match", miss === undefined);
 }
 
 // ---------------------------------------------------------------------------

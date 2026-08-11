@@ -31,7 +31,7 @@ import {
   normaliseLinkedinProfileUrl,
   guardCartographerEntityScope,
 } from "./runner.js";
-import { findPersonMatch, findPersonMatchLoose, richerPersonName } from "./person-name.js";
+import { findPersonMatch, findPersonMatchLoose, dedupeSweepRoster, richerPersonName } from "./person-name.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import {
   guardAllianceMapperRoles,
@@ -748,14 +748,10 @@ export async function runAllianceExecutiveMapper(args: {
     };
 
     // Collapse duplicate spellings within the sweep (same as exec mapper).
-    {
-      const deduped: typeof normalised.decisionMakers = [];
-      for (const d of normalised.decisionMakers) {
-        const existing = findPersonMatch(d.fullName, deduped, (x) => x.fullName);
-        if (!existing) {
-          deduped.push(d);
-          continue;
-        }
+    normalised.decisionMakers = dedupeSweepRoster(
+      normalised.decisionMakers,
+      (x) => x.fullName,
+      (existing, d) => {
         existing.fullName = richerPersonName(existing.fullName, d.fullName);
         if (!existing.title && d.title) existing.title = d.title;
         if (!existing.linkedinUrl && d.linkedinUrl) existing.linkedinUrl = d.linkedinUrl;
@@ -763,9 +759,8 @@ export async function runAllianceExecutiveMapper(args: {
         if (!existing.sourceUrl && d.sourceUrl) existing.sourceUrl = d.sourceUrl;
         if (existing.confidence !== "verified" && d.confidence === "verified")
           existing.confidence = "verified";
-      }
-      normalised.decisionMakers = deduped;
-    }
+      },
+    );
 
     // PDL cross-check — same degrade-loudly contract as the exec mapper.
     if (isPdlConfigured()) {
@@ -784,7 +779,7 @@ export async function runAllianceExecutiveMapper(args: {
           let added = 0;
           for (const p of pdl.people) {
             const pdlLinkedin = normaliseLinkedinProfileUrl(p.linkedinUrl);
-            const existing = findPersonMatch(
+            const existing = findPersonMatchLoose(
               p.fullName,
               normalised.decisionMakers,
               (d) => d.fullName,
@@ -795,7 +790,7 @@ export async function runAllianceExecutiveMapper(args: {
               if (!existing.title && p.title) existing.title = p.title;
               continue;
             }
-            const known = findPersonMatch(p.fullName, args.knownContacts, (c) => c.fullName);
+            const known = findPersonMatchLoose(p.fullName, args.knownContacts, (c) => c.fullName);
             if (known) {
               const bringsNewLinkedin = Boolean(pdlLinkedin) && !known.linkedinUrl;
               const bringsNewTitle = Boolean(p.title) && !known.title;

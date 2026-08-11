@@ -31,7 +31,7 @@ import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import { perplexityResearch } from "./perplexity.js";
-import { findPersonMatch, findPersonMatchLoose, richerPersonName } from "./person-name.js";
+import { findPersonMatch, findPersonMatchLoose, dedupeSweepRoster, richerPersonName } from "./person-name.js";
 import { resolveIndustryTaxonomy } from "./industry-taxonomy.js";
 import {
   buildAllianceCapabilityContext,
@@ -3572,14 +3572,10 @@ export async function runExecutiveMapper(args: {
     // Collapse duplicate spellings WITHIN the web sweep itself (the model can
     // list "Eng. Khalid Al-Falih" and "Khalid AlFalih" as two people). Keeps
     // the richer variant's name/fields, first entry wins ties.
-    {
-      const deduped: typeof normalised.decisionMakers = [];
-      for (const d of normalised.decisionMakers) {
-        const existing = findPersonMatch(d.fullName, deduped, (x) => x.fullName);
-        if (!existing) {
-          deduped.push(d);
-          continue;
-        }
+    normalised.decisionMakers = dedupeSweepRoster(
+      normalised.decisionMakers,
+      (x) => x.fullName,
+      (existing, d) => {
         existing.fullName = richerPersonName(existing.fullName, d.fullName);
         if (!existing.title && d.title) existing.title = d.title;
         if (!existing.linkedinUrl && d.linkedinUrl) existing.linkedinUrl = d.linkedinUrl;
@@ -3589,9 +3585,8 @@ export async function runExecutiveMapper(args: {
           existing.reportsToName = d.reportsToName;
         if (existing.confidence !== "verified" && d.confidence === "verified")
           existing.confidence = "verified";
-      }
-      normalised.decisionMakers = deduped;
-    }
+      },
+    );
 
     // Second source: People Data Labs licensed records. Catches executives
     // whose LinkedIn profiles are confidential or unindexed and therefore
@@ -3622,7 +3617,7 @@ export async function runExecutiveMapper(args: {
             // Fuzzy (not exact) name match — sources spell the same human
             // differently ("Mohammed bin Nasser Al-Jasser" vs "Mohammed Al
             // Jasser"), so exact keys duplicate people.
-            const existing = findPersonMatch(
+            const existing = findPersonMatchLoose(
               p.fullName,
               normalised.decisionMakers,
               (d) => d.fullName,
@@ -3636,7 +3631,7 @@ export async function runExecutiveMapper(args: {
               if (!existing.seniority && boardSeniority) existing.seniority = boardSeniority;
               continue;
             }
-            const known = findPersonMatch(
+            const known = findPersonMatchLoose(
               p.fullName,
               args.knownContacts,
               (c) => c.fullName,
