@@ -32,3 +32,5 @@ Do not blanket-filter every quoted `"aico"` as "org key" when verifying; classif
 each: org-key/RLS/test-const/comment → keep; enum/contract literal → rename.
 Runner-side and codex/docusign-side `side` unions must agree (`"cognirise" |
 "counterparty"`).
+
+- The visual brand is now purple/magenta/coral (dotted-C mark); the CSS token names `--gold*` were RETAINED for stability but hold purple values (#C45BB8 etc). Never design new assets in literal navy/gold from stale docs — read `src/index.css` token values first. The Riser assistant avatar (`atelier/src/assets/riser-avatar.png`, mirrored in `atelier-mobile/assets/images/`) follows this palette.

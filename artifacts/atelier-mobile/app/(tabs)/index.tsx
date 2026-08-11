@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Keyboard,
   Modal,
   Platform,
@@ -777,16 +778,24 @@ export default function ChatScreen() {
         }}
       >
         <IconButton icon="clock" onPress={openHistory} filled />
-        <Text
-          style={{
-            color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
-            fontSize: 18,
-            letterSpacing: -0.3,
-          }}
-        >
-          {t("tab.chat")}
-        </Text>
+        <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+          <Image
+            source={require("@/assets/images/riser-avatar.png")}
+            style={{ width: 24, height: 24 }}
+            resizeMode="contain"
+            accessible={false}
+          />
+          <Text
+            style={{
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontSize: 18,
+              letterSpacing: -0.3,
+            }}
+          >
+            {t("tab.chat")}
+          </Text>
+        </View>
         <IconButton icon="edit" onPress={() => chat.newChat()} filled />
       </View>
       <View style={{ height: 2, backgroundColor: c.primary, opacity: 0.85 }} />
@@ -800,11 +809,55 @@ export default function ChatScreen() {
             onPress={() => Keyboard.dismiss()}
             accessible={false}
           >
-            <EmptyState
-              icon="message-circle"
-              title={t("chat.empty")}
-              body={t("chat.emptyBody")}
-            />
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 40,
+                gap: 12,
+              }}
+            >
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 36,
+                  backgroundColor: c.tint08,
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Image
+                  source={require("@/assets/images/riser-avatar.png")}
+                  style={{ width: 44, height: 44 }}
+                  resizeMode="contain"
+                  accessible={false}
+                />
+              </View>
+              <Text
+                style={{
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontSize: 17,
+                  textAlign: "center",
+                }}
+              >
+                {t("chat.empty")}
+              </Text>
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 14,
+                  lineHeight: 20,
+                  textAlign: "center",
+                }}
+              >
+                {t("chat.emptyBody")}
+              </Text>
+            </View>
           </Pressable>
         ) : (
           <FlatList

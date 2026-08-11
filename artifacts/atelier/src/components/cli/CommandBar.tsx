@@ -29,7 +29,6 @@ import {
   Send,
   Paperclip,
   Plus,
-  Sparkles,
   HelpCircle,
   Bookmark,
   Languages,
@@ -47,6 +46,7 @@ import {
   Trash2,
   Save,
 } from "lucide-react";
+import riserAvatarSrc from "@/assets/riser-avatar.png";
 import { cn } from "@/lib/utils";
 import { useCli, isSafeHttpUrl } from "./useCli";
 import { CliContext } from "./cli-context";
@@ -967,7 +967,13 @@ function Header({
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 border-b border-card-border bg-bg-elevate/30">
-      <Sparkles className="w-4 h-4 text-gold shrink-0" aria-hidden />
+      <img
+        src={riserAvatarSrc}
+        alt=""
+        className="w-5 h-5 shrink-0 select-none"
+        draggable={false}
+        aria-hidden
+      />
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold leading-tight">The Atelier</div>
         <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider truncate">
