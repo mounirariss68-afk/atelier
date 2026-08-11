@@ -1344,8 +1344,26 @@ function Transcript({
                 {t.prompt}
               </div>
             </div>
-            <div className={cn("flex", dir === "rtl" ? "justify-end" : "justify-start")}>
-              <div className="max-w-[92%] w-full">
+            {/* Task #941 — Riser's avatar sits at the start of every
+                assistant reply row. Rendered once per turn (outside the
+                streaming body) so it never jumps or duplicates while a
+                turn streams. flex-row-reverse flips it to the right in
+                RTL while keeping it the visual start of the row. */}
+            <div
+              className={cn(
+                "flex items-start gap-2",
+                dir === "rtl" ? "flex-row-reverse" : "",
+              )}
+              data-testid="cli-assistant-row"
+            >
+              <img
+                src={riserAvatarSrc}
+                alt=""
+                className="w-6 h-6 shrink-0 rounded-full select-none mt-0.5"
+                draggable={false}
+                aria-hidden
+              />
+              <div className="max-w-[92%] w-full min-w-0">
                 <TurnBody
                   turn={t}
                   isCurrent={isCurrent}

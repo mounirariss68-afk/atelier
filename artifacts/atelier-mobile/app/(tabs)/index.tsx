@@ -527,14 +527,25 @@ function TurnBlock({
       ) : null}
 
       {turn.text ? (
-        <View style={{ alignItems: rtl.isRTL ? "flex-end" : "flex-start" }}>
-          {/* width (not maxWidth) — with alignItems:flex-start the parent
-              shrink-wraps its child, and the flex:1 Text rows inside
-              MarkdownText then collapse to ~0 width mid-stream, wrapping
-              one character per line. A fixed 92% keeps the text bounded
-              AND stretched. */}
-          <View style={{ width: "92%" }}>
-            <MarkdownText text={turn.text} color={c.foreground} />
+        /* Task #941 — Riser's avatar sits at the start of every assistant
+           reply. rtl.row flips it to the correct side in Arabic, and it's
+           part of the single reply row so streaming never duplicates it. */
+        <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 8 }}>
+          <Image
+            source={require("@/assets/images/riser-avatar.png")}
+            style={{ width: 24, height: 24, borderRadius: 12, marginTop: 2 }}
+            resizeMode="contain"
+            accessible={false}
+          />
+          <View style={{ flex: 1, alignItems: rtl.isRTL ? "flex-end" : "flex-start" }}>
+            {/* width (not maxWidth) — with alignItems:flex-start the parent
+                shrink-wraps its child, and the flex:1 Text rows inside
+                MarkdownText then collapse to ~0 width mid-stream, wrapping
+                one character per line. A fixed 92% keeps the text bounded
+                AND stretched. */}
+            <View style={{ width: "92%" }}>
+              <MarkdownText text={turn.text} color={c.foreground} />
+            </View>
           </View>
         </View>
       ) : turn.status === "streaming" && turn.trace.length === 0 ? (
