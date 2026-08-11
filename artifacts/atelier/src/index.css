@@ -65,6 +65,11 @@
   --glass-card-alpha:    34%;
   --glass-popover-alpha: 68%;
   --glass-panel-alpha:   14%;
+  /* Task #982 — page-hero band translucency (slight; text stays AA over
+     the blurred navy). Nested variant (inside glass panels, no blur)
+     carries more fill so it doesn't wash out. */
+  --glass-hero-alpha:        62%;
+  --glass-hero-nested-alpha: 84%;
   --card-border:    rgba(255, 255, 255, 0.14);
   --popover-border: rgba(255, 255, 255, 0.18);
   --container:    1240px;
@@ -120,6 +125,10 @@
   --glass-card-alpha:    52%;
   --glass-popover-alpha: 80%;
   --glass-panel-alpha:   24%;
+  /* Task #982 — the hero is a navy "dark island" over the pale backdrop,
+     so it needs more fill (plus blur, below) to keep light text AA. */
+  --glass-hero-alpha:        82%;
+  --glass-hero-nested-alpha: 90%;
   --card-border:    rgba(10, 18, 48, 0.10);
   --popover-border: rgba(10, 18, 48, 0.12);
 }
@@ -131,6 +140,8 @@
     --glass-card-alpha: 96%;
     --glass-popover-alpha: 100%;
     --glass-panel-alpha: 92%;
+    --glass-hero-alpha: 100%;
+    --glass-hero-nested-alpha: 100%;
   }
   /* Structural surfaces styled with fixed Tailwind alpha classes must
      also go (near-)opaque when there is no blur behind them. */
@@ -152,6 +163,8 @@
     --glass-card-alpha: 100%;
     --glass-popover-alpha: 100%;
     --glass-panel-alpha: 100%;
+    --glass-hero-alpha: 100%;
+    --glass-hero-nested-alpha: 100%;
   }
   .bg-bg-deep\/10, .bg-bg-deep\/20, .bg-bg-deep\/40, .bg-bg-deep\/60, .bg-bg-deep\/75 { background-color: var(--bg-deep); }
   .bg-bg\/50, .bg-bg\/75, .bg-bg\/90 { background-color: var(--bg); }
@@ -790,7 +803,9 @@
   /* Task #900 — frosted over the fixed body backdrop (same hue, alpha
      only). Light mode re-opaques below: the band is a "dark island"
      there and translucency over parchment would muddy the navy. */
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  /* Task #982 — alpha now knob-driven (--glass-hero-alpha) and dropped
+     slightly so the page backdrop reads through the band. */
+  background: color-mix(in srgb, var(--bg) var(--glass-hero-alpha), transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.25);
   backdrop-filter: blur(16px) saturate(1.25);
   color: var(--text);
@@ -798,8 +813,13 @@
   border-bottom: 1px solid var(--border);
 }
 [data-theme="light"] .page-hero {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  /* Task #982 — the navy island goes slightly translucent in light mode
+     too; a gentler blur keeps the pale backdrop from speckling through
+     the darker fill while the artwork still faintly shows. NB: the
+     island re-declares --bg to navy below, but --glass-hero-alpha
+     inherits the light-theme (higher-fill) value from :root. */
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
 }
 /* Task #920 — light theme: --bg-deep is pale, so a 60%-alpha composer pill
    over the pale busy backdrop leaves faint placeholder text under-legible.
@@ -821,7 +841,7 @@
 .page-panel .page-hero {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) var(--glass-hero-nested-alpha), transparent);
   border-bottom: 0;
 }
 
