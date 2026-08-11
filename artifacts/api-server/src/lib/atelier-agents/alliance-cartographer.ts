@@ -31,7 +31,7 @@ import {
   normaliseLinkedinProfileUrl,
   guardCartographerEntityScope,
 } from "./runner.js";
-import { findPersonMatch, richerPersonName } from "./person-name.js";
+import { findPersonMatch, findPersonMatchLoose, richerPersonName } from "./person-name.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import {
   guardAllianceMapperRoles,
@@ -929,8 +929,11 @@ export function buildAllianceMapperContactProposals(args: {
   const proposedPeople: Array<{ fullName: string }> = [];
   for (const dm of output.decisionMakers ?? []) {
     if (!dm.fullName || !dm.fullName.trim()) continue;
-    if (findPersonMatch(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
-    const prior = findPersonMatch(dm.fullName, priorContactProposals, (p) => p.fullName);
+    // Task #971 — same belt-and-braces matchPerson pattern as the Executive
+    // Mapper builder: structural matcher first, then the HIGH-confidence
+    // contact-duplicate scorer fallback for near-miss spellings.
+    if (findPersonMatchLoose(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
+    const prior = findPersonMatchLoose(dm.fullName, priorContactProposals, (p) => p.fullName);
     if (
       prior &&
       (prior.status === "pending" || !dm.title || normTitle(dm.title) === normTitle(prior.title))
@@ -938,7 +941,7 @@ export function buildAllianceMapperContactProposals(args: {
       proposedPeople.push({ fullName: dm.fullName });
       continue;
     }
-    const existing = findPersonMatch(dm.fullName, existingContacts, (c) => c.fullName);
+    const existing = findPersonMatchLoose(dm.fullName, existingContacts, (c) => c.fullName);
     const changesTitle = Boolean(
       existing && dm.title && dm.title.trim() !== (existing.title ?? "").trim(),
     );
@@ -978,7 +981,13 @@ export function buildAllianceMapperContactProposals(args: {
       toValue,
       rationale: `Alliance Executive Mapper ${what}.`,
       status: "pending",
-      meta: { allianceRole: dm.allianceRole ?? null },
+      meta: {
+        allianceRole: dm.allianceRole ?? null,
+        // Task #971 — the review UI must present enrichments of a known
+        // contact as updates, never as new-person suggestions.
+        updateKind: existing ? "enrichment" : "new_contact",
+        ...(existing ? { existingContactName: existing.fullName } : {}),
+      },
     });
     proposedPeople.push({ fullName: dm.fullName });
   }

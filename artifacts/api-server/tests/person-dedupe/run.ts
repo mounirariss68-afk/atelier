@@ -18,6 +18,11 @@ import {
   type ExecutiveMapperOutput,
   type PendingProfileUpdate,
 } from "../../src/lib/atelier-agents/runner.js";
+import {
+  buildAllianceMapperContactProposals,
+  type AllianceExecutiveMapperOutput,
+  type PendingPartnerUpdate,
+} from "../../src/lib/atelier-agents/alliance-cartographer.js";
 
 const failures: string[] = [];
 function check(name: string, cond: unknown, detail?: string) {
@@ -562,6 +567,139 @@ check(
 {
   const out = build([dm({ fullName: "   " }), dm({ fullName: "Jane Doe", title: "CFO" })]);
   check("blank decision-maker names skipped", out.length === 1, String(out.length));
+}
+
+// ---------------------------------------------------------------------------
+console.log("buildAllianceMapperContactProposals — duplicate suppression (Task #971)");
+
+type ADM = AllianceExecutiveMapperOutput["decisionMakers"][number];
+
+function adm(partial: Partial<ADM> & { fullName: string }): ADM {
+  return {
+    title: null,
+    entityName: null,
+    entityScope: null,
+    seniority: null,
+    allianceRole: null,
+    sourceUrl: null,
+    linkedinUrl: null,
+    confidence: "inferred",
+    reportsToName: null,
+    rationale: null,
+    ...partial,
+  } as ADM;
+}
+
+function buildAlliance(
+  dms: ADM[],
+  contacts: Array<{ name: string; role: string | null }> = [],
+  pendingUpdates: PendingPartnerUpdate[] = [],
+) {
+  return buildAllianceMapperContactProposals({
+    output: { decisionMakers: dms, sourceSignals: [], openQuestions: [] },
+    firm: { contacts, pendingUpdates } as unknown as Parameters<
+      typeof buildAllianceMapperContactProposals
+    >[0]["firm"],
+  });
+}
+
+// A) Intra-roster spelling variants collapse to one proposal.
+{
+  const out = buildAlliance([
+    adm({ fullName: "Mohammed Al-Jasser", title: "CEO" }),
+    adm({ fullName: "HE Mohammed Al Jasser", title: "Chief Executive Officer" }),
+  ]);
+  check("alliance: intra-roster dupes collapse to one proposal", out.length === 1, String(out.length));
+}
+
+// B) Near-miss spelling the structural matcher can't see — high-confidence
+//    scorer fallback matches it to the known contact; nothing new → dropped.
+{
+  const out = buildAlliance(
+    [adm({ fullName: "Khalid Al-Faleh", title: "CEO" })],
+    [{ name: "Khalid Al-Falih", role: "CEO" }],
+  );
+  check(
+    "alliance: high-confidence near-miss spelling dropped when nothing new",
+    out.length === 0,
+    String(out.length),
+  );
+}
+
+// C) Near-miss spelling WITH new info → single enrichment proposal, labeled.
+{
+  const out = buildAlliance(
+    [
+      adm({ fullName: "Hamad Al-Saghir", title: "CFO", linkedinUrl: "https://linkedin.com/in/hamad" }),
+      adm({ fullName: "Jane Doe", title: "Alliances Director" }),
+    ],
+    [{ name: "Hamad AlSaghir", role: "CFO" }],
+  );
+  check("alliance: enrichment + new person both proposed", out.length === 2, String(out.length));
+  const enrich = out.find(
+    (p) => (p.meta as { updateKind?: string })?.updateKind === "enrichment",
+  );
+  const fresh = out.find(
+    (p) => (p.meta as { updateKind?: string })?.updateKind === "new_contact",
+  );
+  check("alliance: enrichment proposal carries updateKind=enrichment", Boolean(enrich));
+  check(
+    "alliance: enrichment proposal names the existing contact",
+    (enrich?.meta as { existingContactName?: string })?.existingContactName ===
+      "Hamad AlSaghir",
+    JSON.stringify(enrich?.meta),
+  );
+  check("alliance: new person carries updateKind=new_contact", Boolean(fresh));
+}
+
+// D) Pending proposal blocks a fuzzy/near-miss variant on rerun.
+{
+  const pendingUpdates: PendingPartnerUpdate[] = [
+    {
+      id: "pp_a1",
+      proposedBy: "ag_alliance_executive_mapper",
+      proposedAt: new Date().toISOString(),
+      field: "contact",
+      fromValue: null,
+      toValue: { name: "Khalid Al-Falih", role: "CEO" },
+      rationale: "prior run",
+      status: "pending",
+    } as unknown as PendingPartnerUpdate,
+  ];
+  const out = buildAlliance(
+    [adm({ fullName: "Khalid Al-Faleh", title: "Group Chief Executive" })],
+    [],
+    pendingUpdates,
+  );
+  check(
+    "alliance: pending proposal blocks near-miss variant on rerun",
+    out.length === 0,
+    String(out.length),
+  );
+}
+
+// E) Rejected proposal blocks same-title variant, allows a genuinely new title.
+{
+  const rejected: PendingPartnerUpdate[] = [
+    {
+      id: "pp_a2",
+      proposedBy: "ag_alliance_executive_mapper",
+      proposedAt: new Date().toISOString(),
+      field: "contact",
+      fromValue: null,
+      toValue: { name: "Khalid Al-Falih", role: "CEO" },
+      rationale: "prior run",
+      status: "rejected",
+    } as unknown as PendingPartnerUpdate,
+  ];
+  const sameTitle = buildAlliance([adm({ fullName: "Khalid Al-Faleh", title: "ceo" })], [], rejected);
+  check("alliance: rejected blocks near-miss variant with same title", sameTitle.length === 0, String(sameTitle.length));
+  const newTitle = buildAlliance(
+    [adm({ fullName: "Khalid Al-Faleh", title: "Chairman of the Board" })],
+    [],
+    rejected,
+  );
+  check("alliance: rejected does NOT block a genuinely new title", newTitle.length === 1, String(newTitle.length));
 }
 
 // ---------------------------------------------------------------------------

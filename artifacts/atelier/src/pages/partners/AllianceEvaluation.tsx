@@ -379,7 +379,22 @@ export function AllianceEvaluationPanel({
           <div className="text-[10px] font-mono uppercase tracking-widest text-gold">
             Agent proposals awaiting review ({pending.length})
           </div>
-          {pending.map((p) => (
+          {pending.map((p) => {
+            // Task #971 — an enrichment of a known contact must read as an
+            // update to that person, never a new-person suggestion.
+            const meta = p.meta as
+              | { updateKind?: string; existingContactName?: string }
+              | null
+              | undefined;
+            const isEnrichment =
+              p.field === "contact" && meta?.updateKind === "enrichment";
+            const chip =
+              p.field === "contact"
+                ? isEnrichment
+                  ? "existing contact — update"
+                  : "new contact"
+                : p.field;
+            return (
             <div
               key={p.id}
               className="flex items-start justify-between gap-3 text-xs border-b border-border-soft last:border-0 pb-2 last:pb-0"
@@ -387,7 +402,12 @@ export function AllianceEvaluationPanel({
             >
               <div className="min-w-0">
                 <div className="text-text">
-                  <MonoChip>{p.field}</MonoChip>
+                  <MonoChip>{chip}</MonoChip>
+                  {isEnrichment && meta?.existingContactName && (
+                    <span className="text-text-faint ml-2">
+                      updates {meta.existingContactName}
+                    </span>
+                  )}
                   {p.proposedBy && (
                     <span className="text-text-faint ml-2">
                       by {String(p.proposedBy).replace(/_/g, " ")}
@@ -418,7 +438,8 @@ export function AllianceEvaluationPanel({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </Card>
       )}
 

@@ -10,6 +10,8 @@
 // This module is the ONE place that decides "are these two names the same
 // person?". Deterministic, no network, unit-probe friendly.
 
+import { findContactDuplicates } from "../atelier-dedupe.js";
+
 /** Honorifics/qualifications commonly prefixed to MENA/Western exec names. */
 export const HONORIFICS = new Set([
   "mr", "mrs", "ms", "miss", "dr", "eng", "engr", "prof", "sir",
@@ -225,6 +227,32 @@ export function findPersonMatch<T>(
     if (!fuzzy && samePersonName(name, getName(e))) fuzzy = e;
   }
   return fuzzy;
+}
+
+/**
+ * Belt-and-braces person matching (Task #958 / #971): the structural matcher
+ * (findPersonMatch) first, then the shared contact-duplicate scorer as a
+ * fallback net for near-miss spellings it can't see ("Al-Falih" vs
+ * "Al-Faleh"). Only HIGH-confidence scores count — medium/low similarity
+ * must never silently merge two different humans. Shared by the Executive
+ * Mapper and Alliance Cartographer/Mapper proposal builders.
+ */
+export function findPersonMatchLoose<T>(
+  name: string,
+  entries: readonly T[],
+  getName: (e: T) => string,
+): T | undefined {
+  const structural = findPersonMatch(name, entries, getName);
+  if (structural) return structural;
+  const scored = findContactDuplicates(
+    name,
+    entries.map((e, i) => ({ id: String(i), fullName: getName(e) })),
+    { limit: 1 },
+  );
+  if (scored[0] && scored[0].confidence === "high") {
+    return entries[Number(scored[0].id)];
+  }
+  return undefined;
 }
 
 /** The "richer" of two name spellings: more tokens wins, then longer string. */

@@ -31,8 +31,7 @@ import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import { perplexityResearch } from "./perplexity.js";
-import { findPersonMatch, richerPersonName } from "./person-name.js";
-import { findContactDuplicates } from "../atelier-dedupe.js";
+import { findPersonMatch, findPersonMatchLoose, richerPersonName } from "./person-name.js";
 import { resolveIndustryTaxonomy } from "./industry-taxonomy.js";
 import {
   buildAllianceCapabilityContext,
@@ -3786,28 +3785,10 @@ export function buildExecutiveMapperProposals(args: {
   }
   const normTitle = (t: string | null | undefined) =>
     (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  // Task #958 — belt-and-braces person matching: the structural matcher
-  // (findPersonMatch) first, then the shared contact-duplicate scorer as a
-  // fallback net for near-miss spellings it can't see ("Al-Falih" vs
-  // "Al-Faleh"). Only HIGH-confidence scores count — medium/low similarity
-  // must never silently merge two different humans.
-  const matchPerson = <T,>(
-    name: string,
-    entries: readonly T[],
-    getName: (e: T) => string,
-  ): T | undefined => {
-    const structural = findPersonMatch(name, entries, getName);
-    if (structural) return structural;
-    const scored = findContactDuplicates(
-      name,
-      entries.map((e, i) => ({ id: String(i), fullName: getName(e) })),
-      { limit: 1 },
-    );
-    if (scored[0] && scored[0].confidence === "high") {
-      return entries[Number(scored[0].id)];
-    }
-    return undefined;
-  };
+  // Task #958 — belt-and-braces person matching via the shared helper:
+  // structural matcher first, then a HIGH-confidence contact-duplicate
+  // scorer fallback for near-miss spellings ("Al-Falih" vs "Al-Faleh").
+  const matchPerson = findPersonMatchLoose;
   const candidates: PendingProfileUpdate[] = [];
   const proposedPeople: Array<{ fullName: string }> = [];
   for (const dm of output.decisionMakers ?? []) {
