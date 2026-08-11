@@ -209,6 +209,9 @@ importers:
       '@workspace/integrations-anthropic-ai':
         specifier: workspace:*
         version: link:../../lib/integrations-anthropic-ai
+      '@workspace/screen-catalog':
+        specifier: workspace:*
+        version: link:../../lib/screen-catalog
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
@@ -816,6 +819,8 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+
+  lib/screen-catalog: {}
 
   scripts:
     dependencies:

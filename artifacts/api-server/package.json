@@ -91,7 +91,8 @@
     "test:expense-edit": "tsx ./tests/expense-edit/run.ts",
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
     "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
-    "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts"
+    "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts",
+    "test:app-navigation": "tsx tests/app-navigation/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -132,7 +133,8 @@
     "playwright-core": "^1.59.1",
     "qrcode": "1.5.4",
     "unpdf": "^1.6.2",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@workspace/screen-catalog": "workspace:*"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

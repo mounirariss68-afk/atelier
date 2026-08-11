@@ -154,4 +154,5 @@
 - [Credential-bearing link routes](atelier-credential-link-routes.md) — activation/reset-URL responses must use trustedRequestOrigin + 403 untrusted explicit Origins, or CORS leaks the token.
 - [Mechanical className sweeps over tsx](tsx-classname-sweeps.md) — never regex all string literals (apostrophes in comments corrupt code); line-based + tag-aware; skip form controls.
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass; fixed Tailwind-alpha surfaces need explicit fallback selectors; rail now LEFT-anchored.
+- [Screen catalog & find_screen](atelier-screen-catalog.md) — catalog.ts is GENERATED from web nav (regenerate, never hand-edit); nav/role-gate changes must re-run generator; find_screen widening is role-sliced.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — partner_firm_invoices has dual lifecycles keyed on `source`; portal keys on partnerFirmId; bank-IBAN gate at approve+run-build; all raw-fetch @cli-skip.

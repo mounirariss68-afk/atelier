@@ -161,9 +161,15 @@ async function main() {
     // persona and is confirm-gated. This pins the perimeter so a future
     // tool registration (catalog OR legacy TOOL_REGISTRY) cannot
     // silently widen it beyond the me.* lens.
+    // Deliberate, documented widenings beyond me.*: entity.detail
+    // (Task #853 — run() clamps self-only personas to entities they are
+    // staffed on) and meta.find_screen (Task #939 — read-only "where do
+    // I find X?" over the role-sliced screen catalog; self-only personas
+    // only ever get Me-lens screen answers).
+    const SELF_ONLY_WIDENINGS = new Set(["entity.detail", "meta.find_screen"]);
     const meToolNames = new Set(
       listCapabilities()
-        .filter((c) => c.id.startsWith("me."))
+        .filter((c) => c.id.startsWith("me.") || SELF_ONLY_WIDENINGS.has(c.id))
         .map((c) => c.toolName),
     );
     assert.ok(meToolNames.size > 0, "expected at least one me.* capability");
@@ -180,7 +186,7 @@ async function main() {
         const entry = byToolName.get(t.name);
         assert.ok(entry, `${role} got tool ${t.name} not in the capability catalog (legacy leak)`);
         assert.ok(
-          entry!.id.startsWith("me."),
+          entry!.id.startsWith("me.") || SELF_ONLY_WIDENINGS.has(entry!.id),
           `${role} leaked org-wide tool ${t.name} (capability ${entry!.id})`,
         );
       }

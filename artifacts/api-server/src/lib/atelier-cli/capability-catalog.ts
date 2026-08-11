@@ -567,7 +567,13 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   // identity), no entity.detail widening, no attachment/RAG retrieval,
   // no roster / finance / CRM tools — ever.
   if (role === "alliance_partner") {
-    return REGISTRY.filter((e) => e.id.startsWith("partnerportal.") && !e.isWrite);
+    // Task #939 — meta.find_screen is allowed: its catalog slice for
+    // alliance_partner contains ONLY the partner-portal screens.
+    return REGISTRY.filter(
+      (e) =>
+        !e.isWrite &&
+        (e.id.startsWith("partnerportal.") || e.id === "meta.find_screen"),
+    );
   }
   if (SELF_ONLY_CHAT_ROLES.has(role)) {
     // Task #583 — self-only personas now get the identity-locked me.*
@@ -581,7 +587,15 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
     // personas are clamped to accounts / engagements / deliverables they
     // are staffed on (engagement grant or account-team membership).
     // Nothing else widens.
-    return REGISTRY.filter((e) => e.id.startsWith("me.") || e.id === "entity.detail");
+    // Task #939 — meta.find_screen is a second deliberate widening: the
+    // screen catalog is role-sliced, so self-only personas only ever get
+    // answers about Me-lens screens (plus chat itself).
+    return REGISTRY.filter(
+      (e) =>
+        e.id.startsWith("me.") ||
+        e.id === "entity.detail" ||
+        e.id === "meta.find_screen",
+    );
   }
   const restrictedSet: ReadonlySet<AtelierRole> = new Set([
     "contractor",
