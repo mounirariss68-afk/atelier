@@ -1,8 +1,8 @@
 ---
-name: Non-equity partner agreement chat flow
-description: Roster auto-add in contract_prepare + attach-and-send capability invariants; NEP template ingestion quirks.
+name: NEP agreement flow
+description: Non-Equity Partner Agreement template — chat flow quirks and how the v3 template goes live per environment
 ---
-- contract_prepare auto-adds an unknown counterparty to the roster ONLY for contractType non_equity_partner_employment: clarifies for newPersonEmail, dup-guards on lower(email) across employees+contractors (reuses the row), creates contractor via writePersonAndSync (notes="Non-Equity Partner", no login) at COMMIT time only; pending/partial carry the NAME (not an id) until the row exists.
-- contract_attach_final_and_send mirrors POST /contracts/:id/final then calls sendContract; guards: uploader-owned attachment, DOCX mime, non-terminal & not out_for_signature. A failed send still leaves the final version recorded — the error message says so.
-- **Multipart filenames with non-ASCII chars (em dash) get mangled server-side** — any filename-based idempotency check must use ASCII-only names.
-- Ingestion script scripts/ingest-nep-template.ts is idempotent (fileName + reviewed schema match); must be re-run on main dev AND prod with founder credentials (task DB data never merges).
+- Roster auto-add only for NEP type, commit-time create; ASCII-only multipart filenames for idempotency checks.
+- The v3 NEP template goes live via an idempotent BOOT seed (`ensureAtelierNepTemplateSeed` in api-server boot chores), not a credentialed script: agent has no founding-partner login and prod DB is app-write-only. It stores docx bytes to object storage, verifies placeholders before activating, advisory-locked for autoscale. Prod picks it up on next publish.
+- **Why boot seed:** user declined to share founding-partner credentials; boot chores run in every environment automatically.
+- **How to apply:** any future "put template/config data live on main+prod" work should prefer an idempotent boot chore over live-API scripts needing user credentials. Not demo seeding (that stays banned).

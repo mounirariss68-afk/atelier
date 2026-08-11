@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, mkdir, copyFile, stat } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -135,6 +135,20 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Task #969 — runtime assets the bundled server reads from disk. The boot
+  // NEP-template ingestion loads this docx via `./assets/...` relative to
+  // dist/index.mjs, so it MUST ship alongside the bundle. Fail the build
+  // loudly if it can't be packaged — a silent miss would make the prod
+  // boot seed a no-op.
+  const runtimeAssets = ["scripts/assets/non-equity-partner-agreement-template-v3.docx"];
+  await mkdir(path.resolve(distDir, "assets"), { recursive: true });
+  for (const rel of runtimeAssets) {
+    const src = path.resolve(artifactDir, rel);
+    const dest = path.resolve(distDir, "assets", path.basename(rel));
+    await copyFile(src, dest);
+    if ((await stat(dest)).size === 0) throw new Error(`Runtime asset copied empty: ${rel}`);
+  }
 }
 
 buildAll().catch((err) => {

@@ -89,6 +89,21 @@ app.listen(port, (err) => {
         "Pricing seed failed — Pricing module has no active rate card",
       );
     });
+    // Task #969 — idempotent boot-time ingestion of the templatized v3
+    // Non-Equity Partner Agreement (configuration content, not demo data):
+    // task-agent DB writes never merge and prod data is only writable
+    // through the deployed app, so the template rides the boot chores.
+    await (async () => {
+      const { ensureAtelierNepTemplateSeed } = await import(
+        "./lib/atelier-seed-nep-template"
+      );
+      await ensureAtelierNepTemplateSeed();
+    })().catch((err) => {
+      logger.error(
+        { err },
+        "NEP template ingestion failed — Non-Equity Partner Agreement template not live",
+      );
+    });
     // Task #383 — expense taxonomy is configuration (like reference data):
     // install missing category rows idempotently, then backfill the two-axis
     // codes onto legacy expense rows (only touches rows with NULL codes).
