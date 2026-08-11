@@ -617,12 +617,15 @@ export default function Home() {
       {/* Task #913 — the whole main section sits in one rounded glass
           panel so it reads as a single cohesive surface. */}
       <div className="container-atelier py-6">
-        <div className="glass-panel rounded-2xl p-6 sm:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Task #918 — the panel's padding moved OFF the panel and onto the
+            content grid below, so the greeting band bleeds flush to the
+            panel's top and side edges (top corners follow the panel radius). */}
+        <div className="glass-panel rounded-2xl overflow-hidden">
 
         {/* Task #917 — the greeting hero moved INSIDE the main panel as a
-            rounded navy band spanning the full panel width. */}
+            navy band spanning the full panel width. */}
         <div
-          className="page-hero rounded-xl px-6 sm:px-8 xl:col-span-3"
+          className="page-hero rounded-t-2xl px-6 sm:px-8"
           data-testid="home-greeting-band"
         >
           <SectionHead
@@ -632,6 +635,8 @@ export default function Home() {
             }
           />
         </div>
+
+        <div className="p-6 sm:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
         
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">
@@ -776,6 +781,7 @@ export default function Home() {
             </Link>
           </div>
 
+        </div>
         </div>
         </div>
       </div>
