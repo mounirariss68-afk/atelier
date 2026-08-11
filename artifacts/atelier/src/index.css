@@ -60,10 +60,11 @@
   /* --- Glassmorphism knobs (Task #897) — pure alpha, zero hue change.
      Dark glass needs LESS fill: the navy backdrop does the work.
      Rollback: set the three alphas to 100% and borders to var(--border). */
-  --glass-card-alpha:    42%;
+  /* Task #955 — card/panel alphas dropped further so the backdrop artwork
+     reads through content surfaces portal-wide, not just in the gutters. */
+  --glass-card-alpha:    34%;
   --glass-popover-alpha: 68%;
-  /* Task #921 — lighter panel so the backdrop artwork reads through. */
-  --glass-panel-alpha:   22%;
+  --glass-panel-alpha:   14%;
   --card-border:    rgba(255, 255, 255, 0.14);
   --popover-border: rgba(255, 255, 255, 0.18);
   --container:    1240px;
@@ -109,11 +110,12 @@
   --warn-tint-40:        rgba(180, 83, 9, 0.32);
   --danger-tint-40:      rgba(185, 28, 28, 0.32);
 
-  /* Light glass: whiter fill carries more alpha for readability. */
-  --glass-card-alpha:    62%;
+  /* Light glass: whiter fill carries more alpha for readability.
+     Task #955 — panel/card alphas lowered so the pale artwork is
+     perceptible behind content, not only in the page gutters. */
+  --glass-card-alpha:    52%;
   --glass-popover-alpha: 80%;
-  /* Task #921 — lighter panel so the backdrop artwork reads through. */
-  --glass-panel-alpha:   40%;
+  --glass-panel-alpha:   24%;
   --card-border:    rgba(10, 18, 48, 0.10);
   --popover-border: rgba(10, 18, 48, 0.12);
 }
