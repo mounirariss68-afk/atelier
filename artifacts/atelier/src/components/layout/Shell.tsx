@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay, Palette, Newspaper, Shield, BarChart3, FolderOpen, Wallet, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import riserAvatarSrc from "@/assets/riser-avatar.png";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
@@ -766,8 +767,8 @@ export function RightRail() {
               )}
               data-testid="rail-tab-agent"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              Agent
+              <img src={riserAvatarSrc} alt="" className="w-3.5 h-3.5 rounded-full" />
+              Riser
             </button>
             {canSeeOrgRail && (
             <>
@@ -820,19 +821,6 @@ export function RightRail() {
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
-
-      {/* Task #899 — routing-hint strip under the tabs. */}
-      {!collapsed && tab === "agent" && (
-        <div
-          className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-soft text-[11px] text-text-faint shrink-0"
-          data-testid="chat-routing-hint"
-        >
-          <Sparkles className="w-3 h-3 text-gold/70 shrink-0" aria-hidden />
-          <span className="truncate">
-            Riser routes each request to the right specialist
-          </span>
-        </div>
-      )}
       {/* Task #501 — when the Agent tab is active, the embedded
        * CommandBar fills the rail body (it manages its own scroll &
        * composer). Activity/Reports keep the padded scroll area. */}
