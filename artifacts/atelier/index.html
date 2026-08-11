@@ -47,6 +47,16 @@
     </script>
   </head>
   <body>
+    <!-- Task #942: dedicated fixed backdrop layers that "breathe" (slow
+         transform/opacity keyframes). A real element (not body::before,
+         whose background layers can't cheaply animate transforms) so the
+         motion stays GPU-composited. Sits above the static body::before
+         artwork and below #root (z-index 1). -->
+    <div id="bg-breathe" aria-hidden="true">
+      <i class="bb bb-1"></i>
+      <i class="bb bb-2"></i>
+      <i class="bb bb-3"></i>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

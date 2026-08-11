@@ -311,29 +311,52 @@
          #928) so the chat rail keeps the same branded presence. Much fainter
          than dark mode — smooth low-alpha magenta/purple washes over the
          pale scrim, tuned so rail text stays comfortably AA. */
+      /* Task #942: a faint navy dot lattice tiled across the whole light
+         backdrop so the frosted panels always have fine texture to blur,
+         even over the near-white regions of the artwork. */
+      radial-gradient(circle at 1px 1px,
+        rgba(10, 18, 48, 0.055) 1px,
+        transparent 1.5px),
       radial-gradient(60vh 70vh at 0% 20%,
-        color-mix(in srgb, var(--gold-deep) 10%, transparent) 0%,
-        color-mix(in srgb, var(--gold-deep) 4%, transparent) 45%,
+        color-mix(in srgb, var(--gold-deep) 14%, transparent) 0%,
+        color-mix(in srgb, var(--gold-deep) 6%, transparent) 45%,
         transparent 72%),
       radial-gradient(54vh 64vh at 0% 82%,
-        color-mix(in srgb, var(--gold) 8%, transparent) 0%,
-        color-mix(in srgb, var(--gold) 3%, transparent) 45%,
+        color-mix(in srgb, var(--gold) 11%, transparent) 0%,
+        color-mix(in srgb, var(--gold) 4%, transparent) 45%,
+        transparent 70%),
+      /* Task #942: extra soft brand glows across the top-right and centre
+         so the pale upper-left of the artwork is no longer a blank wash.
+         Smooth low-alpha color, not busy texture — text stays AA. */
+      radial-gradient(70vh 60vh at 78% 8%,
+        color-mix(in srgb, #5B7CFF 13%, transparent) 0%,
+        color-mix(in srgb, #5B7CFF 5%, transparent) 45%,
+        transparent 72%),
+      radial-gradient(80vh 70vh at 42% 55%,
+        color-mix(in srgb, var(--gold-deep) 9%, transparent) 0%,
+        color-mix(in srgb, var(--gold-deep) 3.5%, transparent) 50%,
+        transparent 75%),
+      radial-gradient(60vh 52vh at 96% 68%,
+        color-mix(in srgb, var(--gold-soft) 10%, transparent) 0%,
+        color-mix(in srgb, var(--gold-soft) 4%, transparent) 45%,
         transparent 70%),
       /* Task #911: light-mode companion of the dark network image, under a
          pale scrim so text/cards stay readable. The final linear-gradient
-         is retained UNDER the image as the color fallback while it loads. */
+         is retained UNDER the image as the color fallback while it loads.
+         Task #942: scrim lightened slightly so the artwork's pattern reads
+         through the glass instead of washing out. */
       linear-gradient(160deg,
-        color-mix(in srgb, var(--bg) 68%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 46%, transparent) 55%,
-        color-mix(in srgb, var(--bg-deep) 38%, transparent) 100%),
+        color-mix(in srgb, var(--bg) 56%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 36%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 30%, transparent) 100%),
       url("/light-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
-    background-size: auto, auto, auto, auto, cover, auto;
+    background-size: auto, 26px 26px, auto, auto, auto, auto, auto, auto, cover, auto;
     /* Task #932: the artwork layer anchors LEFT so its content reaches the
        left screen edge (cover keeps full coverage — any crop falls on the
        right). Other layers unchanged. */
-    background-position: center, left center, left center, center, left center, center;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-position: center, center, left center, left center, center, center, center, center, left center, center;
+    background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   }
   body::after {
     content: "";
@@ -347,6 +370,87 @@
   /* In light mode the noise overlay would muddy the parchment. */
   [data-theme="light"] body::after { opacity: 0.025; }
   #root { position: relative; z-index: 1; }
+
+  /* ---- Task #942: breathing backdrop layers -------------------------
+     Three oversized soft brand glows on a dedicated fixed element (see
+     index.html) that drift/scale/fade on very long cycles. Real elements
+     — not body::before background layers — so the animation uses only
+     transform/opacity and stays GPU-composited (no repaints, no scroll
+     jank). z-index 0 keeps them above the static backdrop artwork and
+     below #root (z-index 1). */
+  #bg-breathe {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #bg-breathe .bb {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    will-change: transform, opacity;
+    animation: bb-breathe 26s ease-in-out infinite alternate;
+  }
+  #bg-breathe .bb-1 {
+    width: 90vh; height: 90vh;
+    left: -18vh; top: -22vh;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--gold-deep) 22%, transparent) 0%,
+      color-mix(in srgb, var(--gold-deep) 8%, transparent) 45%,
+      transparent 70%);
+    animation-duration: 28s;
+  }
+  #bg-breathe .bb-2 {
+    width: 100vh; height: 100vh;
+    right: -30vh; top: 4vh;
+    background: radial-gradient(circle,
+      color-mix(in srgb, #5B7CFF 18%, transparent) 0%,
+      color-mix(in srgb, #5B7CFF 7%, transparent) 45%,
+      transparent 70%);
+    animation-duration: 36s;
+    animation-delay: -12s;
+  }
+  #bg-breathe .bb-3 {
+    width: 84vh; height: 84vh;
+    left: 24vw; bottom: -34vh;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--gold) 16%, transparent) 0%,
+      color-mix(in srgb, var(--gold) 6%, transparent) 45%,
+      transparent 70%);
+    animation-duration: 44s;
+    animation-delay: -20s;
+  }
+  /* Light mode: fainter glows so the pale backdrop stays calm and
+     rail/panel text keeps AA contrast. (Set on the container, not .bb —
+     the keyframes animate .bb opacity, overriding per-blob static rules.) */
+  [data-theme="light"] #bg-breathe { opacity: 0.55; }
+  @keyframes bb-breathe {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.7;
+    }
+    50% {
+      transform: translate3d(2.5vw, -1.5vh, 0) scale(1.08);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(-1.5vw, 2vh, 0) scale(0.96);
+      opacity: 0.75;
+    }
+  }
+  /* Reduced motion: static backdrop, no breathing. */
+  @media (prefers-reduced-motion: reduce) {
+    #bg-breathe .bb {
+      animation: none;
+      will-change: auto;
+    }
+  }
+  /* Reduced transparency / no blur: surfaces are opaque so the breathing
+     glows would only flicker in page gutters — hide them entirely. */
+  @media (prefers-reduced-transparency: reduce) {
+    #bg-breathe { display: none; }
+  }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-sans);
