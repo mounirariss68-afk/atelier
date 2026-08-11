@@ -28,6 +28,7 @@ import {
   X,
   Send,
   Paperclip,
+  Plus,
   Sparkles,
   HelpCircle,
   Bookmark,
@@ -1144,58 +1145,75 @@ function Composer({
         </div>
       )}
 
+      {/* Task #906 — reference layout: circular "+" attach button on the
+          left, a full pill input, and a circular send button embedded
+          inside the pill's right edge. Shift+Enter / ↑-recall keep working
+          via onKeyDown; the visible hint row is gone and the character
+          counter only appears when the user is close to the limit. */}
       <div className="flex items-end gap-2">
         <button
           type="button"
           onClick={onAttach}
-          className="text-text-mute hover:text-gold p-2 rounded hover:bg-bg-elevate-2 transition-colors shrink-0"
+          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-bg-deep text-text-mute hover:text-gold hover:bg-bg-elevate-2 transition-colors"
           title={s("attach", locale)}
+          aria-label={s("attach", locale)}
           data-testid="cli-attach-button"
         >
-          <Paperclip className="w-4 h-4" />
+          <Plus className="w-4 h-4" />
         </button>
-        <textarea
-          ref={composerRef}
-          value={input}
-          onChange={(e) => onInput(e.target.value.slice(0, MAX_INPUT_CHARS + 200))}
-          onKeyDown={onKeyDown}
-          rows={1}
-          placeholder={s("placeholder", locale)}
-          aria-invalid={overLimit || undefined}
-          aria-label={s("placeholder", locale)}
-          disabled={status === "streaming"}
+        <div
           className={cn(
-            "flex-1 resize-none text-xs leading-relaxed bg-bg-deep border rounded-md px-2.5 py-1.5",
-            "focus:outline-none focus:ring-1 max-h-40 placeholder:text-text-faint",
-            "disabled:opacity-60",
+            "flex-1 min-w-0 flex items-end gap-1.5 rounded-[22px] border bg-bg-deep",
+            "ps-4 pe-1.5 py-1.5 transition-colors",
+            "focus-within:ring-1",
             overLimit
-              ? "border-danger focus:ring-danger"
-              : "border-border focus:ring-gold focus:border-gold",
+              ? "border-danger focus-within:ring-danger"
+              : "border-border focus-within:ring-gold focus-within:border-gold",
           )}
-          data-testid="cli-input"
-        />
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!input.trim() || status === "streaming" || overLimit}
-          className={cn(
-            "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-md transition-colors",
-            "bg-gold text-bg-deep hover:bg-gold/90 disabled:bg-bg-elevate-2 disabled:text-text-faint",
-          )}
-          aria-label={s("send", locale)}
-          title={s("send", locale)}
-          data-testid="cli-send"
         >
-          <Send className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-text-faint">
-        <span>
-          {s("newline", locale)} · {s("recallHint", locale)}
-        </span>
-        <span data-testid="cli-char-count">
-          {input.length}/{MAX_INPUT_CHARS}
-        </span>
+          <textarea
+            ref={composerRef}
+            value={input}
+            onChange={(e) => onInput(e.target.value.slice(0, MAX_INPUT_CHARS + 200))}
+            onKeyDown={onKeyDown}
+            rows={1}
+            placeholder={s("placeholder", locale)}
+            aria-invalid={overLimit || undefined}
+            aria-label={s("placeholder", locale)}
+            disabled={status === "streaming"}
+            className={cn(
+              "flex-1 min-w-0 resize-none text-xs leading-relaxed bg-transparent border-none",
+              "py-1.5 focus:outline-none max-h-40 placeholder:text-text-faint",
+              "disabled:opacity-60",
+            )}
+            data-testid="cli-input"
+          />
+          {input.length > MAX_INPUT_CHARS - 200 && (
+            <span
+              className={cn(
+                "self-center shrink-0 text-[10px] font-mono",
+                overLimit ? "text-danger" : "text-text-faint",
+              )}
+              data-testid="cli-char-count"
+            >
+              {input.length}/{MAX_INPUT_CHARS}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!input.trim() || status === "streaming" || overLimit}
+            className={cn(
+              "shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors",
+              "bg-gold text-bg-deep hover:bg-gold/90 disabled:bg-bg-elevate-2 disabled:text-text-faint",
+            )}
+            aria-label={s("send", locale)}
+            title={s("send", locale)}
+            data-testid="cli-send"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
