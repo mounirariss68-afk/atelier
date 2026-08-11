@@ -127,6 +127,7 @@ import { selfServiceExclusionGuidance } from "./me-chat-parity.js";
 // Task #339 — single bootstrap entry point. Imports cli-only entries,
 // attachment+rubric capabilities, and walks the agent registry.
 import "./bootstrap-capabilities.js";
+import { isValidOrgOwner } from "../atelier-owner-validate.js";
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   attachmentMentionsDestructive,
@@ -830,6 +831,19 @@ const addRaidItem: ToolDef = {
     if (!eng)
       return { ok: false, errorCode: "not_found", errorMessage: `engagement ${engagementId} not found` };
 
+    // Task #940 — mirror the REST owner validation: a supplied owner must
+    // be a live org user, or the "assigned" item is invisible on every
+    // assigned-to-me surface. (The default — the caller — is always valid.)
+    if (
+      input.ownerUserId &&
+      !(await isValidOrgOwner(String(input.ownerUserId), ctx.persona.orgId))
+    ) {
+      return {
+        ok: false,
+        errorCode: "invalid_owner",
+        errorMessage: `Unknown owner ${String(input.ownerUserId)} — the owner must be an active user in your organisation.`,
+      };
+    }
     const ownerUserId = (input.ownerUserId as string | undefined) ?? ctx.persona.id;
     const dueDate = (input.dueDate as string | undefined) ?? null;
     const confirmed = input.confirm === true;
@@ -6349,4 +6363,3 @@ export function writeSseFrame(res: Response, frame: CliFrame): void {
 export function _internalGetInflightSize(): number {
   return inflight.size;
 }
-

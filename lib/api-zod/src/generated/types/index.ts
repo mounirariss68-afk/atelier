@@ -450,6 +450,8 @@ export * from "./atelierMyOpenTasks";
 export * from "./atelierMyPay";
 export * from "./atelierMyPayBank";
 export * from "./atelierMyPerformance";
+export * from "./atelierMyWorkItem";
+export * from "./atelierMyWorkItemKind";
 export * from "./atelierOkResponse";
 export * from "./atelierOpportunityDuplicateCandidates";
 export * from "./atelierOpportunityDuplicateError";

@@ -34873,28 +34873,20 @@ export const AtelierDeleteActivityResponse = zod.object({
  * @summary The current persona's open tasks across accounts, overdue-flagged
  */
 export const AtelierGetMyOpenTasksResponse = zod.object({
-  tasks: zod.array(
+  items: zod.array(
     zod.object({
       id: zod.string(),
-      accountId: zod.string(),
-      accountName: zod.string().nullish(),
-      parentType: zod.enum(["account", "contact", "opportunity"]),
-      parentId: zod.string(),
-      parentLabel: zod.string().nullish(),
-      type: zod.enum(["task", "call", "email", "meeting"]),
+      kind: zod.enum(["activity", "plan_action", "raid"]),
+      type: zod.string().nullish(),
       title: zod.string(),
-      body: zod.string().nullish(),
-      ownerId: zod.string().nullish(),
-      ownerName: zod.string().nullish(),
-      ownerInitials: zod.string().nullish(),
       dueDate: zod.string().nullish(),
-      status: zod.enum(["open", "done"]),
       overdue: zod.boolean(),
-      completedAt: zod.string().nullish(),
-      createdByUserId: zod.string().nullish(),
-      createdByName: zod.string().nullish(),
-      createdAt: zod.string(),
-      updatedAt: zod.string(),
+      accountId: zod.string().nullish(),
+      accountName: zod.string().nullish(),
+      engagementId: zod.string().nullish(),
+      engagementName: zod.string().nullish(),
+      href: zod.string(),
+      createdAt: zod.string().optional(),
     }),
   ),
   openCount: zod.number(),

@@ -493,19 +493,42 @@ const TASK_TYPE_ICON: Record<string, React.ReactNode> = {
   meeting: <CalendarClock className="w-3.5 h-3.5" />,
 };
 
+// Task #940 — kind badges for the consolidated assigned-to-me roll-up.
+const MY_WORK_KIND_LABEL: Record<string, string> = {
+  activity: "Task",
+  plan_action: "Plan",
+  raid: "RAID",
+};
+
 /**
- * Task #631 — per-owner open/overdue task roll-up. Surfaces the signed-in
- * persona's open activities/tasks across every account they own work on,
- * overdue-flagged and deep-linked to the parent account.
+ * Task #631 / #940 — per-owner open/overdue roll-up. Surfaces everything
+ * open and assigned to the signed-in persona — account activity tasks,
+ * account plan actions, and engagement RAID items — kind-badged,
+ * overdue-flagged, and deep-linked to the parent account/engagement.
+ * Fetch failures render a small error state instead of hiding the card.
  */
 function MyOpenTasksCard() {
-  const { data, isLoading } = useAtelierGetMyOpenTasks();
-  if (isLoading || !data || data.openCount === 0) return null;
+  const { data, isLoading, isError } = useAtelierGetMyOpenTasks();
+  if (isLoading) return null;
+  if (isError) {
+    return (
+      <Card className="p-5 space-y-2" data-testid="card-home-my-tasks-error">
+        <SectionLabel className="flex items-center gap-2">
+          <ListTodo className="w-3.5 h-3.5" /> Assigned to me
+        </SectionLabel>
+        <p className="text-xs font-mono text-danger flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" /> Couldn't load your assigned
+          work. Refresh to try again.
+        </p>
+      </Card>
+    );
+  }
+  if (!data || data.openCount === 0) return null;
   return (
     <Card className="p-5 space-y-3" data-testid="card-home-my-tasks">
       <div className="flex items-center justify-between">
         <SectionLabel className="flex items-center gap-2">
-          <ListTodo className="w-3.5 h-3.5" /> My open tasks
+          <ListTodo className="w-3.5 h-3.5" /> Assigned to me
         </SectionLabel>
         <div className="flex items-center gap-2">
           <MonoChip>{data.openCount} open</MonoChip>
@@ -515,22 +538,27 @@ function MyOpenTasksCard() {
         </div>
       </div>
       <div className="divide-y divide-border-soft">
-        {data.tasks.slice(0, 6).map((t) => (
+        {data.items.slice(0, 6).map((t) => (
           <Link
-            key={t.id}
-            href={`/accounts/${t.accountId}`}
+            key={`${t.kind}-${t.id}`}
+            href={t.href}
             className="flex items-center gap-2.5 py-2 group"
             data-testid={`row-my-task-${t.id}`}
           >
             <span className={t.overdue ? "text-danger" : "text-gold/80"}>
-              {TASK_TYPE_ICON[t.type] ?? <CheckSquare className="w-3.5 h-3.5" />}
+              {(t.kind === "activity" && t.type && TASK_TYPE_ICON[t.type]) || (
+                <CheckSquare className="w-3.5 h-3.5" />
+              )}
             </span>
             <span className="flex-1 min-w-0 text-sm text-text group-hover:text-gold truncate">
               {t.title}
             </span>
-            {t.accountName && (
+            <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint border border-border-soft rounded-full px-1.5 py-0.5 shrink-0">
+              {MY_WORK_KIND_LABEL[t.kind] ?? t.kind}
+            </span>
+            {(t.engagementName ?? t.accountName) && (
               <span className="text-[11px] font-mono text-text-faint shrink-0">
-                {t.accountName}
+                {t.engagementName ?? t.accountName}
               </span>
             )}
             {t.dueDate && (

@@ -8290,13 +8290,30 @@ components:
         dueDate: { type: ["string", "null"] }
         status: { $ref: "#/components/schemas/AtelierActivityStatus" }
 
+    AtelierMyWorkItem:
+      type: object
+      required: [id, kind, title, overdue, href]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [activity, plan_action, raid] }
+        type: { type: ["string", "null"] }
+        title: { type: string }
+        dueDate: { type: ["string", "null"] }
+        overdue: { type: boolean }
+        accountId: { type: ["string", "null"] }
+        accountName: { type: ["string", "null"] }
+        engagementId: { type: ["string", "null"] }
+        engagementName: { type: ["string", "null"] }
+        href: { type: string }
+        createdAt: { type: string }
+
     AtelierMyOpenTasks:
       type: object
-      required: [tasks, openCount, overdueCount]
+      required: [items, openCount, overdueCount]
       properties:
-        tasks:
+        items:
           type: array
-          items: { $ref: "#/components/schemas/AtelierActivity" }
+          items: { $ref: "#/components/schemas/AtelierMyWorkItem" }
         openCount: { type: integer }
         overdueCount: { type: integer }
 

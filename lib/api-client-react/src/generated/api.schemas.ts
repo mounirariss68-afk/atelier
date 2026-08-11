@@ -2420,8 +2420,38 @@ export interface AtelierUpdateActivityInput {
   status?: AtelierActivityStatus;
 }
 
+export type AtelierMyWorkItemKind =
+  (typeof AtelierMyWorkItemKind)[keyof typeof AtelierMyWorkItemKind];
+
+export const AtelierMyWorkItemKind = {
+  activity: "activity",
+  plan_action: "plan_action",
+  raid: "raid",
+} as const;
+
+export interface AtelierMyWorkItem {
+  id: string;
+  kind: AtelierMyWorkItemKind;
+  /** @nullable */
+  type?: string | null;
+  title: string;
+  /** @nullable */
+  dueDate?: string | null;
+  overdue: boolean;
+  /** @nullable */
+  accountId?: string | null;
+  /** @nullable */
+  accountName?: string | null;
+  /** @nullable */
+  engagementId?: string | null;
+  /** @nullable */
+  engagementName?: string | null;
+  href: string;
+  createdAt?: string;
+}
+
 export interface AtelierMyOpenTasks {
-  tasks: AtelierActivity[];
+  items: AtelierMyWorkItem[];
   openCount: number;
   overdueCount: number;
 }

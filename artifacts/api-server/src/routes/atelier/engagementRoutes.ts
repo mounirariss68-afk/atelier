@@ -49,6 +49,7 @@ import {
   emitAccessSentinelEvent,
   type HypothesisTree,
 } from "../../lib/atelier-agents/runner.js";
+import { isValidOrgOwner } from "../../lib/atelier-owner-validate.js";
 import { curatorAbstract } from "./knowledgeRoutes.js";
 
 function rid(prefix: string): string {
@@ -516,6 +517,12 @@ router.post("/engagements/:engId/raid", async (req, res) => {
   const parsed = AtelierRaidItemInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  // Task #940 — validate the optional owner belongs to the org, like the
+  // activity-create route does.
+  if (parsed.data.ownerUserId && !(await isValidOrgOwner(parsed.data.ownerUserId, me.orgId))) {
+    res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
     return;
   }
   const id = rid("raid");

@@ -35,6 +35,7 @@ import {
   atelierAccountGoalProgress,
   atelierActivities,
   atelierPersons,
+  atelierRaidItems,
 } from "@workspace/db";
 import {
   resolveStructuredNameInput,
@@ -3959,24 +3960,72 @@ router.delete("/accounts/:accountId/activities/:activityId", async (req, res) =>
   res.json(await timelinePayload(account, canManage));
 });
 
-// ---------- my open tasks (cross-account roll-up, overdue-flagged) ----------
+// ---------- my open work (cross-surface roll-up, overdue-flagged) ----------
+// Task #940 — consolidates everything open and assigned to the signed-in
+// user: account activity tasks, account plan actions, and engagement RAID
+// items. Each item is kind-labelled and deep-links to its parent surface.
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/my-open-tasks", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const rows = await db
-    .select()
-    .from(atelierActivities)
-    .where(
-      and(
-        eq(atelierActivities.ownerId, me.id),
-        eq(atelierActivities.status, "open"),
-        isNull(atelierActivities.deletedAt),
-      ),
-    )
-    .orderBy(desc(atelierActivities.createdAt));
-  // Resolve the account names for the rows in one query.
-  const accountIds = Array.from(new Set(rows.map((r) => r.accountId)));
+  const [activityRows, actionRows, raidRows] = await Promise.all([
+    db
+      .select()
+      .from(atelierActivities)
+      .where(
+        and(
+          eq(atelierActivities.ownerId, me.id),
+          eq(atelierActivities.status, "open"),
+          isNull(atelierActivities.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierActivities.createdAt)),
+    db
+      .select()
+      .from(atelierAccountActions)
+      .where(
+        and(
+          eq(atelierAccountActions.orgId, me.orgId),
+          eq(atelierAccountActions.ownerId, me.id),
+          inArray(atelierAccountActions.status, ["open", "in_progress"]),
+          isNull(atelierAccountActions.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierAccountActions.createdAt)),
+    db
+      .select({
+        raid: atelierRaidItems,
+        engagementName: atelierEngagements.name,
+        engagementAccountId: atelierEngagements.accountId,
+      })
+      .from(atelierRaidItems)
+      .innerJoin(
+        atelierEngagements,
+        and(
+          eq(atelierEngagements.id, atelierRaidItems.engagementId),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(atelierRaidItems.orgId, me.orgId),
+          eq(atelierRaidItems.ownerId, me.id),
+          eq(atelierRaidItems.status, "open"),
+          isNull(atelierRaidItems.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierRaidItems.createdAt)),
+  ]);
+  // Resolve the account names for all referenced accounts in one query.
+  const accountIds = Array.from(
+    new Set(
+      [
+        ...activityRows.map((r) => r.accountId),
+        ...actionRows.map((r) => r.accountId),
+        ...raidRows.map((r) => r.engagementAccountId),
+      ].filter((id): id is string => !!id),
+    ),
+  );
   const accts = accountIds.length
     ? await db
         .select({
@@ -3987,44 +4036,87 @@ router.get("/my-open-tasks", async (req, res) => {
         .from(atelierAccounts)
         .where(inArray(atelierAccounts.id, accountIds))
     : [];
-  const acctName = (id: string) => {
+  const acctName = (id: string | null) => {
+    if (!id) return null;
     const a = accts.find((x) => x.id === id);
     return a ? a.brandName ?? a.name : null;
   };
-  const tasks: ActivityWire[] = rows
-    .map((r) => ({
-      id: r.id,
-      accountId: r.accountId,
-      accountName: acctName(r.accountId),
-      parentType: (r.parentType ?? "account") as ActivityWire["parentType"],
-      parentId: r.parentId,
-      parentLabel: null,
-      type: (r.type ?? "task") as ActivityWire["type"],
-      title: r.title,
-      body: r.body ?? null,
-      ownerId: r.ownerId ?? null,
-      ownerName: me.name,
-      ownerInitials: null,
-      dueDate: r.dueDate ?? null,
-      status: "open" as const,
-      overdue: isOverdue("open", r.dueDate),
-      completedAt: null,
-      createdByUserId: r.createdByUserId ?? null,
-      createdByName: null,
-      createdAt: new Date(r.createdAt).toISOString(),
-      updatedAt: new Date(r.updatedAt).toISOString(),
-    }))
-    .sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-      const ad = a.dueDate ?? "9999-12-31";
-      const bd = b.dueDate ?? "9999-12-31";
-      if (ad !== bd) return ad.localeCompare(bd);
-      return b.createdAt.localeCompare(a.createdAt);
-    });
+  interface MyWorkItemWire {
+    id: string;
+    kind: "activity" | "plan_action" | "raid";
+    type: string | null;
+    title: string;
+    dueDate: string | null;
+    overdue: boolean;
+    accountId: string | null;
+    accountName: string | null;
+    engagementId: string | null;
+    engagementName: string | null;
+    href: string;
+    createdAt: string;
+  }
+  const items: MyWorkItemWire[] = [
+    ...activityRows.map(
+      (r): MyWorkItemWire => ({
+        id: r.id,
+        kind: "activity",
+        type: r.type ?? "task",
+        title: r.title,
+        dueDate: r.dueDate ?? null,
+        overdue: isOverdue("open", r.dueDate),
+        accountId: r.accountId,
+        accountName: acctName(r.accountId),
+        engagementId: null,
+        engagementName: null,
+        href: `/accounts/${r.accountId}`,
+        createdAt: new Date(r.createdAt).toISOString(),
+      }),
+    ),
+    ...actionRows.map(
+      (r): MyWorkItemWire => ({
+        id: r.id,
+        kind: "plan_action",
+        type: null,
+        title: r.title,
+        dueDate: r.dueDate ?? null,
+        // Plan actions stay non-done in "in_progress" too; isOverdue only
+        // fires for "open", so normalise both to open for the check.
+        overdue: isOverdue("open", r.dueDate),
+        accountId: r.accountId,
+        accountName: acctName(r.accountId),
+        engagementId: null,
+        engagementName: null,
+        href: `/accounts/${r.accountId}?tab=account_plan`,
+        createdAt: new Date(r.createdAt).toISOString(),
+      }),
+    ),
+    ...raidRows.map(
+      ({ raid: r, engagementName, engagementAccountId }): MyWorkItemWire => ({
+        id: r.id,
+        kind: "raid",
+        type: r.kind,
+        title: r.description,
+        dueDate: r.dueDate ?? null,
+        overdue: isOverdue("open", r.dueDate),
+        accountId: engagementAccountId ?? null,
+        accountName: acctName(engagementAccountId ?? null),
+        engagementId: r.engagementId,
+        engagementName,
+        href: `/engagements/${r.engagementId}`,
+        createdAt: new Date(r.createdAt).toISOString(),
+      }),
+    ),
+  ].sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    const ad = a.dueDate ?? "9999-12-31";
+    const bd = b.dueDate ?? "9999-12-31";
+    if (ad !== bd) return ad.localeCompare(bd);
+    return b.createdAt.localeCompare(a.createdAt);
+  });
   res.json({
-    tasks,
-    openCount: tasks.length,
-    overdueCount: tasks.filter((t) => t.overdue).length,
+    items,
+    openCount: items.length,
+    overdueCount: items.filter((t) => t.overdue).length,
   });
 });
 

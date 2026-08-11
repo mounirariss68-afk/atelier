@@ -57,6 +57,7 @@ import {
 // Task #538 — chat tools keep accepting free-text fullName; the server
 // parses it into a structured person record and mirrors legacy columns.
 import { writePersonFromFullName, syncLegacyColumns } from "../atelier-person-sync.js";
+import { isValidOrgOwner } from "../atelier-owner-validate.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { resolveAccountRefByName } from "./finance-name-resolvers.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
@@ -292,6 +293,16 @@ defineCapability({
   async run(input, ctx) {
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "raid_add requires confirm:true." };
+    }
+    // Task #940 — mirror the REST owner validation: an assigned RAID item
+    // must point at a live org user or it becomes invisible on "assigned
+    // to me" surfaces.
+    if (input.ownerId && !(await isValidOrgOwner(String(input.ownerId), ctx.persona.orgId))) {
+      return {
+        ok: false,
+        errorCode: "invalid_owner",
+        errorMessage: `Unknown owner ${String(input.ownerId)} — the owner must be an active user in your organisation.`,
+      };
     }
     const id = rid("raid");
     await db.insert(atelierRaidItems).values({

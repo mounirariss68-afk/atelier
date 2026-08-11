@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AtelierActivity } from "./atelierActivity";
+import type { AtelierMyWorkItem } from "./atelierMyWorkItem";
 
 export interface AtelierMyOpenTasks {
-  tasks: AtelierActivity[];
+  items: AtelierMyWorkItem[];
   openCount: number;
   overdueCount: number;
 }
