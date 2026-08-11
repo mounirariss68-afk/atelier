@@ -123,7 +123,7 @@ export default function Settings() {
             {MCP_PLACEHOLDERS.map((m) => (
               <div
                 key={m.name}
-                className="border border-border-soft rounded-md p-3 bg-bg-deep"
+                className="border border-border-soft rounded-md p-3 bg-bg-deep/60"
               >
                 <div className="flex justify-between items-center mb-1">
                   <span className="font-semibold text-text">{m.name}</span>

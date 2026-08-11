@@ -59,7 +59,7 @@ export default function WalletCashRecon() {
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <Card className="overflow-hidden">
           <table className="w-full text-sm" data-testid="recon-rows">
-            <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+            <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
               <tr>
                 <th className="text-left px-3 py-2">Period</th>
                 <th className="text-left px-3 py-2">Range</th>

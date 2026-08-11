@@ -183,7 +183,7 @@ export default function WalletCash() {
             Triage queue · {txns.length} open item{txns.length === 1 ? "" : "s"}
           </div>
           <table className="w-full text-sm" data-testid="cash-triage">
-            <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+            <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
               <tr><th className="text-left px-3 py-2">Date</th><th className="text-left px-3 py-2">Counterparty</th><th className="text-right px-3 py-2">Amount</th><th className="text-left px-3 py-2">State</th><th className="text-left px-3 py-2">Proposal</th><th></th></tr>
             </thead>
             <tbody>
@@ -306,7 +306,7 @@ export default function WalletCash() {
         <Card className="overflow-hidden">
           <div className="px-3 pt-3 font-mono text-xs text-text-faint uppercase">Receipts</div>
           <table className="w-full text-sm" data-testid="cash-receipts">
-            <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+            <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
               <tr><th className="text-left px-3 py-2">Receipt</th><th className="text-left px-3 py-2">Date</th><th className="text-right px-3 py-2">Total</th><th className="text-right px-3 py-2">Applied</th><th className="text-right px-3 py-2">Remaining</th><th></th></tr>
             </thead>
             <tbody>

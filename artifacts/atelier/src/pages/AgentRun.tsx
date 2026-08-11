@@ -449,14 +449,14 @@ function OutputPreviewCard({
         )}
       </p>
       {runDetail?.statusMessage && (
-        <div className="text-xs font-mono text-text-faint border border-border-soft rounded px-2 py-1 bg-bg-deep">
+        <div className="text-xs font-mono text-text-faint border border-border-soft rounded px-2 py-1 bg-bg-deep/60">
           {runDetail.statusMessage}
         </div>
       )}
       {runDetail?.output ? (
         <pre
           data-testid="text-run-output"
-          className="text-xs font-mono text-text bg-bg-deep border border-border-soft rounded p-3 max-h-96 overflow-auto whitespace-pre-wrap break-all"
+          className="text-xs font-mono text-text bg-bg-deep/60 border border-border-soft rounded p-3 max-h-96 overflow-auto whitespace-pre-wrap break-all"
         >
           {JSON.stringify(runDetail.output, null, 2)}
         </pre>

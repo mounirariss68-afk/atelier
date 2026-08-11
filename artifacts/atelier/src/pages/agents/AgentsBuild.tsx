@@ -72,7 +72,7 @@ export default function AgentsBuild() {
                     </div>
                   </div>
 
-                  <pre className="text-xs font-mono text-text-mute bg-bg-deep border border-border-soft rounded p-3 whitespace-pre-wrap">
+                  <pre className="text-xs font-mono text-text-mute bg-bg-deep/60 border border-border-soft rounded p-3 whitespace-pre-wrap">
                     {v.promptDelta}
                   </pre>
 

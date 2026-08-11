@@ -41,7 +41,7 @@ export default function AgentsDeploy() {
               </div>
               <Card className="p-0 overflow-hidden">
                 <table className="w-full text-sm" data-testid={`deploy-table-${env}`}>
-                  <thead className="bg-bg-deep text-[10px] font-mono uppercase tracking-widest text-text-faint">
+                  <thead className="bg-bg-deep/60 text-[10px] font-mono uppercase tracking-widest text-text-faint">
                     <tr>
                       <th className="text-left px-4 py-2.5">Agent</th>
                       <th className="text-left px-4 py-2.5">Version</th>

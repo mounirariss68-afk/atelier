@@ -187,7 +187,7 @@ export function QuickAddPersonDialog({
                   .
                 </p>
                 <div
-                  className="bg-bg-deep border border-line rounded p-3 font-mono text-xs break-all select-all"
+                  className="bg-bg-deep/60 border border-line rounded p-3 font-mono text-xs break-all select-all"
                   data-testid="quick-add-activation-link"
                 >
                   {success.login.activationUrl}

@@ -1951,7 +1951,7 @@ function RollupStat({
         ? fmtCompactUsd(value)
         : value.toLocaleString();
   return (
-    <div className="rounded border border-border-soft bg-bg-deep px-3 py-2" data-testid={testid}>
+    <div className="rounded border border-border-soft bg-bg-deep/60 px-3 py-2" data-testid={testid}>
       <div className="font-mono uppercase tracking-wider text-[10px] text-text-mute">
         {label}
       </div>

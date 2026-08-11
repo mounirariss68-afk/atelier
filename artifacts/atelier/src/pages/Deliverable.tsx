@@ -197,7 +197,7 @@ export default function Deliverable() {
                       No draft yet. Use one of the scaffold actions to create v1.
                     </div>
                   ) : (
-                    <pre className="text-xs whitespace-pre-wrap font-mono text-text bg-bg-deep p-4 rounded-md max-h-[600px] overflow-auto">
+                    <pre className="text-xs whitespace-pre-wrap font-mono text-text bg-bg-deep/60 p-4 rounded-md max-h-[600px] overflow-auto">
                       {current.body}
                     </pre>
                   )}
@@ -268,11 +268,11 @@ function CriticPanel({
       </div>
       {(pyramidScore !== null || evidenceCoveragePct !== null) && (
         <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="bg-bg-deep p-2 rounded">
+          <div className="bg-bg-deep/60 p-2 rounded">
             Pyramid<br />
             <span className="text-text text-base">{pyramidScore !== null ? `${Math.round(pyramidScore * 100)}%` : "—"}</span>
           </div>
-          <div className="bg-bg-deep p-2 rounded">
+          <div className="bg-bg-deep/60 p-2 rounded">
             Evidence<br />
             <span className="text-text text-base">{evidenceCoveragePct !== null ? `${evidenceCoveragePct}%` : "—"}</span>
           </div>
@@ -296,7 +296,7 @@ function CriticPanel({
         {issues.map((iss, i) => (
           <div
             key={iss.id ?? i}
-            className="border border-border-soft rounded-md p-3 bg-bg-deep space-y-1"
+            className="border border-border-soft rounded-md p-3 bg-bg-deep/60 space-y-1"
             data-testid={`critic-issue-${i}`}
           >
             <div className="flex items-center justify-between">
@@ -323,7 +323,7 @@ function DiffPane({ label, v }: { label: string; v: { versionNumber: number; bod
   return (
     <div className="space-y-1">
       <div className="text-xs font-mono uppercase text-text-mute">{label}{v ? ` · v${v.versionNumber}` : ""}</div>
-      <pre className="text-[11px] whitespace-pre-wrap font-mono text-text bg-bg-deep p-3 rounded-md max-h-[420px] overflow-auto">
+      <pre className="text-[11px] whitespace-pre-wrap font-mono text-text bg-bg-deep/60 p-3 rounded-md max-h-[420px] overflow-auto">
         {v?.body ?? "(none)"}
       </pre>
     </div>
@@ -344,7 +344,7 @@ function SimpleDiff({ prev, curr }: { prev: string; curr: string }) {
     }
   }
   return (
-    <div className="border border-border-soft rounded-md bg-bg-deep p-3 max-h-[400px] overflow-auto" data-testid="version-diff">
+    <div className="border border-border-soft rounded-md bg-bg-deep/60 p-3 max-h-[400px] overflow-auto" data-testid="version-diff">
       <div className="text-xs font-mono uppercase text-text-mute mb-2">Diff</div>
       <pre className="text-[11px] font-mono leading-relaxed">
         {lines.map((l, i) => (
@@ -418,7 +418,7 @@ function SendBar({
         {isGreen ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
         Partner Authority Lock — Critic readiness {readiness?.toUpperCase() ?? "PENDING"}
       </div>
-      <div className="w-full space-y-2 bg-bg-deep border border-border-soft rounded-md p-3">
+      <div className="w-full space-y-2 bg-bg-deep/60 border border-border-soft rounded-md p-3">
         <textarea
           value={rationale}
           onChange={(e) => setRationale(e.target.value)}

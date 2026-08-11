@@ -60,7 +60,7 @@ export default function WinLossLibrary() {
         <div className="flex gap-2 text-sm font-mono">
           <Link
             href={intakeHref}
-            className="px-3 py-1 rounded bg-bg-elevate text-text-mute hover:text-text"
+            className="px-3 py-1 rounded bg-bg-elevate/50 text-text-mute hover:text-text"
           >
             ← Debriefs intake
           </Link>
@@ -188,7 +188,7 @@ function ThemesView({
                 <div className="mt-4 pt-4 border-t border-border-soft space-y-3 text-sm">
                   {t.description && <p className="text-text-mute">{t.description}</p>}
                   {t.positioningLine && (
-                    <div className="bg-bg-elevate rounded p-3">
+                    <div className="bg-bg-elevate/50 rounded p-3">
                       <div className="text-xs font-mono uppercase text-gold mb-1">
                         Positioning line (Composer-ready)
                       </div>

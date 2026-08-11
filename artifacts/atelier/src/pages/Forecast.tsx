@@ -101,7 +101,7 @@ export default function Forecast() {
           <SectionHead title={`Roll-up by ${by}`} />
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-bg-elevate text-text-mute font-mono text-xs uppercase">
+              <thead className="bg-bg-elevate/50 text-text-mute font-mono text-xs uppercase">
                 <tr>
                   <th className="text-left p-3">Bucket</th>
                   <th className="text-right p-3">Count</th>

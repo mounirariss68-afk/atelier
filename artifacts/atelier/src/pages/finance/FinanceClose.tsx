@@ -574,7 +574,7 @@ function CollectionsPanel(props: {
                     {expanded === d.id ? "hide draft" : "preview draft"}
                   </button>
                   {expanded === d.id && (
-                    <div className="mt-2 bg-bg-elevate rounded p-2 font-mono text-[10px] text-text-mute whitespace-pre-wrap">
+                    <div className="mt-2 bg-bg-elevate/50 rounded p-2 font-mono text-[10px] text-text-mute whitespace-pre-wrap">
                       <div className="text-text mb-1">{d.subject}</div>
                       {d.bodyText}
                     </div>
@@ -687,7 +687,7 @@ function PayrollPanel(props: {
                     {expanded === r.id ? "hide lines" : "show lines"}
                   </button>
                   {expanded === r.id && (
-                    <div className="mt-2 bg-bg-elevate rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5">
+                    <div className="mt-2 bg-bg-elevate/50 rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5">
                       {r.lines.map((l) => (
                         <div key={l.employeeId} className="flex justify-between gap-3">
                           <span className="truncate">{l.name}{l.title ? ` · ${l.title}` : ""}</span>
@@ -803,15 +803,15 @@ function VatPanel(props: {
       ) : (
         <div className="space-y-2">
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-bg-elevate rounded p-2">
+            <div className="bg-bg-elevate/50 rounded p-2">
               <div className="text-[10px] font-mono uppercase text-text-faint">Output (2300)</div>
               <div className="text-sm font-mono text-text" data-testid="vat-output">USD {ret.outputVat.toLocaleString()}</div>
             </div>
-            <div className="bg-bg-elevate rounded p-2">
+            <div className="bg-bg-elevate/50 rounded p-2">
               <div className="text-[10px] font-mono uppercase text-text-faint">Input (1400)</div>
               <div className="text-sm font-mono text-text" data-testid="vat-input">USD {ret.inputVat.toLocaleString()}</div>
             </div>
-            <div className="bg-bg-elevate rounded p-2">
+            <div className="bg-bg-elevate/50 rounded p-2">
               <div className="text-[10px] font-mono uppercase text-text-faint">{ret.netVat >= 0 ? "Net payable" : "Net receivable"}</div>
               <div className="text-sm font-mono text-gold" data-testid="vat-net">USD {Math.abs(ret.netVat).toLocaleString()}</div>
             </div>
@@ -843,7 +843,7 @@ function VatPanel(props: {
             </div>
           </div>
           {showLines && (
-            <div className="bg-bg-elevate rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5 max-h-48 overflow-auto" data-testid="vat-drilldown">
+            <div className="bg-bg-elevate/50 rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5 max-h-48 overflow-auto" data-testid="vat-drilldown">
               {ret.lines.length === 0 ? (
                 <div className="italic">No VAT-account journal lines in this period.</div>
               ) : (

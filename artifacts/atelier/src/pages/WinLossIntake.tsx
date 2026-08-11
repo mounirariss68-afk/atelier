@@ -141,7 +141,7 @@ export default function WinLossIntake() {
         <span className="px-3 py-1 rounded bg-gold text-bg">Intake</span>
         <Link
           href={referenceHref}
-          className="px-3 py-1 rounded bg-bg-elevate text-text-mute hover:text-text"
+          className="px-3 py-1 rounded bg-bg-elevate/50 text-text-mute hover:text-text"
         >
           Themes library →
         </Link>

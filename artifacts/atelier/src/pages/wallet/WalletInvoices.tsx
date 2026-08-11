@@ -116,7 +116,7 @@ export default function WalletInvoices() {
         ) : (
           <Card className="overflow-hidden">
             <table className="w-full text-sm" data-testid="invoice-list">
-              <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+              <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
                 <tr>
                   <th className="text-left px-3 py-2">Number</th>
                   <th className="text-left px-3 py-2">Bill to</th>

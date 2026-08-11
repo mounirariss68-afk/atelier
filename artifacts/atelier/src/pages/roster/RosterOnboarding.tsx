@@ -255,7 +255,7 @@ export default function RosterOnboarding(): React.ReactElement {
               expires in 72 hours; if the welcome email wasn't delivered, share it through a secure
               channel.
             </p>
-            <div className="bg-bg-deep border border-line rounded p-3 font-mono text-xs break-all select-all" data-testid="login-activation-link">
+            <div className="bg-bg-deep/60 border border-line rounded p-3 font-mono text-xs break-all select-all" data-testid="login-activation-link">
               {loginResult.activationUrl}
             </div>
             <div className="text-xs text-text-mute font-mono">

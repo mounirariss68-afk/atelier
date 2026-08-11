@@ -293,7 +293,7 @@ export default function CodexContract() {
                 {data.clauses.map((cl) => (
                   <div
                     key={cl.id}
-                    className="border border-border-soft rounded-md p-3 bg-bg-deep"
+                    className="border border-border-soft rounded-md p-3 bg-bg-deep/60"
                     data-testid={`contract-clause-${cl.id}`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -356,7 +356,7 @@ export default function CodexContract() {
                 {data.parties.map((p) => (
                   <li
                     key={p.id}
-                    className="border border-border-soft rounded-md p-2.5 bg-bg-deep"
+                    className="border border-border-soft rounded-md p-2.5 bg-bg-deep/60"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">

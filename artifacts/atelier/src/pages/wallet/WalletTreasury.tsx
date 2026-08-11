@@ -159,7 +159,7 @@ export default function WalletTreasury() {
             </Card>
             <Card className="overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+                <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
                   <tr><th className="text-left px-3 py-2">Week</th><th className="text-left px-3 py-2">Start</th><th className="text-right px-3 py-2">In</th><th className="text-right px-3 py-2">Out</th><th className="text-right px-3 py-2">Closing</th><th className="text-left px-3 py-2"></th></tr>
                 </thead>
                 <tbody>

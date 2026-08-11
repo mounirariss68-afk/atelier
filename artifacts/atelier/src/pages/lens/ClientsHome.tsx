@@ -137,7 +137,7 @@ function BarRow({ label, count, value, weighted, pct, testId }: BarRowProps) {
           ) : null}
         </span>
       </div>
-      <div className="h-2 bg-bg-deep rounded-sm overflow-hidden border border-border-soft">
+      <div className="h-2 bg-bg-deep/60 rounded-sm overflow-hidden border border-border-soft">
         <div
           className="h-full bg-gold/70 transition-all"
           style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
@@ -349,7 +349,7 @@ export default function ClientsHome() {
                     <div className="text-[11px] font-mono text-text-faint tabular-nums">
                       {q.count} {q.count === 1 ? "opp" : "opps"} · w {fmtUsd(q.weighted)}
                     </div>
-                    <div className="h-1.5 bg-bg-deep rounded-sm overflow-hidden border border-border-soft">
+                    <div className="h-1.5 bg-bg-deep/60 rounded-sm overflow-hidden border border-border-soft">
                       <div
                         className="h-full bg-gold/70"
                         style={{ width: `${Math.max(0, Math.min(100, (q.value / quarterMaxValue) * 100))}%` }}
@@ -383,7 +383,7 @@ export default function ClientsHome() {
                     {b.count} · {fmtUsd(b.value)}
                   </span>
                 </div>
-                <div className="h-2 bg-bg-deep rounded-sm overflow-hidden border border-border-soft">
+                <div className="h-2 bg-bg-deep/60 rounded-sm overflow-hidden border border-border-soft">
                   <div
                     className="h-full bg-gold/70"
                     style={{ width: `${Math.max(0, Math.min(100, (b.value / typeMaxValue) * 100))}%` }}

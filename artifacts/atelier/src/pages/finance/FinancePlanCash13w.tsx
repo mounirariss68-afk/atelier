@@ -196,7 +196,7 @@ export default function FinancePlanCash13w() {
             {/* Per-week table */}
             <Card className="overflow-hidden">
               <table className="w-full text-sm" data-testid="cash13w-table">
-                <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+                <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
                   <tr>
                     <th className="text-left px-3 py-2">Wk</th>
                     <th className="text-left px-3 py-2">Start</th>

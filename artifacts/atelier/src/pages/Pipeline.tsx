@@ -300,7 +300,7 @@ function ForecastPanel({ initialBy }: { initialBy: string }) {
           </div>
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-bg-deep text-text-mute font-mono text-xs uppercase tracking-wider border-b border-border">
+              <thead className="bg-bg-deep/60 text-text-mute font-mono text-xs uppercase tracking-wider border-b border-border">
                 <tr>
                   <th className="text-left p-3">Bucket</th>
                   <th className="text-right p-3">Count</th>
@@ -643,7 +643,7 @@ export default function Pipeline() {
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-bg-deep font-mono text-xs text-text-mute uppercase tracking-wider border-b border-border">
+                <thead className="bg-bg-deep/60 font-mono text-xs text-text-mute uppercase tracking-wider border-b border-border">
                   <tr>
                     <SortHead k="name" label="Opportunity" />
                     <SortHead k="accountName" label="Account" />

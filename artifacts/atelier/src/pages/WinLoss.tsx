@@ -231,7 +231,7 @@ export default function WinLoss() {
             ))}
           </ul>
           {debrief.whatWeWouldDoDifferently && (
-            <div className="mt-3 p-3 bg-bg-elevate rounded text-sm">
+            <div className="mt-3 p-3 bg-bg-elevate/50 rounded text-sm">
               <span className="font-mono text-xs uppercase text-gold">What we'd do differently</span>
               <p className="mt-1">{debrief.whatWeWouldDoDifferently}</p>
             </div>

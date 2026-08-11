@@ -284,7 +284,7 @@ function PromptsView() {
             {p.evalSetId && <span>evals: {p.evalSetId}</span>}
             {p.owner && <span>owner: {p.owner}</span>}
           </div>
-          <pre className="text-xs text-text-mute bg-bg-deep border border-border-soft rounded p-3 whitespace-pre-wrap line-clamp-6 font-mono">
+          <pre className="text-xs text-text-mute bg-bg-deep/60 border border-border-soft rounded p-3 whitespace-pre-wrap line-clamp-6 font-mono">
             {p.bodyPreview}
           </pre>
         </Card>
