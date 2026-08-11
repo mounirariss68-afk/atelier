@@ -51,6 +51,7 @@ const meetings = [
     isAllDay: false,
     location: null,
     joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+    attendees: [{ email: "colleague@cognirise.ai", name: "Colleague" }],
     matches: [],
   },
   {
@@ -61,7 +62,10 @@ const meetings = [
     isAllDay: false,
     location: "Room 4",
     joinUrl: null,
-    matches: [],
+    attendees: [{ email: "client@external.com", name: "Client" }],
+    matches: [
+      { contactId: "c1", contactName: "Client", accountId: "a1", accountName: "Acme" },
+    ],
   },
   {
     id: "mtg-3",
@@ -119,6 +123,9 @@ check("now line renders for today", dayHtml.includes("meetings-now-line"));
 check("timed meeting block A", dayHtml.includes("meeting-block-mtg-1"));
 check("timed meeting block B", dayHtml.includes("meeting-block-mtg-2"));
 check("overlap splits into 50% lanes", dayHtml.includes("width:50%"));
+// Task #960 — internal meetings render light pink, external light blue.
+check("internal meeting card is pink", dayHtml.includes("bg-pink-400/15"));
+check("external meeting card is blue", dayHtml.includes("bg-sky-400/15"));
 check("all-day strip renders", dayHtml.includes("meeting-allday-mtg-3"));
 check("all-day not in timeline", !dayHtml.includes("meeting-block-mtg-3"));
 check("home card renders", cardHtml.includes("home-my-meetings"));

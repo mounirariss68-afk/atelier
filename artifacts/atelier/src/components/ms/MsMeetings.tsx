@@ -564,6 +564,32 @@ function meetingKind(m: AtelierCalendarMeeting): MeetingKind {
   return k === "ooo" || k === "holiday" ? k : undefined;
 }
 
+// Task #960 — day-view color coding: internal meetings render light pink,
+// meetings involving external parties light blue. A meeting is internal when
+// it was booked in Atelier (`internal`), or when nothing points outside the
+// org: no CRM matches and no attendee/organizer email off the org's domain.
+// Sparse attendee data (common on Graph rows) defaults to internal.
+export function meetingAudience(
+  m: AtelierCalendarMeeting,
+  orgDomain: string | null,
+): "internal" | "external" {
+  if (m.internal) return "internal";
+  if (m.matches.length > 0) return "external";
+  if (orgDomain) {
+    const emails = [
+      ...(m.attendees ?? []).map((a) => a.email),
+      m.organizerEmail ?? "",
+    ].filter(Boolean);
+    if (emails.some((e) => !e.toLowerCase().endsWith(`@${orgDomain}`))) return "external";
+  }
+  return "internal";
+}
+
+/** Card background for day-view meeting cards (timed grid + all-day strip). */
+function audienceCardBg(audience: "internal" | "external"): string {
+  return audience === "internal" ? "bg-pink-400/15" : "bg-sky-400/15";
+}
+
 interface AwayPerson {
   personId: string;
   personName: string;
@@ -900,11 +926,13 @@ function DayTimeline({
   date,
   selectedId,
   onSelect,
+  orgDomain,
 }: {
   meetings: AtelierCalendarMeeting[];
   date: Date;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  orgDomain: string | null;
 }) {
   const isToday = sameDay(date, new Date());
   const blocks = React.useMemo(
@@ -946,7 +974,7 @@ function DayTimeline({
             className="absolute left-0 right-0 flex items-start"
             style={{ top: h * HOUR_H }}
           >
-            <span className="w-14 shrink-0 -translate-y-1.5 pr-2 text-right text-[10px] font-mono text-text-faint select-none">
+            <span className="w-9 shrink-0 -translate-y-1.5 pr-1.5 text-right text-[10px] font-mono text-text-faint select-none">
               {hourLabel(h)}
             </span>
             <div className="flex-1 border-t border-border-soft" />
@@ -955,7 +983,7 @@ function DayTimeline({
 
         {nowTop !== null && (
           <div
-            className="absolute left-14 right-1 z-10 pointer-events-none"
+            className="absolute left-9 right-1 z-10 pointer-events-none"
             style={{ top: nowTop }}
             data-testid="meetings-now-line"
           >
@@ -964,10 +992,9 @@ function DayTimeline({
         )}
 
         {/* Lane area: blocks use % geometry relative to this container. */}
-        <div className="absolute inset-y-0 left-14 right-1">
+        <div className="absolute inset-y-0 left-9 right-1">
           {blocks.map(({ m, top, height, col, cols }) => {
             const selected = selectedId === m.id;
-            const matched = m.matches.length > 0;
             return (
               <button
                 key={m.id}
@@ -986,7 +1013,7 @@ function DayTimeline({
                 <div
                   className={`h-full overflow-hidden rounded-lg border px-2 py-1 ${
                     selected ? "border-gold" : "border-border-soft"
-                  } ${matched ? "bg-gold/15" : "bg-bg-soft"} hover:border-gold/60 transition-colors`}
+                  } ${audienceCardBg(meetingAudience(m, orgDomain))} hover:border-gold/60 transition-colors`}
                 >
                   <div className="text-xs text-text font-medium truncate">
                     {m.subject || "(no subject)"}
@@ -1009,6 +1036,11 @@ function DayTimeline({
 /** Day view for the Home meetings card: navigator + all-day strip +
  * selected-meeting detail + positioned timeline. */
 export function MeetingsDayView() {
+  const { data: conn } = useAtelierGetMyMsConnection();
+  // Task #960 — org email domain for internal/external color coding.
+  const orgDomain = conn?.msEmail?.includes("@")
+    ? conn.msEmail.split("@")[1]!.toLowerCase()
+    : null;
   const [selectedDate, setSelectedDate] = React.useState(() => startOfDay(new Date()));
   const [selectedMeetingId, setSelectedMeetingId] = React.useState<string | null>(null);
   const dayWin = React.useMemo(() => dayWindowIso(selectedDate), [selectedDate]);
@@ -1068,9 +1100,9 @@ export function MeetingsDayView() {
                       } ${
                         meetingKind(m) === "ooo"
                           ? "bg-amber-500/10"
-                          : m.matches.length > 0
-                            ? "bg-gold/15"
-                            : "bg-bg-soft"
+                          : meetingKind(m) === "holiday"
+                            ? "bg-bg-soft"
+                            : audienceCardBg(meetingAudience(m, orgDomain))
                       }`}
                       data-testid={`meeting-allday-${m.id}`}
                     >
@@ -1111,6 +1143,7 @@ export function MeetingsDayView() {
             date={selectedDate}
             selectedId={selectedMeetingId}
             onSelect={setSelectedMeetingId}
+            orgDomain={orgDomain}
           />
         </>
       )}
@@ -1377,7 +1410,8 @@ export function MyMeetingsCard() {
           />
         </>
       )}
-      <Card className="p-5">
+      {/* Task #960 — the day view trades card padding for a wider agenda. */}
+      <Card className={view === "day" ? "p-3" : "p-5"}>
         {conn.configured && !conn.connected && (
           <div className="text-sm text-text-mute mb-3">
             <Link href="/me/profile" className="text-gold hover:underline">
