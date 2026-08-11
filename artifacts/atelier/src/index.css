@@ -646,7 +646,8 @@
 }
 /* Task #917 — a page-hero band nested inside a glass panel (Home greeting):
    no nested blur, near-opaque navy fill, no full-width divider border. */
-.glass-panel .page-hero {
+.glass-panel .page-hero,
+.page-panel .page-hero {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -692,6 +693,15 @@
   /* Some pages nest a container inside PageHero's own container; the
      nested one must not double the side inset. */
   .container-atelier .container-atelier { padding-inline: 0; }
+  /* Task #927 — inside the shared page panel (Shell wraps every routed
+     page in `.page-panel.glass-panel`), page-level containers take the
+     panel's content inset (Home's p-6 / sm:p-8 rhythm) instead of the
+     page gutter — the panel wrapper already carries that. A container
+     nested inside another (e.g. inside PageHero's own container) still
+     collapses to zero so the inset never doubles. */
+  .page-panel .container-atelier { padding-inline: 1.5rem; }
+  @media (min-width: 640px) { .page-panel .container-atelier { padding-inline: 2rem; } }
+  .page-panel .container-atelier .container-atelier { padding-inline: 0; }
   .text-text { color: var(--text); }
   .text-mute { color: var(--text-mute); }
   .text-faint { color: var(--text-faint); }

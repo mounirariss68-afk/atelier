@@ -614,18 +614,13 @@ export default function Home() {
     <div className="animate-in fade-in duration-500">
       {/* Task #899 — the inline "Ask Atelier" input was removed; the
           assistant now lives permanently in the left chat panel. */}
-      {/* Task #913 — the whole main section sits in one rounded glass
-          panel so it reads as a single cohesive surface. */}
-      <div className="container-atelier py-6">
-        {/* Task #918 — the panel's padding moved OFF the panel and onto the
-            content grid below, so the greeting band bleeds flush to the
-            panel's top and side edges (top corners follow the panel radius). */}
-        <div className="glass-panel rounded-2xl overflow-hidden">
-
-        {/* Task #917 — the greeting hero moved INSIDE the main panel as a
-            navy band spanning the full panel width. */}
+      {/* Task #927 — the rounded glass panel moved into the shared Shell
+          layout (every page gets it); Home only renders its hero band and
+          content grid directly. */}
+        {/* Task #917 — the greeting hero renders INSIDE the shared panel as
+            a navy band spanning the full panel width. */}
         <div
-          className="page-hero rounded-t-2xl px-6 sm:px-8"
+          className="page-hero px-6 sm:px-8"
           data-testid="home-greeting-band"
         >
           <SectionHead
@@ -783,8 +778,6 @@ export default function Home() {
 
         </div>
         </div>
-        </div>
-      </div>
     </div>
   );
 }

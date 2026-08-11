@@ -1049,7 +1049,38 @@ export function Shell({ children }: { children: React.ReactNode }) {
             }}
           >
             <TopNav />
-            <main className="flex-1 w-full pb-20">{children}</main>
+            {/* Task #927 — every routed page renders inside one shared
+                rounded glass panel (the treatment Home pioneered). Page
+                heroes render inside it (no-nested-blur styling comes from
+                `.glass-panel .page-hero`); page-level `.container-atelier`
+                wrappers pick up the panel content inset via `.page-panel`
+                CSS. /cli renders null (it only hydrates the rail), so it
+                skips the panel to avoid an empty glass box. */}
+            <main className="flex-1 w-full pb-20">
+              {location === "/cli" || location.startsWith("/cli/") ? (
+                children
+              ) : (
+                <div className="container-atelier py-6">
+                  {/* The frosted glass surface lives on an absolutely-
+                      positioned SIBLING layer, not on the content wrapper:
+                      backdrop-filter establishes a containing block, which
+                      would make page-local `fixed inset-0` dialogs/drawers
+                      size to (and be clipped by) the panel instead of the
+                      viewport. Plain overflow-hidden on the filter-free
+                      content wrapper still rounds the hero's top corners
+                      but does NOT clip fixed-position descendants. */}
+                  <div className="relative">
+                    <div
+                      aria-hidden
+                      className="glass-panel rounded-2xl absolute inset-0 pointer-events-none"
+                    />
+                    <div className="page-panel relative rounded-2xl overflow-hidden">
+                      {children}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
           </div>
         </div>
       </RailContext.Provider>
