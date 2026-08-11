@@ -131,7 +131,7 @@
   .bg-bg-deep\/10, .bg-bg-deep\/20, .bg-bg-deep\/40, .bg-bg-deep\/60, .bg-bg-deep\/75 { background-color: var(--bg-deep); }
   .bg-bg\/50, .bg-bg\/75, .bg-bg\/90 { background-color: var(--bg); }
   .bg-bg-elevate\/20, .bg-bg-elevate\/30, .bg-bg-elevate\/40, .bg-bg-elevate\/50, .bg-bg-elevate\/60, .bg-bg-elevate\/70 { background-color: var(--bg-elevate); }
-  .rail-logo-glass { background-color: #141C42; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  /* .rail-logo-glass is now solid navy by default (Task #936) — no override needed. */
   [data-theme="light"] .cli-composer-pill { background-color: var(--bg-deep); }
   .page-hero {
     background: var(--bg);
@@ -150,7 +150,7 @@
   .bg-bg-deep\/10, .bg-bg-deep\/20, .bg-bg-deep\/40, .bg-bg-deep\/60, .bg-bg-deep\/75 { background-color: var(--bg-deep); }
   .bg-bg\/50, .bg-bg\/75, .bg-bg\/90 { background-color: var(--bg); }
   .bg-bg-elevate\/20, .bg-bg-elevate\/30, .bg-bg-elevate\/40, .bg-bg-elevate\/50, .bg-bg-elevate\/60, .bg-bg-elevate\/70 { background-color: var(--bg-elevate); }
-  .rail-logo-glass { background-color: #141C42; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  /* .rail-logo-glass is now solid navy by default (Task #936) — no override needed. */
   [data-theme="light"] .cli-composer-pill { background-color: var(--bg-deep); }
   .page-hero {
     background: var(--bg);
@@ -632,17 +632,10 @@
      placeholder text legible, so the fill can stay translucent. */
   background-color: color-mix(in srgb, var(--bg-deep) 72%, transparent);
 }
-/* Task #924 — rail identity box: navy-tinted glass in both themes so the
-   backdrop artwork reads through while the light wordmark stays legible. */
+/* Task #936 — rail identity box: SOLID navy in both themes (user request);
+   no glass tint or blur, matching the no-blur/reduced-transparency fallbacks. */
 .rail-logo-glass {
-  background-color: color-mix(in srgb, #141C42 55%, transparent);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  backdrop-filter: blur(12px) saturate(1.2);
-}
-/* Light theme: the artwork behind is pale, so the navy tint must carry more
-   weight or the light wordmark washes out. Still translucent. */
-[data-theme="light"] .rail-logo-glass {
-  background-color: color-mix(in srgb, #141C42 85%, transparent);
+  background-color: #141C42;
 }
 /* Task #917 — a page-hero band nested inside a glass panel (Home greeting):
    no nested blur, near-opaque navy fill, no full-width divider border. */

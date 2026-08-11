@@ -672,9 +672,8 @@ export function RightRail() {
           className="flex items-center gap-3 rounded-xl border border-white/10 rail-logo-glass px-3 py-2.5 shrink-0 h-14"
           data-testid="rail-logo-box"
         >
-          {/* Task #914/#924 — navy-tinted GLASS brand box (both themes): the
-              backdrop artwork shows through while the navy tint keeps the
-              light-wordmark Cognirise lockup legible. */}
+          {/* Task #936 — solid navy brand box (both themes) so the light
+              Cognirise lockup sits on an opaque card. */}
           <Logo variant="lockup" size="sm" className="shrink-0" />
         </div>
       )}
