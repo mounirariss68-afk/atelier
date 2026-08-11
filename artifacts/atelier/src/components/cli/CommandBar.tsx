@@ -966,7 +966,7 @@ function Header({
   hideClose?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-2 border-b border-card-border bg-bg-elevate/50">
+    <div className="flex items-center gap-3 px-3 py-2 border-b border-card-border bg-bg-elevate/30">
       <Sparkles className="w-4 h-4 text-gold shrink-0" aria-hidden />
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold leading-tight">The Atelier</div>
@@ -1066,7 +1066,7 @@ function Composer({
   return (
     <div
       className={cn(
-        "border-t border-card-border bg-bg-elevate/50 p-3 shrink-0 relative",
+        "border-t border-card-border bg-bg-elevate/30 p-3 shrink-0 relative",
         dragOver && "ring-2 ring-gold ring-inset",
       )}
       onDragOver={(e) => {
@@ -1154,7 +1154,7 @@ function Composer({
         <button
           type="button"
           onClick={onAttach}
-          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-bg-deep text-text-mute hover:text-gold hover:bg-bg-elevate-2 transition-colors"
+          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-bg-deep/60 text-text-mute hover:text-gold hover:bg-bg-elevate-2 transition-colors"
           title={s("attach", locale)}
           aria-label={s("attach", locale)}
           data-testid="cli-attach-button"
@@ -1163,7 +1163,7 @@ function Composer({
         </button>
         <div
           className={cn(
-            "flex-1 min-w-0 flex items-end gap-1.5 rounded-[22px] border bg-bg-deep",
+            "cli-composer-pill flex-1 min-w-0 flex items-end gap-1.5 rounded-[22px] border bg-bg-deep/60",
             "ps-4 pe-1.5 py-1.5 transition-colors",
             "focus-within:ring-1",
             overLimit

@@ -645,9 +645,10 @@ export function RightRail() {
         // Task #897/#899 — full-height LEFT chat column: a logo card on
         // top and the chat panel card filling the rest, both rounded
         // boxes on the soft frosted background.
-        // Task #915 — lighter fill + softer blur so the branded backdrop
-        // image visibly extends behind the chat column.
-        "fixed left-0 top-0 bottom-0 z-30 bg-bg-deep/20 backdrop-blur-lg flex flex-col",
+        // Task #915/#920 — barely-there fill + light blur so the branded
+        // backdrop artwork stays recognizable behind the chat column
+        // (heavier blur flattened it into a solid navy slab).
+        "fixed left-0 top-0 bottom-0 z-30 bg-bg-deep/10 backdrop-blur-sm flex flex-col",
         collapsed
           ? "transition-[width] duration-300 ease-[--ease] w-12 border-r border-card-border"
           : "gap-2 p-3 pr-2",
