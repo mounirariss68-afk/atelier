@@ -253,6 +253,11 @@
     content: "";
     position: fixed;
     inset: 0;
+    /* Dark mode (Task #904): the branded navy/purple network image sits at
+       the bottom of the stack, covering the viewport (no tiling), with a
+       subtle navy scrim layered over it so text and glass stay readable.
+       The final linear-gradient is retained UNDER the image as the color
+       fallback while it loads (or if it fails). */
     background-image:
       repeating-linear-gradient(
         to right,
@@ -261,13 +266,15 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
-      radial-gradient(120vmax 80vmax at 82% -12%,
-        color-mix(in srgb, var(--gold) 14%, transparent), transparent 55%),
-      radial-gradient(100vmax 70vmax at -8% 108%,
-        color-mix(in srgb, var(--gold-deep) 16%, transparent), transparent 52%),
-      radial-gradient(80vmax 60vmax at 50% 120%,
-        color-mix(in srgb, var(--gold-soft) 7%, transparent), transparent 60%),
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--bg-deep) 72%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 55%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%),
+      url("/dark-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 45%, var(--bg-elevate) 130%);
+    background-size: auto, auto, cover, auto;
+    background-position: center, center, center, center;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
     pointer-events: none;
     z-index: 0;
   }
@@ -285,6 +292,11 @@
       radial-gradient(100vmax 70vmax at -8% 108%,
         color-mix(in srgb, var(--gold-deep) 9%, transparent), transparent 52%),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
+    /* Light mode has no image layer — reset the per-layer sizing the dark
+       stack needs so light mode is pixel-identical to before Task #904. */
+    background-size: auto;
+    background-position: 0% 0%;
+    background-repeat: repeat;
   }
   body::after {
     content: "";
