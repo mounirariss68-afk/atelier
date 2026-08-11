@@ -688,7 +688,11 @@ export function RightRail() {
         // Task #915/#920 — barely-there fill + light blur so the branded
         // backdrop artwork stays recognizable behind the chat column
         // (heavier blur flattened it into a solid navy slab).
-        "fixed left-0 top-0 bottom-0 z-30 bg-bg-deep/10 backdrop-blur-sm flex flex-col",
+        // Task #977 — container fill/blur dropped entirely: the chat panel
+        // card below now carries the same .glass-panel treatment as the
+        // main content panel, so the rail's translucency tracks the same
+        // --glass-panel-alpha knob instead of an extra darker navy wash.
+        "fixed left-0 top-0 bottom-0 z-30 flex flex-col",
         collapsed
           ? "transition-[width] duration-300 ease-[--ease] w-12 border-r border-card-border"
           : "gap-2 p-3 pr-2",
@@ -738,8 +742,11 @@ export function RightRail() {
       <div
         className={cn(
           "flex-1 min-h-0 flex flex-col",
-          !collapsed &&
-            "rounded-xl border border-card-border bg-white/5 overflow-hidden",
+          // Task #977 — same frosted treatment as the main content panel
+          // (glass-panel = knob-driven alpha + blur/saturate + border),
+          // replacing the flat bg-white/5 card so both sides show the
+          // backdrop artwork equally.
+          !collapsed && "rounded-xl glass-panel overflow-hidden",
         )}
         data-testid="chat-panel-card"
       >
