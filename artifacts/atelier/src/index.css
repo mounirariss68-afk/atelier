@@ -272,33 +272,18 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
-      /* Task #928: the artwork is darkest at its left edge, so the region
-         behind the left-anchored chat rail read as flat navy even through
-         the glass. Two soft brand glows (purple high, magenta low) anchored
-         at the left edge give the rail a perceptible nebula. They sit ABOVE
-         the scrim: they are smooth low-alpha color washes, not busy texture,
-         so text contrast in the rail is unaffected. */
-      radial-gradient(60vh 70vh at 0% 20%,
-        color-mix(in srgb, var(--gold-deep) 34%, transparent) 0%,
-        color-mix(in srgb, var(--gold-deep) 14%, transparent) 45%,
-        transparent 72%),
-      radial-gradient(54vh 64vh at 0% 82%,
-        color-mix(in srgb, var(--gold) 26%, transparent) 0%,
-        color-mix(in srgb, var(--gold) 11%, transparent) 45%,
-        transparent 70%),
+      /* Task #954: the artwork itself now carries wave/network detail on its
+         left side, so the old left-edge compensation glows (Task #928) are
+         gone — they were reading as "just a set of gradients". */
       linear-gradient(160deg,
         color-mix(in srgb, var(--bg-deep) 72%, transparent) 0%,
         color-mix(in srgb, var(--bg) 55%, transparent) 55%,
         color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%),
       url("/dark-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 45%, var(--bg-elevate) 130%);
-    background-size: auto, auto, auto, auto, cover, auto;
-    /* Task #953: the artwork is an asymmetric cosmic-wave flow with all the
-       energy on its LEFT third — anchor it left so the flow reaches the left
-       screen edge and the calm navy falls on the right (any cover-crop lands
-       on the right). */
-    background-position: center, left center, left center, center, left center, center;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-size: auto, auto, cover, auto;
+    background-position: center, center, center, center;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
     pointer-events: none;
     z-index: 0;
   }
@@ -311,24 +296,14 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
-      /* Task #929: light-mode companion of the dark left-edge glows (Task
-         #928) so the chat rail keeps the same branded presence. Much fainter
-         than dark mode — smooth low-alpha magenta/purple washes over the
-         pale scrim, tuned so rail text stays comfortably AA. */
       /* Task #942: a faint navy dot lattice tiled across the whole light
          backdrop so the frosted panels always have fine texture to blur,
          even over the near-white regions of the artwork. */
+      /* Task #954: the light artwork now has left-side wave detail baked in,
+         so the light-mode left-edge compensation glows (Task #929) are gone. */
       radial-gradient(circle at 1px 1px,
         rgba(10, 18, 48, 0.055) 1px,
         transparent 1.5px),
-      radial-gradient(60vh 70vh at 0% 20%,
-        color-mix(in srgb, var(--gold-deep) 14%, transparent) 0%,
-        color-mix(in srgb, var(--gold-deep) 6%, transparent) 45%,
-        transparent 72%),
-      radial-gradient(54vh 64vh at 0% 82%,
-        color-mix(in srgb, var(--gold) 11%, transparent) 0%,
-        color-mix(in srgb, var(--gold) 4%, transparent) 45%,
-        transparent 70%),
       /* Task #942: extra soft brand glows across the top-right and centre
          so the pale upper-left of the artwork is no longer a blank wash.
          Smooth low-alpha color, not busy texture — text stays AA. */
@@ -355,12 +330,12 @@
         color-mix(in srgb, var(--bg-deep) 30%, transparent) 100%),
       url("/light-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
-    background-size: auto, 26px 26px, auto, auto, auto, auto, auto, auto, cover, auto;
+    background-size: auto, 26px 26px, auto, auto, auto, auto, cover, auto;
     /* Task #932: the artwork layer anchors LEFT so its content reaches the
        left screen edge (cover keeps full coverage — any crop falls on the
        right). Other layers unchanged. */
-    background-position: center, center, left center, left center, center, center, center, center, left center, center;
-    background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-position: center, center, center, center, center, center, left center, center;
+    background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   }
   body::after {
     content: "";
@@ -399,12 +374,11 @@
        calm. Transform/opacity only — GPU-composited. */
     animation: bb-breathe 10s ease-in-out infinite alternate;
   }
-  /* Task #953: blobs staggered along the artwork's lower-left → upper-right
-     diagonal so the breathing follows the asymmetric cosmic-wave flow instead
-     of sitting in a balanced triangle. */
+  /* Task #954: blobs restored to their pre-interim spread now the artwork
+     carries its own left-side detail. */
   #bg-breathe .bb-1 {
-    width: 96vh; height: 96vh;
-    left: -26vh; bottom: -30vh;
+    width: 90vh; height: 90vh;
+    left: -18vh; top: -22vh;
     background: radial-gradient(circle,
       color-mix(in srgb, var(--gold-deep) 22%, transparent) 0%,
       color-mix(in srgb, var(--gold-deep) 8%, transparent) 45%,
@@ -412,8 +386,8 @@
     animation-duration: 9s;
   }
   #bg-breathe .bb-2 {
-    width: 80vh; height: 80vh;
-    left: 26vw; top: 18vh;
+    width: 100vh; height: 100vh;
+    right: -30vh; top: 4vh;
     background: radial-gradient(circle,
       color-mix(in srgb, #5B7CFF 18%, transparent) 0%,
       color-mix(in srgb, #5B7CFF 7%, transparent) 45%,
@@ -422,8 +396,8 @@
     animation-delay: -5s;
   }
   #bg-breathe .bb-3 {
-    width: 64vh; height: 64vh;
-    right: -14vh; top: -18vh;
+    width: 84vh; height: 84vh;
+    left: 24vw; bottom: -34vh;
     background: radial-gradient(circle,
       color-mix(in srgb, var(--gold) 16%, transparent) 0%,
       color-mix(in srgb, var(--gold) 6%, transparent) 45%,
