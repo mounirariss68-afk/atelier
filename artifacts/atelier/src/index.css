@@ -745,8 +745,9 @@
    Keep the translucency in dark mode; go near-opaque in light mode. */
 [data-theme="light"] .cli-composer-pill {
   /* Task #924 — glass, not near-opaque: the backdrop-blur on the pill keeps
-     placeholder text legible, so the fill can stay translucent. */
-  background-color: color-mix(in srgb, var(--bg-deep) 72%, transparent);
+     placeholder text legible, so the fill can stay translucent.
+     Task #965 — eased further so the artwork reads through the composer. */
+  background-color: color-mix(in srgb, var(--bg-deep) 60%, transparent);
 }
 /* Task #936 — rail identity box: SOLID navy in both themes (user request);
    no glass tint or blur, matching the no-blur/reduced-transparency fallbacks. */
