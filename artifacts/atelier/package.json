@@ -19,6 +19,7 @@
     "test:esign-dialog": "tsx --tsconfig tsconfig.test.json src/components/esign/SendForSignatureDialog.locked-account.test.tsx",
     "test:agents-dashboard": "tsx --tsconfig tsconfig.test.json src/pages/agents/AgentsLensHome.render.test.tsx",
     "test:slash-composer": "tsx src/components/cli/slashComposer.test.ts",
+    "test:me-lens-gating": "tsx --tsconfig tsconfig.json src/lib/meLensGating.test.ts",
     "generate:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts",
     "test:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts --check"
   },

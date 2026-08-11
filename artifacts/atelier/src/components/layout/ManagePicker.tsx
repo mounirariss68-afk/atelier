@@ -17,7 +17,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { type LensId, getLens, visibleLensesForRole } from "@/lib/lens";
+import {
+  type LensId,
+  getLens,
+  meSectionVisibleForRole,
+  visibleLensesForRole,
+} from "@/lib/lens";
 import { useActiveLens } from "@/hooks/useActiveLens";
 import { cn } from "@/lib/utils";
 
@@ -37,20 +42,12 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
   const [location] = useLocation();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const lens = getLens(active);
-  // Task #50/#242 — contractors have no Performance section on the Me
-  // lens (reviews & goals are employee-only; the server 403s them too),
-  // so the top-bar menu must not offer it either.
-  // Task #386 — on the Me lens, "Delegates" is partner-tier only and
-  // "Assist" (the EA workspace) shows only for the self-only personas.
-  const isPartnerTier = role === "partner" || role === "founding_partner";
+  // Task #943 — the Me-lens role gating (Performance/Delegates/Assist,
+  // Tasks #50/#242/#386) lives in ONE shared definition in lens.ts that
+  // the screen-catalog generator also imports.
   const sections =
     lens.id === "me"
-      ? lens.sections.filter((s) => {
-          if (role === "contractor" && s.id === "performance") return false;
-          if (s.id === "delegates") return isPartnerTier;
-          if (s.id === "assist") return role === "employee" || role === "contractor";
-          return true;
-        })
+      ? lens.sections.filter((s) => meSectionVisibleForRole(s.id, role))
       : lens.sections;
   const more = lens.more ?? [];
   // A section is active on an exact match, or a prefix match when no

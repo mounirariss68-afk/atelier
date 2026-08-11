@@ -1010,8 +1010,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "acting"
     ],
     "roles": [
-      "employee",
-      "contractor"
+      "contractor",
+      "employee"
     ],
     "parameterized": false
   },

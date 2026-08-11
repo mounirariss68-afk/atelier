@@ -14,7 +14,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { LENSES, visibleLensesForRole, type LensDef } from "../src/lib/lens";
+import {
+  LENSES,
+  meSectionVisibleForRole,
+  visibleLensesForRole,
+  type LensDef,
+} from "../src/lib/lens";
 
 // Mirror of ATELIER_PERSONA_ROLES (api-server routes/atelier/personaRoles.ts)
 // minus alliance_partner, whose world is only the partner portal + chat.
@@ -107,14 +112,13 @@ function build(): Entry[] {
     const sections = [...lens.sections, ...(lens.more ?? [])];
     for (const s of sections) {
       const id = `${lens.id}.${s.id}`;
-      // Role-gated Me tabs (mirrors ManagePicker's me-lens filter,
-      // Tasks #50/#242/#386): contractors have NO Performance section
-      // (server 403s reviews/goals too); Delegates = partner-tier;
-      // Assist = self-only EA workspace.
-      let sectionRoles = roles;
-      if (id === "me.performance") sectionRoles = roles.filter((r) => r !== "contractor");
-      if (id === "me.delegates") sectionRoles = ["founding_partner", "partner"];
-      if (id === "me.assist") sectionRoles = ["employee", "contractor"];
+      // Role-gated Me tabs (Task #943): the gating comes from the SAME
+      // shared definition the top-bar menu uses (lens.ts
+      // meSectionVisibleForRole), so the two cannot drift.
+      const sectionRoles =
+        lens.id === "me"
+          ? roles.filter((r) => meSectionVisibleForRole(s.id, r))
+          : roles;
       entries.push({
         id,
         title: s.label,

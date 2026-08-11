@@ -274,6 +274,40 @@ export const LENSES: readonly LensDef[] = [
 ] as const;
 
 /**
+ * Task #943 — single shared definition of the role-gated Me-lens tabs.
+ * Both the top-bar menu (ManagePicker's LensSectionTabs) and the
+ * screen-catalog generator import THIS function, so the role rules can
+ * never drift between the two.
+ *
+ * Rules (Tasks #50/#242/#386):
+ *  • performance — hidden for contractors (server 403s reviews/goals too)
+ *  • delegates   — partner-tier only (partner / founding_partner)
+ *  • assist      — the EA workspace, self-only personas (employee / contractor)
+ *  • everything else — visible to every role that can see the Me lens
+ */
+export function meSectionVisibleForRole(
+  sectionId: string,
+  role: string | null | undefined,
+): boolean {
+  if (sectionId === "performance") return role !== "contractor";
+  if (sectionId === "delegates") {
+    return role === "partner" || role === "founding_partner";
+  }
+  if (sectionId === "assist") {
+    return role === "employee" || role === "contractor";
+  }
+  return true;
+}
+
+/** The Me lens's section tabs filtered by the shared role gating above. */
+export function visibleMeSectionsForRole(
+  role: string | null | undefined,
+): readonly LensSection[] {
+  const me = LENSES.find((l) => l.id === "me")!;
+  return me.sections.filter((s) => meSectionVisibleForRole(s.id, role));
+}
+
+/**
  * Task #50 — personas whose world is ONLY the Me lens. They cannot see the
  * five org-wide lenses in the picker (the server enforces the same boundary
  * on /api/atelier — see the non-employee middleware in routes/atelier).
