@@ -126,6 +126,10 @@ check("overlap splits into 50% lanes", dayHtml.includes("width:50%"));
 // Task #960 — internal meetings render light pink, external light blue.
 check("internal meeting card is pink", dayHtml.includes("bg-pink-400/15"));
 check("external meeting card is blue", dayHtml.includes("bg-sky-400/15"));
+// Task #962 — compact color legend renders in Day view only.
+check("day view shows color legend", dayHtml.includes("meetings-day-legend"));
+check("legend labels internal + external", dayHtml.includes(">Internal<") || (dayHtml.includes("Internal") && dayHtml.includes("External")));
+check("legend absent from list view card", !cardHtml.includes("meetings-day-legend"));
 check("all-day strip renders", dayHtml.includes("meeting-allday-mtg-3"));
 check("all-day not in timeline", !dayHtml.includes("meeting-block-mtg-3"));
 check("home card renders", cardHtml.includes("home-my-meetings"));

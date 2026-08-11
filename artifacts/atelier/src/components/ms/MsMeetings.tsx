@@ -869,6 +869,29 @@ function layoutDayBlocks(
   }));
 }
 
+/**
+ * Task #962 — tiny legend explaining the Day-view color coding (Task #960).
+ * Rendered on its own row under the day navigator so it never crowds the
+ * prev/next controls on narrow widths.
+ */
+function DayColorLegend() {
+  return (
+    <div
+      className="flex items-center justify-center gap-4 text-[10px] font-mono uppercase tracking-wider text-text-faint"
+      data-testid="meetings-day-legend"
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="w-2 h-2 rounded-full bg-pink-400/60 border border-pink-400/50" />
+        Internal
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="w-2 h-2 rounded-full bg-sky-400/60 border border-sky-400/50" />
+        External
+      </span>
+    </div>
+  );
+}
+
 function DayNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => void }) {
   const isToday = sameDay(date, new Date());
   const shift = (days: number) => {
@@ -1065,6 +1088,7 @@ export function MeetingsDayView() {
           setSelectedMeetingId(null);
         }}
       />
+      <DayColorLegend />
       <AwayTodayStrip date={isoDateOnly(selectedDate)} />
       <HolidayBanner
         startDate={isoDateOnly(selectedDate)}
