@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
@@ -59,6 +59,33 @@ function ThemeToggle() {
       className="text-text-mute hover:text-text transition-colors"
     >
       {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+  );
+}
+
+/**
+ * Task #944 — Appearance: breathing-background toggle. Sits beside the
+ * theme switcher and statics the backdrop glows per-device (persisted in
+ * localStorage like the theme). The OS reduced-motion preference still
+ * wins regardless of this toggle.
+ */
+function MotionToggle() {
+  const { motion, toggleMotion } = useTheme();
+  const isOn = motion === "on";
+  const label = isOn
+    ? "Turn off background animation"
+    : "Turn on background animation";
+  return (
+    <button
+      type="button"
+      onClick={toggleMotion}
+      aria-label={label}
+      title={label}
+      aria-pressed={!isOn}
+      data-testid="motion-toggle"
+      className="text-text-mute hover:text-text transition-colors"
+    >
+      {isOn ? <CirclePause className="w-4 h-4" /> : <CirclePlay className="w-4 h-4" />}
     </button>
   );
 }
@@ -202,6 +229,7 @@ export function TopNav() {
             <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
           )}
           <ThemeToggle />
+          <MotionToggle />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
           </button>

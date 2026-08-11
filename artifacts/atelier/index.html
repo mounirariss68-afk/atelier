@@ -43,6 +43,16 @@
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
         }
+        // Task #944 — pre-paint motion preference. "off" disables the
+        // breathing backdrop via [data-motion="off"] CSS; OS
+        // prefers-reduced-motion still wins regardless of this value.
+        try {
+          if (localStorage.getItem('atelier-motion') === 'off') {
+            document.documentElement.setAttribute('data-motion', 'off');
+          }
+        } catch (e) {
+          /* default: motion on */
+        }
       })();
     </script>
   </head>

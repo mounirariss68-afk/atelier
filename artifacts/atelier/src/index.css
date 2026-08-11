@@ -439,6 +439,15 @@
       opacity: 0.75;
     }
   }
+  /* Task #944: in-app Appearance toggle — static backdrop per device,
+     persisted in localStorage (`atelier-motion`) and reflected as
+     `data-motion="off"` on <html> by a pre-paint script (index.html) and
+     the ThemeProvider. OS prefers-reduced-motion still wins regardless
+     (media query below disables the animation independently). */
+  [data-motion="off"] #bg-breathe .bb {
+    animation: none;
+    will-change: auto;
+  }
   /* Reduced motion: static backdrop, no breathing. */
   @media (prefers-reduced-motion: reduce) {
     #bg-breathe .bb {

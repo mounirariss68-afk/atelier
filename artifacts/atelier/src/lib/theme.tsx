@@ -14,16 +14,33 @@ export type Theme = "dark" | "light";
 
 const STORAGE_KEY = "atelier-theme";
 
+/**
+ * Task #944 — Appearance motion preference. "on" (default) keeps the
+ * breathing backdrop animation; "off" statics it via `data-motion="off"`
+ * on <html> (see index.css). Persisted per-device in localStorage under
+ * `atelier-motion`, pre-paint-applied by the inline script in index.html.
+ * The OS prefers-reduced-motion setting still wins regardless.
+ */
+export type Motion = "on" | "off";
+
+const MOTION_STORAGE_KEY = "atelier-motion";
+
 interface ThemeCtx {
   theme: Theme;
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
+  motion: Motion;
+  setMotion: (m: Motion) => void;
+  toggleMotion: () => void;
 }
 
 const Ctx = React.createContext<ThemeCtx>({
   theme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
+  motion: "on",
+  setMotion: () => {},
+  toggleMotion: () => {},
 });
 
 function readInitialTheme(): Theme {
@@ -45,8 +62,27 @@ function readInitialTheme(): Theme {
   return "dark";
 }
 
+function readInitialMotion(): Motion {
+  if (typeof document !== "undefined") {
+    if (document.documentElement.getAttribute("data-motion") === "off") {
+      return "off";
+    }
+  }
+  if (typeof window !== "undefined") {
+    try {
+      if (window.localStorage.getItem(MOTION_STORAGE_KEY) === "off") {
+        return "off";
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return "on";
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>(() => readInitialTheme());
+  const [motion, setMotionState] = React.useState<Motion>(() => readInitialMotion());
 
   const applyTheme = React.useCallback((t: Theme) => {
     if (typeof document !== "undefined") {
@@ -78,9 +114,46 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(theme === "dark" ? "light" : "dark");
   }, [theme, setTheme]);
 
+  const applyMotion = React.useCallback((m: Motion) => {
+    if (typeof document !== "undefined") {
+      if (m === "off") {
+        document.documentElement.setAttribute("data-motion", "off");
+      } else {
+        document.documentElement.removeAttribute("data-motion");
+      }
+    }
+  }, []);
+
+  // Keep the DOM in sync on mount even if the pre-paint script didn't run.
+  React.useEffect(() => {
+    applyMotion(motion);
+  }, [motion, applyMotion]);
+
+  const setMotion = React.useCallback(
+    (m: Motion) => {
+      setMotionState(m);
+      try {
+        // Only "off" is stored; default ("on") clears the key.
+        if (m === "off") {
+          window.localStorage.setItem(MOTION_STORAGE_KEY, "off");
+        } else {
+          window.localStorage.removeItem(MOTION_STORAGE_KEY);
+        }
+      } catch {
+        /* ignore */
+      }
+      applyMotion(m);
+    },
+    [applyMotion],
+  );
+
+  const toggleMotion = React.useCallback(() => {
+    setMotion(motion === "on" ? "off" : "on");
+  }, [motion, setMotion]);
+
   const value = React.useMemo(
-    () => ({ theme, setTheme, toggleTheme }),
-    [theme, setTheme, toggleTheme],
+    () => ({ theme, setTheme, toggleTheme, motion, setMotion, toggleMotion }),
+    [theme, setTheme, toggleTheme, motion, setMotion, toggleMotion],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
