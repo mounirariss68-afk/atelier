@@ -390,7 +390,10 @@
     display: block;
     border-radius: 50%;
     will-change: transform, opacity;
-    animation: bb-breathe 26s ease-in-out infinite alternate;
+    /* Task #948: cycles shortened (26–44s → 9–15s) and amplitude raised so
+       the breathing is clearly visible within a few seconds while staying
+       calm. Transform/opacity only — GPU-composited. */
+    animation: bb-breathe 10s ease-in-out infinite alternate;
   }
   #bg-breathe .bb-1 {
     width: 90vh; height: 90vh;
@@ -399,7 +402,7 @@
       color-mix(in srgb, var(--gold-deep) 22%, transparent) 0%,
       color-mix(in srgb, var(--gold-deep) 8%, transparent) 45%,
       transparent 70%);
-    animation-duration: 28s;
+    animation-duration: 9s;
   }
   #bg-breathe .bb-2 {
     width: 100vh; height: 100vh;
@@ -408,8 +411,8 @@
       color-mix(in srgb, #5B7CFF 18%, transparent) 0%,
       color-mix(in srgb, #5B7CFF 7%, transparent) 45%,
       transparent 70%);
-    animation-duration: 36s;
-    animation-delay: -12s;
+    animation-duration: 12s;
+    animation-delay: -5s;
   }
   #bg-breathe .bb-3 {
     width: 84vh; height: 84vh;
@@ -418,25 +421,28 @@
       color-mix(in srgb, var(--gold) 16%, transparent) 0%,
       color-mix(in srgb, var(--gold) 6%, transparent) 45%,
       transparent 70%);
-    animation-duration: 44s;
-    animation-delay: -20s;
+    animation-duration: 15s;
+    animation-delay: -8s;
   }
   /* Light mode: fainter glows so the pale backdrop stays calm and
      rail/panel text keeps AA contrast. (Set on the container, not .bb —
      the keyframes animate .bb opacity, overriding per-blob static rules.) */
-  [data-theme="light"] #bg-breathe { opacity: 0.55; }
+  /* Task #948: raised from 0.55 so the light-mode breathing is actually
+     perceptible; the glows are smooth low-alpha washes, so rail/card text
+     stays AA. */
+  [data-theme="light"] #bg-breathe { opacity: 0.9; }
   @keyframes bb-breathe {
     0% {
       transform: translate3d(0, 0, 0) scale(1);
-      opacity: 0.7;
+      opacity: 0.45;
     }
     50% {
-      transform: translate3d(2.5vw, -1.5vh, 0) scale(1.08);
+      transform: translate3d(3.5vw, -2.5vh, 0) scale(1.16);
       opacity: 1;
     }
     100% {
-      transform: translate3d(-1.5vw, 2vh, 0) scale(0.96);
-      opacity: 0.75;
+      transform: translate3d(-2.5vw, 3vh, 0) scale(0.92);
+      opacity: 0.5;
     }
   }
   /* Task #944: in-app Appearance toggle — static backdrop per device,
