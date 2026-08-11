@@ -176,8 +176,9 @@ export function TopNav() {
 
   return (
     // Task #899 — two stacked rounded card bars on the right column:
-    // a title bar (brand text · selectors · avatar) and a menu bar
-    // (Home + lens section tabs + Manage picker). Both sticky.
+    // a title bar (brand text · lens picker · selectors · avatar) and a
+    // menu bar (Home + lens section tabs). Both sticky. (Task #937 moved
+    // the lens picker up into the title bar.)
     <header className="atelier-topnav sticky top-0 z-40 w-full space-y-2 px-3 pt-3 pb-2 md:px-4 backdrop-blur-xl">
       <div
         className="flex h-14 items-center gap-4 rounded-xl border border-card-border bg-bg-elevate/60 px-4 shadow-lg shadow-black/10"
@@ -195,6 +196,11 @@ export function TopNav() {
         </Link>
 
         <div className="ml-auto flex items-center gap-4">
+          {/* Task #937 — lens picker relocated from the menu bar into the
+              title bar, just before the theme toggle. */}
+          {!alliancePartner && (
+            <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          )}
           <ThemeToggle />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
@@ -340,11 +346,6 @@ export function TopNav() {
         {!alliancePartner && (
           <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
         )}
-        <div className="ml-auto flex items-center shrink-0">
-          {!alliancePartner && (
-            <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
-          )}
-        </div>
       </nav>
       <ChangePasswordDialog open={changePwOpen} onOpenChange={setChangePwOpen} />
       <TwoFactorDialog open={twoFaOpen} onOpenChange={setTwoFaOpen} />
