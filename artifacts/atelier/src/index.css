@@ -69,7 +69,9 @@
      the blurred navy). Nested variant (inside glass panels, no blur)
      carries more fill so it doesn't wash out. */
   --glass-hero-alpha:        62%;
-  --glass-hero-nested-alpha: 84%;
+  /* Task #987 — eased from 84% so a hero nested in the page panel reads
+     as the same translucent glass as the panel body, not a darker slab. */
+  --glass-hero-nested-alpha: 40%;
   --card-border:    rgba(255, 255, 255, 0.14);
   --popover-border: rgba(255, 255, 255, 0.18);
   --container:    1240px;
@@ -128,7 +130,9 @@
   /* Task #982 — the hero is a navy "dark island" over the pale backdrop,
      so it needs more fill (plus blur, below) to keep light text AA. */
   --glass-hero-alpha:        82%;
-  --glass-hero-nested-alpha: 90%;
+  /* Task #987 — nested band now matches the standalone hero fill; the navy
+     island stays legible while the panel edge reads above the heading. */
+  --glass-hero-nested-alpha: 82%;
   --card-border:    rgba(10, 18, 48, 0.10);
   --popover-border: rgba(10, 18, 48, 0.12);
 }
@@ -923,6 +927,13 @@
   [data-theme="light"] .glass-panel {
     background-color: color-mix(in srgb, #FFFFFF var(--glass-panel-alpha), transparent);
     box-shadow: 0 8px 32px rgba(10, 18, 48, 0.10);
+  }
+  /* Task #987 — variant for the shell's page panel: the border moved to a
+     border-only FRONT overlay (content was painting over the back-layer
+     border above page headings), so the back glass layer goes borderless
+     to avoid a double-composited edge where content is transparent. */
+  .glass-panel--borderless {
+    border: 0;
   }
   .glass-frost {
     -webkit-backdrop-filter: blur(16px) saturate(1.25);

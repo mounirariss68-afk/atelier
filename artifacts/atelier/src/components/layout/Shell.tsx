@@ -1098,11 +1098,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <div className="relative">
                     <div
                       aria-hidden
-                      className="glass-panel rounded-2xl absolute inset-0 pointer-events-none"
+                      className="glass-panel glass-panel--borderless rounded-2xl absolute inset-0 pointer-events-none"
                     />
                     <div className="page-panel relative rounded-2xl overflow-hidden">
                       {children}
                     </div>
+                    {/* Task #987 — the panel border repeats on a FRONT
+                        overlay: page content (notably the near-opaque
+                        page-hero band) paints over the back glass layer,
+                        which was swallowing the panel's top border above
+                        headings. Border-only, so it never dims content. */}
+                    <div
+                      aria-hidden
+                      className="absolute inset-0 rounded-2xl pointer-events-none border border-card-border"
+                    />
                   </div>
                 </div>
               )}
