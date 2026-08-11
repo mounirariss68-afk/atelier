@@ -307,6 +307,18 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
+      /* Task #929: light-mode companion of the dark left-edge glows (Task
+         #928) so the chat rail keeps the same branded presence. Much fainter
+         than dark mode — smooth low-alpha magenta/purple washes over the
+         pale scrim, tuned so rail text stays comfortably AA. */
+      radial-gradient(60vh 70vh at 0% 20%,
+        color-mix(in srgb, var(--gold-deep) 10%, transparent) 0%,
+        color-mix(in srgb, var(--gold-deep) 4%, transparent) 45%,
+        transparent 72%),
+      radial-gradient(54vh 64vh at 0% 82%,
+        color-mix(in srgb, var(--gold) 8%, transparent) 0%,
+        color-mix(in srgb, var(--gold) 3%, transparent) 45%,
+        transparent 70%),
       /* Task #911: light-mode companion of the dark network image, under a
          pale scrim so text/cards stay readable. The final linear-gradient
          is retained UNDER the image as the color fallback while it loads. */
@@ -316,9 +328,9 @@
         color-mix(in srgb, var(--bg-deep) 38%, transparent) 100%),
       url("/light-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
-    background-size: auto, auto, cover, auto;
-    background-position: center, center, center, center;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-size: auto, auto, auto, auto, cover, auto;
+    background-position: center, left center, left center, center, center, center;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   }
   body::after {
     content: "";
