@@ -32,6 +32,7 @@ import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import { perplexityResearch } from "./perplexity.js";
 import { findPersonMatch, richerPersonName } from "./person-name.js";
+import { findContactDuplicates } from "../atelier-dedupe.js";
 import { resolveIndustryTaxonomy } from "./industry-taxonomy.js";
 import {
   buildAllianceCapabilityContext,
@@ -3785,17 +3786,39 @@ export function buildExecutiveMapperProposals(args: {
   }
   const normTitle = (t: string | null | undefined) =>
     (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  // Task #958 — belt-and-braces person matching: the structural matcher
+  // (findPersonMatch) first, then the shared contact-duplicate scorer as a
+  // fallback net for near-miss spellings it can't see ("Al-Falih" vs
+  // "Al-Faleh"). Only HIGH-confidence scores count — medium/low similarity
+  // must never silently merge two different humans.
+  const matchPerson = <T,>(
+    name: string,
+    entries: readonly T[],
+    getName: (e: T) => string,
+  ): T | undefined => {
+    const structural = findPersonMatch(name, entries, getName);
+    if (structural) return structural;
+    const scored = findContactDuplicates(
+      name,
+      entries.map((e, i) => ({ id: String(i), fullName: getName(e) })),
+      { limit: 1 },
+    );
+    if (scored[0] && scored[0].confidence === "high") {
+      return entries[Number(scored[0].id)];
+    }
+    return undefined;
+  };
   const candidates: PendingProfileUpdate[] = [];
   const proposedPeople: Array<{ fullName: string }> = [];
   for (const dm of output.decisionMakers ?? []) {
     if (!dm.fullName || !dm.fullName.trim()) continue;
     // One proposal per human per run, even when the roster somehow still
     // carries two spellings of the same person.
-    if (findPersonMatch(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
+    if (matchPerson(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
     // Fuzzy-human blocking against the existing queue: a pending proposal
     // for this person (under any spelling) blocks a second one outright; a
     // rejected one blocks re-proposal unless the title genuinely differs.
-    const prior = findPersonMatch(dm.fullName, priorContactProposals, (p) => p.fullName);
+    const prior = matchPerson(dm.fullName, priorContactProposals, (p) => p.fullName);
     if (
       prior &&
       (prior.status === "pending" ||
@@ -3807,7 +3830,7 @@ export function buildExecutiveMapperProposals(args: {
     }
     // Fuzzy match against CRM contacts so a spelling variant enriches the
     // existing record instead of proposing a duplicate person.
-    const existing = findPersonMatch(
+    const existing = matchPerson(
       dm.fullName,
       args.existingContacts,
       (c) => c.fullName,
@@ -3873,7 +3896,13 @@ export function buildExecutiveMapperProposals(args: {
       toValue,
       rationale: `Executive Mapper ${what}.`,
       status: "pending",
-      meta: { reportsToName: dm.reportsToName ?? null },
+      meta: {
+        reportsToName: dm.reportsToName ?? null,
+        // Task #958 — the review UI must present enrichments of a known
+        // contact as updates, never as new decision-maker suggestions.
+        updateKind: existing ? "enrichment" : "new_contact",
+        ...(existing ? { existingContactName: existing.fullName } : {}),
+      },
     });
     proposedPeople.push({ fullName: dm.fullName });
   }

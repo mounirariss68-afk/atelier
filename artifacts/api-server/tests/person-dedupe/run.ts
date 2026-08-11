@@ -477,6 +477,87 @@ check(
   );
 }
 
+// 10) Task #958 — name-order swaps, near-miss spelling fallback, and
+//     enrichment labeling.
+console.log("samePersonName — name-order swaps");
+check(
+  "order swap matches",
+  samePersonName("AlSaghir Hamad", "Hamad Al-Saghir"),
+);
+check(
+  "order swap with transliteration matches",
+  samePersonName("Al Jasser Mohammad", "Mohammed Al-Jasser"),
+);
+check(
+  "reordered but different token sets do NOT match",
+  !samePersonName("Nasser Mohammed", "Mohammed Al Jasser"),
+);
+check(
+  "swap never widens to initials",
+  !samePersonName("J. Mohammed", "Mohammed Al Jasser"),
+);
+
+{
+  // Within-run: an order-swapped second sighting collapses to one proposal.
+  const out = build([
+    dm({ fullName: "Hamad AlSaghir", title: "CFO" }),
+    dm({ fullName: "Al-Saghir Hamad", title: "Chief Financial Officer" }),
+  ]);
+  check("order-swapped within-run dupe suppressed", out.length === 1, String(out.length));
+}
+{
+  // Existing contact under an order-swapped spelling, nothing new -> dropped.
+  const out = build(
+    [dm({ fullName: "Al-Saghir Hamad", title: "CFO" })],
+    [{ fullName: "Hamad AlSaghir", title: "CFO", linkedinUrl: "https://li/h" }],
+  );
+  check("order-swapped known contact with nothing new dropped", out.length === 0, String(out.length));
+}
+{
+  // Near-miss spelling the structural matcher can't see is caught by the
+  // shared contact-duplicate scorer (high confidence only).
+  const out = build(
+    [dm({ fullName: "Khalid Al-Faleh", title: "CEO" })],
+    [{ fullName: "Khalid Al-Falih", title: "CEO", linkedinUrl: "https://li/k" }],
+  );
+  check("high-confidence near-miss spelling dropped when nothing new", out.length === 0, String(out.length));
+}
+{
+  // Enrichment proposals are labeled as updates to an existing contact; new
+  // people are labeled new.
+  const out = build(
+    [
+      dm({ fullName: "Hamad Al-Saghir", title: "CFO", linkedinUrl: "https://li/h" }),
+      dm({ fullName: "Jane Doe", title: "CTO" }),
+    ],
+    [{ fullName: "Hamad AlSaghir", title: "CFO", linkedinUrl: null }],
+  );
+  check("enrichment + new person both proposed", out.length === 2, String(out.length));
+  const enrich = out.find(
+    (p) => (p.meta as { updateKind?: string })?.updateKind === "enrichment",
+  );
+  const fresh = out.find(
+    (p) => (p.meta as { updateKind?: string })?.updateKind === "new_contact",
+  );
+  check("enrichment proposal carries updateKind=enrichment", Boolean(enrich));
+  check(
+    "enrichment proposal names the existing contact",
+    (enrich?.meta as { existingContactName?: string })?.existingContactName ===
+      "Hamad AlSaghir",
+    JSON.stringify(enrich?.meta),
+  );
+  check("new person carries updateKind=new_contact", Boolean(fresh));
+  check(
+    "two same-run proposals never target the same person",
+    out.filter((p) =>
+      samePersonName(
+        (p.toValue as { fullName: string }).fullName,
+        "Hamad AlSaghir",
+      ),
+    ).length === 1,
+  );
+}
+
 // 8) Blank names skipped.
 {
   const out = build([dm({ fullName: "   " }), dm({ fullName: "Jane Doe", title: "CFO" })]);

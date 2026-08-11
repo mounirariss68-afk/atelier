@@ -1729,7 +1729,17 @@ function PendingProposalCard({
   const isArray = p.field === "strategicPriorities";
   const isContact = p.field === "contact";
   const editable = isScalar || isArray || isContact;
-  const label = PROPOSAL_FIELD_LABELS[p.field] ?? p.field;
+  // Task #958 — enrichment of a known contact must never look like a new
+  // decision-maker suggestion.
+  const isEnrichment =
+    isContact &&
+    (p.meta as { updateKind?: string } | null | undefined)?.updateKind ===
+      "enrichment";
+  const label = isContact
+    ? isEnrichment
+      ? "Existing contact — update"
+      : "New decision-maker"
+    : (PROPOSAL_FIELD_LABELS[p.field] ?? p.field);
 
   const [editing, setEditing] = useState(false);
   const [scalarVal, setScalarVal] = useState(
@@ -1801,6 +1811,14 @@ function PendingProposalCard({
           ) : isContact ? (
             <div className="space-y-0.5">
               <div className="font-medium">{contactObj.fullName}</div>
+              {isEnrichment && (
+                <MonoChip tone="default" data-testid={`chip-existing-contact-${p.id}`}>
+                  Updates existing contact
+                  {(p.meta as { existingContactName?: string } | null)?.existingContactName
+                    ? `: ${(p.meta as { existingContactName?: string }).existingContactName}`
+                    : ""}
+                </MonoChip>
+              )}
               {contactObj.title && <div className="text-text-mute text-xs">{contactObj.title}</div>}
               {contactObj.criticalRole && CRITICAL_ROLE_LABELS[contactObj.criticalRole] && (
                 <MonoChip tone="gold" data-testid={`chip-critical-role-${p.id}`}>

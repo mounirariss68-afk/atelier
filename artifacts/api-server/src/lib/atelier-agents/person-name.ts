@@ -188,6 +188,14 @@ export function samePersonName(a: string, b: string): boolean {
   const jb = tb.join(" ");
   if (ja === jb) return true;
   if (ta.length < 2 || tb.length < 2) return false; // single token too weak
+  // Name-order swap: "AlSaghir Hamad" vs "Hamad Al-Saghir". Only full-token
+  // multiset equality under canonicalisation counts — no initials, no subset
+  // tolerance — so reordering can never widen the ordinary matching rules.
+  if (ta.length === tb.length) {
+    const sortedCanon = (ts: string[]) =>
+      ts.map(canonPersonToken).sort().join(" ");
+    if (sortedCanon(ta) === sortedCanon(tb)) return true;
+  }
   // Given name: transliteration + initial tolerated.
   if (!tokensEquivalent(ta[0], tb[0], true)) return false;
   // Surname: transliteration tolerated, initials never.

@@ -18,7 +18,6 @@
 - [Atelier API types are codegen'd](atelier-api-types-codegen.md) — AtelierContact/cartographer types are orval-generated from lib/api-spec/openapi.yaml; edit the spec + run codegen, never hand-edit generated files.
 - [Cartographer entity-scope](cartographer-entity-scope.md) — chair/owner-led groups have NO group CEO; deterministic guardCartographerEntityScope() (not the prompt) is the regression-proof safety net.
 - [Atelier research priority-refs shape](atelier-research-priority-refs-shape.md) — account strategicPriorityRefs is {text,sourceUrls} (NO evidence); don't reuse AtelierResearchBriefFact for it or create 400s.
-- [Launch deck-graphics policy](launch-deck-graphics.md) — launch site ships from separate project (cognirise.ai); render quirks in launch-*.md topic files.
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; drafts stash in partial.input.__researchedDraft; multi-field details in [cli-multifield-clarification.md](cli-multifield-clarification.md).
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors; diff against HEAD to attribute.
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.
@@ -38,7 +37,7 @@
 - [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.
 - [Contract templates ingested](atelier-contract-templates-ingested.md) — task-agent DB data never merges; templates/signing entities re-ingested via live API on main (2026-07-19); repeat in prod before go-live.
 - [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
-- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
+- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai) — never re-add it; deck-graphics quirks in [launch-deck-graphics.md](launch-deck-graphics.md).
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete; polymorphic pane hrefs filter deleted targets; delete/close paths resolve pane items org-scoped.
