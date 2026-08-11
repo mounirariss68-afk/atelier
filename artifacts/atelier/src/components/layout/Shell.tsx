@@ -485,7 +485,7 @@ function ReportsRailPanel() {
       {items.map((r) => (
         <div
           key={r.id}
-          className="bg-bg-elevate border border-border rounded-md p-2.5 text-sm"
+          className="glass-surface border border-border rounded-md p-2.5 text-sm"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="font-medium text-text leading-tight truncate" title={r.name}>
@@ -814,7 +814,7 @@ export function RightRail() {
                   onClick={() =>
                     cliCtx.requestHydration({ sessionId: t.sessionId, turnId: t.id })
                   }
-                  className="w-full text-left bg-bg-elevate border border-border hover:border-gold/40 rounded-md p-2 animate-in fade-in zoom-in-95 duration-300"
+                  className="w-full text-left glass-surface border border-border hover:border-gold/40 rounded-md p-2 animate-in fade-in zoom-in-95 duration-300"
                   data-testid="cli-rail-turn-row"
                   data-turn-status={t.status}
                 >
@@ -841,7 +841,7 @@ export function RightRail() {
           </div>
         )}
         {!collapsed && tab === "activity" && activities && activities.map(item => (
-          <div key={item.id} className="bg-bg-elevate border border-border rounded-md p-3 text-sm animate-in fade-in zoom-in-95 duration-300">
+          <div key={item.id} className="glass-surface border border-border rounded-md p-3 text-sm animate-in fade-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="font-mono text-xs text-gold font-medium">{item.agentName}</span>
               <div className="flex items-center gap-1.5">
@@ -1021,7 +1021,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* Task #899 — two-column card layout: the chat column is a
             fixed full-height rail on the left; everything on the right
             (title-bar card, menu-bar card, routed page) offsets past it. */}
-        <div className="min-h-screen relative bg-bg">
+        <div className="min-h-screen relative">
           <RightRail />
           <div
             className="flex min-h-screen flex-col transition-[padding] duration-300"

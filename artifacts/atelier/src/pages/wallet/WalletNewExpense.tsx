@@ -210,7 +210,7 @@ export default function WalletNewExpense() {
   const labelCls = "block text-[10px] font-mono uppercase tracking-wider text-text-mute mb-1";
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <BackLink href="/wallet/expenses" className="mb-4" data-testid="link-back">
           Back to expenses

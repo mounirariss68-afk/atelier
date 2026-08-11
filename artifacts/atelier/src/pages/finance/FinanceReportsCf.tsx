@@ -33,7 +33,7 @@ export default function FinanceReportsCf() {
   const headCf: CfLines | null = data?.consolidated ?? data?.perEntity?.[0]?.display ?? null;
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-cf">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-cf">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"

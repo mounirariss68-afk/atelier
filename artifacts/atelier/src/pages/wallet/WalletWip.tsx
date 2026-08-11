@@ -52,7 +52,7 @@ export default function WalletWip() {
   const isFinance = me?.role === "finance" || me?.role === "founding_partner" || me?.role === "partner";
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

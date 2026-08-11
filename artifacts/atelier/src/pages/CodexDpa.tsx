@@ -116,7 +116,7 @@ export default function CodexDpa() {
                 {dpa.data.dataClasses.map((c) => (
                   <span
                     key={c}
-                    className="px-1.5 py-0.5 rounded bg-bg-elevate-2 border border-border-soft text-[10px] font-mono uppercase"
+                    className="px-1.5 py-0.5 rounded glass-surface-2 border border-border-soft text-[10px] font-mono uppercase"
                   >
                     {c}
                   </span>

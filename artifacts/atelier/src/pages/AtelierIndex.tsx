@@ -175,7 +175,7 @@ function AssetsView() {
             {concierge.data.results.map((hit) => (
               <div
                 key={hit.asset.id}
-                className="text-sm border border-border-soft rounded-md p-3 bg-bg-elevate"
+                className="text-sm border border-border-soft rounded-md p-3 glass-surface"
               >
                 <div className="flex justify-between gap-2">
                   <span className="font-semibold text-text">{hit.asset.title}</span>
@@ -540,7 +540,7 @@ function PeopleView() {
         {(personas ?? []).map((p) => (
           <Card key={p.id} className="p-5 border-border" data-testid={`persona-${p.id}`}>
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-bg-elevate border border-gold/30 flex items-center justify-center text-gold">
+              <div className="w-10 h-10 rounded-full glass-surface border border-gold/30 flex items-center justify-center text-gold">
                 <Users className="w-5 h-5" />
               </div>
               <div className="flex-1">

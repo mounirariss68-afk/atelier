@@ -398,17 +398,24 @@
     line-height: 1.6;
   }
 
-  /* Card: subtle elevation, never competes with body via fill. */
+  /* Card: subtle elevation, never competes with body via fill.
+     Task #905 — frosted like the shadcn Card: same hue, alpha via the
+     --glass-card-alpha knob, blur over the fixed body backdrop. The
+     fallback blocks at the top of this file re-opaque the knob. */
   .card {
-    background: var(--bg-elevate);
-    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-elevate) var(--glass-card-alpha), transparent);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lift);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
   }
   .card-flat {
-    background: var(--bg-elevate);
-    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-elevate) var(--glass-card-alpha), transparent);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius-lg);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
   }
   /* Add hover-lift to interactive cards (Cognirise-inspired). */
   .card-hover {
@@ -650,12 +657,36 @@
     -webkit-backdrop-filter: blur(16px) saturate(1.25);
     backdrop-filter: blur(16px) saturate(1.25);
   }
+
+  /* Glass surface (Task #905): frosted replacement for hand-rolled card
+     panels that used to paint opaque bg-bg-elevate / bg-bg-elevate-2.
+     Same hues, translucency via the --glass-card-alpha knob so Card and
+     these panels frost in lockstep. Inputs, hover states and tiny chips
+     deliberately keep the opaque tokens. */
+  .glass-surface {
+    background-color: color-mix(in srgb, var(--bg-elevate) var(--glass-card-alpha), transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+  }
+  .glass-surface-2 {
+    background-color: color-mix(in srgb, var(--bg-elevate-2) var(--glass-card-alpha), transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+  }
   @media (prefers-reduced-transparency: reduce) {
-    .glass-panel, .glass-frost {
+    .glass-panel, .glass-frost, .glass-surface, .glass-surface-2, .card, .card-flat {
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
-    .glass-panel { background-color: var(--bg-elevate); }
+    .glass-panel, .glass-surface, .card, .card-flat { background-color: var(--bg-elevate); }
+    .glass-surface-2 { background-color: var(--bg-elevate-2); }
     [data-theme="light"] .glass-panel { background-color: #FFFFFF; }
+  }
+  /* No backdrop-filter support: alphas go near-opaque via the knob
+     override at the top of the file; also drop the (ignored) blur. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .card, .card-flat { background: var(--bg-elevate); }
+    .glass-surface { background-color: var(--bg-elevate); }
+    .glass-surface-2 { background-color: var(--bg-elevate-2); }
   }
 }

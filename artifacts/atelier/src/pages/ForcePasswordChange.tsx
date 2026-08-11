@@ -57,12 +57,12 @@ export default function ForcePasswordChange() {
   };
 
   const field =
-    "w-full rounded-md border border-border bg-bg-elevate px-3 py-2.5 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
+    "w-full rounded-md border border-border glass-surface px-3 py-2.5 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
   const label =
     "block text-xs font-mono uppercase tracking-wider text-text-faint";
 
   return (
-    <div className="min-h-screen bg-bg text-text flex flex-col items-center justify-center py-20 px-4">
+    <div className="min-h-screen text-text flex flex-col items-center justify-center py-20 px-4">
       <div className="w-full max-w-sm space-y-10">
         <div className="text-center space-y-6">
           <div className="flex justify-center">

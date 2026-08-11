@@ -315,7 +315,7 @@ function TimesheetApprovalsCard({ role }: { role: string }) {
 
       {rejectFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRejectFor(null)}>
-          <div className="w-full max-w-md rounded border border-border bg-bg-elevate p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded border border-border glass-surface p-4" onClick={(e) => e.stopPropagation()}>
             <div className="font-semibold text-text">Reject {rejectFor.week.personName} · {rejectFor.week.weekIso}</div>
             <textarea
               value={rejectReason}

@@ -94,7 +94,7 @@ export function AuditTab({ entityType, entityId }: AuditTabProps) {
             </div>
             
             {event.payloadSummary && (
-              <div className="mt-2 bg-bg-elevate border border-border rounded p-3 text-sm text-text-mute font-mono">
+              <div className="mt-2 glass-surface border border-border rounded p-3 text-sm text-text-mute font-mono">
                 {event.payloadSummary}
               </div>
             )}

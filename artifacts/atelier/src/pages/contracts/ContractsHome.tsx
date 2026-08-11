@@ -52,7 +52,7 @@ import {
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 const selectCls =
-  "h-9 rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
+  "h-9 rounded-md border border-border glass-surface px-2 text-sm text-text outline-none focus-visible:border-gold";
 
 const CONTRACT_TYPES = Object.keys(CONTRACT_TYPE_LABELS);
 

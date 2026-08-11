@@ -62,7 +62,7 @@ export default function FinanceReportsCube() {
   }, [data]);
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-cube">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-cube">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"

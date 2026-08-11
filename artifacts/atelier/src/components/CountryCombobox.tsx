@@ -58,7 +58,7 @@ export function CountryCombobox({
           disabled={disabled}
           data-testid={testIdPrefix ? `${testIdPrefix}-trigger` : undefined}
           className={cn(
-            "flex items-center gap-2 bg-bg-elevate border border-border-soft rounded px-2 py-1 text-text text-xs",
+            "flex items-center gap-2 glass-surface border border-border-soft rounded px-2 py-1 text-text text-xs",
             "w-full justify-between hover:border-gold/40 focus:outline-none focus:ring-1 focus:ring-gold/40",
             disabled && "opacity-60 cursor-not-allowed",
             !label && "text-text-faint",

@@ -547,7 +547,7 @@ function SubmitForm({
   const [email, setEmail] = React.useState("");
   const [title, setTitle] = React.useState("");
   return (
-    <div className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-2">
+    <div className="rounded-md border border-border-soft glass-surface p-3 space-y-2">
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -606,7 +606,7 @@ function SingleFieldForm({
 }) {
   const [v, setV] = React.useState("");
   return (
-    <div className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-2">
+    <div className="rounded-md border border-border-soft glass-surface p-3 space-y-2">
       <div className="text-[10px] font-mono uppercase text-text-mute">{label}</div>
       {textarea ? (
         <textarea

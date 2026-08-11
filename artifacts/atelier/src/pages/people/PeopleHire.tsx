@@ -44,7 +44,7 @@ const SUBS = [
 ];
 
 const inputCls =
-  "w-full rounded border border-border bg-bg-elevate px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
+  "w-full rounded border border-border glass-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
 const smallBtnCls =
   "font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text disabled:opacity-50";
 const goldBtnCls =

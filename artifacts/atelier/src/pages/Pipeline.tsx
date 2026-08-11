@@ -480,7 +480,7 @@ export default function Pipeline() {
             </PillButton>
             {/* Task #271 — segmented Pipeline | Forecast control. Replaces
                 the standalone /forecast top-nav entry. */}
-            <div className="flex items-center bg-bg-elevate p-1 rounded-full border border-border text-xs font-mono">
+            <div className="flex items-center glass-surface p-1 rounded-full border border-border text-xs font-mono">
               <button
                 type="button"
                 onClick={() => setMode("pipeline")}

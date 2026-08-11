@@ -69,7 +69,7 @@ export function ViewToggle({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 bg-bg-elevate p-1 rounded-full border border-border shrink-0",
+        "flex items-center gap-1 glass-surface p-1 rounded-full border border-border shrink-0",
         className,
       )}
       data-testid={testId ?? "view-toggle"}
@@ -134,7 +134,7 @@ export function RecordRow({
   const body = (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 bg-bg-elevate border border-border rounded-md transition-colors",
+        "flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 glass-surface border border-border rounded-md transition-colors",
         accentClass && cn("border-l-4", accentClass),
         interactive && "cursor-pointer hover:bg-bg-elevate-2",
         className,

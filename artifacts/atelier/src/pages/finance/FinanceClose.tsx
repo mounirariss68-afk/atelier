@@ -257,7 +257,7 @@ export default function FinanceClose() {
                       <li key={c.id}>
                         <button
                           onClick={() => setSelectedId(c.id)}
-                          className={`w-full text-left border rounded p-2 text-xs transition-colors ${selected?.id === c.id ? "border-gold/60 bg-bg-elevate" : "border-border-soft hover:bg-bg-elevate"}`}
+                          className={`w-full text-left border rounded p-2 text-xs transition-colors ${selected?.id === c.id ? "border-gold/60 glass-surface" : "border-border-soft hover:bg-bg-elevate"}`}
                           data-testid={`close-cycle-${c.periodLabel}`}
                         >
                           <div className="flex items-baseline justify-between gap-2">

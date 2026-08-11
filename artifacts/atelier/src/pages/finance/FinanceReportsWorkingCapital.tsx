@@ -32,7 +32,7 @@ export default function FinanceReportsWorkingCapital() {
   const cons: WorkingCapitalMetrics | null = data?.consolidated ?? null;
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-working-capital">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-working-capital">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"

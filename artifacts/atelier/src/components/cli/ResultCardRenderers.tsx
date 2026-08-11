@@ -664,7 +664,7 @@ function ToolResultCard({
   const titleLabel = humanLabel(tool);
   return (
     <div
-      className="bg-bg-elevate border border-border rounded-md overflow-hidden"
+      className="glass-surface border border-border rounded-md overflow-hidden"
       data-testid="cli-tool-result-card"
       data-tool={tool}
       data-shape={shape ?? "unknown"}

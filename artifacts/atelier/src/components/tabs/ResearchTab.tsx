@@ -36,7 +36,7 @@ export function ResearchTab({ oppId }: { oppId: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex gap-2 bg-bg-elevate p-1 rounded-full border border-border">
+        <div className="flex gap-2 glass-surface p-1 rounded-full border border-border">
           {(["all", "promoted", "candidates"] as const).map((k) => (
             <button
               key={k}

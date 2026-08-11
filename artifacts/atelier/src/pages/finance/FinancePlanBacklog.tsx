@@ -32,7 +32,7 @@ export default function FinancePlanBacklog() {
   const { data } = useBacklogCoverage(presentation, entityFilter);
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-plan-backlog">
+    <div className="min-h-screen text-text" data-testid="page-finance-plan-backlog">
       <PageHero>
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <SectionHead

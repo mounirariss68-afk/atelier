@@ -157,7 +157,7 @@ export default function FinanceReportsBoardPack() {
   const outlook = sectionMap.get("outlook");
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-board-pack">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-board-pack">
       <PageHero>
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <SectionHead

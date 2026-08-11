@@ -254,7 +254,7 @@ export function FlightPlannerCard({
 
   return (
     <div
-      className="bg-bg-elevate border border-gold/40 rounded-lg p-3 space-y-3"
+      className="glass-surface border border-gold/40 rounded-lg p-3 space-y-3"
       data-testid="flight-planner-card"
     >
       {/* Trip-type tabs */}
@@ -349,7 +349,7 @@ export function FlightPlannerCard({
                 <button
                   type="button"
                   onClick={() => swapSeg(i)}
-                  className="self-center shrink-0 rounded-full border border-border-soft bg-bg-elevate p-1.5 text-text-mute hover:text-gold hover:border-gold/50 transition-colors"
+                  className="self-center shrink-0 rounded-full border border-border-soft glass-surface p-1.5 text-text-mute hover:text-gold hover:border-gold/50 transition-colors"
                   title={s("plannerSwap", locale)}
                   aria-label={s("plannerSwap", locale)}
                   data-testid={i === 0 ? "planner-swap" : undefined}

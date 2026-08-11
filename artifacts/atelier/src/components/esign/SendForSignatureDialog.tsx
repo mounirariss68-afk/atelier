@@ -42,7 +42,7 @@ const SignaturePlacementEditor = React.lazy(() =>
 );
 
 const selectCls =
-  "h-9 rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
+  "h-9 rounded-md border border-border glass-surface px-2 text-sm text-text outline-none focus-visible:border-gold";
 
 export interface SignerDraft {
   name: string;

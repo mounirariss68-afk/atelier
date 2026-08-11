@@ -651,7 +651,7 @@ export function AwayTodayStrip({ date }: { date?: string }) {
       </div>
       {openPerson && (
         <div
-          className="mt-2 rounded-md border border-border-soft bg-bg-elevate px-3 py-2 text-xs text-text-mute"
+          className="mt-2 rounded-md border border-border-soft glass-surface px-3 py-2 text-xs text-text-mute"
           data-testid="away-chip-detail"
         >
           <span className="text-text font-medium">{openPerson.personName}</span>{" "}
@@ -733,7 +733,7 @@ export function HolidayBanner({ startDate, endDate }: { startDate: string; endDa
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full border border-border-soft bg-bg-elevate px-2 py-0.5 text-[11px] font-mono text-text-mute hover:text-text transition-colors"
+            className="inline-flex items-center gap-1 rounded-full border border-border-soft glass-surface px-2 py-0.5 text-[11px] font-mono text-text-mute hover:text-text transition-colors"
             data-testid="holiday-others-toggle"
           >
             {expanded ? "Hide" : `+${others.length} in other markets`}

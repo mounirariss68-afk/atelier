@@ -72,7 +72,7 @@ export default function LedgerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-ledger">
+    <div className="min-h-screen text-text" data-testid="page-finance-ledger">
       <PageHero>
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <SectionHead
@@ -264,7 +264,7 @@ function AccountsTab({ entityId, onChanged }: { entityId: string | null; onChang
         <button
           onClick={() => void seed()}
           disabled={seeding}
-          className="text-xs font-mono bg-bg-elevate border border-border rounded px-3 py-1.5 hover:border-gold/50 disabled:opacity-50"
+          className="text-xs font-mono glass-surface border border-border rounded px-3 py-1.5 hover:border-gold/50 disabled:opacity-50"
           data-testid="button-seed-chart"
         >
           {seeding ? "Seeding…" : "Seed default chart"}

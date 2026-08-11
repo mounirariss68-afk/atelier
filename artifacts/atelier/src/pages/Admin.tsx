@@ -754,7 +754,7 @@ function PartnerAccessRecovery() {
           )}
           <div className="flex items-center gap-2 min-w-0">
             <code
-              className="font-mono text-xs text-gold bg-bg-elevate border border-border rounded px-2 py-1 truncate max-w-full"
+              className="font-mono text-xs text-gold glass-surface border border-border rounded px-2 py-1 truncate max-w-full"
               data-testid="text-reset-link"
               title={result.resetUrl}
             >
@@ -1005,7 +1005,7 @@ function SecurityConsole() {
   };
 
   const inputCls =
-    "bg-bg-elevate border border-border rounded-md px-2.5 py-1.5 text-sm text-text";
+    "glass-surface border border-border rounded-md px-2.5 py-1.5 text-sm text-text";
 
   return (
     <Card className="p-6 space-y-4 border-gold/30" data-testid="card-security-console">

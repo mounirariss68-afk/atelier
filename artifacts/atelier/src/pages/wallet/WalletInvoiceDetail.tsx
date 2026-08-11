@@ -55,7 +55,7 @@ export default function WalletInvoiceDetail() {
   const isSm = isFinance || me?.role === "senior_manager";
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <BackLink href="/wallet/invoices" className="mb-4" data-testid="link-back">
           Back to invoices

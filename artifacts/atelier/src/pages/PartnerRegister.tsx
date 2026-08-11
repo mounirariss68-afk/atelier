@@ -147,7 +147,7 @@ export default function PartnerRegister() {
   };
 
   const inputCls =
-    "w-full bg-bg-elevate border border-border-soft rounded px-3 py-2 text-text text-sm focus:outline-none focus:ring-1 focus:ring-gold/40";
+    "w-full glass-surface border border-border-soft rounded px-3 py-2 text-text text-sm focus:outline-none focus:ring-1 focus:ring-gold/40";
   const labelCls = "block text-xs font-mono uppercase tracking-wider text-text-faint";
   const headCls = "text-xs font-mono uppercase tracking-widest text-gold";
 

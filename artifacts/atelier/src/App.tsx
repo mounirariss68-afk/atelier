@@ -278,7 +278,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <span className="font-mono text-xs uppercase tracking-widest text-text-faint">
           Loading…
         </span>

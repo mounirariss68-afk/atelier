@@ -40,7 +40,7 @@ export default function WalletCashRecon() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-cash-recon">
+    <div className="min-h-screen text-text" data-testid="page-wallet-cash-recon">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

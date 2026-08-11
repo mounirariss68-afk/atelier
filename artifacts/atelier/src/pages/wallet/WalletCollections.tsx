@@ -54,7 +54,7 @@ export default function WalletCollections() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"
@@ -90,7 +90,7 @@ export default function WalletCollections() {
                     <td className="px-3 py-2 text-right font-mono">{r.daysOverdue}</td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <button disabled={busy} onClick={() => void send(r.invoice.id)} className="px-2 py-1 rounded text-xs bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30">Send next reminder</button>
-                      <button disabled={busy} onClick={() => void recordPromise(r.invoice.id, r.outstanding)} className="px-2 py-1 rounded text-xs bg-bg-elevate-2 border border-border hover:border-gold/40">Promise to pay</button>
+                      <button disabled={busy} onClick={() => void recordPromise(r.invoice.id, r.outstanding)} className="px-2 py-1 rounded text-xs glass-surface-2 border border-border hover:border-gold/40">Promise to pay</button>
                     </td>
                   </tr>
                 ))}

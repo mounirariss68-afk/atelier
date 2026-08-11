@@ -152,5 +152,6 @@
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
 - [Stale lib dist fails typecheck/review](stale-lib-dist-review.md) — gitignored lib/db + api-zod + api-client-react dist lag schema edits AND merged-in commits; `tsc -b --force` them after Drizzle edits and before markTaskComplete.
 - [Credential-bearing link routes](atelier-credential-link-routes.md) — activation/reset-URL responses must use trustedRequestOrigin + 403 untrusted explicit Origins, or CORS leaks the token.
+- [Mechanical className sweeps over tsx](tsx-classname-sweeps.md) — never regex all string literals (apostrophes in comments corrupt code); line-based + tag-aware; skip form controls.
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass; fixed Tailwind-alpha surfaces need explicit fallback selectors; rail now LEFT-anchored.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — partner_firm_invoices has dual lifecycles keyed on `source`; portal keys on partnerFirmId; bank-IBAN gate at approve+run-build; all raw-fetch @cli-skip.

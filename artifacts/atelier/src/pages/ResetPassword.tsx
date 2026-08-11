@@ -41,7 +41,7 @@ export default function ResetPassword() {
 }
 
 const inputCls =
-  "w-full rounded-md border border-border bg-bg-elevate px-3 py-2.5 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
+  "w-full rounded-md border border-border glass-surface px-3 py-2.5 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
 const labelCls = "block text-xs font-mono uppercase tracking-wider text-text-faint";
 const buttonCls =
   "w-full rounded-md bg-gold text-bg font-semibold text-sm py-2.5 transition-opacity hover:opacity-90 disabled:opacity-50";

@@ -86,11 +86,11 @@ export default function Activate() {
   };
 
   const inputCls =
-    "w-full bg-bg-elevate border border-border-soft rounded px-3 py-2 text-text text-sm focus:outline-none focus:ring-1 focus:ring-gold/40";
+    "w-full glass-surface border border-border-soft rounded px-3 py-2 text-text text-sm focus:outline-none focus:ring-1 focus:ring-gold/40";
   const labelCls = "block text-xs font-mono uppercase tracking-wider text-text-faint";
 
   return (
-    <div className="min-h-screen bg-bg text-text flex flex-col items-center justify-center py-20 px-4">
+    <div className="min-h-screen text-text flex flex-col items-center justify-center py-20 px-4">
       <div className="w-full max-w-sm space-y-10">
         <div className="text-center space-y-6">
           <div className="flex justify-center">

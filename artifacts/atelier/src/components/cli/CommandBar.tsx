@@ -1302,7 +1302,7 @@ function Transcript({
               key={sug.text}
               type="button"
               onClick={() => onPickSuggestion(sug.text)}
-              className="text-start text-xs bg-bg-elevate hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded-md px-2.5 py-1.5 transition-colors"
+              className="text-start text-xs glass-surface hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded-md px-2.5 py-1.5 transition-colors"
               data-testid="cli-suggestion"
             >
               {sug.text}
@@ -1976,7 +1976,7 @@ function TurnBody({
             <button
               type="button"
               onClick={() => onPickSuggestion(`Resume the previous turn from step ${turn.partial!.failedStepIndex + 1}`)}
-              className="text-xs bg-bg-elevate border border-border hover:border-gold/50 rounded px-2 py-1"
+              className="text-xs glass-surface border border-border hover:border-gold/50 rounded px-2 py-1"
               data-testid="cli-resume"
             >
               {s("resume", locale)}
@@ -1984,7 +1984,7 @@ function TurnBody({
             <button
               type="button"
               onClick={() => onPickSuggestion("Rollback the partially-completed turn")}
-              className="text-xs bg-bg-elevate border border-border hover:border-gold/50 rounded px-2 py-1"
+              className="text-xs glass-surface border border-border hover:border-gold/50 rounded px-2 py-1"
               data-testid="cli-rollback"
             >
               {s("rollback", locale)}
@@ -2934,7 +2934,7 @@ function HistoryPanel({
           {sessions.map((sess) => (
             <div
               key={sess.id}
-              className="group relative w-full bg-bg-elevate border border-border rounded text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
+              className="group relative w-full glass-surface border border-border rounded text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
               data-testid="cli-history-row"
             >
               {confirmingId === sess.id ? (

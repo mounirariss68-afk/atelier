@@ -66,7 +66,7 @@ export default function FinancePlanScenarios() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-plan-scenarios">
+    <div className="min-h-screen text-text" data-testid="page-finance-plan-scenarios">
       <PageHero>
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <SectionHead

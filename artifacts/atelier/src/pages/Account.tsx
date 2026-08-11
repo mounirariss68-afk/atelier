@@ -3191,7 +3191,7 @@ export function RelationshipsTab({
 
   const renderNode = (c: AtelierContact, depth = 0): React.ReactNode => (
     <div key={c.id} className="space-y-2" style={{ marginLeft: depth * 16 }}>
-      <div className="flex items-center gap-3 border border-border rounded-md bg-bg-elevate px-3 py-2">
+      <div className="flex items-center gap-3 border border-border rounded-md glass-surface px-3 py-2">
         <div className="flex-1">
           <div className="text-sm font-semibold text-text">{c.fullName}</div>
           <div className="text-xs font-mono text-text-mute">{c.title ?? "—"}</div>
@@ -3524,7 +3524,7 @@ function StrategyDraftEditor({
   onChange: (next: StrategyShape) => void;
 }) {
   const inputCls =
-    "w-full bg-bg-elevate border border-border-soft rounded px-2 py-1.5 text-sm text-text focus:outline-none focus:border-gold/50";
+    "w-full glass-surface border border-border-soft rounded px-2 py-1.5 text-sm text-text focus:outline-none focus:border-gold/50";
   const setObjective = (
     idx: number,
     patch: Partial<StrategyShape["objectives"][number]>,

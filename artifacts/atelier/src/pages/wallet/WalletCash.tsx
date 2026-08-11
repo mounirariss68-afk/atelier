@@ -157,7 +157,7 @@ export default function WalletCash() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-cash">
+    <div className="min-h-screen text-text" data-testid="page-wallet-cash">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

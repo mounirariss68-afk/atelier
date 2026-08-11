@@ -71,7 +71,7 @@ export function expiryText(iso: string | null | undefined): string {
 }
 
 const fieldCls =
-  "h-9 w-full rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
+  "h-9 w-full rounded-md border border-border glass-surface px-2 text-sm text-text outline-none focus-visible:border-gold";
 const labelCls = "text-[10px] font-mono uppercase tracking-widest text-text-mute";
 
 function Field(props: { label: string; children: React.ReactNode; className?: string }) {

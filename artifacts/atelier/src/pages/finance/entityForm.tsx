@@ -449,7 +449,7 @@ function sectionForKey(key: string): SectionId {
 // ---------------------------------------------------------------------------
 
 const inputCls =
-  "h-9 w-full rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
+  "h-9 w-full rounded-md border border-border glass-surface px-2 text-sm text-text outline-none focus-visible:border-gold";
 const errInputCls = "border-danger focus-visible:border-danger";
 
 function FieldShell(props: {

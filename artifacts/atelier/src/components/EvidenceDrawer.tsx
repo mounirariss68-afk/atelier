@@ -51,7 +51,7 @@ export function EvidenceDrawer({ trigger, citations, title = "Evidence & Citatio
                   <ConfidenceChip value={cite.confidence} className="shrink-0" />
                 </div>
                 {cite.snippet && (
-                  <div className="bg-bg-elevate p-3 rounded text-sm text-text-mute border-l-2 border-border font-serif italic text-sm">
+                  <div className="glass-surface p-3 rounded text-sm text-text-mute border-l-2 border-border font-serif italic text-sm">
                     "{cite.snippet}"
                   </div>
                 )}

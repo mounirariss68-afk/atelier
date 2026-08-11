@@ -316,7 +316,7 @@ function ProposeForm({
       </div>
       {showFinanceFields && (
         <div
-          className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-3"
+          className="rounded-md border border-border-soft glass-surface p-3 space-y-3"
           data-testid="co-effort-deltas"
         >
           <div className="text-[10px] font-mono uppercase tracking-wider text-text-mute">
@@ -669,7 +669,7 @@ function DispatchForm({
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   return (
-    <div className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-2">
+    <div className="rounded-md border border-border-soft glass-surface p-3 space-y-2">
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -721,7 +721,7 @@ function SingleFieldForm({
 }) {
   const [v, setV] = React.useState("");
   return (
-    <div className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-2">
+    <div className="rounded-md border border-border-soft glass-surface p-3 space-y-2">
       <div className="text-[10px] font-mono uppercase text-text-mute">{label}</div>
       {textarea ? (
         <textarea

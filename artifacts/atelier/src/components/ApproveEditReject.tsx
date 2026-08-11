@@ -34,7 +34,7 @@ export function ApproveEditReject({ personaName, onDecision }: ApproveEditReject
   };
 
   return (
-    <div className="bg-bg-elevate border border-border rounded-lg p-5 space-y-4">
+    <div className="glass-surface border border-border rounded-lg p-5 space-y-4">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-text-mute">Rationale / Feedback</label>
         <Textarea 

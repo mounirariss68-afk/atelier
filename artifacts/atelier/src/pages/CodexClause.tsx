@@ -109,7 +109,7 @@ export default function CodexClause() {
                 {cl.data.jurisdictionTags.map((j) => (
                   <span
                     key={j}
-                    className="px-1.5 py-0.5 rounded bg-bg-elevate-2 border border-border-soft text-[10px] font-mono uppercase"
+                    className="px-1.5 py-0.5 rounded glass-surface-2 border border-border-soft text-[10px] font-mono uppercase"
                   >
                     {j}
                   </span>
@@ -124,7 +124,7 @@ export default function CodexClause() {
                     {cl.data.instrumentTypes.map((t) => (
                       <span
                         key={t}
-                        className="px-1.5 py-0.5 rounded bg-bg-elevate-2 border border-border-soft text-[10px] font-mono uppercase"
+                        className="px-1.5 py-0.5 rounded glass-surface-2 border border-border-soft text-[10px] font-mono uppercase"
                       >
                         {t}
                       </span>

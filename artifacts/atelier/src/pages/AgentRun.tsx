@@ -555,7 +555,7 @@ function CheckpointControls({
           disabled={!canDecide || isResolved || decide.isPending}
           onClick={() => submit("edit")}
           data-testid="button-decision-edit"
-          className="inline-flex items-center gap-1.5 bg-bg-elevate text-text px-3 py-1.5 rounded text-xs font-medium hover:bg-bg-elevate/80 disabled:opacity-50 transition-colors border border-border-soft"
+          className="inline-flex items-center gap-1.5 glass-surface text-text px-3 py-1.5 rounded text-xs font-medium hover:bg-bg-elevate/80 disabled:opacity-50 transition-colors border border-border-soft"
         >
           <Edit3 className="w-3.5 h-3.5" /> Edit
         </button>

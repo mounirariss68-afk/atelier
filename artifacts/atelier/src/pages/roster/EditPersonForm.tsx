@@ -445,7 +445,7 @@ export function EditPersonForm({
   };
 
   const input =
-    "bg-bg-elevate border border-border-soft rounded px-2 py-1 text-text text-xs w-full";
+    "glass-surface border border-border-soft rounded px-2 py-1 text-text text-xs w-full";
   const label = "text-[10px] font-mono uppercase tracking-widest text-text-mute";
 
   return (

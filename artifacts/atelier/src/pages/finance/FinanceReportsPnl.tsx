@@ -43,7 +43,7 @@ export default function FinanceReportsPnl() {
   });
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-pnl">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-pnl">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"

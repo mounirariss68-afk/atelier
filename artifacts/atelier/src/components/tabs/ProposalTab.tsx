@@ -224,7 +224,7 @@ export function ProposalTab({ oppId }: { oppId: string }) {
             key={v}
             data-testid={`proposal-view-${v}`}
             onClick={() => setView(v)}
-            className={`px-3 py-1.5 rounded border ${view === v ? "border-text bg-bg-elevate text-text" : "border-border-soft text-text-mute hover:border-text-mute"}`}
+            className={`px-3 py-1.5 rounded border ${view === v ? "border-text glass-surface text-text" : "border-border-soft text-text-mute hover:border-text-mute"}`}
           >{v === "workspace" ? "Workspace" : v === "preview" ? "Live preview" : "Recipients"}</button>
         ))}
       </div>

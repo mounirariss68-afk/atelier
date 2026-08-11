@@ -52,7 +52,7 @@ function SalonSignIn() {
     navigate("/salon");
   }
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-md w-full border border-border rounded p-6">
         <h1 className="text-lg font-semibold mb-2">The Salon — sign in</h1>
         <p className="text-sm text-text-mute mb-4">Pick a seeded client persona to enter your workspace.</p>
@@ -85,7 +85,7 @@ function SalonPortfolio() {
   }, [me, navigate]);
   const { data } = useApi<{ engagements: Array<{ slug: string; displayName: string; accentColor: string; eyebrowText: string | null; plmStage: string; role: string }> }>("/engagements");
   return (
-    <div className="min-h-screen bg-bg p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-3xl mx-auto">
         <header className="mb-6">
           <div className="text-xs uppercase tracking-widest text-text-mute">The Salon</div>
@@ -593,7 +593,7 @@ function SalonProposalView({ proposalId, token }: { proposalId: string; token: s
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg p-6">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full border border-border rounded p-6 text-center">
           <div className="text-base font-medium text-text">Unavailable</div>
           <div className="text-sm text-text-mute mt-2">{error}</div>

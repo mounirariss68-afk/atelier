@@ -101,7 +101,7 @@ function MerchantAdminPanel() {
         </button>
         {open && (
           <button
-            className="rounded bg-bg-elevate border border-border px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-gold disabled:opacity-50"
+            className="rounded glass-surface border border-border px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-gold disabled:opacity-50"
             onClick={enrich}
             disabled={running || pendingCount === 0}
             data-testid="btn-enrich-merchants"
@@ -184,7 +184,7 @@ export default function WalletExpenses() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

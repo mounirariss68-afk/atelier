@@ -34,7 +34,7 @@ export default function WalletAr() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

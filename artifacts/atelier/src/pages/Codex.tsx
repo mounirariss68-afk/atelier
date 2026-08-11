@@ -297,7 +297,7 @@ function ClausesSection() {
                     {cl.instrumentTypes.map((t) => (
                       <span
                         key={t}
-                        className="px-1.5 py-0.5 rounded bg-bg-elevate-2 border border-border-soft uppercase"
+                        className="px-1.5 py-0.5 rounded glass-surface-2 border border-border-soft uppercase"
                       >
                         {t}
                       </span>

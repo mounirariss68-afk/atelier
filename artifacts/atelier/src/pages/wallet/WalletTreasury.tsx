@@ -68,7 +68,7 @@ export default function WalletTreasury() {
   const max = Math.max(1, ...weeks.map((w) => Math.abs(w.closingBalance)));
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-treasury">
+    <div className="min-h-screen text-text" data-testid="page-wallet-treasury">
       <PageHero>
         <div className="flex items-end justify-between gap-4">
           <SectionHead

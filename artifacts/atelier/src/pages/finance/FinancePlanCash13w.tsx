@@ -112,7 +112,7 @@ export default function FinancePlanCash13w() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-plan-cash13w">
+    <div className="min-h-screen text-text" data-testid="page-finance-plan-cash13w">
       <PageHero>
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <SectionHead

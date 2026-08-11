@@ -298,7 +298,7 @@ export default function FinanceReportsMargin() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-margin">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-margin">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"

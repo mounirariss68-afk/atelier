@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 
 const selectCls =
-  "h-9 rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
+  "h-9 rounded-md border border-border glass-surface px-2 text-sm text-text outline-none focus-visible:border-gold";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   sent: { label: "Sent", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },

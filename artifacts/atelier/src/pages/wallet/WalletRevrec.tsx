@@ -141,7 +141,7 @@ export default function WalletRevrec() {
   const pendingPosting = postings.find((p) => p.periodLabel === period && !p.postedAt);
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen text-text">
       <PageHero>
         <SectionHead
           eyebrow="Firm · Wallet"

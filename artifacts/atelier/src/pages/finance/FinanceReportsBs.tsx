@@ -64,7 +64,7 @@ export default function FinanceReportsBs() {
   const headBs: BsLines | null = data?.consolidated ?? data?.perEntity?.[0]?.display ?? null;
 
   return (
-    <div className="min-h-screen bg-bg text-text" data-testid="page-finance-reports-bs">
+    <div className="min-h-screen text-text" data-testid="page-finance-reports-bs">
       <PageHero>
         <SectionHead
           eyebrow="Manage · Finance · Report"
