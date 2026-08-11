@@ -183,7 +183,7 @@ export default function SignIn() {
             <Logo variant="mark" size="lg" />
           </div>
           <SectionHead
-            headline={<>Sign in to <em className="accent">Atelier</em></>}
+            headline={<>Sign in to <em className="accent font-wordmark">Atelier</em></>}
             lede="Cognirise employee portal"
             className="flex flex-col items-center text-center"
           />

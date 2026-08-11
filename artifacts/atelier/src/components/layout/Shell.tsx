@@ -215,7 +215,7 @@ export function TopNav() {
             logo box; the title bar reads "Atelier" as a text wordmark. */}
         <Link href={alliancePartner ? "/partner" : "/"} className="flex min-w-0 items-center">
           <span
-            className="text-lg font-semibold tracking-tight text-text select-none"
+            className="font-wordmark text-lg text-text select-none"
             data-testid="title-bar-wordmark"
           >
             Atelier

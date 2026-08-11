@@ -97,7 +97,7 @@ export default function Activate() {
             <Logo variant="mark" size="lg" />
           </div>
           <SectionHead
-            headline={<>Activate your <em className="accent">Atelier</em> account</>}
+            headline={<>Activate your <em className="accent font-wordmark">Atelier</em> account</>}
             lede="Cognirise employee portal"
             className="flex flex-col items-center text-center"
           />

@@ -73,6 +73,10 @@
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-serif: 'Plus Jakarta Sans', Georgia, serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  /* Task #949 — display face for the "Atelier" brand wordmark only.
+     Quicksand echoes the rounded geometric lettering of the Cognirise
+     logo lockup; everything else stays Plus Jakarta Sans. */
+  --font-wordmark: 'Quicksand', 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 /* ----- Light theme -----
@@ -462,6 +466,16 @@
     font-style: italic;
     font-weight: 400;
     color: var(--gold);
+  }
+
+  /* Task #949 — the "Atelier" brand wordmark is drawn in the logo-matching
+     rounded geometric face (Quicksand). Wins over em.accent so auth-page
+     headlines can keep the accent color while switching typeface. */
+  .font-wordmark, em.accent.font-wordmark {
+    font-family: var(--font-wordmark);
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.015em;
   }
 }
 

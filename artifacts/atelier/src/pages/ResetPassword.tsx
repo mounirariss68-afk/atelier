@@ -29,7 +29,7 @@ export default function ResetPassword() {
             <Logo variant="mark" size="lg" />
           </div>
           <SectionHead
-            headline={<>Reset your <em className="accent">Atelier</em> password</>}
+            headline={<>Reset your <em className="accent font-wordmark">Atelier</em> password</>}
             lede="Cognirise employee portal"
             className="flex flex-col items-center text-center"
           />
