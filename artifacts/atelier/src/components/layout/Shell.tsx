@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, X as XIcon, Sparkles, Sun, Moon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
@@ -32,11 +32,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { CommandBar } from "@/components/cli/CommandBar";
 import { CliContext } from "@/components/cli/cli-context";
-import { s as cliS } from "@/components/cli/locale";
-import type { CliLocale } from "@/components/cli/types";
 import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
@@ -175,47 +172,22 @@ export function TopNav() {
   ];
 
   return (
-    <header className="atelier-topnav sticky top-0 z-40 w-full border-b border-card-border bg-bg/50 backdrop-blur-xl supports-[backdrop-filter]:bg-bg/50 shadow-lg shadow-black/10">
-      <div className="flex h-14 items-center px-4 md:px-6 gap-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Logo size="sm" />
-          <span className="hidden sm:inline font-mono text-[10px] tracking-wider text-text-faint normal-case">
-            Atelier
+    // Task #899 — two stacked rounded card bars on the right column:
+    // a title bar (brand text · selectors · avatar) and a menu bar
+    // (Home + lens section tabs + Manage picker). Both sticky.
+    <header className="atelier-topnav sticky top-0 z-40 w-full space-y-2 px-3 pt-3 pb-2 md:px-4 backdrop-blur-xl">
+      <div
+        className="flex h-14 items-center gap-4 rounded-xl border border-card-border bg-bg-elevate/60 px-4 shadow-lg shadow-black/10"
+        data-testid="title-bar-card"
+      >
+        <Link href={alliancePartner ? "/partner" : "/"} className="flex min-w-0 flex-col leading-tight">
+          <span className="font-semibold text-sm text-text truncate">The Atelier</span>
+          <span className="font-mono text-[10px] tracking-wider text-text-faint truncate">
+            Cognirise Employee Portal
           </span>
         </Link>
-        
-        <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
-          <Link
-            href={homeItem.href}
-            className={cn(
-              "transition-colors hover:text-gold inline-flex items-center gap-1.5",
-              isHomeActive ? "text-gold" : "text-text-mute",
-            )}
-          >
-            {homeItem.label}
-            {homeItem.badge && homeItem.badge > 0 ? (
-              <span
-                className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
-                title={`${homeItem.badge} pending approval${homeItem.badge === 1 ? "" : "s"}`}
-                data-testid="nav-badge-home-approvals"
-              >
-                {homeItem.badge}
-              </span>
-            ) : null}
-          </Link>
-          {/* Contextual lens-section tabs slot. Renders the active lens's
-              default sections; each lens task replaces these with its own
-              lifecycle-shaped tabs. Always visible (including on Home) so
-              the menu doesn't appear empty on first load. */}
-          {!alliancePartner && (
-            <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
-          )}
-        </nav>
 
         <div className="ml-auto flex items-center gap-4">
-          {!alliancePartner && (
-            <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
-          )}
           <ThemeToggle />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
@@ -325,6 +297,43 @@ export function TopNav() {
           )}
         </div>
       </div>
+      {/* Menu bar card — existing nav tabs / lens sections in their own
+          rounded box below the title bar. */}
+      <nav
+        className="flex h-11 items-center gap-5 rounded-xl border border-card-border bg-bg-elevate/60 px-4 text-sm font-medium shadow-lg shadow-black/10 overflow-x-auto"
+        data-testid="menu-bar-card"
+      >
+        <Link
+          href={homeItem.href}
+          className={cn(
+            "transition-colors hover:text-gold inline-flex items-center gap-1.5 shrink-0",
+            isHomeActive ? "text-gold" : "text-text-mute",
+          )}
+        >
+          {homeItem.label}
+          {homeItem.badge && homeItem.badge > 0 ? (
+            <span
+              className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
+              title={`${homeItem.badge} pending approval${homeItem.badge === 1 ? "" : "s"}`}
+              data-testid="nav-badge-home-approvals"
+            >
+              {homeItem.badge}
+            </span>
+          ) : null}
+        </Link>
+        {/* Contextual lens-section tabs slot. Renders the active lens's
+            default sections; each lens task replaces these with its own
+            lifecycle-shaped tabs. Always visible (including on Home) so
+            the menu doesn't appear empty on first load. */}
+        {!alliancePartner && (
+          <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
+        )}
+        <div className="ml-auto flex items-center shrink-0">
+          {!alliancePartner && (
+            <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          )}
+        </div>
+      </nav>
       <ChangePasswordDialog open={changePwOpen} onOpenChange={setChangePwOpen} />
       <TwoFactorDialog open={twoFaOpen} onOpenChange={setTwoFaOpen} />
     </header>
@@ -629,9 +638,13 @@ export function RightRail() {
   return (
     <aside
       className={cn(
-        // Task #897 — rail moved to the LEFT edge, frosted glass panel.
-        "fixed left-0 top-14 bottom-0 z-30 border-r border-card-border bg-bg-deep/60 backdrop-blur-2xl shadow-2xl shadow-black/20 flex flex-col",
-        collapsed ? "transition-[width] duration-300 ease-[--ease] w-12" : "",
+        // Task #897/#899 — full-height LEFT chat column: a logo card on
+        // top and the chat panel card filling the rest, both rounded
+        // boxes on the soft frosted background.
+        "fixed left-0 top-0 bottom-0 z-30 bg-bg-deep/40 backdrop-blur-2xl flex flex-col",
+        collapsed
+          ? "transition-[width] duration-300 ease-[--ease] w-12 border-r border-card-border"
+          : "gap-2 p-3 pr-2",
       )}
       style={collapsed ? undefined : { width: `${width}px` }}
       data-testid="right-rail"
@@ -640,7 +653,7 @@ export function RightRail() {
       {/* Task #897 — rounded glass identity box above the chat: logo + wordmark. */}
       {!collapsed && (
         <div
-          className="m-3 mb-0 flex items-center gap-3 rounded-xl border border-card-border bg-white/5 px-3 py-2.5 shrink-0"
+          className="flex items-center gap-3 rounded-xl border border-card-border bg-white/5 px-3 py-2.5 shrink-0 h-14"
           data-testid="rail-logo-box"
         >
           <Logo variant="mark" size="sm" />
@@ -673,7 +686,18 @@ export function RightRail() {
           data-testid="right-rail-resize-handle"
         />
       )}
-      <div className="flex items-center justify-between p-3 border-b border-border">
+      {/* Task #899 — the chat panel itself is a rounded card: tab strip,
+          routing-hint strip, then the conversation / activity / reports
+          body with the composer pinned at the bottom (inside CommandBar). */}
+      <div
+        className={cn(
+          "flex-1 min-h-0 flex flex-col",
+          !collapsed &&
+            "rounded-xl border border-card-border bg-white/5 overflow-hidden",
+        )}
+        data-testid="chat-panel-card"
+      >
+      <div className="flex items-center justify-between p-3 border-b border-border shrink-0">
         {!collapsed && (
           // Task #501 — Tab strip: Agent (conversational AI) is the
           // primary, default-selected tab; Activity is the live agent
@@ -744,6 +768,18 @@ export function RightRail() {
         </button>
       </div>
 
+      {/* Task #899 — routing-hint strip under the tabs. */}
+      {!collapsed && tab === "agent" && (
+        <div
+          className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-soft text-[11px] text-text-faint shrink-0"
+          data-testid="chat-routing-hint"
+        >
+          <Sparkles className="w-3 h-3 text-gold/70 shrink-0" aria-hidden />
+          <span className="truncate">
+            Atelier routes each request to the right specialist
+          </span>
+        </div>
+      )}
       {/* Task #501 — when the Agent tab is active, the embedded
        * CommandBar fills the rail body (it manages its own scroll &
        * composer). Activity/Reports keep the padded scroll area. */}
@@ -847,140 +883,8 @@ export function RightRail() {
         )}
         {!collapsed && tab === "reports" && <ReportsRailPanel />}
       </div>
+      </div>
     </aside>
-  );
-}
-
-/**
- * Task #342 — bottom-right floating chat bubble. Visible on every page
- * except `/cli`, dismissible per session (sessionStorage), respects
- * safe-area insets on tablet, and threads the floating-bubble source
- * into the cli.opened telemetry. Hidden on the sign-in route too via
- * the parent guard in Shell.
- */
-function FloatingCliBubble() {
-  const [location] = useLocation();
-  const cli = React.useContext(CliContext);
-  // Right rail is fixed-position on the right edge: w-12 (3rem) when
-  // collapsed, w-80 (20rem) when expanded. We read its state so the
-  // bubble can park to the *inside* of the rail instead of underneath
-  // it. RTL flips the rail-collision side too because the rail itself
-  // mirrors via `right-0` on the parent — when locale is RTL the rail
-  // visually sits on the left, so the bubble offsets accordingly.
-  const { collapsed: railCollapsed, width: railWidth } = React.useContext(RailContext);
-  // Toast viewport (`components/ui/toast.tsx` Viewport): fixed bottom-0
-  // right-0 on sm+, max-w-[420px] with p-4. When at least one toast is
-  // active, lift the bubble above that lane so it doesn't sit on top
-  // of dismissable notifications. We subscribe to the toast store via
-  // the same hook the toaster uses; re-renders are cheap and bounded.
-  const { toasts } = useToast();
-  const hasToasts = toasts.length > 0;
-  const locale: CliLocale =
-    typeof window !== "undefined"
-      ? ((window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en")
-      : "en";
-  const dir = locale === "ar" ? "rtl" : "ltr";
-  const [dismissed, setDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.sessionStorage.getItem("atelier-cli-bubble-dismissed") === "1";
-    } catch {
-      return false;
-    }
-  });
-  // Task #342 — restoration path. Whenever the panel transitions from
-  // open → closed, re-read sessionStorage: the header / ⌘K opener
-  // clears the dismissal key as part of the open() call, so once the
-  // user closes the bar the bubble re-appears for the rest of the
-  // session. (Without this re-sync, the locally-cached `dismissed`
-  // state from the initial mount would leave the bubble hidden.)
-  React.useEffect(() => {
-    if (cli.open) return;
-    try {
-      const stored =
-        window.sessionStorage.getItem("atelier-cli-bubble-dismissed") === "1";
-      setDismissed(stored);
-    } catch {
-      /* ignore */
-    }
-  }, [cli.open]);
-  // Hide on the assistant route itself (matches /cli + nested deep-links).
-  if (location.startsWith("/cli")) return null;
-  if (dismissed) return null;
-  if (cli.open) return null; // don't compete with the open panel
-  const handleClick = () => cli.openCli({ source: "floating_bubble" });
-  const handleDismiss = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      window.sessionStorage.setItem("atelier-cli-bubble-dismissed", "1");
-    } catch {
-      /* ignore */
-    }
-    setDismissed(true);
-  };
-  // Compute side-offset to clear the rail. Task #897 — the rail is now
-  // anchored to the LEFT edge, so the default (LTR) bottom-right bubble
-  // no longer collides with it; only the RTL bubble (bottom-left) needs
-  // the rail offset. Rail is user-resizable (Task #515), so we read the
-  // live width from RailContext.
-  const railOffsetPx = railCollapsed ? RAIL_COLLAPSED_WIDTH : railWidth;
-  const sideStyle: React.CSSProperties = dir === "rtl"
-    ? { left: `calc(${railOffsetPx}px + 1.5rem)` }
-    : { right: "1.5rem" };
-  // Bottom offset: clear the toast lane (toasts cap around 5–6rem tall
-  // each, but most show one at a time; 6rem is a safe baseline) plus
-  // the safe-area inset on tablets.
-  const bottomStyle: React.CSSProperties = {
-    bottom: hasToasts ? "calc(6.5rem + env(safe-area-inset-bottom))" : "calc(1.5rem + env(safe-area-inset-bottom))",
-  };
-  return (
-    <div
-      dir={dir}
-      style={{ ...sideStyle, ...bottomStyle }}
-      className={cn(
-        "fixed z-30 flex items-center",
-        // Smooth re-park when the rail collapses/expands or a toast
-        // pops in/out — disabled under reduced motion.
-        "transition-[bottom,right,left] duration-200 motion-reduce:transition-none",
-      )}
-      data-testid="cli-floating-bubble-wrap"
-      data-rail-collapsed={railCollapsed ? "1" : "0"}
-      data-toasts-active={hasToasts ? "1" : "0"}
-    >
-      <button
-        type="button"
-        onClick={handleClick}
-        aria-label={cliS("floatingBubbleLabel", locale)}
-        title={cliS("floatingBubbleLabel", locale)}
-        className={cn(
-          "group relative inline-flex items-center gap-2 rounded-full",
-          "bg-gold text-bg-deep shadow-2xl shadow-black/40",
-          "px-4 py-3 hover:bg-gold/90 transition-colors",
-          "motion-reduce:transition-none",
-          "focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-bg-deep",
-        )}
-        data-testid="cli-floating-bubble"
-      >
-        <Sparkles className="w-5 h-5" aria-hidden />
-        <span className="hidden sm:inline text-sm font-semibold">
-          {cliS("askAtelier", locale)}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        aria-label={cliS("floatingBubbleDismiss", locale)}
-        title={cliS("floatingBubbleDismiss", locale)}
-        className={cn(
-          "ml-1 inline-flex items-center justify-center w-6 h-6 rounded-full",
-          "bg-bg-elevate text-text-mute hover:text-text border border-border",
-          "shadow-md focus:outline-none focus:ring-2 focus:ring-gold",
-        )}
-        data-testid="cli-floating-bubble-dismiss"
-      >
-        <XIcon className="w-3.5 h-3.5" />
-      </button>
-    </div>
   );
 }
 
@@ -988,7 +892,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const isSignIn = location === "/sign-in";
 
-  const [collapsed, setCollapsed] = React.useState(false);
+  // Task #899 — on narrow viewports start with the chat column
+  // collapsed to its icon strip so the main area isn't squeezed.
+  const [collapsed, setCollapsed] = React.useState<boolean>(
+    () => typeof window !== "undefined" && window.innerWidth < 1024,
+  );
   // Task #501 — Agent is the default rail tab. The conversational AI
   // is open whenever the rail is expanded AND the Agent tab is active;
   // we no longer track a separate `cliOpen` flag or render a modal.
@@ -1070,19 +978,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         if (opts.prompt) {
           hydrationRef.current = { prompt: opts.prompt };
         }
-        // Task #342 — using the header (or the ⌘K shortcut) is an
-        // explicit re-engagement signal: it should *restore* the
-        // floating bubble for the rest of the session, undoing any
-        // earlier per-session dismissal. Other entry points (slash,
-        // deep link, home input/chip, the bubble itself) leave the
-        // dismissal untouched.
-        if (opts.source === "header" || opts.source === "shortcut") {
-          try {
-            window.sessionStorage.removeItem("atelier-cli-bubble-dismissed");
-          } catch {
-            /* ignore */
-          }
-        }
         openAgentTab();
       },
     }),
@@ -1125,25 +1020,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
       value={cliCtxValue}
     >
       <RailContext.Provider value={railCtxValue}>
-        <div className="min-h-screen flex flex-col relative">
-          <TopNav />
-          <div className="flex flex-1">
-            <main
-              className={cn(
-                "flex-1 w-full pb-20",
-                collapsed ? "pl-12 transition-[padding] duration-300" : "pl-12",
-              )}
-              style={
-                collapsed
-                  ? undefined
-                  : { paddingLeft: `max(3rem, ${railWidth}px)` }
-              }
-            >
-              {children}
-            </main>
-            <RightRail />
+        {/* Task #899 — two-column card layout: the chat column is a
+            fixed full-height rail on the left; everything on the right
+            (title-bar card, menu-bar card, routed page) offsets past it. */}
+        <div className="min-h-screen relative bg-bg">
+          <RightRail />
+          <div
+            className="flex min-h-screen flex-col transition-[padding] duration-300"
+            style={{
+              paddingLeft: collapsed
+                ? `${RAIL_COLLAPSED_WIDTH}px`
+                : `max(3rem, ${railWidth}px)`,
+            }}
+          >
+            <TopNav />
+            <main className="flex-1 w-full pb-20">{children}</main>
           </div>
-          <FloatingCliBubble />
         </div>
       </RailContext.Provider>
     </CliContext.Provider>

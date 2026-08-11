@@ -3,12 +3,8 @@ import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks, getAtelie
 import { SectionHead, PageHero, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Sparkles, MessageSquare, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
+import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CliContext } from "@/components/cli/cli-context";
-import { s as cliS } from "@/components/cli/locale";
-import { homeSuggestionsFor } from "@/components/cli/pageContext";
-import type { CliCapability, CliLocale } from "@/components/cli/types";
 import { cn } from "@/lib/utils";
 import { isSelfOnlyRole } from "@/lib/lens";
 import { MyMeetingsCard } from "@/components/ms/MsMeetings";
@@ -489,207 +485,6 @@ function WorkspaceShelf({ role }: { role: string }) {
   );
 }
 
-/**
- * Task #342 — Home page chat-style entry point. Click or start typing
- * to open the assistant; whatever was typed forwards into the composer
- * via CliContext.openCli({ source, prompt }).
- *
- * Below the input we render 4–6 role-aware suggestion chips drawn from
- * the home suggestions surface (`surfaceOn: "home"` conceptually) and
- * a one-time first-run tooltip anchored to the input.
- */
-function HomeAskAtelier({ role, userId }: { role: string | undefined; userId: string | undefined }) {
-  const cli = React.useContext(CliContext);
-  const [draft, setDraft] = React.useState("");
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const locale: CliLocale =
-    typeof window !== "undefined"
-      ? ((window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en")
-      : "en";
-  const dir = locale === "ar" ? "rtl" : "ltr";
-
-  // Pull the persona's capability catalog so the chips are catalog-driven:
-  // any entry tagged `surfaceOn: ["home"]` contributes its first
-  // per-locale `examplePhrases` entry as a chip label. The static
-  // role-based fallback inside `homeSuggestionsFor` only backfills when
-  // the catalog hasn't yet been seeded with home capabilities.
-  const [capabilities, setCapabilities] = React.useState<CliCapability[]>([]);
-  React.useEffect(() => {
-    let alive = true;
-    fetch("/api/atelier/cli/capabilities", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { capabilities?: CliCapability[] } | null) => {
-        if (alive && j?.capabilities) setCapabilities(j.capabilities);
-      })
-      .catch(() => {
-        /* fallback list will be used */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const chips = React.useMemo(
-    () => homeSuggestionsFor(role, locale, capabilities),
-    [role, locale, capabilities],
-  );
-
-  // First-run tooltip: shown the first time a signed-in user lands on
-  // Home; auto-dismisses after acknowledged or after 3 page loads.
-  // Per-user scoped: the dismissal/load-count keys are suffixed with
-  // the persona id so coaching state doesn't leak across personas
-  // sharing the same browser (common in demo / dev environments).
-  const [tooltipVisible, setTooltipVisible] = React.useState(false);
-  const tooltipKeyDismissed = `atelier-cli-home-tooltip-dismissed:${userId ?? "anon"}`;
-  const tooltipKeyLoads = `atelier-cli-home-tooltip-loads:${userId ?? "anon"}`;
-  React.useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (!userId) return undefined; // wait until we know who the user is
-    try {
-      if (window.localStorage.getItem(tooltipKeyDismissed) === "1") return undefined;
-      const loads = Number(window.localStorage.getItem(tooltipKeyLoads) ?? "0") + 1;
-      window.localStorage.setItem(tooltipKeyLoads, String(loads));
-      // Spec: hide once 3 page loads have been reached. Render on the
-      // first two visits only; on the 3rd visit set the dismissed flag
-      // and skip rendering, so the tooltip is gone from load #3 onward.
-      if (loads >= 3) {
-        window.localStorage.setItem(tooltipKeyDismissed, "1");
-        return undefined;
-      }
-      // Defer one tick so the input has mounted for proper anchoring.
-      const t = setTimeout(() => setTooltipVisible(true), 250);
-      return () => clearTimeout(t);
-    } catch {
-      /* ignore storage errors */
-      return undefined;
-    }
-  }, [userId, tooltipKeyDismissed, tooltipKeyLoads]);
-  // Acknowledged-via-button only — focus alone is *not* acknowledgment
-  // (the user might focus the input by accident). Spec: dismissed on
-  // explicit acknowledgment or after 3 page loads. We also emit a
-  // cli.opened telemetry event so the discovery dashboard can attribute
-  // first-run-tooltip-driven opens distinctly from header opens.
-  const dismissTooltip = (opts: { opensCli?: boolean } = {}) => {
-    setTooltipVisible(false);
-    try {
-      window.localStorage.setItem(tooltipKeyDismissed, "1");
-    } catch {
-      /* ignore */
-    }
-    if (opts.opensCli) {
-      cli.openCli({ source: "first_run_tooltip" });
-    }
-  };
-
-  const partnerTier = new Set(["founding_partner", "partner", "senior_manager", "finance"]);
-  const tooltipText = role && partnerTier.has(role)
-    ? cliS("firstRunTooltipPartner", locale)
-    : cliS("firstRunTooltipDefault", locale);
-
-  const openWith = (text: string) => {
-    cli.openCli({ source: "home_input", prompt: text || undefined });
-    setDraft("");
-  };
-  const openWithChip = (text: string) => {
-    cli.openCli({ source: "home_chip", prompt: text });
-  };
-
-  return (
-    <div dir={dir} className="space-y-3" data-testid="home-ask-atelier">
-      <div className="relative">
-        <div className="absolute inset-y-0 start-0 flex items-center ps-4 pointer-events-none text-gold/80">
-          <Sparkles className="w-4 h-4" aria-hidden />
-        </div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={draft}
-          onChange={(e) => {
-            const v = e.target.value;
-            setDraft(v);
-            // Opening on first keystroke matches the spec: "starting to
-            // type opens the assistant with whatever was typed already
-            // in the composer." We only fire once per focus session by
-            // checking the panel's open state.
-            if (v.length === 1 && !cli.open) {
-              openWith(v);
-            }
-          }}
-          onFocus={() => {
-            // Focus alone is *not* tooltip acknowledgment — the user
-            // could focus the input by accident. The tooltip dismisses
-            // on explicit "Got it" click or after 3 page loads.
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              openWith(draft);
-            }
-          }}
-          onClick={() => {
-            // Bare click (no typing) still opens the assistant; matches
-            // "Clicking it opens the assistant…".
-            if (!cli.open && draft === "") {
-              cli.openCli({ source: "home_input" });
-            }
-          }}
-          placeholder={cliS("homeInputPlaceholder", locale)}
-          aria-label={cliS("homeInputPlaceholder", locale)}
-          className={cn(
-            "w-full bg-bg-elevate border border-border rounded-full",
-            "ps-11 pe-4 py-3.5 text-sm leading-relaxed text-text",
-            "placeholder:text-text-faint",
-            "focus:outline-none focus:ring-2 focus:ring-gold focus:border-gold",
-            "transition-colors hover:border-gold/40",
-          )}
-          data-testid="home-ask-input"
-        />
-        {tooltipVisible && (
-          <div
-            role="tooltip"
-            className={cn(
-              "absolute z-20 mt-2 max-w-md p-3 rounded-md border border-gold/40 bg-bg-elevate-2 shadow-xl",
-              "flex items-start gap-3 text-sm text-text",
-              "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1",
-              dir === "rtl" ? "right-0" : "left-0",
-            )}
-            data-testid="home-ask-tooltip"
-          >
-            <MessageSquare className="w-4 h-4 mt-0.5 text-gold shrink-0" aria-hidden />
-            <p className="flex-1 leading-snug">{tooltipText}</p>
-            <button
-              type="button"
-              onClick={() => dismissTooltip({ opensCli: true })}
-              className="text-xs font-mono uppercase tracking-wider text-gold hover:text-gold-soft px-2 py-0.5 rounded border border-gold/40 hover:bg-bg-elevate"
-              data-testid="home-ask-tooltip-dismiss"
-            >
-              {cliS("firstRunTooltipDismiss", locale)}
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2" data-testid="home-ask-chips">
-        {chips.map((c) => (
-          <button
-            key={c.text}
-            type="button"
-            onClick={() => openWithChip(c.text)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full",
-              "border border-border-soft bg-bg-elevate hover:bg-bg-elevate-2 hover:border-gold/40",
-              "text-xs text-text-mute hover:text-text transition-colors",
-              "focus:outline-none focus:ring-2 focus:ring-gold",
-            )}
-            data-testid="home-ask-chip"
-          >
-            <Sparkles className="w-3 h-3 text-gold/70" aria-hidden />
-            {c.text}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 const TASK_TYPE_ICON: Record<string, React.ReactNode> = {
   task: <CheckSquare className="w-3.5 h-3.5" />,
@@ -826,11 +621,8 @@ export default function Home() {
         />
       </PageHero>
 
-      {/* Task #342 — primary "Ask Atelier" entry point. */}
-      <div className="container-atelier pt-2">
-        <HomeAskAtelier role={me?.role} userId={me?.id} />
-      </div>
-
+      {/* Task #899 — the inline "Ask Atelier" input was removed; the
+          assistant now lives permanently in the left chat panel. */}
       <div className="container-atelier py-10 space-y-12 grid grid-cols-1 xl:grid-cols-3 gap-8">
         
         {/* PANE A: What needs me today */}

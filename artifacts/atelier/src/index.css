@@ -600,8 +600,15 @@
   --gold-tint-30: rgba(196, 91, 184, 0.30);
   --gold-tint-35: rgba(196, 91, 184, 0.35);
   --gold-tint-45: rgba(196, 91, 184, 0.45);
-  background: var(--bg);
+  /* Task #899 — the solid navy band moved off the wrapper onto the
+     rounded title-bar / menu-bar cards inside it, so the two bars read
+     as distinct boxes on the soft page background. */
   color: var(--text);
+}
+/* Task #899 — card-layout header: the navy brand surface now lives on
+   the rounded cards themselves (both themes pick their own --bg-elevate). */
+.atelier-topnav .rounded-xl {
+  background: var(--bg-elevate);
 }
 
 @layer utilities {
