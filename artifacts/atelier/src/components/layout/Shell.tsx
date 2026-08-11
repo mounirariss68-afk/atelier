@@ -38,6 +38,7 @@ import { useAuth } from "@/lib/auth";
 import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 import { TwoFactorDialog } from "@/components/layout/TwoFactorDialog";
+import { NavGlidePill } from "@/components/layout/NavGlidePill";
 
 /**
  * Task #497 — light/dark mode toggle. Sits in the right-side utility
@@ -67,6 +68,8 @@ export function TopNav() {
   const { logout } = useAuth();
   const [changePwOpen, setChangePwOpen] = React.useState(false);
   const [twoFaOpen, setTwoFaOpen] = React.useState(false);
+  // Task #930 — menu-bar container ref for the gliding pill highlight.
+  const menuBarRef = React.useRef<HTMLElement | null>(null);
   // Task #821 — policy nudge: sign-in flagged that this role must enrol.
   React.useEffect(() => {
     try {
@@ -304,13 +307,18 @@ export function TopNav() {
       {/* Menu bar card — existing nav tabs / lens sections in their own
           rounded box below the title bar. */}
       <nav
-        className="flex h-11 items-center gap-5 rounded-xl border border-card-border bg-bg-elevate/60 px-4 text-sm font-medium shadow-lg shadow-black/10 overflow-x-auto"
+        ref={menuBarRef}
+        className="relative flex h-11 items-center gap-3 rounded-xl border border-card-border bg-bg-elevate/60 px-3 text-sm font-medium shadow-lg shadow-black/10 overflow-x-auto"
         data-testid="menu-bar-card"
       >
+        {/* Task #930 — pill highlight that glides between menu items. */}
+        <NavGlidePill containerRef={menuBarRef} activeKey={location} />
         <Link
           href={homeItem.href}
+          data-nav-pill-item
+          data-nav-pill-active={isHomeActive ? "true" : undefined}
           className={cn(
-            "transition-colors hover:text-gold inline-flex items-center gap-1.5 shrink-0",
+            "relative transition-colors hover:text-gold inline-flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1",
             isHomeActive ? "text-gold" : "text-text-mute",
           )}
         >

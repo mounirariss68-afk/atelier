@@ -71,7 +71,7 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
   const moreActive = more.some((s) => isSectionActive(s.href));
   return (
     <div
-      className="hidden lg:flex items-center gap-4 pl-2 ml-1 border-l border-border-soft text-xs font-mono uppercase tracking-widest"
+      className="hidden lg:flex items-center gap-2 pl-2 ml-0.5 border-l border-border-soft text-xs font-mono uppercase tracking-widest"
       data-testid={`lens-sections-${active}`}
     >
       {sections.map((s) => {
@@ -80,8 +80,10 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
           <Link
             key={s.id}
             href={s.href}
+            data-nav-pill-item
+            data-nav-pill-active={isActive ? "true" : undefined}
             className={cn(
-              "transition-colors hover:text-gold",
+              "relative rounded-full px-2.5 py-1 transition-colors hover:text-gold",
               isActive ? "text-gold" : "text-text-mute",
             )}
             data-testid={`lens-section-${active}-${s.id}`}
@@ -96,8 +98,10 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
             <button
               type="button"
               data-testid={`lens-sections-${active}-more`}
+              data-nav-pill-item
+              data-nav-pill-active={moreActive ? "true" : undefined}
               className={cn(
-                "inline-flex items-center gap-0.5 uppercase tracking-widest transition-colors hover:text-gold outline-none",
+                "relative rounded-full px-2.5 py-1 inline-flex items-center gap-0.5 uppercase tracking-widest transition-colors hover:text-gold outline-none",
                 moreActive ? "text-gold" : "text-text-mute",
               )}
             >
