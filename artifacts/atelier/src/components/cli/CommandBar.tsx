@@ -1072,7 +1072,7 @@ function Composer({
   return (
     <div
       className={cn(
-        "border-t border-card-border bg-bg-elevate/30 p-3 shrink-0 relative",
+        "border-t border-card-border bg-bg-elevate/20 backdrop-blur-sm p-3 shrink-0 relative",
         dragOver && "ring-2 ring-gold ring-inset",
       )}
       onDragOver={(e) => {
@@ -1089,7 +1089,7 @@ function Composer({
     >
       {slashOpen && (
         <div
-          className="absolute bottom-full left-3 right-3 mb-1 bg-bg-deep border border-border rounded-md shadow-2xl overflow-hidden"
+          className="absolute bottom-full left-3 right-3 mb-1 bg-bg-deep/75 backdrop-blur-xl border border-border rounded-md shadow-2xl overflow-hidden"
           role="listbox"
           aria-label="Slash commands"
           data-testid="cli-slash-menu"
@@ -1160,7 +1160,7 @@ function Composer({
         <button
           type="button"
           onClick={onAttach}
-          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-bg-deep/60 text-text-mute hover:text-gold hover:bg-bg-elevate-2 transition-colors"
+          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-bg-deep/40 backdrop-blur-md text-text-mute hover:text-gold hover:bg-bg-elevate-2 transition-colors"
           title={s("attach", locale)}
           aria-label={s("attach", locale)}
           data-testid="cli-attach-button"
@@ -1169,7 +1169,7 @@ function Composer({
         </button>
         <div
           className={cn(
-            "cli-composer-pill flex-1 min-w-0 flex items-end gap-1.5 rounded-[22px] border bg-bg-deep/60",
+            "cli-composer-pill flex-1 min-w-0 flex items-end gap-1.5 rounded-[22px] border bg-bg-deep/40 backdrop-blur-md",
             "ps-4 pe-1.5 py-1.5 transition-colors",
             "focus-within:ring-1",
             overLimit
