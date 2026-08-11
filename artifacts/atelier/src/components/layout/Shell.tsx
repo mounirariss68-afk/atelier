@@ -180,11 +180,15 @@ export function TopNav() {
         className="flex h-14 items-center gap-4 rounded-xl border border-card-border bg-bg-elevate/60 px-4 shadow-lg shadow-black/10"
         data-testid="title-bar-card"
       >
-        {/* Task #902 — Cognirise lockup replaces the "The Atelier" wordmark.
-            The title bar stays navy in both themes, so always use the
-            light-wordmark lockup here (not the themed navy-ink variant). */}
+        {/* Task #914 — the Cognirise lockup moved to the chat column's navy
+            logo box; the title bar reads "Atelier" as a text wordmark. */}
         <Link href={alliancePartner ? "/partner" : "/"} className="flex min-w-0 items-center">
-          <Logo variant="lockup" size="sm" className="shrink-0" />
+          <span
+            className="text-lg font-semibold tracking-tight text-text select-none"
+            data-testid="title-bar-wordmark"
+          >
+            Atelier
+          </span>
         </Link>
 
         <div className="ml-auto flex items-center gap-4">
@@ -653,11 +657,12 @@ export function RightRail() {
       {/* Task #897 — rounded glass identity box above the chat: logo + wordmark. */}
       {!collapsed && (
         <div
-          className="flex items-center gap-3 rounded-xl border border-card-border bg-white/5 px-3 py-2.5 shrink-0 h-14"
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#141C42] px-3 py-2.5 shrink-0 h-14"
           data-testid="rail-logo-box"
         >
-          {/* Task #902 — Cognirise lockup instead of mark + "ATELIER" text. */}
-          <Logo variant="themed" size="sm" className="shrink-0" />
+          {/* Task #914 — solid navy brand box (both themes) with the
+              light-wordmark Cognirise lockup, per the user's reference. */}
+          <Logo variant="lockup" size="sm" className="shrink-0" />
         </div>
       )}
       {/* Task #515 — drag handle on the outer (right) edge (only when expanded). */}
