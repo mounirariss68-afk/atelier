@@ -272,15 +272,29 @@
         var(--grid-line) calc((100vw - 32px) / 12 - 1px),
         var(--grid-line) calc((100vw - 32px) / 12)
       ),
+      /* Task #928: the artwork is darkest at its left edge, so the region
+         behind the left-anchored chat rail read as flat navy even through
+         the glass. Two soft brand glows (purple high, magenta low) anchored
+         at the left edge give the rail a perceptible nebula. They sit ABOVE
+         the scrim: they are smooth low-alpha color washes, not busy texture,
+         so text contrast in the rail is unaffected. */
+      radial-gradient(60vh 70vh at 0% 20%,
+        color-mix(in srgb, var(--gold-deep) 34%, transparent) 0%,
+        color-mix(in srgb, var(--gold-deep) 14%, transparent) 45%,
+        transparent 72%),
+      radial-gradient(54vh 64vh at 0% 82%,
+        color-mix(in srgb, var(--gold) 26%, transparent) 0%,
+        color-mix(in srgb, var(--gold) 11%, transparent) 45%,
+        transparent 70%),
       linear-gradient(160deg,
         color-mix(in srgb, var(--bg-deep) 72%, transparent) 0%,
         color-mix(in srgb, var(--bg) 55%, transparent) 55%,
         color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%),
       url("/dark-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 45%, var(--bg-elevate) 130%);
-    background-size: auto, auto, cover, auto;
-    background-position: center, center, center, center;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-size: auto, auto, auto, auto, cover, auto;
+    background-position: center, left center, left center, center, center, center;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
     pointer-events: none;
     z-index: 0;
   }
