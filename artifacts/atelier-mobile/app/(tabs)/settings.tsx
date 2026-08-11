@@ -21,6 +21,7 @@ import { useDisplayCurrency } from "@/lib/displayCurrency";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 import {
   ensureNotificationPermission,
@@ -210,6 +211,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <AppBackground />
       <View
         style={{
           paddingHorizontal: 16,

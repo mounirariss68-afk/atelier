@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, FadeInView, Field, hapticError, hapticSuccess, IconButton } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 import { HttpError } from "@/lib/api";
 
@@ -73,6 +74,7 @@ export default function ChangePasswordScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={{ flex: 1, backgroundColor: c.background }}
     >
+      <AppBackground />
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,

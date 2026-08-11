@@ -40,6 +40,7 @@ import { FlightPlannerCard } from "@/components/FlightPlannerCard";
 import { ToolResultCards } from "@/components/ResultCards";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 import { AttachmentRejectedError, MAX_ATTACHMENT_BYTES } from "@/lib/api";
 import { resolveClarificationFields } from "@/lib/chatFrames";
@@ -766,6 +767,7 @@ export default function ChatScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <AppBackground />
       <View
         style={{
           flexDirection: rtl.row,

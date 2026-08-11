@@ -3,6 +3,7 @@ import { Link, Stack } from "expo-router";
 import { Text, View } from "react-native";
 
 import { FadeInView } from "@/components/ui";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 
 export default function NotFoundScreen() {
@@ -21,6 +22,7 @@ export default function NotFoundScreen() {
           gap: 18,
         }}
       >
+        <AppBackground />
         <FadeInView style={{ alignItems: "center", gap: 18 }}>
           <View
             style={{

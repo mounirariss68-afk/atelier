@@ -45,6 +45,7 @@ import {
 } from "@/components/ui";
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
@@ -1134,6 +1135,7 @@ export default function MeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <AppBackground />
       <View
         style={{
           flexDirection: rtl.row,

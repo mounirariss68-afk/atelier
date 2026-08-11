@@ -52,6 +52,7 @@ import {
   hapticLight,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 
 // Device-persisted list/day view choice for the Meetings tab (matches the
@@ -1992,6 +1993,7 @@ export default function MeetingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <AppBackground />
       {/* Dark-island header: stays navy in both themes. */}
       <View
         style={{

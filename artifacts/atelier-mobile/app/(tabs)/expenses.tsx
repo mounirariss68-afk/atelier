@@ -29,6 +29,7 @@ import {
   softShadow,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
+import { AppBackground } from "@/components/AppBackground";
 import { useColors } from "@/hooks/useColors";
 import { formatMoney } from "@/lib/format";
 import { ExpenseCharts } from "@/components/ExpenseCharts";
@@ -464,6 +465,7 @@ export default function ExpensesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <AppBackground />
       {/* Dark-island header: stays navy in both themes. */}
       <View
         style={{

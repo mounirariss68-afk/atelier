@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-/* ============================================================
+/* ------------------------------------------------------------
    THE ATELIER — Cognirise brand system
    Internal employee portal: deep Cognirise navy + the Cognirise
    blue→purple→magenta→coral accent, cool near-white text,
@@ -17,7 +17,7 @@
 
    NB: the `--gold*` token names are retained for stability, but
    their resolved values are now the Cognirise magenta accent.
-   ============================================================ */
+   ------------------------------------------------------------ */
 
 :root,
 [data-theme="dark"] {
@@ -330,9 +330,9 @@
   }
 }
 
-/* ============================================================
+/* ------------------------------------------------------------
    Reusable primitives — shared across every page.
-   ============================================================ */
+   ------------------------------------------------------------ */
 
 @layer components {
   /* Eyebrow: mono uppercase 11px with a 24px accent leading rule */
@@ -568,14 +568,14 @@
   }
 }
 
-/* ============================================================
+/* ------------------------------------------------------------
    Page hero band — the full-width header section that contains the
    eyebrow + headline + ownership/meta. Always renders on the deep
    navy brand surface; in light mode this is a "dark island" so the
    navy header treatment the user likes carries over. Tokens used by
    children (text, mute, gold, borders) are re-declared inside the
    island so eyebrow/headline/lede stay legible.
-   ============================================================ */
+   ------------------------------------------------------------ */
 .page-hero {
   /* Task #900 — frosted over the fixed body backdrop (same hue, alpha
      only). Light mode re-opaques below: the band is a "dark island"
