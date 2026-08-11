@@ -145,7 +145,12 @@ export default function Opportunity() {
             <HeroStat
               value={dealLabel}
               caption={
-                <>
+                // Task #973 — HeroStat's caption row is already flex-wrap;
+                // tagged to mirror Account's row-account-chips pattern.
+                <span
+                  className="contents"
+                  data-testid="row-opportunity-chips"
+                >
                   <MonoChip tone={stageTone(salesStage)}>{SALES_STAGE_LABEL[salesStage]}</MonoChip>
                   <MonoChip>Prob {opp.probabilityPct}%</MonoChip>
                   {isStalled && (
@@ -156,7 +161,7 @@ export default function Opportunity() {
                     </MonoChip>
                   )}
                   <span className="text-text-faint">Deal value</span>
-                </>
+                </span>
               }
             />
 
@@ -213,7 +218,7 @@ export default function Opportunity() {
         {/* Primary creative-work toolbar — anchored next to the tabs.
             Gold accent reserved for the Draft POV primary action. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" data-testid="row-opportunity-actions">
             <PillButton variant="primary" onClick={() => setActiveTab("pov")}>
               <span className="inline-flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Draft POV</span>
             </PillButton>

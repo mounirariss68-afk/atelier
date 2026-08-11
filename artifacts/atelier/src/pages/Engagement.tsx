@@ -93,11 +93,19 @@ export default function Engagement() {
         <BackLink href="/clients/deliver/engagements">Back to Engagements</BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
+          {/* Task #973 — same overflow treatment as the Account header: the
+              headline column must be allowed to shrink (min-w-0) so a long
+              engagement name wraps instead of pushing the ownership panel
+              off screen; the chip row inside the lede already flex-wraps. */}
           <SectionHead
+            className="min-w-0 flex-1"
             eyebrow={eng.accountName}
             headline={eng.name}
             lede={
-              <span className="inline-flex items-center gap-3 flex-wrap">
+              <span
+                className="inline-flex items-center gap-3 flex-wrap"
+                data-testid="row-engagement-chips"
+              >
                 <PlmPill stage={eng.plmStage} />
                 <MonoChip tone={eng.raidStatus === 'red' ? 'red' : eng.raidStatus === 'amber' ? 'amber' : 'green'}>
                   RAID · {eng.raidStatus}
@@ -105,7 +113,10 @@ export default function Engagement() {
               </span>
             }
           />
-          <div className="shrink-0 flex flex-col items-end gap-3">
+          <div
+            className="shrink min-w-0 flex flex-col items-end gap-3"
+            data-testid="row-engagement-actions"
+          >
             <OwnershipPanel
               rows={[
                 { label: "Partner", name: eng.partnerOwnerName },
@@ -193,7 +204,7 @@ function LegalEntitySelector({ engId, legalEntityId }: { engId: string; legalEnt
   };
 
   return (
-    <label className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-text-faint" data-testid="engagement-entity-selector">
+    <label className="flex items-center gap-2 flex-wrap justify-end text-[10px] font-mono uppercase tracking-widest text-text-faint" data-testid="engagement-entity-selector">
       Legal entity
       <select
         value={legalEntityId ?? ""}
