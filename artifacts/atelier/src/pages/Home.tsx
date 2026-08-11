@@ -623,7 +623,10 @@ export default function Home() {
 
       {/* Task #899 — the inline "Ask Atelier" input was removed; the
           assistant now lives permanently in the left chat panel. */}
-      <div className="container-atelier py-10 space-y-12 grid grid-cols-1 xl:grid-cols-3 gap-8">
+      {/* Task #913 — the whole main section below the hero sits in one
+          rounded glass panel so it reads as a single cohesive surface. */}
+      <div className="container-atelier py-10">
+        <div className="glass-panel rounded-2xl p-6 sm:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
         
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">
@@ -768,6 +771,7 @@ export default function Home() {
             </Link>
           </div>
 
+        </div>
         </div>
       </div>
     </div>
