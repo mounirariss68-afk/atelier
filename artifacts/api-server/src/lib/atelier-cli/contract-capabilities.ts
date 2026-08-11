@@ -29,9 +29,11 @@
  * shape the confirm/clarification envelopes.
  */
 
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import {
   db,
+  atelierAuditEvents,
+  atelierContractors,
   atelierEmployees,
   atelierUsers,
   atelierContractTemplates,
@@ -49,9 +51,30 @@ import {
   resolveSigningEntity,
   type Counterparty,
 } from "../atelier-contract-service.js";
-import { CONTRACT_TYPES, normalizeFieldSchema } from "../atelier-contracts.js";
+import {
+  CONTRACT_TYPES,
+  DOCX_MIME,
+  TERMINAL_CONTRACT_STATUSES,
+  addContractDocument,
+  auditContractEntity,
+  normalizeFieldSchema,
+} from "../atelier-contracts.js";
+import { writePersonAndSync } from "../atelier-person-sync.js";
+import {
+  PersonNameValidationError,
+  resolveStructuredNameInput,
+} from "../atelier-person-model.js";
+import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
 
 const CONTRACTS_PATH = "/contracts";
+
+/** Contract type whose chat prepare flow may auto-add the counterparty to the roster (Task #967). */
+const NEP_CONTRACT_TYPE = "non_equity_partner_employment";
+const NEP_ROLE_LABEL = "Non-Equity Partner";
+
+function rid(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 type TemplateRow = typeof atelierContractTemplates.$inferSelect;
 
@@ -159,6 +182,27 @@ async function resolveCounterpartyByName(
         score: p.fullName.toLowerCase() === q.toLowerCase() ? 1 : 0.7,
       });
     }
+    // Task #967 — contractors are roster people too (non-equity partners
+    // added by the prepare flow live in atelier_contractors).
+    const contractors = await db
+      .select({ id: atelierContractors.id, fullName: atelierContractors.fullName })
+      .from(atelierContractors)
+      .where(
+        and(
+          eq(atelierContractors.orgId, orgId),
+          isNull(atelierContractors.deletedAt),
+          ilike(atelierContractors.fullName, `%${q}%`),
+        ),
+      )
+      .limit(5);
+    for (const c of contractors) {
+      candidates.push({
+        kind: "person",
+        id: c.id,
+        label: c.fullName,
+        score: c.fullName.toLowerCase() === q.toLowerCase() ? 1 : 0.7,
+      });
+    }
   }
   if (wants("contact")) {
     for (const c of await hybridResolveEntity("contact", q, orgId)) {
@@ -241,6 +285,11 @@ defineCapability({
         enum: ["person", "contact", "account"],
         description: "Optional narrowing when the name alone is ambiguous.",
       },
+      newPersonEmail: {
+        type: "string",
+        description:
+          "Non-equity partner agreements only: when the counterparty is not on the roster yet, their email address — the person is auto-added to the roster (contractor, no login) on commit.",
+      },
       values: {
         type: "object",
         description:
@@ -286,25 +335,82 @@ defineCapability({
         errorMessage: `No active contract template matches "${String(input.template)}". Upload and activate one on the Contracts → Templates page (types: ${CONTRACT_TYPES.join(", ")}).`,
       };
     }
-    const { match: counterparty, candidates } = await resolveCounterpartyByName(
+    const resolved = await resolveCounterpartyByName(
       orgId,
       String(input.counterparty ?? ""),
       input.counterpartyKind ? String(input.counterpartyKind) : null,
     );
+    let counterparty = resolved.match;
+    // Task #967 — roster auto-add for non-equity partner agreements: when
+    // the named counterparty is nobody we know, offer to add them to the
+    // roster (contractor, role label "Non-Equity Partner", no login) and
+    // prepare the agreement against the new roster row.
+    let pendingRosterCreate: { name: string; email: string } | null = null;
     if (!counterparty) {
-      if (candidates.length > 1) {
+      if (resolved.candidates.length > 1) {
         return {
           ok: false,
           errorCode: "ambiguous_counterparty",
           errorMessage: "Multiple people/organizations match.",
-          disambiguation: { kind: "contract_counterparty", options: candidates },
+          disambiguation: { kind: "contract_counterparty", options: resolved.candidates },
         };
       }
-      return {
-        ok: false,
-        errorCode: "counterparty_not_found",
-        errorMessage: `Nobody in the roster, contacts, or accounts matches "${String(input.counterparty)}".`,
-      };
+      const name = String(input.counterparty ?? "").trim();
+      if (template.contractType !== NEP_CONTRACT_TYPE) {
+        return {
+          ok: false,
+          errorCode: "counterparty_not_found",
+          errorMessage: `Nobody in the roster, contacts, or accounts matches "${name}".`,
+        };
+      }
+      const email = String(input.newPersonEmail ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        return {
+          ok: false,
+          errorCode: "counterparty_not_on_roster",
+          errorMessage: `"${name}" is not on the roster yet; their email is needed to add them.`,
+          clarification: {
+            field: "newPersonEmail",
+            question: `"${name}" isn't on the roster yet. What's their email address? I'll add them to the roster as a non-equity partner (contractor, no portal login) and prepare the agreement.`,
+            tool: "contract_prepare",
+            partial: { ...input, template: template.id },
+          },
+        };
+      }
+      // Duplicate guard — same email already on the roster means the same
+      // human; reuse that roster row instead of creating a duplicate.
+      const [dupEmp] = await db
+        .select({ id: atelierEmployees.id })
+        .from(atelierEmployees)
+        .where(and(eq(atelierEmployees.orgId, orgId), sql`lower(${atelierEmployees.email}) = ${email}`, isNull(atelierEmployees.deletedAt)));
+      const [dupCtr] = await db
+        .select({ id: atelierContractors.id })
+        .from(atelierContractors)
+        .where(and(eq(atelierContractors.orgId, orgId), sql`lower(${atelierContractors.email}) = ${email}`, isNull(atelierContractors.deletedAt)));
+      const dup = dupEmp ?? dupCtr;
+      if (dup) {
+        counterparty = await resolveCounterparty(orgId, "person", dup.id);
+      }
+      if (!counterparty) {
+        // Validate the name up front so the confirm card never promises a
+        // roster row that would fail structured-name validation on commit.
+        try {
+          resolveStructuredNameInput({ fullName: name });
+        } catch (err) {
+          if (err instanceof PersonNameValidationError) {
+            return { ok: false, errorCode: "invalid_name", errorMessage: err.message };
+          }
+          throw err;
+        }
+        pendingRosterCreate = { name, email };
+        counterparty = {
+          kind: "person",
+          id: "",
+          label: name,
+          accountId: null,
+          autoFill: { counterparty_name: name, counterparty_email: email },
+        };
+      }
     }
 
     // Preview the merged values against the current template version.
@@ -385,7 +491,9 @@ defineCapability({
           partial: {
             ...input,
             template: template.id,
-            counterparty: counterparty.id,
+            // Pending roster creates have no id yet — keep resolving by name
+            // (+ newPersonEmail) until the commit actually creates the row.
+            counterparty: pendingRosterCreate ? pendingRosterCreate.name : counterparty.id,
             counterpartyKind: counterparty.kind,
             values: { ...explicit, ...values },
           },
@@ -398,10 +506,23 @@ defineCapability({
         ok: true,
         data: { stage: "preview", template: template.name, counterparty: counterparty.label },
         confirmation: {
-          summary: `Prepare "${template.name}" for ${counterparty.label} — the filled Word draft will be generated for review/redlining.`,
+          summary: pendingRosterCreate
+            ? `Add ${pendingRosterCreate.name} (${pendingRosterCreate.email}) to the roster as a non-equity partner (contractor, no portal login) and prepare "${template.name}" for them — the filled Word draft will be generated for review/redlining.`
+            : `Prepare "${template.name}" for ${counterparty.label} — the filled Word draft will be generated for review/redlining.`,
           diff: {
             template: { id: template.id, name: template.name, type: template.contractType },
             counterparty: { kind: counterparty.kind, id: counterparty.id, label: counterparty.label },
+            ...(pendingRosterCreate
+              ? {
+                  rosterCreate: {
+                    name: pendingRosterCreate.name,
+                    email: pendingRosterCreate.email,
+                    workerType: "contractor",
+                    roleLabel: NEP_ROLE_LABEL,
+                    login: "none",
+                  },
+                }
+              : {}),
             signingEntity: { id: signingEntity.id, name: signingEntity.name },
             values: {
               ...values,
@@ -421,7 +542,7 @@ defineCapability({
             input: {
               ...input,
               template: template.id,
-              counterparty: counterparty.id,
+              counterparty: pendingRosterCreate ? pendingRosterCreate.name : counterparty.id,
               counterpartyKind: counterparty.kind,
               values: { ...explicit, ...values },
               confirm: true,
@@ -429,6 +550,54 @@ defineCapability({
           },
         },
       };
+    }
+
+    // Task #967 — commit-time roster create for a pending non-equity
+    // partner (contractor row, structured-name SoT, no portal login).
+    if (pendingRosterCreate) {
+      const personWrite = await writePersonAndSync(db, {
+        orgId,
+        structured: resolveStructuredNameInput({ fullName: pendingRosterCreate.name })!,
+        sourceKind: "contractor",
+        createdByUserId: ctx.persona.id,
+      });
+      const personId = `ctr_${rid("x").slice(2)}`;
+      await db.insert(atelierContractors).values({
+        id: personId,
+        orgId,
+        personId: personWrite.personId,
+        fullName: personWrite.fullName,
+        email: pendingRosterCreate.email,
+        notes: NEP_ROLE_LABEL,
+        status: "active",
+      });
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "person",
+        entityId: personId,
+        actorType: "human",
+        actorId: ctx.persona.id,
+        actorLabel: ctx.persona.name,
+        action: "roster.person.created",
+        payload: {
+          method: "chat_contract_prepare",
+          workerType: "contractor",
+          roleLabel: NEP_ROLE_LABEL,
+          status: "active",
+          email: pendingRosterCreate.email,
+          createLogin: false,
+        },
+        payloadSummary: `${ctx.persona.name} added ${personWrite.fullName} to the roster (non-equity partner) while preparing their agreement in chat.`,
+      });
+      const created = await resolveCounterparty(orgId, "person", personId);
+      if (!created) {
+        return {
+          ok: false,
+          errorCode: "roster_create_failed",
+          errorMessage: "The roster entry could not be created.",
+        };
+      }
+      counterparty = created;
     }
 
     const result = await prepareContract({
@@ -601,6 +770,232 @@ defineCapability({
         id: result.contract.id,
         kind: "contract",
         contract: contractSummary(result.contract),
+        signatureRequestId: result.signatureRequestId,
+        navigateTo: { path: `${CONTRACTS_PATH}/${result.contract.id}`, when: "on_commit" },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// 2b. contract_attach_final_and_send (Task #967)
+// ---------------------------------------------------------------------------
+
+defineCapability({
+  id: "codex.contract_attach_final_and_send",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "codex",
+  toolName: "contract_attach_final_and_send",
+  description:
+    "Record a chat-attached revised Word document (.docx) as a contract's FINAL version and immediately send it for e-signature: the attachment is stored as the final Word version, converted to PDF, and dispatched through the DocuSeal e-sign flow. Use when the user attaches an agreed/externally-reviewed revision and asks to trigger signature. Two-phase confirm; sends outbound email to the signers.",
+  slashAliases: { en: ["/contract-attach-sign"] },
+  representativePrompts: {
+    en: [
+      "Here's the agreed revision — record it as final and send it for signature.",
+      "Attach this revised agreement to the Nowfel contract and trigger the signature process.",
+    ],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      confirm: { type: "boolean", description: "Set true to commit." },
+      summary: { type: "string", description: "Optional human description." },
+      contract: { type: "string", description: "Contract id or title/counterparty text." },
+      attachmentId: {
+        type: "string",
+        description: "Chat attachment id of the revised .docx (from attachmentIds).",
+      },
+      signers: {
+        type: "array",
+        minItems: 1,
+        maxItems: 10,
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            email: { type: "string" },
+          },
+          required: ["name", "email"],
+          additionalProperties: false,
+        },
+      },
+      message: { type: "string", description: "Optional message to the signers." },
+    },
+    required: ["contract", "attachmentId", "signers"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: true,
+  outboundChannel: "email",
+  resultCard: "entity_card",
+  irreversible: true,
+  requiredRoles: ["founding_partner", "partner"],
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    const orgId = ctx.persona.orgId;
+    const q = String(input.contract ?? "").trim();
+    const rows = await db
+      .select()
+      .from(atelierContractRecords)
+      .where(
+        and(
+          eq(atelierContractRecords.orgId, orgId),
+          or(
+            eq(atelierContractRecords.id, q),
+            ilike(atelierContractRecords.title, `%${q}%`),
+            ilike(atelierContractRecords.counterpartyLabel, `%${q}%`),
+          ),
+        ),
+      )
+      .orderBy(desc(atelierContractRecords.updatedAt))
+      .limit(5);
+    // Same editability rule as the REST final-upload route: terminal
+    // statuses and out_for_signature cannot take a new final version.
+    const editable = rows.filter(
+      (r) => !TERMINAL_CONTRACT_STATUSES.has(r.status) && r.status !== "out_for_signature",
+    );
+    if (editable.length === 0) {
+      return {
+        ok: false,
+        errorCode: rows.length > 0 ? "not_editable" : "not_found",
+        errorMessage:
+          rows.length > 0
+            ? `Matching contract(s) cannot take a final version right now (${rows.map((r) => `${r.title}: ${r.status}`).join("; ")}).`
+            : `No contract matches "${q}".`,
+      };
+    }
+    if (editable.length > 1) {
+      return {
+        ok: false,
+        errorCode: "ambiguous_contract",
+        errorMessage: "Multiple contracts match.",
+        disambiguation: {
+          kind: "contract",
+          options: editable.map((r) => ({ id: r.id, label: `${r.title} (${r.status})` })),
+        },
+        // Write-tool disambiguation payloads must carry navigateTo:null.
+        data: { navigateTo: null },
+      };
+    }
+    const target = editable[0];
+
+    const attachmentId = String(input.attachmentId ?? "").trim();
+    const loaded = await loadAttachment(attachmentId, orgId);
+    if (!loaded || loaded.attachment.deletedAt) {
+      return {
+        ok: false,
+        errorCode: "attachment_not_found",
+        errorMessage: `Attachment ${attachmentId} was not found (it may have been deleted).`,
+      };
+    }
+    // Own-upload guard — the revision recorded as final must be a file this
+    // user attached in chat, not someone else's upload.
+    if (loaded.attachment.userId !== ctx.persona.id) {
+      return {
+        ok: false,
+        errorCode: "attachment_not_yours",
+        errorMessage: "Only the uploader of the attachment can record it as the final version.",
+      };
+    }
+    if (loaded.attachment.mime !== DOCX_MIME) {
+      return {
+        ok: false,
+        errorCode: "not_a_docx",
+        errorMessage: `The final version must be a Word document (.docx); the attachment is ${loaded.attachment.mime}.`,
+      };
+    }
+    const signers = (Array.isArray(input.signers) ? input.signers : []) as Array<{
+      name: string;
+      email: string;
+    }>;
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: { stage: "preview", contract: contractSummary(target) },
+        confirmation: {
+          summary: `Record "${loaded.attachment.fileName}" as the FINAL version of "${target.title}", convert it to PDF, and send it for signature to ${signers.map((s) => s.email).join(", ")} via DocuSeal.`,
+          diff: {
+            contract: contractSummary(target),
+            finalDocument: {
+              attachmentId,
+              fileName: loaded.attachment.fileName,
+              sizeBytes: loaded.attachment.sizeBytes,
+            },
+            signers,
+            message: input.message ?? null,
+          },
+          pending: {
+            tool: "contract_attach_final_and_send",
+            input: { ...input, contract: target.id, confirm: true },
+          },
+        },
+      };
+    }
+
+    const bytes = await loadAttachmentBytes(loaded.attachment.encryptedRef);
+    if (!bytes) {
+      return {
+        ok: false,
+        errorCode: "attachment_bytes_missing",
+        errorMessage: "The attachment's file content could not be loaded.",
+      };
+    }
+    // Mirror POST /contracts/:id/final — store the doc, flip the status,
+    // audit — then hand off to the shared send flow.
+    const doc = await addContractDocument({
+      contractId: target.id,
+      kind: "final_docx",
+      fileName: loaded.attachment.fileName || "final.docx",
+      mime: DOCX_MIME,
+      bytes,
+      actor: { id: ctx.persona.id, label: ctx.persona.name },
+    });
+    await db
+      .update(atelierContractRecords)
+      .set({ status: "final_uploaded", currentDocumentId: doc.id, updatedAt: new Date() })
+      .where(eq(atelierContractRecords.id, target.id));
+    await auditContractEntity({
+      entityType: "atelier_contract_record",
+      entityId: target.id,
+      actorId: ctx.persona.id,
+      actorLabel: ctx.persona.name,
+      action: "contract.final_upload",
+      payload: { fileName: doc.fileName, from: target.status, via: "chat", attachmentId },
+      summary: `Uploaded final Word version for contract "${target.title}" (chat attachment)`,
+    });
+
+    // Authorised-signatory gate + DOCX→PDF + DocuSeal dispatch all live in
+    // the shared service (same as contract_send_signature).
+    const [callerRow] = await db
+      .select({ email: atelierUsers.email })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, ctx.persona.id), eq(atelierUsers.orgId, orgId)));
+    const result = await sendContract({
+      orgId,
+      actor: { id: ctx.persona.id, name: ctx.persona.name },
+      contractId: target.id,
+      signers,
+      message: input.message ? String(input.message) : null,
+      caller: { userId: ctx.persona.id, email: callerRow?.email ?? null },
+    });
+    if (!result.ok) {
+      // The final version IS recorded even when the send fails (signatory
+      // gate, conversion, DocuSeal outage) — surface that honestly.
+      return {
+        ok: false,
+        errorCode: result.code.replace(/-/g, "_"),
+        errorMessage: `The revision was recorded as the final version, but sending for signature failed: ${result.message}`,
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        id: result.contract.id,
+        kind: "contract",
+        contract: contractSummary(result.contract),
+        finalDocumentId: doc.id,
         signatureRequestId: result.signatureRequestId,
         navigateTo: { path: `${CONTRACTS_PATH}/${result.contract.id}`, when: "on_commit" },
       },

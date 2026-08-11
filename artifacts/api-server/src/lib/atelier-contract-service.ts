@@ -15,6 +15,7 @@ import {
   db,
   atelierAccounts,
   atelierContacts,
+  atelierContractors,
   atelierEmployees,
   atelierFirmProfile,
   atelierUsers,
@@ -86,17 +87,37 @@ export async function resolveCounterparty(
       .select()
       .from(atelierEmployees)
       .where(and(eq(atelierEmployees.id, id), eq(atelierEmployees.orgId, orgId)));
-    if (!p) return null;
+    if (p) {
+      return {
+        kind,
+        id,
+        label: p.fullName,
+        accountId: null,
+        autoFill: {
+          counterparty_name: p.fullName,
+          counterparty_email: p.email ?? "",
+          counterparty_address: p.homeAddress ?? p.officeAddress ?? "",
+          counterparty_country: p.country ?? "",
+        },
+      };
+    }
+    // Task #967 — contractors are roster people too (non-equity partners
+    // are added as contractor rows by the chat prepare flow).
+    const [c] = await db
+      .select()
+      .from(atelierContractors)
+      .where(and(eq(atelierContractors.id, id), eq(atelierContractors.orgId, orgId)));
+    if (!c) return null;
     return {
       kind,
       id,
-      label: p.fullName,
+      label: c.fullName,
       accountId: null,
       autoFill: {
-        counterparty_name: p.fullName,
-        counterparty_email: p.email ?? "",
-        counterparty_address: p.homeAddress ?? p.officeAddress ?? "",
-        counterparty_country: p.country ?? "",
+        counterparty_name: c.fullName,
+        counterparty_email: c.email ?? "",
+        counterparty_address: c.homeAddress ?? c.officeAddress ?? "",
+        counterparty_country: c.country ?? "",
       },
     };
   }

@@ -93,7 +93,8 @@
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
     "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
     "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts",
-    "test:app-navigation": "tsx tests/app-navigation/run.ts"
+    "test:app-navigation": "tsx tests/app-navigation/run.ts",
+    "test:nep-flow": "tsx ./tests/crm/nep-flow-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
