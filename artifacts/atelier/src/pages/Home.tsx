@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks, getAtelierGetHomeQueryKey } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
+import { SectionHead, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
@@ -612,21 +612,26 @@ export default function Home() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <PageHero>
-        <SectionHead 
-          eyebrow={home.eyebrowDate}
-          headline={
-            <span dangerouslySetInnerHTML={{ __html: home.greeting.replace(home.persona.name, `<em class="accent">${home.persona.name}</em>`) }} />
-          }
-        />
-      </PageHero>
-
       {/* Task #899 — the inline "Ask Atelier" input was removed; the
           assistant now lives permanently in the left chat panel. */}
-      {/* Task #913 — the whole main section below the hero sits in one
-          rounded glass panel so it reads as a single cohesive surface. */}
-      <div className="container-atelier py-10">
+      {/* Task #913 — the whole main section sits in one rounded glass
+          panel so it reads as a single cohesive surface. */}
+      <div className="container-atelier py-6">
         <div className="glass-panel rounded-2xl p-6 sm:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+        {/* Task #917 — the greeting hero moved INSIDE the main panel as a
+            rounded navy band spanning the full panel width. */}
+        <div
+          className="page-hero rounded-xl px-6 sm:px-8 xl:col-span-3"
+          data-testid="home-greeting-band"
+        >
+          <SectionHead
+            eyebrow={home.eyebrowDate}
+            headline={
+              <span dangerouslySetInnerHTML={{ __html: home.greeting.replace(home.persona.name, `<em class="accent">${home.persona.name}</em>`) }} />
+            }
+          />
+        </div>
         
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">

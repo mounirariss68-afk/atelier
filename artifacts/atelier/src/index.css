@@ -589,6 +589,14 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* Task #917 — a page-hero band nested inside a glass panel (Home greeting):
+   no nested blur, near-opaque navy fill, no full-width divider border. */
+.glass-panel .page-hero {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border-bottom: 0;
+}
 
 [data-theme="light"] .page-hero,
 [data-theme="light"] .atelier-topnav {
