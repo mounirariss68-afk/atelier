@@ -329,7 +329,10 @@
       url("/light-bg.webp"),
       linear-gradient(160deg, var(--bg-deep) 0%, var(--bg) 50%, #FFFFFF 130%);
     background-size: auto, auto, auto, auto, cover, auto;
-    background-position: center, left center, left center, center, center, center;
+    /* Task #932: the artwork layer anchors LEFT so its content reaches the
+       left screen edge (cover keeps full coverage — any crop falls on the
+       right). Other layers unchanged. */
+    background-position: center, left center, left center, center, left center, center;
     background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   }
   body::after {
