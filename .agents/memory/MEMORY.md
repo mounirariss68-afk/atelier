@@ -19,7 +19,7 @@
 - [Cartographer entity-scope](cartographer-entity-scope.md) — chair/owner-led groups have NO group CEO; deterministic guardCartographerEntityScope() (not the prompt) is the regression-proof safety net.
 - [Atelier research priority-refs shape](atelier-research-priority-refs-shape.md) — account strategicPriorityRefs is {text,sourceUrls} (NO evidence); don't reuse AtelierResearchBriefFact for it or create 400s.
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; drafts stash in partial.input.__researchedDraft; multi-field details in [cli-multifield-clarification.md](cli-multifield-clarification.md).
-- [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors; diff against HEAD to attribute.
+- [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` has many PRE-EXISTING errors, diff vs HEAD to attribute; also rebuild gitignored lib dists first ([stale-lib-dist-review.md](stale-lib-dist-review.md)).
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.
 - [Running the CRM test harness](crm-harness-run.md) — isolated crm_test DB, >120s one-shot; never a workflow; flake/cleanup notes in crm-harness-*.md topic files.
 - [Atelier expense taxonomy surfaces](atelier-expense-taxonomy.md) — new non-/me endpoints for Me-lens UIs must be allowlisted in EVERY persona branch of the central gate; fresh scratch DBs need `CREATE EXTENSION vector` before drizzle push.
@@ -37,7 +37,7 @@
 - [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.
 - [Contract templates ingested](atelier-contract-templates-ingested.md) — task-agent DB data never merges; templates/signing entities re-ingested via live API on main (2026-07-19); repeat in prod before go-live.
 - [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
-- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai) — never re-add it; deck-graphics quirks in [launch-deck-graphics.md](launch-deck-graphics.md).
+- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai), never re-add its production block; render quirks in launch-*.md.
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete; polymorphic pane hrefs filter deleted targets; delete/close paths resolve pane items org-scoped.
@@ -125,10 +125,10 @@
 - [Download filename headers](download-filename-headers.md) — any Content-Disposition built from user data must use the shared httpFilename helper (RFC 5987 dual form) or non-ASCII names crash Node with a 500 HTML page.
 - [Account industry taxonomy resolver](atelier-industry-taxonomy.md) — ALL industry writes via resolveIndustryTaxonomy; unmappable → skip, never raw NAICS; backfill rerun notes in [atelier-industry-backfill.md](atelier-industry-backfill.md).
 - [Statutory filing register actions](atelier-statutory-filings.md) — overdue derived at read time; mark-filed/reopen via audited dedicated route; payroll-page register fetch must wait for overview backfill.
-- [Atelier chat travel tools](atelier-travel-tools.md) — flights=Ignav, hotels=StayingAPI; tools DB-free, booking = deep-link only; employee prefs masked outside self+fp/hr ([atelier-travel-profile.md](atelier-travel-profile.md)); more in atelier-travel-*.md.
+- [Atelier chat travel tools](atelier-travel-tools.md) — flights=Ignav, hotels=StayingAPI; tools DB-free, booking deep-link only; prefs masked outside self+fp/hr (atelier-travel-profile.md, atelier-travel-*.md).
 - [Procurement Navigator invariants](atelier-procurement-navigator.md) — deterministic GCC routing (not prompt-only); approve keeps manual status; account tabs deep-link via ?tab=.
-- [Chat verbatim replay window](atelier-chat-replay.md) — verbatim replay + rollover lineage; facts from tool successes only, every new commit path needs its own ingest, facts/replay authoritative over summaries ([atelier-session-facts.md](atelier-session-facts.md)).
-- [Atelier clarification resolver](atelier-clarification-resolver.md) — shared reply classifier, opener sets stay in sync; option picks resume via prompt-injected `id <optionId>` with exact tool-input ids ([chat-disambiguation-resume.md](chat-disambiguation-resume.md)).
+- [Chat verbatim replay window](atelier-chat-replay.md) — rollover keeps lineage; facts from tool successes only, every new commit path needs its own ingest; replay/facts beat summaries (atelier-session-facts.md).
+- [Atelier clarification resolver](atelier-clarification-resolver.md) — shared reply classifier; opener sets stay in sync; option picks resume via `id <optionId>` with exact tool-input ids (chat-disambiguation-resume.md).
 - [Chat reliability harness](chat-reliability-harness.md) — run validation step `chat-reliability` (test:chat-suite) before merging orchestrator/resolver/chat-core changes; assertAlive = dead-end guard; employee chat is 200+me.*-clamped, not 403.
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.
 - [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
@@ -149,7 +149,6 @@
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
 - [Partner registration flow](atelier-partner-registration.md) — token purpose partner_registration; "registered" signal is firm.registrationCompletedAt (NOT cred.userManaged); firm bank columns write only via finance approve.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
-- [Stale lib dist fails typecheck/review](stale-lib-dist-review.md) — gitignored lib/db + api-zod + api-client-react dist lag schema edits AND merged-in commits; `tsc -b --force` them after Drizzle edits and before markTaskComplete.
 - [Credential-bearing link routes](atelier-credential-link-routes.md) — activation/reset-URL responses must use trustedRequestOrigin + 403 untrusted explicit Origins, or CORS leaks the token.
 - [Mechanical className sweeps over tsx](tsx-classname-sweeps.md) — never regex all string literals (apostrophes in comments corrupt code); line-based + tag-aware; skip form controls.
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass; fixed Tailwind-alpha surfaces need explicit fallback selectors; rail now LEFT-anchored.

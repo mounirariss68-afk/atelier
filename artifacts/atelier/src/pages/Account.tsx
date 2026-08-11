@@ -35,7 +35,6 @@ import {
 import {
   BackLink,
   PageHero,
-  SectionHead,
   Card,
   MonoChip,
   PlmPill,
@@ -228,6 +227,31 @@ export default function Account() {
     return TABS.some((t) => t.key === wanted) ? (wanted as TabKey) : "profile";
   });
   const [esignOpen, setEsignOpen] = useState(false);
+  // Task #957 — long account descriptions are clamped to keep the header
+  // compact. The "Show more" affordance is driven by measured overflow of the
+  // clamped paragraph (scrollHeight vs clientHeight), not by text length, so
+  // narrow viewports never hide text without a way to expand it.
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement | null>(null);
+  const notes = ws?.account?.notes ?? null;
+  useEffect(() => {
+    // Navigating between accounts must not carry an expanded header along.
+    setDescExpanded(false);
+  }, [accountId]);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) {
+      setDescOverflows(false);
+      return;
+    }
+    const measure = () =>
+      setDescOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [notes, descExpanded, isLoading]);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
@@ -317,47 +341,53 @@ export default function Account() {
           </div>
         )}
 
-        <div className="flex items-start justify-between gap-6 flex-wrap">
-          <SectionHead
-            eyebrow={
+        <div className="flex items-start justify-between gap-x-6 gap-y-4 flex-wrap">
+          <div className="min-w-0 flex-1 basis-72 space-y-3">
+            <Eyebrow>
               <span className="inline-flex items-center gap-2">
                 <Globe className="w-3.5 h-3.5" /> {a.country} · {a.sector}
                 {a.hqCity && ` · HQ ${a.hqCity}`}
               </span>
-            }
-            headline={a.brandName ?? a.name}
-            lede={
-              a.brandName && a.brandName !== a.name
-                ? `${a.name}${a.notes ? ` — ${a.notes}` : ""}`
-                : a.notes ?? undefined
-            }
-          />
-          <div className="flex items-center gap-3">
-            <MonoChip tone={a.tier === "A" ? "gold" : a.tier === "B" ? "green" : "default"}>
-              Tier {a.tier}
-            </MonoChip>
-            <MonoChip>{a.status}</MonoChip>
-            {a.health && (
-              <button
-                onClick={() => setTab("account_360")}
-                className="appearance-none"
-                data-testid="chip-account-health"
-                title={`Account health ${a.health.score}/100`}
-              >
-                <MonoChip
-                  tone={
-                    a.health.band === "green"
-                      ? "green"
-                      : a.health.band === "amber"
-                        ? "amber"
-                        : "red"
-                  }
+            </Eyebrow>
+            <h2 className="headline">{a.brandName ?? a.name}</h2>
+            {/* Task #957 — one aligned, consistent chip row (tier / status /
+                health), instead of a loose cluster mixed into the actions. */}
+            <div className="flex items-center gap-2 flex-wrap" data-testid="row-account-chips">
+              <MonoChip tone={a.tier === "A" ? "gold" : a.tier === "B" ? "green" : "default"}>
+                Tier {a.tier}
+              </MonoChip>
+              <MonoChip>{a.status}</MonoChip>
+              {a.health && (
+                <button
+                  onClick={() => setTab("account_360")}
+                  className="appearance-none inline-flex"
+                  data-testid="chip-account-health"
+                  title={`Account health ${a.health.score}/100`}
                 >
-                  <Gauge className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                  Health {a.health.score}
-                </MonoChip>
-              </button>
-            )}
+                  <MonoChip
+                    tone={
+                      a.health.band === "green"
+                        ? "green"
+                        : a.health.band === "amber"
+                          ? "amber"
+                          : "red"
+                    }
+                    className="inline-flex items-center gap-1"
+                  >
+                    <Gauge className="w-3.5 h-3.5" />
+                    Health {a.health.score}
+                  </MonoChip>
+                </button>
+              )}
+              {a.brandName && a.brandName !== a.name && (
+                <MonoChip title="Registered legal name">{a.name}</MonoChip>
+              )}
+            </div>
+          </div>
+          <div
+            className="flex items-center gap-2 flex-wrap justify-end shrink min-w-0"
+            data-testid="row-account-actions"
+          >
             {a.cartographerStatus === "running" ? (
               <span
                 className="pill-btn pill-btn-ghost text-xs cursor-default"
@@ -461,6 +491,28 @@ export default function Account() {
             )}
           </div>
         </div>
+        {a.notes && (
+          // Task #957 — description as a single full-width paragraph (never in
+          // the eyebrow), clamped with an expand affordance when long.
+          <div className="mt-4 max-w-none" data-testid="text-account-description">
+            <p
+              ref={descRef}
+              className={`text-[15px] leading-relaxed text-text-mute ${descExpanded ? "" : "line-clamp-2"}`}
+            >
+              {a.notes}
+            </p>
+            {(descOverflows || descExpanded) && (
+              <button
+                type="button"
+                onClick={() => setDescExpanded((v) => !v)}
+                className="mt-1 text-xs font-mono uppercase tracking-widest text-text-faint hover:text-gold transition-colors"
+                data-testid="button-toggle-description"
+              >
+                {descExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </div>
+        )}
         {a.cartographerStatus === "failed" && (
           <div
             className="mt-4 border border-danger/40 bg-danger/10 rounded p-3 text-xs font-mono text-danger flex items-center justify-between"
@@ -474,7 +526,7 @@ export default function Account() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-6">
           <HeroStat value={a.openOpportunityCount} caption="Open opportunities" size="md" />
           <HeroStat value={a.activeEngagementCount} caption="Active engagements" size="md" />
           <HeroStat value={ws.contacts.length} caption="Decision-makers" size="md" />
@@ -2707,9 +2759,9 @@ function DecisionMakersTab({
           onOpenChange={(o) => !o && setMergeFromId(null)}
         />
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <SectionLabel>Decision-makers</SectionLabel>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href={`${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/meeting-prep.html`}
             target="_blank"
