@@ -537,6 +537,33 @@ function meetingKind(m: AtelierCalendarMeeting): MeetingKind {
   return k === "ooo" || k === "holiday" ? k : undefined;
 }
 
+// Task #963 — day-view color coding, mirroring the web Meetings day view
+// (Task #960, `meetingAudience` in atelier MsMeetings.tsx): internal meetings
+// render light pink, meetings involving external parties light blue. A meeting
+// is internal when it was booked in Atelier (`internal`), or when nothing
+// points outside the org: no CRM matches and no attendee/organizer email off
+// the org's domain. Sparse attendee data defaults to internal.
+function meetingAudience(
+  m: AtelierCalendarMeeting,
+  orgDomain: string | null,
+): "internal" | "external" {
+  if (m.internal) return "internal";
+  if (m.matches.length > 0) return "external";
+  if (orgDomain) {
+    const emails = [
+      ...(m.attendees ?? []).map((a) => a.email),
+      m.organizerEmail ?? "",
+    ].filter(Boolean);
+    if (emails.some((e) => !e.toLowerCase().endsWith(`@${orgDomain}`))) return "external";
+  }
+  return "internal";
+}
+
+// Same hues as the web day view: pink-400/15 and sky-400/15.
+function audienceCardBg(audience: "internal" | "external"): string {
+  return audience === "internal" ? "#F472B626" : "#38BDF826";
+}
+
 interface AwayPerson {
   personId: string;
   personName: string;
@@ -978,10 +1005,12 @@ function DayTimeline({
   meetings,
   date,
   onOpen,
+  orgDomain,
 }: {
   meetings: AtelierCalendarMeeting[];
   date: Date;
   onOpen: (m: AtelierCalendarMeeting) => void;
+  orgDomain: string | null;
 }) {
   const c = useColors();
   const { t } = useI18n();
@@ -1049,7 +1078,6 @@ function DayTimeline({
         }}
       >
         {blocks.map(({ m, top, height, col, cols }) => {
-          const matched = m.matches.length > 0;
           return (
             <Pressable
               key={m.id}
@@ -1073,7 +1101,7 @@ function DayTimeline({
                   borderRadius: 8,
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: c.border,
-                  backgroundColor: matched ? c.primary + "22" : c.secondary,
+                  backgroundColor: audienceCardBg(meetingAudience(m, orgDomain)),
                   paddingHorizontal: 8,
                   paddingVertical: 4,
                   overflow: "hidden",
@@ -1912,6 +1940,11 @@ export default function MeetingsScreen() {
   const dayMeetings = dayCalendar.data?.meetings ?? [];
   const allDayMeetings = dayMeetings.filter((m) => m.isAllDay);
   const connected = Boolean(conn.data?.configured && conn.data.connected);
+  // Task #963 — org email domain for internal/external color coding (same
+  // derivation as the web day view).
+  const orgDomain = conn.data?.msEmail?.includes("@")
+    ? conn.data.msEmail.split("@")[1]!.toLowerCase()
+    : null;
 
   // When the day view opens or the day's data arrives, land on the 9:00 AM
   // slot by default — unless a deep link focuses a meeting on this day, in
@@ -2239,9 +2272,9 @@ export default function MeetingsScreen() {
                           backgroundColor:
                             meetingKind(m) === "ooo"
                               ? "#D9770622"
-                              : m.matches.length > 0
-                                ? c.primary + "22"
-                                : c.secondary,
+                              : meetingKind(m) === "holiday"
+                                ? c.secondary
+                                : audienceCardBg(meetingAudience(m, orgDomain)),
                           paddingHorizontal: 10,
                           paddingVertical: 8,
                           opacity: pressed ? 0.8 : 1,
@@ -2273,6 +2306,7 @@ export default function MeetingsScreen() {
                   meetings={dayMeetings}
                   date={selectedDate}
                   onOpen={(m) => setDetailMeeting(m)}
+                  orgDomain={orgDomain}
                 />
               </>
             )}
