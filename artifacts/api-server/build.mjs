@@ -146,6 +146,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     // Task #1007 — approved Cognirise backdrop artwork for the PDF brand kit.
     "assets/pdf-bg-light.jpg",
     "assets/pdf-bg-dark.jpg",
+    "assets/pdf-logo-white.png",
   ];
   await mkdir(path.resolve(distDir, "assets"), { recursive: true });
   for (const rel of runtimeAssets) {

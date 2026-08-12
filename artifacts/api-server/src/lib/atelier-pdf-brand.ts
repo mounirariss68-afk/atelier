@@ -266,7 +266,14 @@ export interface BrandCoverOpts {
   confidentiality?: string;
 }
 
-/** Full-bleed navy cover with a soft glass card. */
+/**
+ * Full-bleed cover on the approved dark Cognirise artwork.
+ *
+ * Editorial layout — no boxes, no chips: the white wordmark sits directly
+ * on the artwork top-left, the title block anchors the upper-middle of the
+ * page over the darkest region of the art, and a hairline meta band with
+ * the generated date + confidentiality line closes the page.
+ */
 export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void {
   const s = state(doc);
   s.chrome = false;
@@ -282,99 +289,103 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
   if (bg) {
     doc.image(bg, 0, 0, { width: w, height: h });
     doc.save();
-    doc.fillOpacity(0.42).rect(0, 0, w, h).fill(BRAND.navyDeep);
+    // Heavier at the top (where the copy sits), lighter over the artwork.
+    const scrim = doc.linearGradient(0, 0, 0, h);
+    scrim.stop(0, BRAND.navyDeep).stop(0.65, BRAND.navyDeep).stop(1, BRAND.navyDeep);
+    doc.fillOpacity(0.45).rect(0, 0, w, h).fill(scrim);
     doc.fillOpacity(1);
     doc.restore();
   } else {
     const grad = doc.linearGradient(0, 0, w, h);
     grad.stop(0, BRAND.navyDeep).stop(0.55, BRAND.navy).stop(1, "#16305A");
     doc.rect(0, 0, w, h).fill(grad);
-    // Soft glass orbs — large translucent circles echoing the UI backdrop.
-    doc.save();
-    doc.fillOpacity(0.05).circle(w - 60, 120, 150).fill(BRAND.white);
-    doc.fillOpacity(0.04).circle(70, h - 130, 190).fill(BRAND.goldSoft);
-    doc.fillOpacity(1);
-    doc.restore();
   }
   // Cognirise gradient top rule.
   cogGradRule(doc, 0, 0, w, 6);
 
-  // Glass card.
-  const cardX = 64;
-  const cardW = w - 128;
-  const cardY = 168;
-  const cardH = 330;
-  doc.save();
-  doc.fillOpacity(0.09).roundedRect(cardX, cardY, cardW, cardH, 18).fill(BRAND.white);
-  doc.fillOpacity(1);
-  doc.roundedRect(cardX, cardY, cardW, cardH, 18).lineWidth(1).strokeOpacity(0.35).strokeColor(BRAND.white).stroke();
-  doc.strokeOpacity(1);
-  doc.restore();
+  const mx = 64; // cover margin
+  const cw = w - mx * 2;
 
-  const inX = cardX + 36;
-  const inW = cardW - 72;
-  let y = cardY + 36;
-
-  // Wordmark chip — the navy logo needs a light surface.
-  if (s.logo) {
-    doc.roundedRect(inX, y, 156, 46, 10).fill(BRAND.white);
-    doc.image(s.logo, inX + 18, y + 12, { width: 120 });
-    y += 70;
+  // White wordmark straight on the artwork — no chip.
+  const whiteLogo = loadBgAsset("pdf-logo-white.png");
+  if (whiteLogo) {
+    doc.image(whiteLogo, mx, 58, { width: 132 });
   } else {
-    doc.font(FONT.bold).fontSize(20).fillColor(BRAND.white).text("COGNIRISE", inX, y);
-    y += 40;
+    doc.font(FONT.bold).fontSize(18).fillColor(BRAND.white).text("COGNIRISE", mx, 62, { lineBreak: false });
   }
+  doc
+    .font(FONT.medium)
+    .fontSize(8)
+    .fillOpacity(0.7)
+    .fillColor(BRAND.white)
+    .text("ATELIER", w - mx - 120, 70, { width: 120, align: "right", characterSpacing: 3, lineBreak: false });
+  doc.fillOpacity(1);
 
+  // Title block, upper-middle.
+  let y = 236;
+  cogGradRule(doc, mx, y, 72, 2.2);
+  y += 18;
   doc
     .font(FONT.semibold)
-    .fontSize(10)
+    .fontSize(11)
     .fillColor(BRAND.goldSoft)
-    .text(opts.docType.toUpperCase(), inX, y, { width: inW, characterSpacing: 2 });
-  y = doc.y + 10;
-  cogGradRule(doc, inX, y - 0.7, 64, 1.4);
-  y += 16;
-
-  doc.font(FONT.bold).fontSize(25).fillColor(BRAND.white).text(opts.title, inX, y, { width: inW });
-  y = doc.y + 10;
+    .text(opts.docType.toUpperCase(), mx, y, { width: cw, characterSpacing: 2.6 });
+  y = doc.y + 14;
+  doc.font(FONT.bold).fontSize(31).fillColor(BRAND.white).text(opts.title, mx, y, { width: cw, lineGap: 2 });
+  y = doc.y + 14;
 
   for (const line of opts.subLines ?? []) {
     if (!line) continue;
-    doc.font(FONT.regular).fontSize(11.5).fillOpacity(0.85).fillColor(BRAND.white).text(line, inX, y, { width: inW });
+    doc.font(FONT.regular).fontSize(12).fillOpacity(0.85).fillColor(BRAND.white).text(line, mx, y, { width: cw });
     doc.fillOpacity(1);
-    y = doc.y + 4;
+    y = doc.y + 5;
   }
   if (opts.badge) {
-    y += 8;
-    doc.font(FONT.semibold).fontSize(10).fillColor(BRAND.coral).text(opts.badge, inX, y, { width: inW });
-    y = doc.y;
+    // Outlined pill badge in the coral accent.
+    y += 12;
+    const badgeText = opts.badge;
+    doc.font(FONT.semibold).fontSize(9.5);
+    const tw = doc.widthOfString(badgeText, { characterSpacing: 0.4 });
+    const ph = 22;
+    doc.save();
+    doc.roundedRect(mx, y, tw + 28, ph, ph / 2).lineWidth(1).strokeOpacity(0.85).strokeColor(BRAND.coral).stroke();
+    doc.strokeOpacity(1);
+    doc.restore();
+    doc.fillColor(BRAND.coral).text(badgeText, mx + 14, y + 6, { characterSpacing: 0.4, lineBreak: false });
+    y += ph;
   }
 
-  // Meta under the card. Zero the bottom margin while writing near the
-  // page edge — otherwise pdfkit auto-paginates onto a phantom page.
+  // Bottom meta band. Zero the bottom margin while writing near the page
+  // edge — otherwise pdfkit auto-paginates onto a phantom page.
   const savedBottom = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
   const genAt = opts.generatedAt ?? new Date();
   const dateStr = genAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const bandY = h - 92;
+  doc.save();
+  doc.moveTo(mx, bandY).lineTo(w - mx, bandY).lineWidth(0.8).strokeOpacity(0.28).strokeColor(BRAND.white).stroke();
+  doc.strokeOpacity(1);
+  doc.restore();
+  doc
+    .font(FONT.semibold)
+    .fontSize(9)
+    .fillOpacity(0.85)
+    .fillColor(BRAND.white)
+    .text(`Generated ${dateStr}`, mx, bandY + 14, { width: cw / 2, lineBreak: false });
   doc
     .font(FONT.regular)
-    .fontSize(10)
-    .fillOpacity(0.75)
-    .fillColor(BRAND.white)
-    .text(`Generated ${dateStr}`, cardX, cardY + cardH + 22, { width: cardW });
-  doc.fillOpacity(1);
-
-  // Confidentiality footer.
+    .fontSize(9)
+    .text("cognirise.ai", mx + cw / 2, bandY + 14, { width: cw / 2, align: "right", lineBreak: false });
   doc
     .font(FONT.regular)
-    .fontSize(8)
-    .fillOpacity(0.65)
-    .fillColor(BRAND.white)
+    .fontSize(7.5)
+    .fillOpacity(0.6)
     .text(
       opts.confidentiality ??
         "Confidential — prepared by Cognirise. Not for distribution outside the intended recipient.",
-      64,
-      h - 64,
-      { width: w - 128, align: "center" },
+      mx,
+      bandY + 32,
+      { width: cw },
     );
   doc.fillOpacity(1);
   doc.page.margins.bottom = savedBottom;
