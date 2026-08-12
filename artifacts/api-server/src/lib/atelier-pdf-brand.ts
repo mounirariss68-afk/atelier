@@ -230,14 +230,14 @@ function paintPageChrome(doc: PDFKit.PDFDocument): void {
   // Navy strip + Cognirise gradient hairline at the very top.
   doc.rect(0, 0, w, 8).fill(BRAND.navy);
   cogGradRule(doc, 0, 8, w, 1.6);
-  // Riser avatar + Atelier name, top-left of the header zone.
+  // Riser avatar + Riser name, top-left of the header zone.
   const avatar = loadBgAsset("pdf-riser-avatar.png");
   let tx = PAGE.left;
   if (avatar) {
     doc.image(avatar, PAGE.left, 22, { width: 24, height: 24 });
     tx += 32;
   }
-  doc.font(FONT.semibold).fontSize(12).fillColor(BRAND.navy).text("Atelier", tx, 29, { lineBreak: false });
+  doc.font(FONT.semibold).fontSize(12).fillColor(BRAND.navy).text("Riser", tx, 29, { lineBreak: false });
   doc
     .moveTo(PAGE.left, 56)
     .lineTo(PAGE.right, 56)
