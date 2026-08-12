@@ -1236,6 +1236,115 @@ function EntityBody({ data, lang }: { data: Json; lang: string }) {
   );
 }
 
+/* ─────────── Task #994 — /recap body (proactive-card parity) ─────────── */
+
+function RecapBody({ data }: { data: Json }) {
+  const c = useColors();
+  const { t } = useI18n();
+  const rtl = useRTL();
+  const accomplishments = asArr(data.accomplishments)
+    .map((a) => asStr(a))
+    .filter((a) => a.trim().length > 0);
+  const openThreads = asArr(data.openThreads)
+    .map((o) => asStr(o))
+    .filter((o) => o.trim().length > 0);
+  return (
+    <View style={{ gap: 4 }}>
+      <Text
+        style={{
+          color: "#C9A24E",
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 11,
+          letterSpacing: 1,
+          textTransform: "uppercase",
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {t("chat.recapTitle")}
+      </Text>
+      {accomplishments.map((a, i) => (
+        <Text
+          key={i}
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_400Regular",
+            fontSize: 13,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {"• "}
+          {a}
+        </Text>
+      ))}
+      {openThreads.length > 0 ? (
+        <View style={{ gap: 2, paddingTop: 2 }}>
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 10,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {t("chat.recapStillOpen")}
+          </Text>
+          {openThreads.map((o, i) => (
+            <Text
+              key={i}
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_400Regular",
+                fontSize: 12,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {o}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {asArr(data.entities).length > 0 ? (
+        <View
+          style={{
+            flexDirection: rtl.row,
+            flexWrap: "wrap",
+            gap: 6,
+            paddingTop: 2,
+          }}
+        >
+          {asArr(data.entities)
+            .map((e) => asObj(e))
+            .filter((e) => asStr(e.label).trim().length > 0)
+            .map((e, i) => (
+              <View
+                key={`${asStr(e.kind)}:${asStr(e.id)}-${i}`}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderRadius: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontSize: 10,
+                  }}
+                >
+                  {asStr(e.kind)}: {asStr(e.label)}
+                </Text>
+              </View>
+            ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function FallbackGrid({ data, lang }: { data: Json; lang: string }) {
   const c = useColors();
   const rtl = useRTL();
@@ -1798,6 +1907,19 @@ export function ToolResultCards({
             case "renewal_card":
             case "change_order_card":
               body = <EntityBody data={dataObj} lang={lang} />;
+              break;
+            // Task #994 — /recap renders the same tidy card as the
+            // proactive "Catching you up" treatment when composed lists
+            // exist; legacy trace-only payloads keep the generic grid.
+            case "recap_card":
+              if (
+                asArr(dataObj.accomplishments).length > 0 ||
+                asArr(dataObj.openThreads).length > 0
+              ) {
+                body = <RecapBody data={dataObj} />;
+                break;
+              }
+              body = <FallbackGrid data={dataObj} lang={lang} />;
               break;
             // Task #853 — AR rollup cards (universal chat lookups).
             case "statement_of_account":

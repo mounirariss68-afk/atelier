@@ -782,9 +782,81 @@ function ShapeBody({
       return <CrmEntityCard shape={shape} data={data} locale={locale} />;
     case "qualification_rubric":
       return <QualificationRubric data={data} locale={locale} />;
+    // Task #994 — /recap renders the same tidy card as the proactive
+    // "Catching you up" treatment when composed lists exist.
+    case "recap_card":
+      return <RecapCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────────── Task #994 — /recap result card (proactive parity) ─────────── */
+
+function RecapCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const accomplishments = asArr(data.accomplishments)
+    .map((a) => asStr(a))
+    .filter((a) => a.trim().length > 0);
+  const openThreads = asArr(data.openThreads)
+    .map((o) => asStr(o))
+    .filter((o) => o.trim().length > 0);
+
+  // Legacy fallback: no composed summary and nothing open — keep the
+  // previous generic rendering (raw `recap` trace lines et al).
+  if (accomplishments.length === 0 && openThreads.length === 0) {
+    return <FallbackJson data={data} />;
+  }
+
+  const entities = asArr(data.entities)
+    .map((e) => asObj(e))
+    .filter((e) => asStr(e.label).trim().length > 0);
+
+  return (
+    <div className="space-y-1.5" data-testid="cli-recap-card">
+      <div className="text-xs font-mono uppercase tracking-wider text-gold">
+        {s("recapTitle", locale)}
+      </div>
+      {accomplishments.length > 0 && (
+        <ul
+          className="text-xs text-text leading-relaxed space-y-0.5"
+          data-testid="cli-recap-card-accomplishments"
+        >
+          {accomplishments.map((a, i) => (
+            <li key={i} className="flex gap-1.5">
+              <span className="text-gold" aria-hidden>
+                •
+              </span>
+              <span>{a}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {openThreads.length > 0 && (
+        <div className="pt-1 space-y-0.5" data-testid="cli-recap-card-open-threads">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-mute">
+            {s("recapOpenThreads", locale)}
+          </div>
+          {openThreads.map((o, i) => (
+            <div key={i} className="text-xs text-text-mute leading-relaxed">
+              {o}
+            </div>
+          ))}
+        </div>
+      )}
+      {entities.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {entities.map((e, i) => (
+            <span
+              key={`${asStr(e.kind)}:${asStr(e.id)}-${i}`}
+              className="text-[10px] font-mono bg-bg-deep border border-border rounded px-1.5 py-0.5 text-text-mute"
+            >
+              {asStr(e.kind)}: {asStr(e.label)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────────── Task #560 — account-creation proposal ─────────────── */
