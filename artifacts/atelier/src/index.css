@@ -348,10 +348,10 @@
         color-mix(in srgb, var(--bg-deep) 24%, transparent) 100%),
       url("/light-bg.webp");
     background-size: auto, cover;
-    /* Task #932: the artwork layer anchors LEFT so its content reaches the
-       left screen edge (cover keeps full coverage — any crop falls on the
-       right). */
-    background-position: center, left center;
+    /* Task #932 anchored the old watercolor art LEFT; Task #996's geometric
+       artwork is a balanced blue→coral sweep, so it re-centers to keep the
+       coral right side visible on narrow viewports (crop falls evenly). */
+    background-position: center, center center;
     background-repeat: no-repeat, no-repeat;
   }
   @keyframes bg-drift {
