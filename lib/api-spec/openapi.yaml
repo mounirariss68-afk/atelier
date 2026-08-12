@@ -11195,6 +11195,15 @@ components:
         promoted: { type: boolean }
         promotedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+        # Task #1022 — fact-hygiene projection (computed at read time).
+        retrievedAt: { type: ["string", "null"], format: date-time }
+        flags:
+          type: object
+          properties:
+            stale: { type: boolean }
+            lowConfidence: { type: boolean }
+            unsourced: { type: boolean }
+        duplicateOfId: { type: ["string", "null"] }
         runId: { type: ["string", "null"] }
 
     AtelierPromoteFactInput:

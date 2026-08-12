@@ -184,6 +184,46 @@ export const POVDraft = defineAgent({
   ],
 });
 
+// Task #1022 — POV Deep Researcher (Front of House). Dedicated pre-outline
+// research pass: targeted Perplexity queries per thesis angle with recency
+// filters and optional domain restriction; results land as unpromoted
+// candidate facts on the opportunity for partner review.
+export const PovDeepResearcher = defineAgent({
+  id: "ag_pov_researcher",
+  name: "POV Deep Researcher",
+  group: "Front of House",
+  stage: "Shape",
+  purpose: "Targeted per-angle web research producing atomic, dated candidate facts for POV evidence review.",
+  model: "claude-sonnet-4-5",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/pov_author/v1.md",
+  inputSchema: z.object({
+    opportunityId: z.string(),
+    audience: z.string(),
+    objective: z.string(),
+    angles: z.array(z.string()).optional(),
+  }),
+  outputSchema: z.object({
+    facts: z.array(
+      z
+        .object({
+          topic: z.string(),
+          statement: z.string(),
+        })
+        .passthrough(),
+    ),
+    queryCount: z.number().optional(),
+  }).passthrough(),
+  tools: ["web.research"],
+  guardrails: [
+    "Source URLs copied verbatim from retrieval — never invented",
+    "One claim per fact; facts land unpromoted for human review",
+  ],
+  humanCheckpoints: [partnerCheck("Partner promotes facts before they become citable")],
+  evals: [],
+});
+
 // Task #297 — Brand Profile Writer (Front of House). Canonical source of
 // firm brand copy: tagline, mission, boilerplate, differentiators, proof
 // points, legal entities, contact block. Other agents (Proposal Composer,
@@ -2201,6 +2241,8 @@ export const ATELIER_AGENTS: Agent[] = [
   // Task #699 — Account Strategy Developer
   StrategyDeveloper,
   ProcurementNavigator,
+  // Task #1022 — POV deep-research pass
+  PovDeepResearcher,
 ];
 
 export const AGENT_BY_ID: Record<string, Agent> = Object.fromEntries(

@@ -1598,6 +1598,12 @@ export const atelierPovs = pgTable(
     objective: text("objective"),
     status: text("status").notNull().default("outline"),
     outline: jsonb("outline").notNull().default([]),
+    // Task #1022 — evidence snapshot. The promoted-fact set the CURRENT
+    // outline was built from, frozen at outline creation/regeneration so the
+    // draft/revise chain always runs on exactly the evidence the approved
+    // outline used (no silent drift when facts are promoted/demoted later).
+    factSnapshot: jsonb("fact_snapshot"),
+    factSnapshotAt: timestamp("fact_snapshot_at"),
     currentVersionId: text("current_version_id"),
     runId: text("run_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1625,7 +1631,13 @@ export const atelierPovVersions = pgTable(
     createdByUserId: text("created_by_user_id"),
     deletedAt: timestamp("deleted_at"),
   },
-  (t) => [index("idx_atelier_povv_pov").on(t.povId)],
+  (t) => [
+    index("idx_atelier_povv_pov").on(t.povId),
+    // Task #1022 — race-safe version numbering: concurrent draft/revise
+    // launches can no longer mint duplicate version numbers; the insert
+    // path retries on unique-violation with a freshly computed max+1.
+    uniqueIndex("uq_atelier_povv_num").on(t.povId, t.versionNumber),
+  ],
 );
 
 // ============================================================

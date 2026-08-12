@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierResearchFactFlags } from "./atelierResearchFactFlags";
 import type { Confidence } from "./confidence";
 
 export interface AtelierResearchFact {
@@ -23,6 +24,11 @@ export interface AtelierResearchFact {
   /** @nullable */
   promotedAt?: Date | null;
   createdAt: Date;
+  /** @nullable */
+  retrievedAt?: Date | null;
+  flags?: AtelierResearchFactFlags;
+  /** @nullable */
+  duplicateOfId?: string | null;
   /** @nullable */
   runId?: string | null;
 }

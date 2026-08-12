@@ -9015,6 +9015,15 @@ export const AtelierListResearchFactsResponseItem = zod.object({
   promoted: zod.boolean(),
   promotedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
+  retrievedAt: zod.coerce.date().nullish(),
+  flags: zod
+    .object({
+      stale: zod.boolean().optional(),
+      lowConfidence: zod.boolean().optional(),
+      unsourced: zod.boolean().optional(),
+    })
+    .optional(),
+  duplicateOfId: zod.string().nullish(),
   runId: zod.string().nullish(),
 });
 export const AtelierListResearchFactsResponse = zod.array(
@@ -9042,6 +9051,15 @@ export const AtelierPromoteResearchFactResponse = zod.object({
   promoted: zod.boolean(),
   promotedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
+  retrievedAt: zod.coerce.date().nullish(),
+  flags: zod
+    .object({
+      stale: zod.boolean().optional(),
+      lowConfidence: zod.boolean().optional(),
+      unsourced: zod.boolean().optional(),
+    })
+    .optional(),
+  duplicateOfId: zod.string().nullish(),
   runId: zod.string().nullish(),
 });
 

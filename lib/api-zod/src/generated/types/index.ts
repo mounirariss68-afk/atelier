@@ -687,6 +687,7 @@ export * from "./atelierResearchDecisionMakerConfidence";
 export * from "./atelierResearchDecisionMakerEntityScope";
 export * from "./atelierResearchDecisionMakerSeniority";
 export * from "./atelierResearchFact";
+export * from "./atelierResearchFactFlags";
 export * from "./atelierResearchStressTest";
 export * from "./atelierResearchStressTestAssumptions";
 export * from "./atelierResearchStressTestEvidenceToStrengthenItem";

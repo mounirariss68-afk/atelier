@@ -6081,6 +6081,12 @@ export interface AtelierScoutInput {
   contextBlurb?: string;
 }
 
+export type AtelierResearchFactFlags = {
+  stale?: boolean;
+  lowConfidence?: boolean;
+  unsourced?: boolean;
+};
+
 export interface AtelierResearchFact {
   id: string;
   oppId: string;
@@ -6097,6 +6103,11 @@ export interface AtelierResearchFact {
   /** @nullable */
   promotedAt?: string | null;
   createdAt: string;
+  /** @nullable */
+  retrievedAt?: string | null;
+  flags?: AtelierResearchFactFlags;
+  /** @nullable */
+  duplicateOfId?: string | null;
   /** @nullable */
   runId?: string | null;
 }

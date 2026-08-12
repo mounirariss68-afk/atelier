@@ -32,6 +32,10 @@ export class PerplexityConnectionError extends Error {
 export interface PerplexityCitation {
   url: string;
   title?: string;
+  /** ISO-ish publication date when the search result carried one (Task #1022). */
+  date?: string;
+  /** Short source snippet when the search result carried one (Task #1022). */
+  snippet?: string;
 }
 
 export interface PerplexityQueryResult {
@@ -51,18 +55,29 @@ type ChatCompletionShape = {
 function parseCitations(json: ChatCompletionShape): PerplexityCitation[] {
   const out: PerplexityCitation[] = [];
   const seen = new Set<string>();
-  const push = (url: unknown, title?: unknown) => {
+  const push = (url: unknown, title?: unknown, date?: unknown, snippet?: unknown) => {
     if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return;
     if (seen.has(url)) return;
     seen.add(url);
     out.push({
       url,
       title: typeof title === "string" && title.trim() ? title.trim() : undefined,
+      date: typeof date === "string" && date.trim() ? date.trim() : undefined,
+      snippet:
+        typeof snippet === "string" && snippet.trim()
+          ? snippet.trim().slice(0, 400)
+          : undefined,
     });
   };
   if (Array.isArray(json.search_results)) {
-    for (const r of json.search_results as Array<{ url?: unknown; title?: unknown }>) {
-      push(r?.url, r?.title);
+    for (const r of json.search_results as Array<{
+      url?: unknown;
+      title?: unknown;
+      date?: unknown;
+      last_updated?: unknown;
+      snippet?: unknown;
+    }>) {
+      push(r?.url, r?.title, r?.date ?? r?.last_updated, r?.snippet);
     }
   }
   if (Array.isArray(json.citations)) {
@@ -88,6 +103,11 @@ export async function perplexitySearch(
      * new Date().toISOString().slice(0, 10) at call time.
      */
     today?: string;
+    /**
+     * Task #1022 — restrict retrieval to specific domains (Perplexity
+     * `search_domain_filter`; max 10 entries, "-domain" excludes).
+     */
+    searchDomainFilter?: string[];
   },
 ): Promise<PerplexityQueryResult> {
   const todayStr =
@@ -110,6 +130,9 @@ export async function perplexitySearch(
     ],
     ...(opts?.searchRecencyFilter
       ? { search_recency_filter: opts.searchRecencyFilter }
+      : {}),
+    ...(opts?.searchDomainFilter && opts.searchDomainFilter.length > 0
+      ? { search_domain_filter: opts.searchDomainFilter.slice(0, 10) }
       : {}),
   };
 
@@ -236,6 +259,14 @@ export async function perplexityResearch(args: {
   searchRecencyFilter?: "day" | "week" | "month" | "year";
   /** ISO date "YYYY-MM-DD" passed to each perplexitySearch call. */
   today?: string;
+  /**
+   * Task #1022 — per-call query cap override (default 8, clamped 1–16).
+   * POV deep research runs targeted per-angle queries and needs headroom
+   * beyond the Scout's default.
+   */
+  maxQueries?: number;
+  /** Task #1022 — restrict retrieval to specific domains (all queries). */
+  searchDomainFilter?: string[];
   onPhase?: (pct: number, message: string, data?: Record<string, unknown>) => void;
 }): Promise<PerplexityDossier> {
   const todayStr =
@@ -257,7 +288,7 @@ export async function perplexityResearch(args: {
       ]
     : [];
 
-  const cap = 8;
+  const cap = Math.max(1, Math.min(16, Math.round(args.maxQueries ?? 8)));
   const baseSliced = baseQueries.slice(0, cap);
   const remaining = Math.max(0, cap - baseSliced.length);
   const allRecency = [...callerRecency, ...autoSupplements];
@@ -266,7 +297,7 @@ export async function perplexityResearch(args: {
   if (allRecency.length > remaining && process.env.NODE_ENV !== "production") {
     console.warn(
       `[perplexityResearch] ${allRecency.length - remaining} recency ` +
-        `query/queries truncated (8-query cap reached after ${baseSliced.length} base queries).`,
+        `query/queries truncated (${cap}-query cap reached after ${baseSliced.length} base queries).`,
     );
   }
 
@@ -290,6 +321,7 @@ export async function perplexityResearch(args: {
     const r = await perplexitySearch(q, {
       searchRecencyFilter: recency ? "month" : args.searchRecencyFilter,
       today: todayStr,
+      searchDomainFilter: args.searchDomainFilter,
     });
     for (const c of r.citations) {
       if (!seen.has(c.url)) {
@@ -300,7 +332,10 @@ export async function perplexityResearch(args: {
     const sources =
       r.citations.length > 0
         ? r.citations
-            .map((c, j) => `  [${j + 1}] ${c.title ? `${c.title} — ` : ""}${c.url}`)
+            .map(
+              (c, j) =>
+                `  [${j + 1}] ${c.title ? `${c.title} — ` : ""}${c.url}${c.date ? ` (published ${c.date})` : ""}${c.snippet ? `\n      » ${c.snippet.slice(0, 200)}` : ""}`,
+            )
             .join("\n")
         : "  (no sources returned)";
     sections.push(

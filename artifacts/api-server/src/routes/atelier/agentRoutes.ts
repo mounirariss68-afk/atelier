@@ -70,6 +70,7 @@ import {
   runPursuitScout,
   runPovOutline,
   runPovDraft,
+  runPovDeepResearch,
   runMeetingScribe,
   recordDecision,
   runPipelineForecaster,
@@ -88,6 +89,13 @@ import {
 } from "../../lib/atelier-agents/brief-quality.js";
 import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
+import {
+  auditPovCitations,
+  describeCitationFailure,
+  factHygieneFlags,
+  findNearDuplicateFacts,
+} from "../../lib/atelier-agents/pov-quality.js";
+import { buildPovBackgroundContext } from "../../lib/atelier-agents/pov-grounding.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import {
@@ -1104,6 +1112,15 @@ router.get("/opportunities/:oppId/research", async (req, res) => {
     .from(atelierResearchFacts)
     .where(and(eq(atelierResearchFacts.opportunityId, req.params.oppId), isNull(atelierResearchFacts.deletedAt)))
     .orderBy(desc(atelierResearchFacts.createdAt));
+  // Task #1022 — hygiene projection: near-duplicate detection across runs
+  // (oldest-first so the earliest/promoted copy is canonical) plus stale /
+  // low-confidence flags, computed at read time so partners review evidence
+  // quality without mutating the rows.
+  const dupMap = findNearDuplicateFacts(
+    [...rows]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((f) => ({ id: f.id, statement: f.statement, promoted: f.promoted })),
+  );
   res.json(
     rows.map((f) => ({
       id: f.id,
@@ -1119,6 +1136,9 @@ router.get("/opportunities/:oppId/research", async (req, res) => {
       includedInBrief: f.includedInBrief,
       includedInPov: f.includedInPov,
       createdAt: f.createdAt.toISOString(),
+      retrievedAt: (f.retrievedAt ?? f.createdAt).toISOString(),
+      flags: factHygieneFlags(f),
+      duplicateOfId: dupMap.get(f.id) ?? null,
       runId: f.runId,
     })),
   );
@@ -1299,11 +1319,158 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
       objective: parsed.data.objective,
       status: "outline",
       outline: outline.sections as never,
+      // Task #1022 — the evidence snapshot is frozen at outline APPROVAL time
+      // (decision route), not here: facts demoted/promoted during outline
+      // review must be reflected in the set the draft runs on.
       runId,
       createdByUserId: me.id,
     })
     .returning();
   res.status(201).json(povWire(pov));
+});
+
+// ── POV deep research (Task #1022) ──────────────────────────────────────────
+// Dedicated research pass before outlining: targeted Perplexity queries per
+// thesis angle with recency + optional domain filters, synthesised into
+// candidate facts that land UNPROMOTED for partner review. Async 202+poll
+// (research runs for minutes; the proxy would 502 a held request).
+const POV_RESEARCH_JOB_KIND = "pov_research";
+
+// @cli-skip: transient launch status for the Research tab poller; not a data read
+router.get("/opportunities/:oppId/pov-research-status", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const job = await getLatestJob([POV_RESEARCH_JOB_KIND], req.params.oppId, me.orgId);
+  if (!job) {
+    res.json({ status: "idle" });
+    return;
+  }
+  if (job.status === "running") res.json({ status: "running" });
+  else if (job.status === "failed") res.json({ status: "failed", error: job.error ?? "failed" });
+  else {
+    const r = (job.result ?? {}) as { factCount?: number };
+    res.json({ status: "done", factCount: r.factCount ?? 0 });
+  }
+});
+
+// @cli-skip: agent launch surface; chat uses the dedicated research capability path
+router.post("/opportunities/:oppId/pov-research", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const opp = await loadOpp(req.params.oppId);
+  // Org-scoped: research burns paid retrieval quota and writes facts onto the
+  // opportunity — never allow a caller to target another org's record.
+  if (!opp || opp.orgId !== me.orgId) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const body = (req.body ?? {}) as {
+    audience?: unknown;
+    objective?: unknown;
+    angles?: unknown;
+    domains?: unknown;
+  };
+  const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 120) : "";
+  const objective = typeof body.objective === "string" ? body.objective.trim().slice(0, 500) : "";
+  if (!objective) {
+    res.status(400).json({ error: "invalid-body", reason: "objective is required" });
+    return;
+  }
+  const strArr = (v: unknown, capLen: number, capItems: number): string[] =>
+    Array.isArray(v)
+      ? v
+          .filter((x): x is string => typeof x === "string" && !!x.trim())
+          .map((x) => x.trim().slice(0, capLen))
+          .slice(0, capItems)
+      : [];
+  const angles = strArr(body.angles, 200, 8);
+  const domains = strArr(body.domains, 100, 10);
+  if (await hasRunningJob([POV_RESEARCH_JOB_KIND], opp.id, me.orgId)) {
+    res.status(409).json({ error: "pov-research-in-progress" });
+    return;
+  }
+  const [acct] = await db.select().from(atelierAccounts).where(eq(atelierAccounts.id, opp.accountId));
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: POV_RESEARCH_JOB_KIND,
+    lockKey: "pov_research",
+    targetType: "opportunity",
+    targetId: opp.id,
+    label: `POV deep research — "${opp.name}"`,
+    resultHref: `/opportunities/${opp.id}?tab=research`,
+  });
+  if (!jobId) {
+    res.status(409).json({ error: "pov-research-in-progress" });
+    return;
+  }
+  const meId = me.id;
+  const oppName = opp.name;
+  void (async () => {
+    try {
+      const { runId, facts } = await runPovDeepResearch({
+        opportunityId: opp.id,
+        opportunityName: oppName,
+        accountName: acct?.name ?? oppName,
+        accountSector: acct?.sector ?? null,
+        audience: audience || "executive",
+        objective,
+        angles,
+        domains,
+        triggeredByUserId: meId,
+        actorLabel: "POV Author · Deep Research",
+      });
+      // Dedupe against the opportunity's existing fact pool before insert so
+      // repeated research runs don't multiply near-identical statements.
+      const existing = await db
+        .select({ id: atelierResearchFacts.id, statement: atelierResearchFacts.statement })
+        .from(atelierResearchFacts)
+        .where(
+          and(
+            eq(atelierResearchFacts.opportunityId, opp.id),
+            isNull(atelierResearchFacts.deletedAt),
+          ),
+        );
+      const pool = existing.map((e) => ({ id: e.id, statement: e.statement, promoted: true }));
+      const fresh: typeof facts = [];
+      for (const f of facts) {
+        const probeId = `probe_${fresh.length}`;
+        const dup = findNearDuplicateFacts([
+          ...pool,
+          ...fresh.map((x, i) => ({ id: `new_${i}`, statement: x.statement })),
+          { id: probeId, statement: f.statement },
+        ]).get(probeId);
+        if (!dup) fresh.push(f);
+      }
+      if (fresh.length > 0) {
+        await db.insert(atelierResearchFacts).values(
+          fresh.map((f) => ({
+            id: f.id ?? rid("fact"),
+            orgId: me.orgId,
+            opportunityId: opp.id,
+            runId,
+            topic: f.topic,
+            statement: f.statement,
+            sourceUrl: f.sourceUrl ?? null,
+            sourceTitle: f.sourceTitle ?? null,
+            snippet: f.snippet ?? null,
+            confidence: f.confidence,
+            retrievedAt: new Date(),
+            createdByUserId: meId,
+          })),
+        );
+      }
+      await completeBackgroundJob(jobId, {
+        result: { factCount: fresh.length, skippedDuplicates: facts.length - fresh.length, runId },
+        notifyTitle: `POV research ready — "${oppName}"`,
+        notifyBody: `${fresh.length} candidate fact${fresh.length === 1 ? "" : "s"} to review.`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await failBackgroundJob(jobId, msg, { notifyTitle: `POV research failed — "${oppName}"` });
+    }
+  })();
+  res.status(202).json({ started: true });
 });
 
 // ── POV draft/revise async launches ─────────────────────────────────────────
@@ -1315,8 +1482,63 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
 // registry (atelier_background_jobs), so status survives restarts, shows
 // in the global indicator, and notifies the starter on completion.
 const POV_JOB_KINDS = ["pov_draft", "pov_revise"];
-const POV_MIN_CITATION_COVERAGE = 0.6;
 const povResultHref = (oppId: string) => `/opportunities/${oppId}?tab=pov`;
+
+// Task #1022 — resolve the evidence set for a POV draft/revise run: the
+// snapshot frozen at outline creation/regeneration, or (legacy POVs created
+// before snapshots existed) a live query over promoted facts.
+function resolvePovEvidence(pov: typeof atelierPovs.$inferSelect): AgentFact[] | null {
+  // The snapshot is written BEFORE the approval is recorded (decision
+  // route), so an approved outline always has one. No live-query fallback:
+  // drafts must never silently pick up facts promoted or demoted after
+  // approval. `null` means the snapshot is missing (pre-snapshot legacy POV
+  // or a mid-approval read) — callers 412 and ask for a (re-)approval.
+  const snap = pov.factSnapshot as AgentFact[] | null;
+  if (pov.factSnapshotAt != null && Array.isArray(snap)) return snap;
+  return null;
+}
+
+// Task #1022 — race-safe version insert: (povId, versionNumber) is now
+// UNIQUE, so concurrent launches retry with a freshly computed max+1 instead
+// of minting duplicate numbers.
+async function insertPovVersionRaceSafe(values: {
+  povId: string;
+  body: string;
+  sections: unknown;
+  citations: unknown;
+  citationCoverage: number;
+  notes: string | null;
+  createdByUserId: string;
+}): Promise<{ versionId: string; versionNumber: number }> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const versions = await db
+      .select({ versionNumber: atelierPovVersions.versionNumber })
+      .from(atelierPovVersions)
+      .where(eq(atelierPovVersions.povId, values.povId));
+    const next = versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) + 1;
+    const versionId = rid("povv");
+    try {
+      await db.insert(atelierPovVersions).values({
+        id: versionId,
+        povId: values.povId,
+        versionNumber: next,
+        body: values.body,
+        sections: values.sections as never,
+        citations: values.citations as never,
+        citationCoverage: values.citationCoverage,
+        notes: values.notes,
+        createdByUserId: values.createdByUserId,
+      });
+      return { versionId, versionNumber: next };
+    } catch (err) {
+      lastErr = err;
+      const code = (err as { code?: string })?.code;
+      if (code !== "23505") throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("pov-version-insert-conflict");
+}
 
 // @cli-skip: transient launch status for the POV tab poller; not a data read
 router.get("/povs/:povId/draft-status", async (req, res) => {
@@ -1333,8 +1555,32 @@ router.get("/povs/:povId/draft-status", async (req, res) => {
     res.json({ status: "idle" });
     return;
   }
-  if (job.status === "running") res.json({ status: "running", kind });
-  else if (job.status === "failed") res.json({ status: "failed", kind, error: job.error ?? "failed" });
+  if (job.status === "running") {
+    // Task #1022 — surface multi-pass progress: the draft chain's agent run
+    // writes progressPct/statusMessage as it moves through sections → critic
+    // → revision → stylist; expose the latest running run for this opp.
+    const [run] = await db
+      .select({
+        progressPct: atelierAgentRuns.progressPct,
+        statusMessage: atelierAgentRuns.statusMessage,
+      })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.agentId, "ag_pov_draft"),
+          eq(atelierAgentRuns.targetId, pov.opportunityId),
+          eq(atelierAgentRuns.status, "running"),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(1);
+    res.json({
+      status: "running",
+      kind,
+      progressPct: run?.progressPct ?? null,
+      phase: run?.statusMessage ?? null,
+    });
+  } else if (job.status === "failed") res.json({ status: "failed", kind, error: job.error ?? "failed" });
   else {
     const r = (job.result ?? {}) as { versionId?: string; versionNumber?: number };
     res.json({ status: "done", kind, versionId: r.versionId, versionNumber: r.versionNumber });
@@ -1384,25 +1630,18 @@ router.post("/povs/:povId/draft", async (req, res) => {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
   }
-  const factRows = await db
-    .select()
-    .from(atelierResearchFacts)
-    .where(
-      and(
-        eq(atelierResearchFacts.opportunityId, opp.id),
-        eq(atelierResearchFacts.promoted, true),
-        isNull(atelierResearchFacts.deletedAt),
-      ),
-    );
-  const promoted: AgentFact[] = factRows.map((f) => ({
-    id: f.id,
-    topic: f.topic,
-    statement: f.statement,
-    sourceUrl: f.sourceUrl ?? undefined,
-    sourceTitle: f.sourceTitle ?? undefined,
-    snippet: f.snippet ?? undefined,
-    confidence: f.confidence as "green" | "amber" | "red",
-  }));
+  // Task #1022 — the draft runs on the evidence snapshot frozen at outline
+  // APPROVAL, so it always matches the approved outline (no silent drift).
+  const promoted = resolvePovEvidence(pov);
+  if (promoted == null) {
+    res.status(412).json({
+      error: "evidence-snapshot-missing",
+      reason:
+        "This POV has no frozen evidence snapshot. Re-approve the outline to freeze the promoted-fact set before drafting.",
+      outlineRunId: pov.runId,
+    });
+    return;
+  }
   // Task #653 — empty-brief degrade. A POV is an evidence-backed argument; with
   // no promoted facts there is nothing to cite, so refuse with a clear, soft
   // 412 ("promote facts first") rather than generating an uncitable draft.
@@ -1441,8 +1680,18 @@ router.post("/povs/:povId/draft", async (req, res) => {
   const povId = pov.id;
   const povTitleForNotify = pov.title;
   const meId = me.id;
+  const persona = { id: me.id, role: me.role, orgId: me.orgId };
   void (async () => {
     try {
+      // Task #1022 — labeled NON-CITABLE background context (fail-soft).
+      const backgroundContext = await buildPovBackgroundContext({
+        povId,
+        opportunityId: opp.id,
+        orgId: persona.orgId,
+        persona,
+        audience: pov.audience ?? "",
+        objective: pov.objective ?? "",
+      }).catch(() => "");
       const { runId, draft } = await runPovDraft({
         opportunityId: opp.id,
         opportunityName: opp.name,
@@ -1450,40 +1699,33 @@ router.post("/povs/:povId/draft", async (req, res) => {
         promotedFacts: promoted,
         triggeredByUserId: meId,
         actorLabel: "POV Author · Sections+Critic+Stylist",
+        backgroundContext: backgroundContext || undefined,
       });
-      // Task #653 — citation-coverage gate. The draft self-reports the share of
-      // sections whose claims cite a promoted fact. Below the floor the argument
-      // is under-evidenced; fail the launch (without persisting a version) so
-      // the partner promotes more facts or tightens the outline instead of
-      // shipping thin work.
-      if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-        await failBackgroundJob(
-          jobId,
-          `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
-          { notifyTitle: `POV draft needs more evidence — "${povTitleForNotify}"` },
-        );
+      // Task #1022 — deterministic citation gate on the FINAL stylist HTML.
+      // The server parses every citation marker / data-fact attribute itself,
+      // validates ids against the snapshotted fact set, and computes coverage;
+      // the model's self-report is ignored. Malformed/unknown citation markup
+      // is stripped before persistence.
+      const audit = auditPovCitations({
+        html: draft.html,
+        sections: draft.sections ?? [],
+        validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
+      });
+      if (!audit.passes) {
+        await failBackgroundJob(jobId, describeCitationFailure(audit), {
+          notifyTitle: `POV draft needs more evidence — "${povTitleForNotify}"`,
+        });
         return;
       }
-      // Version number = max + 1.
-      const versions = await db
-        .select()
-        .from(atelierPovVersions)
-        .where(and(eq(atelierPovVersions.povId, povId), isNull(atelierPovVersions.deletedAt)));
-      const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
-      const versionId = rid("povv");
-      await db
-        .insert(atelierPovVersions)
-        .values({
-          id: versionId,
-          povId,
-          versionNumber: next,
-          body: draft.html,
-          sections: draft.sections as never,
-          citations: promoted as never,
-          citationCoverage: draft.citationCoverage,
-          notes: draft.voiceFlags?.join(" · ") || null,
-          createdByUserId: meId,
-        });
+      const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
+        povId,
+        body: audit.sanitizedHtml,
+        sections: audit.sanitizedSections,
+        citations: promoted,
+        citationCoverage: audit.coverage,
+        notes: draft.voiceFlags?.join(" · ") || null,
+        createdByUserId: meId,
+      });
       await db
         .update(atelierPovs)
         .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
@@ -1670,7 +1912,15 @@ router.post("/povs/:povId/outline/regenerate", async (req, res) => {
   });
   const [updated] = await db
     .update(atelierPovs)
-    .set({ outline: outline.sections as never, runId, updatedAt: new Date() })
+    .set({
+      outline: outline.sections as never,
+      // Task #1022 — a regenerated outline needs a fresh approval; clear any
+      // prior snapshot so it re-freezes at the new approval.
+      factSnapshot: null,
+      factSnapshotAt: null,
+      runId,
+      updatedAt: new Date(),
+    })
     .where(eq(atelierPovs.id, pov.id))
     .returning();
   await db.insert(atelierAuditEvents).values({
@@ -1734,25 +1984,18 @@ router.post("/povs/:povId/revise", async (req, res) => {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
   }
-  const factRows = await db
-    .select()
-    .from(atelierResearchFacts)
-    .where(
-      and(
-        eq(atelierResearchFacts.opportunityId, opp.id),
-        eq(atelierResearchFacts.promoted, true),
-        isNull(atelierResearchFacts.deletedAt),
-      ),
-    );
-  const promoted: AgentFact[] = factRows.map((f) => ({
-    id: f.id,
-    topic: f.topic,
-    statement: f.statement,
-    sourceUrl: f.sourceUrl ?? undefined,
-    sourceTitle: f.sourceTitle ?? undefined,
-    snippet: f.snippet ?? undefined,
-    confidence: f.confidence as "green" | "amber" | "red",
-  }));
+  // Task #1022 — revisions consume the same evidence snapshot as the
+  // original draft, so feedback is applied against the visible evidence.
+  const promoted = resolvePovEvidence(pov);
+  if (promoted == null) {
+    res.status(412).json({
+      error: "evidence-snapshot-missing",
+      reason:
+        "This POV has no frozen evidence snapshot. Re-approve the outline to freeze the promoted-fact set before revising.",
+      outlineRunId: pov.runId,
+    });
+    return;
+  }
   if (promoted.length === 0) {
     res.status(412).json({
       error: "no-promoted-facts",
@@ -1788,8 +2031,17 @@ router.post("/povs/:povId/revise", async (req, res) => {
   const povTitle = pov.title;
   const meId = me.id;
   const meName = me.name;
+  const persona = { id: me.id, role: me.role, orgId: me.orgId };
   void (async () => {
     try {
+      const backgroundContext = await buildPovBackgroundContext({
+        povId,
+        opportunityId: opp.id,
+        orgId: persona.orgId,
+        persona,
+        audience: pov.audience ?? "",
+        objective: pov.objective ?? "",
+      }).catch(() => "");
       const { runId, draft } = await runPovDraft({
         opportunityId: opp.id,
         opportunityName: opp.name,
@@ -1799,30 +2051,30 @@ router.post("/povs/:povId/revise", async (req, res) => {
         actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
         revisionFeedback: feedback,
         priorDraftHtml: base.body ?? "",
+        backgroundContext: backgroundContext || undefined,
       });
-      if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-        await failBackgroundJob(
-          jobId,
-          `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
-          { notifyTitle: `POV revision needs more evidence — "${povTitle}"` },
-        );
+      // Task #1022 — deterministic citation gate on the final stylist HTML
+      // (see the /draft route for the contract; same single threshold).
+      const audit = auditPovCitations({
+        html: draft.html,
+        sections: draft.sections ?? [],
+        validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
+      });
+      if (!audit.passes) {
+        await failBackgroundJob(jobId, describeCitationFailure(audit), {
+          notifyTitle: `POV revision needs more evidence — "${povTitle}"`,
+        });
         return;
       }
-      const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
-      const versionId = rid("povv");
-      await db
-        .insert(atelierPovVersions)
-        .values({
-          id: versionId,
-          povId,
-          versionNumber: next,
-          body: draft.html,
-          sections: draft.sections as never,
-          citations: promoted as never,
-          citationCoverage: draft.citationCoverage,
-          notes: draft.voiceFlags?.join(" · ") || null,
-          createdByUserId: meId,
-        });
+      const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
+        povId,
+        body: audit.sanitizedHtml,
+        sections: audit.sanitizedSections,
+        citations: promoted,
+        citationCoverage: audit.coverage,
+        notes: draft.voiceFlags?.join(" · ") || null,
+        createdByUserId: meId,
+      });
       // A new revision resets the POV to "drafted" so it must be re-approved.
       await db
         .update(atelierPovs)
@@ -2152,6 +2404,48 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
   if (!r) {
     res.status(404).json({ error: "run-not-found" });
     return;
+  }
+  // Task #1022 — freeze the POV evidence snapshot BEFORE the approval is
+  // recorded. Ordering is the race guard: the draft route treats "outline
+  // approved" as authoritative only together with a persisted snapshot, and
+  // because the snapshot commits first, any request that can observe the
+  // approval necessarily observes the snapshot. Fact promotions/demotions
+  // made during outline review are captured; changes after this point are not.
+  if (
+    parsed.data.decision === "approve" &&
+    r.status !== "blocked" &&
+    (r.agentId === "ag_pov_author" || r.agentId === "pov_author")
+  ) {
+    const [povForRun] = await db
+      .select()
+      .from(atelierPovs)
+      .where(and(eq(atelierPovs.runId, r.id), isNull(atelierPovs.deletedAt)));
+    if (povForRun) {
+      const factRows = await db
+        .select()
+        .from(atelierResearchFacts)
+        .where(
+          and(
+            eq(atelierResearchFacts.opportunityId, povForRun.opportunityId),
+            eq(atelierResearchFacts.promoted, true),
+            isNull(atelierResearchFacts.deletedAt),
+          ),
+        );
+      const snapshot: AgentFact[] = factRows.map((f) => ({
+        id: f.id,
+        topic: f.topic,
+        statement: f.statement,
+        sourceUrl: f.sourceUrl ?? undefined,
+        sourceTitle: f.sourceTitle ?? undefined,
+        snippet: f.snippet ?? undefined,
+        confidence: f.confidence as "green" | "amber" | "red",
+      }));
+      const now = new Date();
+      await db
+        .update(atelierPovs)
+        .set({ factSnapshot: snapshot as never, factSnapshotAt: now, updatedAt: now })
+        .where(eq(atelierPovs.id, povForRun.id));
+    }
   }
   await recordDecision({
     runId: r.id,

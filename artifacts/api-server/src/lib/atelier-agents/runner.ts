@@ -442,6 +442,25 @@ export async function failRun(
 
 // ------- citation guardrail -------
 
+/**
+ * Deliberate, minimal URL canonicalization for provenance matching: lowercase
+ * scheme/host, drop the fragment and any trailing slash. Anything beyond this
+ * (query reordering, www-stripping) risks matching distinct documents.
+ */
+export function canonicalizeSourceUrl(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    u.hash = "";
+    let s = u.toString();
+    if (s.endsWith("/")) s = s.slice(0, -1);
+    return s;
+  } catch {
+    return "";
+  }
+}
+
 export function applyCitationGuardrail(facts: AgentFact[]): AgentFact[] {
   return facts
     .map((f) => {
@@ -1141,6 +1160,29 @@ export async function runPovOutline(args: {
   return { runId: result.runId, outline: result.output as PovOutline, costUsd: result.costUsd };
 }
 
+export interface PovCriticReport {
+  coverage: number;
+  voiceFlags: string[];
+  verdict: "pass" | "revise";
+  notes: string;
+  unsupportedClaims: Array<{ sectionId: string; claim: string }>;
+}
+
+/**
+ * Task #1022 — real multi-pass draft orchestration.
+ *
+ * The former single composite LLM call is now four orchestrated passes
+ * inside one agent run: Phase B (section writer) → Phase C (independent
+ * synthesis critic auditing claims against the cited facts) → an optional
+ * single Phase B revision pass when the critic says "revise" → Phase D
+ * (stylist HTML). Each pass gets a slice of the total POV budget
+ * (ATELIER_POV_TIMEOUT_MS, default 8 min) so the whole run fits the
+ * timeout, and run-row progress states surface to the polling client.
+ *
+ * The critic's coverage number is informational only — the deterministic
+ * server-side gate in pov-quality.ts recomputes coverage on the final
+ * stylist HTML and is the sole enforcement point.
+ */
 export async function runPovDraft(args: {
   opportunityId: string;
   opportunityName: string;
@@ -1152,7 +1194,14 @@ export async function runPovDraft(args: {
   revisionFeedback?: string;
   /** The prior draft HTML being revised, for context. */
   priorDraftHtml?: string;
-}): Promise<{ runId: string; draft: PovDraft; costUsd: number }> {
+  /**
+   * Clearly-labeled, NON-citable background context (account summary,
+   * document-library extracts, capability profiles, exemplars). The prompt
+   * instructs the model this adds perspective but can never be cited.
+   */
+  backgroundContext?: string;
+}): Promise<{ runId: string; draft: PovDraft; critic: PovCriticReport | null; costUsd: number }> {
+  let criticOut: PovCriticReport | null = null;
   const result = await runAgent(
     {
       agentId: "ag_pov_draft",
@@ -1170,33 +1219,257 @@ export async function runPovDraft(args: {
     },
     async (ctx) => {
       const system = loadPrompt("pov_author");
-      await ctx.progress(40, args.revisionFeedback ? "Revising sections" : "Writing sections");
-      const directive = args.revisionFeedback
-        ? "\n\n## Run-time directive\nRevise the PRIOR draft to address the reviewer feedback below. Execute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }."
-        : "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.";
-      const { value, costUsd } = await callClaudeJson<PovDraft>(
+      const totalBudgetMs = Number(process.env.ATELIER_POV_TIMEOUT_MS ?? 480000);
+      const t0 = Date.now();
+      // Per-pass budgets sized against the total (sum 0.95, headroom for IO).
+      const budget = {
+        sections: Math.round(totalBudgetMs * 0.35),
+        critic: Math.round(totalBudgetMs * 0.15),
+        revision: Math.round(totalBudgetMs * 0.25),
+        stylist: Math.round(totalBudgetMs * 0.2),
+      };
+      let costUsd = 0;
+      const baseInput = {
+        outline: args.outline,
+        facts: args.promotedFacts,
+        ...(args.backgroundContext
+          ? { backgroundContext: args.backgroundContext }
+          : {}),
+      };
+
+      // ── Pass 1: Phase B (sections) ────────────────────────────────────
+      await ctx.progress(20, args.revisionFeedback ? "Revising sections" : "Writing sections");
+      const bDirective = args.revisionFeedback
+        ? "\n\n## Run-time directive\nRevise the PRIOR draft to address the reviewer feedback below. Execute Phase B (sections) ONLY and return { \"sections\": [...] }."
+        : "\n\n## Run-time directive\nExecute Phase B (sections) ONLY and return { \"sections\": [...] }.";
+      const b = await callClaudeJson<{ sections: PovDraft["sections"] }>(
         "claude-sonnet-4-5",
-        system + directive,
+        system + bDirective,
         JSON.stringify({
-          outline: args.outline,
-          facts: args.promotedFacts,
+          ...baseInput,
           ...(args.revisionFeedback
             ? { reviewerFeedback: args.revisionFeedback, priorDraftHtml: args.priorDraftHtml ?? "" }
             : {}),
         }),
-        // Full multi-section drafts run well past the generic 45s budget.
-        { timeoutMs: Number(process.env.ATELIER_POV_TIMEOUT_MS ?? 240000) },
+        { timeoutMs: budget.sections },
       );
+      costUsd += b.costUsd;
+      let sections = b.value.sections ?? [];
+
+      // ── Pass 2: Phase C (independent critic) ──────────────────────────
+      await ctx.progress(50, "Auditing claims against cited facts");
+      const cDirective =
+        "\n\n## Run-time directive\nExecute Phase C (critic) ONLY. You are an INDEPENDENT auditor: check every factual claim in the sections below against the provided facts (and nothing else). Return { \"coverage\": <0..1>, \"voiceFlags\": [...], \"verdict\": \"pass\"|\"revise\", \"notes\": \"...\", \"unsupportedClaims\": [{ \"sectionId\": \"...\", \"claim\": \"...\" }] }.";
+      try {
+        const c = await callClaudeJson<PovCriticReport>(
+          "claude-sonnet-4-5",
+          system + cDirective,
+          JSON.stringify({ sections, facts: args.promotedFacts }),
+          { timeoutMs: budget.critic },
+        );
+        costUsd += c.costUsd;
+        criticOut = {
+          coverage: typeof c.value.coverage === "number" ? c.value.coverage : 0,
+          voiceFlags: c.value.voiceFlags ?? [],
+          verdict: c.value.verdict === "revise" ? "revise" : "pass",
+          notes: c.value.notes ?? "",
+          unsupportedClaims: (c.value.unsupportedClaims ?? []).filter(
+            (u) => u && typeof u.claim === "string",
+          ),
+        };
+      } catch (e) {
+        // The critic is an audit layer, not the enforcement point (the
+        // deterministic gate is). A critic failure degrades to "no revision
+        // pass" rather than killing a multi-minute run.
+        console.warn("[pov-draft] critic pass failed — skipping revision pass", e);
+        criticOut = null;
+      }
+
+      // ── Pass 3: one revision pass when the critic asks for it ─────────
+      const elapsed = Date.now() - t0;
+      if (
+        criticOut?.verdict === "revise" &&
+        elapsed + budget.revision < totalBudgetMs * 0.85
+      ) {
+        await ctx.progress(65, "Revising sections per critic notes");
+        const rDirective =
+          "\n\n## Run-time directive\nExecute Phase B (sections) ONCE MORE to address the critic notes below (single revision pass — do not loop). Ground every claim in the provided facts; drop or hedge any claim the critic flagged as unsupported. Return { \"sections\": [...] }.";
+        try {
+          const r = await callClaudeJson<{ sections: PovDraft["sections"] }>(
+            "claude-sonnet-4-5",
+            system + rDirective,
+            JSON.stringify({
+              ...baseInput,
+              priorSections: sections,
+              criticNotes: criticOut.notes,
+              unsupportedClaims: criticOut.unsupportedClaims,
+              voiceFlags: criticOut.voiceFlags,
+            }),
+            { timeoutMs: budget.revision },
+          );
+          costUsd += r.costUsd;
+          if ((r.value.sections ?? []).length > 0) sections = r.value.sections;
+        } catch (e) {
+          console.warn("[pov-draft] revision pass failed — keeping first-pass sections", e);
+        }
+      }
+
+      // ── Pass 4: Phase D (stylist) ──────────────────────────────────────
       await ctx.progress(85, "Stylist polish");
+      const dDirective =
+        "\n\n## Run-time directive\nExecute Phase D (stylist) ONLY on the sections below. Preserve every section heading VERBATIM (as an <h2>) and every citation marker exactly — render each cited fact id as <sup data-fact=\"ID\">n</sup> inside its own section and NEVER invent, drop, or alter fact ids. The server audits the final HTML: any section whose heading or citations are missing from your output fails the run. Return { \"html\": \"...\", \"wordCount\": <int> }.";
+      const d = await callClaudeJson<{ html: string; wordCount: number }>(
+        "claude-haiku-4-5",
+        system + dDirective,
+        JSON.stringify({ title: args.outline.title, thesis: args.outline.thesis, sections }),
+        { timeoutMs: budget.stylist },
+      );
+      costUsd += d.costUsd;
+
+      const draft: PovDraft = {
+        sections,
+        html: d.value.html ?? "",
+        // Informational self-report; the deterministic gate recomputes this.
+        citationCoverage: criticOut?.coverage ?? 0,
+        voiceFlags: criticOut?.voiceFlags ?? [],
+        wordCount: d.value.wordCount ?? 0,
+      };
       return {
-        output: value,
+        output: draft,
         costUsd,
-        confidence: value.citationCoverage >= 0.8 ? "green" : "amber",
+        confidence: (criticOut?.coverage ?? 0) >= 0.8 ? "green" : "amber",
         sourcesCount: args.promotedFacts.length,
       };
     },
   );
-  return { runId: result.runId, draft: result.output as PovDraft, costUsd: result.costUsd };
+  return {
+    runId: result.runId,
+    draft: result.output as PovDraft,
+    critic: criticOut,
+    costUsd: result.costUsd,
+  };
+}
+
+/**
+ * Task #1022 — dedicated POV deep-research pass.
+ *
+ * Runs targeted Perplexity queries per thesis angle (plus market/recency
+ * baselines) via the shared research client with a raised query cap and
+ * optional domain filtering, then synthesises the dossier into atomic
+ * candidate facts. Facts are returned (guardrailed) for the route to persist
+ * as UNPROMOTED candidates tied to the opportunity — partners still review
+ * and promote before outlining.
+ */
+export async function runPovDeepResearch(args: {
+  opportunityId: string;
+  opportunityName: string;
+  accountName: string;
+  accountSector?: string | null;
+  audience: string;
+  objective: string;
+  /** Thesis angles / outline-section themes to target one query each. */
+  angles?: string[];
+  /** Optional Perplexity search_domain_filter entries. */
+  domains?: string[];
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; facts: AgentFact[]; queryCount: number; costUsd: number }> {
+  let queryCount = 0;
+  const result = await runAgent(
+    {
+      agentId: "ag_pov_researcher",
+      input: {
+        opportunityId: args.opportunityId,
+        audience: args.audience,
+        objective: args.objective,
+        angles: args.angles ?? [],
+      },
+      triggeredByUserId: args.triggeredByUserId,
+      targetType: "opportunity",
+      targetId: args.opportunityId,
+      targetLabel: args.opportunityName,
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const sector = (args.accountSector ?? "").trim();
+      const angles = (args.angles ?? [])
+        .map((a) => a.trim())
+        .filter(Boolean)
+        .slice(0, 8);
+      const baseQueries = [
+        `${args.accountName}${sector ? ` (${sector})` : ""}: verifiable evidence relevant to "${args.objective}" — figures, dates, named initiatives, quantified outcomes`,
+        `${args.accountName} market and competitive context relevant to "${args.opportunityName}": analyst views, peer benchmarks, comparable programmes with quantified results`,
+        ...angles.map(
+          (a) =>
+            `${args.accountName}: ${a} — specific facts, statistics and dated developments a ${args.audience}-level reader would find credible`,
+        ),
+      ];
+      await ctx.progress(10, "Running targeted web research");
+      const system =
+        "You are a research analyst extracting ATOMIC, verifiable facts for a consulting point-of-view. " +
+        "From the dossier, return JSON { \"facts\": [ { \"topic\": string, \"statement\": string, \"sourceUrl\": string, \"sourceTitle\": string, \"snippet\": string, \"confidence\": \"green\"|\"amber\"|\"red\" } ] }. " +
+        "Rules: one claim per fact (a figure, a date, a named event — never a paragraph); 8–20 facts; " +
+        "sourceUrl MUST be copied exactly from the dossier's listed sources (never invented); " +
+        "snippet is a short verbatim-or-near-verbatim quote from the dossier supporting the statement, including the publication date when the dossier shows one; " +
+        "confidence green only for primary/named-source claims with clear dates, amber for secondary or undated, red for weakly sourced. " +
+        "Prefer recent, dated, quantified evidence. No opinions, no synthesis — facts only.";
+      const maxQueries = Math.max(
+        1,
+        Math.min(16, Number(process.env.ATELIER_POV_RESEARCH_MAX_QUERIES ?? 12)),
+      );
+      const r = await callResearchJson<{ facts: AgentFact[] }>(
+        "claude-sonnet-4-5",
+        system,
+        JSON.stringify({
+          opportunity: args.opportunityName,
+          account: args.accountName,
+          audience: args.audience,
+          objective: args.objective,
+          angles,
+        }),
+        {
+          progressRunId: ctx.runId,
+          researchQueries: baseQueries,
+          recencyQueries: [
+            `${args.accountName} recent announcements, results or regulatory changes relevant to ${args.objective}`,
+          ],
+          entityLabel: args.accountName,
+          maxQueries,
+          searchDomainFilter:
+            args.domains && args.domains.length > 0 ? args.domains.slice(0, 10) : undefined,
+        },
+      );
+      queryCount = Math.min(maxQueries, baseQueries.length + 2);
+      const guarded = applyCitationGuardrail(r.value.facts ?? []);
+      // Provenance gate: a deep-research fact is only admissible when its
+      // sourceUrl is one of the URLs the Perplexity dossier actually
+      // retrieved. The synthesis model is asked to copy dossier URLs, but a
+      // hallucinated (valid-looking) URL must never become a promotable fact.
+      const dossierUrls = new Set(r.citationUrls.map((c) => canonicalizeSourceUrl(c.url)).filter(Boolean));
+      const facts = guarded.filter(
+        (f) => f.sourceUrl != null && dossierUrls.has(canonicalizeSourceUrl(f.sourceUrl)),
+      );
+      const rejected = guarded.length - facts.length;
+      await ctx.progress(
+        90,
+        `Extracted ${facts.length} candidate facts` +
+          (rejected > 0 ? ` (${rejected} rejected: source URL not in retrieved dossier)` : ""),
+      );
+      return {
+        output: { factCount: facts.length, facts },
+        costUsd: r.costUsd,
+        confidence: facts.some((f) => f.confidence === "green") ? "green" : "amber",
+        sourcesCount: r.citationUrls.length,
+      };
+    },
+  );
+  const out = result.output as { facts: AgentFact[] };
+  return {
+    runId: result.runId,
+    facts: out.facts ?? [],
+    queryCount,
+    costUsd: result.costUsd,
+  };
 }
 
 // ------- Meeting Scribe -------
@@ -2744,6 +3017,10 @@ export interface ResearchJsonOpts {
    * ATELIER_PERPLEXITY_TODAY env var (stubs) or this field (per-call).
    */
   today?: string;
+  /** Task #1022 — per-call Perplexity query cap override (default 8, max 16). */
+  maxQueries?: number;
+  /** Task #1022 — restrict Perplexity retrieval to specific domains. */
+  searchDomainFilter?: string[];
 }
 
 /**
@@ -2818,6 +3095,8 @@ async function callClaudeJsonWithPerplexityResearch<T>(
     entityLabel: opts.entityLabel,
     searchRecencyFilter: opts.searchRecencyFilter,
     today: todayStr,
+    maxQueries: opts.maxQueries,
+    searchDomainFilter: opts.searchDomainFilter,
     onPhase: emitPhase,
   });
 

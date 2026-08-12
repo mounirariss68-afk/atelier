@@ -1,6 +1,7 @@
 import * as React from "react";
 import DOMPurify from "dompurify";
 import {
+  useAtelierListResearchFacts,
   useAtelierListPovs,
   useAtelierStartPov,
   useAtelierDraftPov,
@@ -163,6 +164,15 @@ function ActivePov({
   const regenMut = useAtelierRegeneratePovOutline();
   const reviseMut = useAtelierRevisePov();
 
+  // Task #1022 — outline review shows each cited fact's statement/source/date
+  // so approval is a review of evidence, not a count of citations.
+  const { data: factData } = useAtelierListResearchFacts(oppId);
+  const factById = React.useMemo(() => {
+    const m = new Map<string, NonNullable<typeof factData>[number]>();
+    for (const f of factData ?? []) m.set(f.id, f);
+    return m;
+  }, [factData]);
+
   const versionList = versions ?? [];
   const [selectedVersionId, setSelectedVersionId] = React.useState<string | null>(null);
   const selected =
@@ -182,6 +192,9 @@ function ActivePov({
   const [draftFeedback, setDraftFeedback] = React.useState("");
   // True while a background draft/revision run is in flight (start → poll → done).
   const [generating, setGenerating] = React.useState<null | "draft" | "revise">(null);
+  // Task #1022 — multi-pass progress surfaced by the poller (sections →
+  // critic → revision → stylist).
+  const [runPhase, setRunPhase] = React.useState<string | null>(null);
   const unmountedRef = React.useRef(false);
   React.useEffect(() => {
     unmountedRef.current = false;
@@ -202,11 +215,12 @@ function ActivePov({
       try {
         const r = await fetch(`/api/atelier/povs/${encodeURIComponent(pov.id)}/draft-status`, { credentials: "include" });
         if (!r.ok) continue;
-        const body = (await r.json()) as { status: string; error?: string; versionId?: string; versionNumber?: number };
+        const body = (await r.json()) as { status: string; error?: string; versionId?: string; versionNumber?: number; phase?: string | null; progressPct?: number | null };
         if (body.status === "idle") {
           return { status: "failed", error: "The run was interrupted (server restarted). Please try again." };
         }
         if (body.status !== "running") return body;
+        if (body.phase) setRunPhase(body.phase);
       } catch {
         // transient network blip — keep polling
       }
@@ -264,6 +278,7 @@ function ActivePov({
       toast({ title: "Could not generate draft", description: errText(e, "Try again."), variant: "destructive" });
     } finally {
       setGenerating(null);
+      setRunPhase(null);
     }
   }
 
@@ -292,6 +307,7 @@ function ActivePov({
       toast({ title: "Could not revise POV", description: errText(e, "Try again."), variant: "destructive" });
     } finally {
       setGenerating(null);
+      setRunPhase(null);
     }
   }
 
@@ -368,7 +384,31 @@ function ActivePov({
             <li key={s.id} className="border-l-2 border-border-soft pl-3">
               <div className="text-text font-medium">{i + 1}. {s.heading}</div>
               <div className="text-text-mute text-xs mt-0.5">{s.intent}</div>
-              <div className="text-[10px] font-mono text-text-faint mt-1">cites: {s.factIds.length || "—"}</div>
+              {s.factIds.length === 0 ? (
+                <div className="text-[10px] font-mono text-text-faint mt-1">cites: —</div>
+              ) : (
+                <ul className="mt-1.5 space-y-1">
+                  {s.factIds.map((fid) => {
+                    const f = factById.get(fid);
+                    if (!f) {
+                      return (
+                        <li key={fid} className="text-[10px] font-mono text-text-faint">
+                          cites {fid}
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={fid} className="text-xs text-text-mute bg-bg-deep/50 rounded px-2 py-1">
+                        <span className="text-text">{f.statement}</span>
+                        <span className="ml-2 text-[10px] font-mono text-text-faint">
+                          {f.sourceTitle ?? (f.sourceUrl ? new URL(f.sourceUrl).hostname : "unsourced")}
+                          {f.retrievedAt ? ` · ${new Date(f.retrievedAt).toLocaleDateString()}` : ""}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           ))}
         </ol>
@@ -402,7 +442,9 @@ function ActivePov({
                 disabled={draftMut.isPending || generating === "draft"}
                 data-testid="button-approve-outline"
               >
-                {draftMut.isPending || generating === "draft" ? "Drafting… (a few minutes)" : "Approve outline & generate draft"}
+                {draftMut.isPending || generating === "draft"
+                  ? runPhase ?? "Drafting… (a few minutes)"
+                  : "Approve outline & generate draft"}
               </PillButton>
             </div>
           </div>
@@ -456,7 +498,9 @@ function ActivePov({
                 disabled={reviseMut.isPending || generating === "revise"}
                 data-testid="button-request-changes"
               >
-                {reviseMut.isPending || generating === "revise" ? "Revising… (a few minutes)" : "Request changes"}
+                {reviseMut.isPending || generating === "revise"
+                  ? runPhase ?? "Revising… (a few minutes)"
+                  : "Request changes"}
               </PillButton>
             </div>
           </div>

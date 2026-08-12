@@ -45,6 +45,37 @@
         { "kind": "html_citations_use_sup_tag" },
         { "kind": "word_count_within", "min": 600, "max": 1800 }
       ]
+    },
+    {
+      "id": "pov_06_deterministic_gate_hallucinated_ids",
+      "phase": "server_citation_gate",
+      "input": { "htmlCitesUnknownFactIds": true, "validFactIds": ["f1", "f2"] },
+      "asserts": [
+        { "kind": "gate_fails_below_threshold", "value": 0.8 },
+        { "kind": "invalid_fact_ids_stripped_from_html" },
+        { "kind": "failure_lists_unsupported_sections" }
+      ]
+    },
+    {
+      "id": "pov_07_inference_labeling_and_implications",
+      "phase": "sections",
+      "input": { "backgroundContextProvided": true },
+      "asserts": [
+        { "kind": "background_context_never_cited" },
+        { "kind": "each_section_ends_with_client_implication" },
+        { "kind": "inference_labeled_not_stated_as_fact" },
+        { "kind": "max_jargon_terms_per_section", "value": 2 }
+      ]
+    },
+    {
+      "id": "pov_08_deep_research_fact_quality",
+      "phase": "deep_research",
+      "input": { "anglesCount": 3, "recencyFilter": "month" },
+      "asserts": [
+        { "kind": "facts_are_atomic_single_claim" },
+        { "kind": "source_urls_copied_from_dossier" },
+        { "kind": "snippets_carry_publication_dates_when_available" }
+      ]
     }
   ]
 }
