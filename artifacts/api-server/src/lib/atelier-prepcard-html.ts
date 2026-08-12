@@ -25,8 +25,9 @@
 const COGNIRISE_TAGLINE = "Intelligence that Elevates.";
 
 // Distinct accent colors for the business-unit map cards, cycled by index so
-// each division reads as its own block at a glance.
-const BU_ACCENTS = ["#E89E2C", "#3B82C4", "#2E7D5B", "#8E5BB8", "#C4553B", "#11808F"];
+// each division reads as its own block at a glance. Cognirise brand rules:
+// no amber/golden hues — lead with the magenta family, keep the rest cool.
+const BU_ACCENTS = ["#A6348F", "#3B82C4", "#2E7D5B", "#8A5BD6", "#FF7B5A", "#11808F"];
 
 // Typical first-mandate deal-size ranges per Cognirise service line.
 // Mirrors the table in prompts/account_cartographer/v1.md — kept here so
@@ -389,7 +390,9 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(brand)} — First-meeting prep</title>
 <style>
-  :root { --navy:#0E1F3D; --gold:#E89E2C; --ink:#26303f; --mute:#6b7480; --soft:#f5f6f8; --rule:#e2e6ec; --paper:#ffffff; }
+  /* --gold name kept for stability but resolves to the Cognirise magenta
+     accent — never amber/golden hues (mirrors atelier-pdf-brand.ts). */
+  :root { --navy:#0E1F3D; --gold:#A6348F; --ink:#26303f; --mute:#6b7480; --soft:#f5f6f8; --rule:#e2e6ec; --paper:#ffffff; }
   *,*::before,*::after { box-sizing:border-box; }
   html,body { margin:0; padding:0; background:#eef1f5; color:var(--ink);
     font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55; }
@@ -414,7 +417,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   .glance-cell { background:var(--soft); border:1px solid var(--rule); border-radius:8px; padding:8px 14px; min-width:110px; }
   .glance-cell span { display:block; font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--mute); }
   .glance-cell b { font-size:15px; color:var(--navy); }
-  .headline { margin-top:16px; padding:14px 16px; background:#fbf3e3; border-left:3px solid var(--gold); border-radius:0 8px 8px 0; font-size:15.5px; color:var(--navy); }
+  .headline { margin-top:16px; padding:14px 16px; background:#faeef7; border-left:3px solid var(--gold); border-radius:0 8px 8px 0; font-size:15.5px; color:var(--navy); }
   .headline-label, .rtw-label { display:block; font-size:10.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gold); margin-bottom:4px; font-weight:700; }
   .rtw { margin-top:14px; padding:14px 16px; background:var(--soft); border:1px solid var(--rule); border-radius:8px; }
   ul.rows { list-style:none; padding:0; margin:0; }
@@ -423,7 +426,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   .prose { margin:0; }
   .ev { display:inline-block; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; padding:1px 7px; border-radius:999px; border:1px solid var(--rule); vertical-align:middle; }
   .ev-evidenced { color:#2E7D5B; border-color:#bfe0cd; background:#f0f8f3; }
-  .ev-inferred { color:#b07a14; border-color:#ecd9a4; background:#fdf6e6; }
+  .ev-inferred { color:#8A5BD6; border-color:#ddd0f5; background:#f6f2fd; }
   .ev-hypothesis { color:#6b7480; border-color:var(--rule); background:var(--soft); }
   .srcs a { color:var(--gold); text-decoration:none; font-size:11.5px; font-weight:600; }
   table.grid { width:100%; border-collapse:collapse; font-size:13.5px; }
@@ -432,7 +435,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   table.grid td { padding:9px 10px; border-bottom:1px solid var(--rule); vertical-align:top; }
   td.sl { font-weight:600; color:var(--navy); white-space:nowrap; }
   td.deal { white-space:nowrap; color:var(--navy); font-weight:600; }
-  .gap { margin-top:4px; font-size:12.5px; color:#b07a14; }
+  .gap { margin-top:4px; font-size:12.5px; color:#A6348F; }
   .bu-grid { display:flex; flex-wrap:wrap; gap:12px; }
   .bu-card { flex:1 1 160px; min-width:150px; background:var(--soft); border:1px solid var(--rule);
     border-radius:10px; padding:12px 14px; }
@@ -442,7 +445,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   .angle { padding:14px 16px; border:1px solid var(--rule); border-radius:8px; margin-bottom:12px; }
   .angle:last-child { margin-bottom:0; }
   .angle-title { font-weight:700; color:var(--navy); font-size:15px; margin-bottom:8px; }
-  .sl-tag { display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.06em; color:var(--gold); border:1px solid #ecd9a4; background:#fdf6e6; border-radius:999px; padding:1px 7px; margin-left:4px; }
+  .sl-tag { display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.06em; color:var(--gold); border:1px solid #e9c8e1; background:#faeef7; border-radius:999px; padding:1px 7px; margin-left:4px; }
   .kv { display:flex; gap:10px; padding:3px 0; font-size:13.5px; }
   .kv span { flex:0 0 88px; color:var(--mute); font-size:11px; letter-spacing:0.06em; text-transform:uppercase; padding-top:2px; }
   .kv b { font-weight:500; color:var(--ink); }
@@ -455,7 +458,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   .assume-col { flex:1 1 200px; min-width:180px; }
   .person { padding:16px 0; border-bottom:1px solid var(--rule); }
   .person:last-child { border-bottom:0; }
-  .person-spotlight { background:#fbf3e3; border:1px solid #ecd9a4; border-radius:10px; padding:16px; margin-bottom:8px; }
+  .person-spotlight { background:#faeef7; border:1px solid #e9c8e1; border-radius:10px; padding:16px; margin-bottom:8px; }
   .person-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
   .person-name { font-weight:700; color:var(--navy); font-size:15.5px; }
   .person-meta { color:var(--mute); font-size:13px; margin-top:2px; }
