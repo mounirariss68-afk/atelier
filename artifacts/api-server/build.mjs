@@ -147,6 +147,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     "assets/pdf-bg-light.jpg",
     "assets/pdf-bg-dark.jpg",
     "assets/pdf-logo-white.png",
+    "assets/pdf-riser-avatar.png",
   ];
   await mkdir(path.resolve(distDir, "assets"), { recursive: true });
   for (const rel of runtimeAssets) {

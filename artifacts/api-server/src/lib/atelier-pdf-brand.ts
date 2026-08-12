@@ -230,18 +230,14 @@ function paintPageChrome(doc: PDFKit.PDFDocument): void {
   // Navy strip + Cognirise gradient hairline at the very top.
   doc.rect(0, 0, w, 8).fill(BRAND.navy);
   cogGradRule(doc, 0, 8, w, 1.6);
-  // Wordmark, top-left of the header zone.
-  const s = state(doc);
-  if (s.logo) {
-    doc.image(s.logo, PAGE.left, 24, { width: 88 });
-  } else {
-    doc.font(FONT.bold).fontSize(13).fillColor(BRAND.navy).text("COGNIRISE", PAGE.left, 26, { lineBreak: false });
+  // Riser avatar + Atelier name, top-left of the header zone.
+  const avatar = loadBgAsset("pdf-riser-avatar.png");
+  let tx = PAGE.left;
+  if (avatar) {
+    doc.image(avatar, PAGE.left, 22, { width: 24, height: 24 });
+    tx += 32;
   }
-  doc
-    .font(FONT.medium)
-    .fontSize(7.5)
-    .fillColor(BRAND.muted)
-    .text("ATELIER · COGNIRISE", PAGE.right - 180, 32, { width: 180, align: "right", characterSpacing: 1.2, lineBreak: false });
+  doc.font(FONT.semibold).fontSize(12).fillColor(BRAND.navy).text("Atelier", tx, 29, { lineBreak: false });
   doc
     .moveTo(PAGE.left, 56)
     .lineTo(PAGE.right, 56)
@@ -313,6 +309,7 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
   } else {
     doc.font(FONT.bold).fontSize(18).fillColor(BRAND.white).text("COGNIRISE", mx, 62, { lineBreak: false });
   }
+  const coverAvatar = loadBgAsset("pdf-riser-avatar.png");
   doc
     .font(FONT.medium)
     .fontSize(8)
@@ -320,6 +317,10 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
     .fillColor(BRAND.white)
     .text("ATELIER", w - mx - 120, 70, { width: 120, align: "right", characterSpacing: 3, lineBreak: false });
   doc.fillOpacity(1);
+  if (coverAvatar) {
+    const labelW = doc.widthOfString("ATELIER", { characterSpacing: 3 });
+    doc.image(coverAvatar, w - mx - labelW - 30, 64, { width: 20, height: 20 });
+  }
 
   // Title block, upper-middle.
   let y = 236;
@@ -385,6 +386,14 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
         "Confidential — prepared by Cognirise. Not for distribution outside the intended recipient.",
       mx,
       bandY + 32,
+      { width: cw },
+    );
+  doc
+    .fontSize(7.5)
+    .text(
+      "This document is AI generated and may contain errors — please verify key facts before relying on it.",
+      mx,
+      doc.y + 3,
       { width: cw },
     );
   doc.fillOpacity(1);
