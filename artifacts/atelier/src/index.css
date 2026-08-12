@@ -346,7 +346,7 @@
         color-mix(in srgb, var(--bg) 48%, transparent) 0%,
         color-mix(in srgb, var(--bg) 30%, transparent) 55%,
         color-mix(in srgb, var(--bg-deep) 24%, transparent) 100%),
-      url("/light-bg.webp");
+      url("/light-bg-wave.webp");
     background-size: auto, cover;
     /* Task #932 anchored the old watercolor art LEFT; Task #996's geometric
        artwork is a balanced blue→coral sweep, so it re-centers to keep the
