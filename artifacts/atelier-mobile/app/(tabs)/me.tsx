@@ -728,7 +728,33 @@ function LettersSection() {
     }
   }, [busy, buildBody, reload, feedback]);
 
-  if (!allowed || !data) return null;
+  // Task #1036 — this section now lives in its own tab, so it must render
+  // something meaningful instead of vanishing (blank tab).
+  if (!allowed) {
+    return (
+      <Card>
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_400Regular",
+            fontSize: 13,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          Official letters are available to employees only.
+        </Text>
+      </Card>
+    );
+  }
+  if (!data) {
+    return (
+      <View style={{ gap: 12 }}>
+        <Card>
+          <Skeleton height={16} width="60%" />
+        </Card>
+      </View>
+    );
+  }
 
   const inputStyle = {
     borderWidth: 1,
@@ -1072,8 +1098,16 @@ export default function MeScreen() {
   // Task #828 — refetch the document list whenever the Me tab regains
   // focus, so out-of-band changes (chat writes, another device) surface
   // without restarting the app.
+  const [qrOpen, setQrOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  // Task #1036 — the page content below the QR business card is split
+  // into three tabs. Selection survives while the screen stays mounted.
+  const [meTab, setMeTab] = useState<"tasks" | "documents" | "letters">("tasks");
+
   const refetchDocs = docs.refetch;
   const focusedOnceRef = React.useRef(false);
+  const meTabRef = React.useRef(meTab);
+  meTabRef.current = meTab;
   useFocusEffect(
     useCallback(() => {
       // Skip the very first focus — the initial query fetch already runs.
@@ -1081,12 +1115,16 @@ export default function MeScreen() {
         focusedOnceRef.current = true;
         return;
       }
-      void refetchDocs();
+      // Task #1036 — only refresh the document list while it is visible.
+      if (meTabRef.current === "documents") void refetchDocs();
     }, [refetchDocs]),
   );
 
-  const [qrOpen, setQrOpen] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  // Task #1036 — switching to the Documents tab refreshes the list once so
+  // out-of-band changes (chat writes, another device) surface there too.
+  React.useEffect(() => {
+    if (meTab === "documents" && focusedOnceRef.current) void refetchDocs();
+  }, [meTab, refetchDocs]);
 
   const user = profile.data?.user;
   const person = profile.data?.person;
@@ -1511,6 +1549,57 @@ export default function MeScreen() {
           </FadeInView>
         )}
 
+        {/* Task #1036 — segmented switcher directly below the QR card. */}
+        <View
+          style={{
+            flexDirection: rtl.row,
+            gap: 6,
+            padding: 4,
+            borderRadius: 999,
+            backgroundColor: c.tint08,
+            borderWidth: 1,
+            borderColor: c.tint25,
+          }}
+        >
+          {(
+            [
+              { key: "tasks", label: t("me.tabTasks") },
+              { key: "documents", label: t("me.tabDocuments") },
+              { key: "letters", label: t("me.tabLetters") },
+            ] as const
+          ).map((tab) => {
+            const active = meTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => setMeTab(tab.key)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 4,
+                  borderRadius: 999,
+                  backgroundColor: active ? c.primary : "transparent",
+                  alignItems: "center",
+                }}
+                testID={`tab-me-${tab.key}`}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: active ? "#FFFFFF" : c.mutedForeground,
+                    fontFamily: active ? "PlusJakartaSans_700Bold" : "PlusJakartaSans_600SemiBold",
+                    fontSize: 12,
+                  }}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {meTab === "documents" ? (
+        <>
         <View
           style={{
             flexDirection: rtl.row,
@@ -1636,12 +1725,22 @@ export default function MeScreen() {
             ))}
           </View>
         )}
+        </>
+        ) : null}
 
-        {/* Task #1002 — personal tasks & reminders. */}
-        <MyTasksSection />
+        {meTab === "tasks" ? (
+          <>
+            {/* Task #1002 — personal tasks & reminders. */}
+            <MyTasksSection />
+          </>
+        ) : null}
 
-        {/* Task #850 — official letters: history + re-download + request. */}
-        <LettersSection />
+        {meTab === "letters" ? (
+          <>
+            {/* Task #850 — official letters: history + re-download + request. */}
+            <LettersSection />
+          </>
+        ) : null}
 
         <SelfBillingSection />
       </ScrollView>

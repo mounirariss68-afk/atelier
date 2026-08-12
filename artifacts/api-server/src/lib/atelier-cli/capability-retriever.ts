@@ -39,6 +39,14 @@ const ALWAYS_INCLUDE = new Set([
   "prefill_from_specialist",
   "evaluate_gate",
   "propose_write",
+  // "Take me to the alliance partners page" and similar navigation asks
+  // classify as domain intents (partner_firm, account, …), so cosine
+  // ranking routinely dropped find_screen from the menu and the model
+  // told users it had no navigation tool. Navigation phrasing is too
+  // varied for a keyword floor — keep the tool always on the menu.
+  // (Step 1 below only adds names present on the persona's surface, so
+  // role clamps still hold.)
+  "find_screen",
 ]);
 
 /**
