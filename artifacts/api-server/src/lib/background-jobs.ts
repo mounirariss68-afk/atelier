@@ -30,7 +30,7 @@ import {
   atelierPushTokens,
 } from "@workspace/db";
 import { and, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
-import { sendExpoPushMessages } from "./expoPush.js";
+import { mirrorSelfNotificationPush } from "./expoPush.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -189,19 +189,15 @@ async function notifyJobTerminal(job: BackgroundJobRow, n: NotifyArgs): Promise<
       .onConflictDoNothing({ target: atelierSelfNotifications.id })
       .returning({ id: atelierSelfNotifications.id });
     if (!inserted.length) return;
-    const tokens = await db
-      .select()
-      .from(atelierPushTokens)
-      .where(eq(atelierPushTokens.userId, job.startedByUserId));
-    if (!tokens.length) return;
-    await sendExpoPushMessages(
-      tokens.map((t) => ({
-        to: t.token,
-        title: n.title,
-        body: n.body ?? "",
-        data: { href: n.href ?? null, kind: "background_job", notificationId: cardId },
-      })),
-    );
+    // Task #1017 — shared mirror honors the owner's per-category opt-out.
+    await mirrorSelfNotificationPush({
+      id: cardId,
+      userId: job.startedByUserId,
+      kind: "background_job",
+      title: n.title,
+      body: n.body ?? "",
+      href: n.href ?? null,
+    });
   } catch (err) {
     console.warn("[background-jobs] notify failed for", job.id, err);
   }

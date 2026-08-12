@@ -10,8 +10,8 @@
  *   - Tokens Expo reports as DeviceNotRegistered are pruned from the
  *     registry so dead devices stop accumulating.
  */
-import { db, atelierPushTokens } from "@workspace/db";
-import { inArray } from "drizzle-orm";
+import { db, atelierPushTokens, atelierUsers } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 
 // Overridable for offline probes/tests (mirrors the MS_*_BASE_URL stub
 // pattern). Read at call time so a probe can point the sender at a local
@@ -27,6 +27,95 @@ export interface PushMessage {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------
+// Task #1017 — per-category push preferences.
+//
+// Every self-notification kind maps onto ONE coarse category so users can
+// opt out of a whole family of alerts without a per-kind wall of toggles.
+// Preferences live on atelier_users.push_notification_prefs as an opt-OUT
+// record: a missing key means enabled. Unknown/new kinds fall into
+// "other" so a future kind can never bypass the preference layer.
+// ---------------------------------------------------------------------
+export const PUSH_CATEGORIES = [
+  "tasks",
+  "expenses",
+  "timesheets",
+  "approvals",
+  "agreements",
+  "other",
+] as const;
+export type PushCategory = (typeof PUSH_CATEGORIES)[number];
+
+export function pushCategoryForKind(kind: string): PushCategory {
+  if (kind === "personal_task_due") return "tasks";
+  if (kind.startsWith("expense_") || kind === "engagement_expense_budget") return "expenses";
+  if (kind.startsWith("timesheet_")) return "timesheets";
+  if (
+    kind.startsWith("ea_") ||
+    kind.startsWith("leave_") ||
+    kind === "bank_change"
+  )
+    return "approvals";
+  if (kind.startsWith("agreement_") || kind === "contract_archived" || kind === "contract_signature_requested")
+    return "agreements";
+  return "other";
+}
+
+/** Merge stored opt-outs over the all-enabled default. */
+export function resolvePushCategoryPrefs(
+  stored: Record<string, boolean> | null | undefined,
+): Record<PushCategory, boolean> {
+  const out = {} as Record<PushCategory, boolean>;
+  for (const c of PUSH_CATEGORIES) out[c] = stored?.[c] !== false;
+  return out;
+}
+
+/**
+ * Mirror ONE self-notification card to the owner's registered devices.
+ *
+ * Callers must pass the id of a card they just INSERTED (i.e. the insert
+ * returned a row) — that keeps push idempotent on exactly the same key as
+ * the in-app card: a card that already existed never re-pushes. Honors the
+ * owner's per-category opt-out and never throws (a push hiccup must not
+ * break the caller's write).
+ */
+export async function mirrorSelfNotificationPush(card: {
+  id: string;
+  userId: string;
+  kind: string;
+  title: string;
+  body?: string | null;
+  href?: string | null;
+}): Promise<{ sent: number; skipped: boolean }> {
+  try {
+    const category = pushCategoryForKind(card.kind);
+    const [owner] = await db
+      .select({ prefs: atelierUsers.pushNotificationPrefs })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.id, card.userId));
+    if (owner && resolvePushCategoryPrefs(owner.prefs)[category] === false) {
+      return { sent: 0, skipped: true };
+    }
+    const tokens = await db
+      .select()
+      .from(atelierPushTokens)
+      .where(eq(atelierPushTokens.userId, card.userId));
+    if (!tokens.length) return { sent: 0, skipped: false };
+    const res = await sendExpoPushMessages(
+      tokens.map((t) => ({
+        to: t.token,
+        title: card.title,
+        body: card.body ?? "",
+        data: { href: card.href ?? null, kind: card.kind, notificationId: card.id },
+      })),
+    );
+    return { sent: res.sent, skipped: false };
+  } catch (err) {
+    console.warn("[push] mirror failed for card", card.id, err);
+    return { sent: 0, skipped: false };
+  }
 }
 
 export function isExpoPushToken(token: string): boolean {

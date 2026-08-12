@@ -107,6 +107,13 @@ export const atelierUsers = pgTable(
     // expense charts / month totals). Original claim currencies stay the
     // source of truth; this only affects display conversion.
     displayCurrency: text("display_currency").notNull().default("USD"),
+    // Task #1017 — per-category device-push opt-outs. Keys are push
+    // categories (tasks/expenses/timesheets/approvals/agreements/other);
+    // a missing key means enabled (opt-out model, default all on).
+    pushNotificationPrefs: jsonb("push_notification_prefs")
+      .notNull()
+      .$type<Record<string, boolean>>()
+      .default({}),
     permissions: jsonb("permissions").notNull().$type<string[]>().default([]),
     // Task #873 — alliance-partner portal logins. Set ONLY for
     // role="alliance_partner" users: links the login to its firm in

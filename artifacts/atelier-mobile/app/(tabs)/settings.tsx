@@ -18,6 +18,8 @@ import { useFeedback } from "@/components/feedback";
 import { Card, FadeInView, WEB_TAB_BAR, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDisplayCurrency } from "@/lib/displayCurrency";
+import { usePushPrefs } from "@/lib/pushPrefs";
+import { PUSH_CATEGORIES } from "@/lib/pushPrefsCore";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
@@ -155,6 +157,7 @@ export default function SettingsScreen() {
     "—";
 
   const dc = useDisplayCurrency();
+  const pushPrefs = usePushPrefs();
   const [reminders, setReminders] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -291,6 +294,57 @@ export default function SettingsScreen() {
                   testID="meeting-reminders-toggle"
                 />
               </View>
+            </Card>
+
+            <SectionTitle>{t("set.pushAlerts")}</SectionTitle>
+            <Card style={{ paddingVertical: 4 }}>
+              {PUSH_CATEGORIES.map((cat, i) => (
+                <View key={cat}>
+                  <View
+                    style={{
+                      flexDirection: rtl.row,
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingVertical: 10,
+                      paddingHorizontal: 4,
+                      gap: 12,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: c.foreground,
+                        fontFamily: "Inter_500Medium",
+                        fontSize: 16,
+                        textAlign: rtl.textAlign,
+                        flex: 1,
+                      }}
+                    >
+                      {t(`set.push.${cat}`)}
+                    </Text>
+                    <Switch
+                      value={pushPrefs.categories[cat]}
+                      onValueChange={(v) => pushPrefs.toggle(cat, v)}
+                      trackColor={{ true: c.primary }}
+                      testID={`push-category-${cat}`}
+                    />
+                  </View>
+                  {i < PUSH_CATEGORIES.length - 1 ? (
+                    <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />
+                  ) : null}
+                </View>
+              ))}
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 12.5,
+                  paddingHorizontal: 4,
+                  paddingBottom: 8,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {t("set.pushAlertsBody")}
+              </Text>
             </Card>
           </>
         ) : null}

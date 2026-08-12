@@ -31,6 +31,7 @@ import {
   atelierAgentRuns,
 } from "@workspace/db";
 import { listJobsForUser } from "../../lib/background-jobs.js";
+import { mirrorSelfNotificationPush } from "../../lib/expoPush.js";
 import {
   AtelierGetMyProfileResponse,
   AtelierListMyNotificationsResponse,
@@ -187,15 +188,39 @@ export async function emitSelfNotification(
   tx: Pick<typeof db, "insert"> = db,
 ): Promise<string> {
   const id = rid("selfnotif");
-  await tx.insert(atelierSelfNotifications).values({
-    id,
-    orgId: args.orgId,
-    userId: args.userId,
-    kind: args.kind,
-    title: args.title,
-    body: args.body ?? "",
-    href: args.href ?? null,
-  });
+  // Task #1017 — insert is conflict-guarded + returning() so the device
+  // push below fires ONLY for a newly inserted card (same idempotency key
+  // as the in-app bell: the notification id).
+  const inserted = await tx
+    .insert(atelierSelfNotifications)
+    .values({
+      id,
+      orgId: args.orgId,
+      userId: args.userId,
+      kind: args.kind,
+      title: args.title,
+      body: args.body ?? "",
+      href: args.href ?? null,
+    })
+    .onConflictDoNothing({ target: atelierSelfNotifications.id })
+    .returning({ id: atelierSelfNotifications.id });
+  // Mirror to registered devices (Task #1017). Fire-and-forget so the
+  // caller's request never waits on the Expo API; mirror honors the
+  // owner's per-category opt-out and never throws. Skipped when the
+  // caller supplied a transaction executor — the tx may still roll back,
+  // and a push for an uncommitted card would be a lie (current tx callers
+  // are onboarding "welcome" cards, where a device push is pointless: the
+  // joiner has no registered device yet).
+  if (tx === db && inserted.length) {
+    void mirrorSelfNotificationPush({
+      id,
+      userId: args.userId,
+      kind: args.kind,
+      title: args.title,
+      body: args.body ?? "",
+      href: args.href ?? null,
+    });
+  }
   return id;
 }
 

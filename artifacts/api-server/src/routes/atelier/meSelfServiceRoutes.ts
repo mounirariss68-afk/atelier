@@ -83,6 +83,7 @@ import {
 } from "../../lib/atelier-agents/runner.js";
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
 import { convertToUsd, convertUsdTo, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
+import { PUSH_CATEGORIES, resolvePushCategoryPrefs } from "../../lib/expoPush.js";
 import { evaluateExpense } from "../../lib/atelier-expense-policy.js";
 // Task #383 — taxonomy + attribution + funding + merchant-memory learning.
 import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
@@ -2058,9 +2059,17 @@ router.get("/me/preferences", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
+    // Task #1017 — pushCategories: per-category device-push opt-outs
+    // (opt-out model; missing key = enabled). Read fresh — the persona
+    // cache may predate a PATCH in the same session.
+    const [row] = await db
+      .select({ prefs: atelierUsers.pushNotificationPrefs })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.id, me.id));
     res.json({
       displayCurrency: me.displayCurrency ?? "USD",
       supportedCurrencies: DISPLAY_CURRENCIES,
+      pushCategories: resolvePushCategoryPrefs(row?.prefs),
     });
   } catch (err) {
     next(err);
@@ -2073,24 +2082,73 @@ router.patch("/me/preferences", async (req, res, next) => {
     const me = ensurePersona(req, res);
     if (!me) return;
     const b = (req.body ?? {}) as Record<string, unknown>;
-    const cur = String(b.displayCurrency ?? "").toUpperCase();
-    if (!DISPLAY_CURRENCIES.includes(cur)) {
-      res.status(400).json({ error: "unsupported-currency", allowed: DISPLAY_CURRENCIES });
+    const patch: Record<string, unknown> = {};
+    const auditPayload: Record<string, unknown> = {};
+    // displayCurrency — optional now that the endpoint also carries push
+    // preferences (Task #1017); still strictly validated when present.
+    let cur: string | null = null;
+    if (b.displayCurrency !== undefined) {
+      cur = String(b.displayCurrency ?? "").toUpperCase();
+      if (!DISPLAY_CURRENCIES.includes(cur)) {
+        res.status(400).json({ error: "unsupported-currency", allowed: DISPLAY_CURRENCIES });
+        return;
+      }
+      patch.displayCurrency = cur;
+      auditPayload.displayCurrency = cur;
+      auditPayload.previous = me.displayCurrency;
+    }
+    // Task #1017 — pushCategories: partial per-category toggles. Unknown
+    // categories or non-boolean values are rejected loudly (never
+    // silently dropped) so a client typo can't fake a saved preference.
+    let mergedPrefs: Record<string, boolean> | null = null;
+    if (b.pushCategories !== undefined) {
+      const pc = b.pushCategories;
+      if (typeof pc !== "object" || pc === null || Array.isArray(pc)) {
+        res.status(400).json({ error: "invalid-push-categories", allowed: PUSH_CATEGORIES });
+        return;
+      }
+      const entries = Object.entries(pc as Record<string, unknown>);
+      for (const [k, v] of entries) {
+        if (!(PUSH_CATEGORIES as readonly string[]).includes(k) || typeof v !== "boolean") {
+          res.status(400).json({ error: "invalid-push-categories", allowed: PUSH_CATEGORIES });
+          return;
+        }
+      }
+      const [row] = await db
+        .select({ prefs: atelierUsers.pushNotificationPrefs })
+        .from(atelierUsers)
+        .where(eq(atelierUsers.id, me.id));
+      mergedPrefs = { ...(row?.prefs ?? {}), ...(pc as Record<string, boolean>) };
+      patch.pushNotificationPrefs = mergedPrefs;
+      auditPayload.pushCategories = pc;
+    }
+    if (!Object.keys(patch).length) {
+      res.status(400).json({ error: "empty-patch" });
       return;
     }
     await db
       .update(atelierUsers)
-      .set({ displayCurrency: cur, updatedAt: new Date() })
+      .set({ ...patch, updatedAt: new Date() })
       .where(eq(atelierUsers.id, me.id));
     await audit({
       entityType: "user",
       entityId: me.id,
       actor: me,
       action: "me.preferences.updated",
-      payload: { displayCurrency: cur, previous: me.displayCurrency },
-      summary: `${me.name} set display currency to ${cur}`,
+      payload: auditPayload,
+      summary: `${me.name} updated preferences${cur ? ` (display currency ${cur})` : ""}${auditPayload.pushCategories ? " (push alerts)" : ""}`,
     });
-    res.json({ displayCurrency: cur, supportedCurrencies: DISPLAY_CURRENCIES });
+    res.json({
+      displayCurrency: cur ?? me.displayCurrency ?? "USD",
+      supportedCurrencies: DISPLAY_CURRENCIES,
+      pushCategories: resolvePushCategoryPrefs(
+        mergedPrefs ??
+          (await db
+            .select({ prefs: atelierUsers.pushNotificationPrefs })
+            .from(atelierUsers)
+            .where(eq(atelierUsers.id, me.id)))[0]?.prefs,
+      ),
+    });
   } catch (err) {
     next(err);
   }

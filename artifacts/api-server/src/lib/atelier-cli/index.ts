@@ -5536,6 +5536,29 @@ export async function runTurn(
       }
 
       const tc = claudeStep.toolCall;
+      // Hallucinated tool-name recovery: the model occasionally invents a
+      // near-miss name (e.g. `request_employment_certificate` for
+      // `request_employment_letter`), which used to kill the whole turn
+      // with a red "tool not registered" error. If the mistyped name has
+      // exactly one close match in the menu the model was shown, silently
+      // substitute it BEFORE the self-only clamp and resolution below.
+      if (!findToolByName(tc.name, persona)) {
+        const corrected = closestToolName(
+          tc.name,
+          tools.map((t) => String((t as { name?: unknown }).name ?? "")),
+        );
+        if (corrected && findToolByName(corrected, persona)) {
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "tool_name_corrected",
+              turnId,
+              from: tc.name,
+              to: corrected,
+            })}`,
+          );
+          tc.name = corrected;
+        }
+      }
       // Task #591 — self-only personas (employee / contractor) get a
       // helpful, scrubbed refusal when the model reaches for anything
       // outside their me.* surface (e-sign, HR admin, firm documents,

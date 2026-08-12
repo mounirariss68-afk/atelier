@@ -51,6 +51,7 @@ import {
   type ExtraSignerField,
 } from "./docuseal.js";
 import { buildCogniriseEmail } from "./cognirise-email-templates.js";
+import { mirrorSelfNotificationPush } from "./expoPush.js";
 import { createDocument } from "./atelier-documents.js";
 import { legalNamesByEmail } from "./atelier-person-sync.js";
 
@@ -596,21 +597,28 @@ async function notifyRequesterOfTerminalStatus(
           };
   try {
     // Deterministic ids keep re-syncs idempotent (terminal states never
-    // regress, but belt-and-braces against double-delivery).
-    await db
+    // regress, but belt-and-braces against double-delivery). Task #1017:
+    // the same id keys the device push — only a NEWLY inserted card
+    // (returning() non-empty) mirrors to registered devices, so a re-sync
+    // can never double-push.
+    const mainCard = {
+      id: `selfnotif_esign_${row.id}_${status}`,
+      userId: row.createdBy,
+      kind: wording.kind,
+      title: wording.title,
+      body: wording.body,
+      href: `/contracts/signatures?request=${row.id}`,
+    };
+    const insertedMain = await db
       .insert(atelierSelfNotifications)
-      .values({
-        id: `selfnotif_esign_${row.id}_${status}`,
-        orgId: row.orgId,
-        userId: row.createdBy,
-        kind: wording.kind,
-        title: wording.title,
-        body: wording.body,
-        href: `/contracts/signatures?request=${row.id}`,
-      })
-      .onConflictDoNothing({ target: atelierSelfNotifications.id });
+      .values({ ...mainCard, orgId: row.orgId })
+      .onConflictDoNothing({ target: atelierSelfNotifications.id })
+      .returning({ id: atelierSelfNotifications.id });
+    if (insertedMain.length) await mirrorSelfNotificationPush(mainCard);
     // On completion, a companion card links straight to the archived
-    // signed contract in the Document Library.
+    // signed contract in the Document Library. In-app only — the main
+    // "signed" card already pushed; a second buzz for the same event
+    // would be noise.
     if (status === "completed" && row.signedDocumentId) {
       await db
         .insert(atelierSelfNotifications)

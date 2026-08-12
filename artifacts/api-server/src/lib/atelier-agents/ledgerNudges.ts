@@ -184,9 +184,9 @@ export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Prom
 // rescheduling, or deleting the task dismisses its cards at the write
 // site (dismissTaskReminders in meTasksRoutes.ts).
 // ---------------------------------------------------------------------
-import { atelierPersonalTasks, atelierSelfNotifications, atelierPushTokens } from "@workspace/db";
+import { atelierPersonalTasks, atelierSelfNotifications, atelierPushTokens, atelierUsers } from "@workspace/db";
 import { lte, isNotNull } from "drizzle-orm";
-import { sendExpoPushMessages } from "../expoPush.js";
+import { sendExpoPushMessages, resolvePushCategoryPrefs } from "../expoPush.js";
 
 export async function runPersonalTaskReminderTick(): Promise<{ inserted: number; pushed: number }> {
   const now = new Date();
@@ -228,7 +228,18 @@ export async function runPersonalTaskReminderTick(): Promise<{ inserted: number;
   if (inserted.length) {
     const insertedIds = new Set(inserted.map((r) => r.id));
     const newRows = rows.filter((r) => insertedIds.has(r.id));
-    const userIds = Array.from(new Set(newRows.map((r) => r.userId)));
+    let userIds = Array.from(new Set(newRows.map((r) => r.userId)));
+    // Task #1017 — honor per-category push opt-outs ("tasks" category).
+    if (userIds.length) {
+      const prefRows = await db
+        .select({ id: atelierUsers.id, prefs: atelierUsers.pushNotificationPrefs })
+        .from(atelierUsers)
+        .where(inArray(atelierUsers.id, userIds));
+      const optedOut = new Set(
+        prefRows.filter((u) => resolvePushCategoryPrefs(u.prefs).tasks === false).map((u) => u.id),
+      );
+      userIds = userIds.filter((id) => !optedOut.has(id));
+    }
     const tokens = await db
       .select()
       .from(atelierPushTokens)
