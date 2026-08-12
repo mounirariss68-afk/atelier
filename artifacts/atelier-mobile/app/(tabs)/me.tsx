@@ -38,7 +38,6 @@ import {
   Sheet,
   Skeleton,
   WEB_TAB_BAR,
-  WEB_TOP_INSET,
   hapticError,
   hapticSuccess,
   softShadow,
@@ -46,6 +45,7 @@ import {
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
@@ -1129,27 +1129,15 @@ export default function MeScreen() {
     }
   }, [addTitle, addExpires, addKind, addFront, addBack, createDoc, docs, t, feedback, resetAddForm, applyScanError]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
+
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const documents = docs.data?.documents ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      <View
-        style={{
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingTop: topPad,
-          paddingBottom: 12,
-        }}
-      >
-        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 24, letterSpacing: -0.4 }}>
-          {t("me.title")}
-        </Text>
-      </View>
+      {/* Task #1003 — unified glass header with brand logo. */}
+      <AppHeader title={t("me.title")} />
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }}>
         {profile.isLoading ? (

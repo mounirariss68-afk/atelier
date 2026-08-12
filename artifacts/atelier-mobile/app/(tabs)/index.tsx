@@ -33,7 +33,6 @@ import {
   PressScale,
   Sheet,
   WEB_TAB_BAR,
-  WEB_TOP_INSET,
   softShadow,
 } from "@/components/ui";
 import { FlightPlannerCard } from "@/components/FlightPlannerCard";
@@ -41,6 +40,7 @@ import { ToolResultCards } from "@/components/ResultCards";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { AttachmentRejectedError, MAX_ATTACHMENT_BYTES } from "@/lib/api";
 import { resolveClarificationFields } from "@/lib/chatFrames";
@@ -852,44 +852,23 @@ export default function ChatScreen() {
     }
   }, [chat, feedback, t]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
+
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      <View
-        style={{
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingTop: topPad,
-          paddingBottom: 12,
-          backgroundColor: c.background,
-        }}
-      >
-        <IconButton icon="clock" onPress={openHistory} filled />
-        <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
-          <Image
-            source={require("@/assets/images/riser-avatar.png")}
-            style={{ width: 24, height: 24 }}
-            resizeMode="contain"
-            accessible={false}
-          />
-          <Text
-            style={{
-              color: c.foreground,
-              fontFamily: "PlusJakartaSans_800ExtraBold",
-              fontSize: 18,
-              letterSpacing: -0.3,
-            }}
-          >
-            {t("tab.chat")}
-          </Text>
-        </View>
-        <IconButton icon="edit" onPress={() => chat.newChat()} filled />
-      </View>
-      <View style={{ height: 2, backgroundColor: c.primary, opacity: 0.85 }} />
+      {/* Task #1003 — unified glass header with brand logo. History and
+          new-chat actions live in the header's actions slot; the Riser
+          avatar stays on the empty state below. */}
+      <AppHeader
+        title={t("tab.chat")}
+        actions={
+          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+            <IconButton icon="clock" onPress={openHistory} filled />
+            <IconButton icon="edit" onPress={() => chat.newChat()} filled />
+          </View>
+        }
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {chat.turns.length === 0 ? (

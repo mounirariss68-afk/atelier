@@ -25,11 +25,11 @@ import {
   PressScale,
   Skeleton,
   WEB_TAB_BAR,
-  WEB_TOP_INSET,
   softShadow,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { formatMoney } from "@/lib/format";
 import { ExpenseCharts } from "@/components/ExpenseCharts";
@@ -373,7 +373,7 @@ export default function ExpensesScreen() {
     await query.refetch();
   }, [query, syncAndRefresh]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 10;
+
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const fabBottom = (Platform.OS === "web" ? WEB_TAB_BAR + 12 : Math.max(insets.bottom, 10) + 80);
 
@@ -466,41 +466,8 @@ export default function ExpensesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      {/* Dark-island header: stays navy in both themes. */}
-      <View
-        style={{
-          backgroundColor: "#0A1230",
-          paddingHorizontal: 20,
-          paddingTop: topPad,
-          paddingBottom: 18,
-          borderBottomLeftRadius: 28,
-          borderBottomRightRadius: 28,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 3,
-            backgroundColor: c.primary,
-            opacity: 0.9,
-          }}
-        />
-        <Text
-          style={{
-            color: "#EEF1FA",
-            fontFamily: "PlusJakartaSans_800ExtraBold",
-            fontSize: 26,
-            letterSpacing: -0.4,
-            textAlign: rtl.textAlign,
-          }}
-        >
-          {t("exp.title")}
-        </Text>
-      </View>
+      {/* Task #1003 — unified glass header with brand logo. */}
+      <AppHeader title={t("exp.title")} />
 
       {queued > 0 ? (
         <Glass

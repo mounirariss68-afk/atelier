@@ -48,11 +48,11 @@ import {
   ErrorState,
   Skeleton,
   WEB_TAB_BAR,
-  WEB_TOP_INSET,
   hapticLight,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 
 // Device-persisted list/day view choice for the Meetings tab (matches the
@@ -1933,7 +1933,7 @@ export default function MeetingsScreen() {
   });
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
+
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const meetings = calendar.data?.meetings ?? [];
 
@@ -2027,52 +2027,8 @@ export default function MeetingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      {/* Dark-island header: stays navy in both themes. */}
-      <View
-        style={{
-          backgroundColor: "#0A1230",
-          paddingHorizontal: 20,
-          paddingTop: topPad,
-          paddingBottom: 18,
-          borderBottomLeftRadius: 28,
-          borderBottomRightRadius: 28,
-          overflow: "hidden",
-          gap: 2,
-        }}
-      >
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 3,
-            backgroundColor: c.primary,
-            opacity: 0.9,
-          }}
-        />
-        <Text
-          style={{
-            color: "#EEF1FA",
-            fontFamily: "PlusJakartaSans_800ExtraBold",
-            fontSize: 26,
-            letterSpacing: -0.4,
-            textAlign: rtl.textAlign,
-          }}
-        >
-          {t("mtg.title")}
-        </Text>
-        <Text
-          style={{
-            color: "#9AA5C4",
-            fontFamily: "PlusJakartaSans_500Medium",
-            fontSize: 13,
-            textAlign: rtl.textAlign,
-          }}
-        >
-          {t("mtg.subtitle")}
-        </Text>
-      </View>
+      {/* Task #1003 — unified glass header with brand logo. */}
+      <AppHeader title={t("mtg.title")} subtitle={t("mtg.subtitle")} />
 
       {/* Pinned controls: view toggle plus, in day view, the date navigator.
           They live outside the ScrollView so they stay locked while the

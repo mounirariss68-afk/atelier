@@ -15,13 +15,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useFeedback } from "@/components/feedback";
-import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
+import { Card, FadeInView, WEB_TAB_BAR, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDisplayCurrency } from "@/lib/displayCurrency";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import {
   ensureNotificationPermission,
@@ -206,23 +207,14 @@ export default function SettingsScreen() {
     if (ok) logout();
   };
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
+
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingTop: topPad,
-          paddingBottom: 12,
-        }}
-      >
-        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 24, letterSpacing: -0.4, textAlign: rtl.textAlign }}>
-          {t("set.title")}
-        </Text>
-      </View>
+      {/* Task #1003 — unified glass header with brand logo. */}
+      <AppHeader title={t("set.title")} />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: bottomPad }}>
         <SectionTitle>{t("set.appearance")}</SectionTitle>
