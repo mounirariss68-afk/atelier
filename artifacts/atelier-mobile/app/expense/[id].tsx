@@ -25,7 +25,6 @@ import {
   View,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   Button,
@@ -33,17 +32,16 @@ import {
   Chip,
   ErrorState,
   Field,
-  IconButton,
   PickerSheet,
   Sheet,
   Skeleton,
-  WEB_TOP_INSET,
   hapticError,
   hapticSuccess,
 } from "@/components/ui";
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { HttpError, apiJson } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
@@ -149,7 +147,6 @@ export default function ExpenseDetailScreen() {
   const { t, lang } = useI18n();
   const rtl = useRTL();
   const feedback = useFeedback();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id, parsed } = useLocalSearchParams<{ id: string; parsed?: string }>();
 
@@ -396,8 +393,6 @@ export default function ExpenseDetailScreen() {
     }
   }, [id, list, t, feedback]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-
   const accounts = contexts.data?.accounts ?? [];
   const engagements = contexts.data?.engagements ?? [];
   const pickList: AtelierIdName[] = contextType === "account" ? accounts : engagements;
@@ -409,30 +404,21 @@ export default function ExpenseDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      <View
-        style={{
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingTop: topPad,
-          paddingBottom: 12,
-        }}
-      >
-        <IconButton
-          icon={rtl.isRTL ? "chevron-right" : "chevron-left"}
-          onPress={() => router.back()}
-          filled
-        />
-        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 18, letterSpacing: -0.3 }}>
-          {editable ? t("exp.review") : t("exp.detail")}
-        </Text>
-        {editable ? (
-          <IconButton icon="trash-2" color={c.destructive} onPress={remove} filled />
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
-      </View>
+      {/* Task #1014 — shared navy branded header (back-button variant). */}
+      <AppHeader
+        title={editable ? t("exp.review") : t("exp.detail")}
+        onBack={() => router.back()}
+        actions={
+          editable ? (
+            <AppHeaderIconButton
+              icon="trash-2"
+              color="#FCA5A5"
+              onPress={remove}
+              accessibilityLabel={t("common.delete")}
+            />
+          ) : undefined
+        }
+      />
 
       {list.isLoading ? (
         <View style={{ padding: 16, gap: 12 }}>

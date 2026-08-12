@@ -1,3 +1,4 @@
+- [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps for the 7-equals marker as a substring; decorative `// ====` comment rules trip it — convert to dashes.
 - [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip onnxruntime CUDA bins for 8GiB image cap.
 - [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
 - [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; navy logo only fits server PDFs.
@@ -33,7 +34,7 @@
 - [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.
 - [Contract templates ingested](atelier-contract-templates-ingested.md) — task-agent DB data never merges; templates/signing entities re-ingested via live API on main (2026-07-19); repeat in prod before go-live.
 - [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
-- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai), never re-add its production block; render quirks in launch-*.md.
+- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai), never re-add its production block; deck/render quirks in launch-*.md ([launch-deck-graphics.md](launch-deck-graphics.md)).
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete; polymorphic pane hrefs filter deleted targets; delete/close paths resolve pane items org-scoped.
@@ -60,8 +61,7 @@
 - [Roster person edit surface](atelier-person-edit.md) — full-profile PATCH whitelists per worker type; users table column is `name` (not fullName) when syncing employee identity to the login row.
 - [Signing-entity registry](atelier-signing-entities.md) — lives in firm-profile payload.legalEntities; PUT replaces whole registry; signatory gate lives INSIDE sendContract ([atelier-entity-signatories.md](atelier-entity-signatories.md)).
 - [Template prior-field reconciliation](atelier-template-prior-review.md) — new-version upload stores prior REVIEWED schema reconciled vs new doc (carried_over/missing); UI restore-merge never re-adds missing placeholders.
-- [Atelier async agent launches](atelier-agent-async-launch.md) — long agent routes must return instantly + poll (proxy 502s held requests); state now lives in the durable job registry ([atelier-background-jobs.md](atelier-background-jobs.md)).
-- [Durable background jobs](atelier-background-jobs.md) — atelier_background_jobs replaces in-memory launch maps; atomic start via running-unique index (null = lost race), reap stale before relaunch, boot sweep pre-boot rows only.
+- [Atelier async agent launches](atelier-agent-async-launch.md) — long agent routes must return instantly + poll (proxy 502s held requests); durable job registry details (atomic start, stale reap, boot sweep) in [atelier-background-jobs.md](atelier-background-jobs.md).
 - [Atelier legal-entity registry](atelier-legal-entity-registry.md) — ENTITIES_SEED removed; plan/reports read registry via listFinanceEntities + setFpaEntities, firm pseudo-entity fallback; extract data under proposal.fields.
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
@@ -156,6 +156,4 @@
 - [Push tap deep-linking](atelier-push-tap-deeplink.md) — tap routes via pure pushRoute stash; listener must use a ref'd consumer or warm-app taps go stale.
 - [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); token re-register re-owns; EXPO_PUSH_BASE_URL stub for probes.
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic `selfnotif_ptask_<id>_<epoch>` reminder cards; every mutation must dismiss stale cards.
-- [Launch deck-graphics policy](launch-deck-graphics.md) — launch site ships from separate project (cognirise.ai); render quirks in launch-*.md topic files.
-- [Merge verifier "=======" false positive](merge-marker-false-positive.md) — marker check is substring-based; `// =====` comment banners block rebase completion — rewrite them to dashes.
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.

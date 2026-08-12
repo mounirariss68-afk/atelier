@@ -8,12 +8,12 @@ import {
   Text,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Button, Card, FadeInView, Field, hapticError, hapticSuccess, IconButton } from "@/components/ui";
+import { Button, Card, FadeInView, Field, hapticError, hapticSuccess } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { HttpError } from "@/lib/api";
 
@@ -21,7 +21,6 @@ export default function ChangePasswordScreen() {
   const c = useColors();
   const { t } = useI18n();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { changePassword, mustChangePassword, logout } = useAuth();
 
   const [current, setCurrent] = useState("");
@@ -75,20 +74,20 @@ export default function ChangePasswordScreen() {
       style={{ flex: 1, backgroundColor: c.background }}
     >
       <AppBackground />
+      {/* Task #1014 — shared navy branded header; back button only when the
+          change isn't forced (forced flow must not be escapable). */}
+      <AppHeader
+        title={t("cp.title")}
+        onBack={!mustChangePassword ? () => router.back() : undefined}
+      />
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,
           padding: 28,
-          paddingTop: insets.top + 20,
+          paddingTop: 20,
         }}
         keyboardShouldPersistTaps="handled"
       >
-        {!mustChangePassword ? (
-          <View style={{ marginBottom: 8 }}>
-            <IconButton icon="chevron-left" onPress={() => router.back()} filled />
-          </View>
-        ) : null}
-
         <View style={{ marginBottom: 28 }}>
           <View
             style={{

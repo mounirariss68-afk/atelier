@@ -22,22 +22,20 @@ import {
   View,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   Button,
   Card,
   FadeInView,
   Field,
-  IconButton,
   Sheet,
-  WEB_TOP_INSET,
   hapticError,
   hapticSuccess,
 } from "@/components/ui";
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
+import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import { apiJson, putFileToSignedUrl } from "@/lib/api";
 import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
@@ -107,7 +105,6 @@ export default function NewExpenseScreen() {
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const feedback = useFeedback();
 
@@ -551,27 +548,11 @@ export default function NewExpenseScreen() {
     }
   }, [parseFailedId, runParse, parseErrorMessage, router, feedback]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AppBackground />
-      <View
-        style={{
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingTop: topPad,
-          paddingBottom: 12,
-        }}
-      >
-        <IconButton icon="x" onPress={() => router.back()} filled />
-        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 18, letterSpacing: -0.3 }}>
-          {t("exp.new")}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {/* Task #1014 — shared navy branded header (close-button variant). */}
+      <AppHeader title={t("exp.new")} onBack={() => router.back()} backIcon="x" />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
