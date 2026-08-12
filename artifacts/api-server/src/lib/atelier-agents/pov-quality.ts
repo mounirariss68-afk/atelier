@@ -33,6 +33,8 @@ export interface FactHygieneFlags {
   stale: boolean;
   lowConfidence: boolean;
   unsourced: boolean;
+  /** Task #1027 — set when a re-verify pass could not re-confirm the source. */
+  sourceDead: boolean;
 }
 
 export function normalizeFactText(s: string): string {
@@ -100,6 +102,7 @@ export function factHygieneFlags(
     createdAt: Date | string;
     confidence: string;
     sourceUrl?: string | null;
+    sourceDeadAt?: Date | string | null;
   },
   now: Date = new Date(),
 ): FactHygieneFlags {
@@ -110,6 +113,7 @@ export function factHygieneFlags(
     stale: ageDays > FACT_STALE_DAYS,
     lowConfidence: f.confidence !== "green",
     unsourced: !f.sourceUrl || !/^https?:\/\//i.test(f.sourceUrl),
+    sourceDead: !!f.sourceDeadAt,
   };
 }
 

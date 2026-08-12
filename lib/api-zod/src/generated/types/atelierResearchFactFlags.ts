@@ -10,4 +10,5 @@ export type AtelierResearchFactFlags = {
   stale?: boolean;
   lowConfidence?: boolean;
   unsourced?: boolean;
+  sourceDead?: boolean;
 };

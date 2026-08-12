@@ -193,6 +193,7 @@ import type {
   AtelierMergeAccountsInput,
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
+  AtelierMergeFactResult,
   AtelierMsConnectionStatus,
   AtelierMyApprovals,
   AtelierMyOpenTasks,
@@ -280,6 +281,7 @@ import type {
   AtelierReplaceMyDocumentScan200,
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
+  AtelierReverifyFactResult,
   AtelierReviewReleaseInput,
   AtelierRevisePovInput,
   AtelierRevokeDocumentAccess200,
@@ -14523,6 +14525,176 @@ export const useAtelierPromoteResearchFact = <
   TContext
 > => {
   return useMutation(getAtelierPromoteResearchFactMutationOptions(options));
+};
+
+export const getAtelierMergeResearchFactUrl = (
+  oppId: string,
+  factId: string,
+) => {
+  return `/api/atelier/opportunities/${oppId}/research/${factId}/merge`;
+};
+
+export const atelierMergeResearchFact = async (
+  oppId: string,
+  factId: string,
+  options?: RequestInit,
+): Promise<AtelierMergeFactResult> => {
+  return customFetch<AtelierMergeFactResult>(
+    getAtelierMergeResearchFactUrl(oppId, factId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierMergeResearchFactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeResearchFact>>,
+    TError,
+    { oppId: string; factId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierMergeResearchFact>>,
+  TError,
+  { oppId: string; factId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierMergeResearchFact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierMergeResearchFact>>,
+    { oppId: string; factId: string }
+  > = (props) => {
+    const { oppId, factId } = props ?? {};
+
+    return atelierMergeResearchFact(oppId, factId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierMergeResearchFactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierMergeResearchFact>>
+>;
+
+export type AtelierMergeResearchFactMutationError = ErrorType<unknown>;
+
+export const useAtelierMergeResearchFact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeResearchFact>>,
+    TError,
+    { oppId: string; factId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierMergeResearchFact>>,
+  TError,
+  { oppId: string; factId: string },
+  TContext
+> => {
+  return useMutation(getAtelierMergeResearchFactMutationOptions(options));
+};
+
+export const getAtelierReverifyResearchFactUrl = (
+  oppId: string,
+  factId: string,
+) => {
+  return `/api/atelier/opportunities/${oppId}/research/${factId}/reverify`;
+};
+
+export const atelierReverifyResearchFact = async (
+  oppId: string,
+  factId: string,
+  options?: RequestInit,
+): Promise<AtelierReverifyFactResult> => {
+  return customFetch<AtelierReverifyFactResult>(
+    getAtelierReverifyResearchFactUrl(oppId, factId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierReverifyResearchFactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReverifyResearchFact>>,
+    TError,
+    { oppId: string; factId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReverifyResearchFact>>,
+  TError,
+  { oppId: string; factId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierReverifyResearchFact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReverifyResearchFact>>,
+    { oppId: string; factId: string }
+  > = (props) => {
+    const { oppId, factId } = props ?? {};
+
+    return atelierReverifyResearchFact(oppId, factId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReverifyResearchFactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReverifyResearchFact>>
+>;
+
+export type AtelierReverifyResearchFactMutationError = ErrorType<unknown>;
+
+export const useAtelierReverifyResearchFact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReverifyResearchFact>>,
+    TError,
+    { oppId: string; factId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReverifyResearchFact>>,
+  TError,
+  { oppId: string; factId: string },
+  TContext
+> => {
+  return useMutation(getAtelierReverifyResearchFactMutationOptions(options));
 };
 
 export const getAtelierListPovsUrl = (oppId: string) => {

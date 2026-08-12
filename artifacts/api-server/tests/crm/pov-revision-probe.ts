@@ -215,14 +215,19 @@ async function main() {
     req.on("data", (ch) => (body += ch));
     req.on("end", () => {
       res.writeHead(200, { "content-type": "application/json" });
+      // Task #1027 — the re-verify probe fact whose statement carries the
+      // dead-source marker gets NO citations back (source dead path).
+      const dead = body.includes("DEADSOURCEPROBE");
       res.end(
         JSON.stringify({
           id: "pplx_stub",
           model: "sonar-pro",
-          choices: [{ message: { role: "assistant", content: "Revenue rose 12% in H1 2026." } }],
-          search_results: [
-            { url: "https://example.test/deep1", title: "Deep source", date: "2026-08-01", snippet: "Revenue rose 12% in H1 2026." },
-          ],
+          choices: [{ message: { role: "assistant", content: dead ? "No current sources support this." : "Revenue rose 12% in H1 2026." } }],
+          search_results: dead
+            ? []
+            : [
+                { url: "https://example.test/deep1", title: "Deep source", date: "2026-08-01", snippet: "Revenue rose 12% in H1 2026." },
+              ],
           usage: { prompt_tokens: 5, completion_tokens: 5 },
         }),
       );
@@ -540,6 +545,109 @@ async function main() {
     // valid-looking URL the dossier never retrieved — it must NOT persist.
     const inventedFact = (rFactsAfter.body ?? []).find((f: any) => /margin expanded 400bps/i.test(f.statement ?? ""));
     check("research: hallucinated-URL fact rejected by provenance gate", inventedFact == null, inventedFact);
+
+    // 12. Task #1027 — fact hygiene actions: merge duplicates + re-verify.
+    const hygCanonicalId = `hyg_canon_${runTag}`;
+    const hygDupId = `hyg_dup_${runTag}`;
+    const hygStaleId = `hyg_stale_${runTag}`;
+    const hygDeadId = `hyg_dead_${runTag}`;
+    const staleDate = new Date(Date.now() - 400 * 86_400_000);
+    await db.insert(atelierResearchFacts).values([
+      {
+        id: hygCanonicalId, orgId: "aico", opportunityId: oppId, topic: "Hygiene",
+        statement: "Hygiene probe alpha statement about market entry timing",
+        sourceUrl: "https://example.com/hyg1", sourceTitle: "Hyg source",
+        confidence: "green", promoted: false,
+      },
+      // Near-duplicate, later createdAt, PROMOTED — merge must carry promotion.
+      {
+        id: hygDupId, orgId: "aico", opportunityId: oppId, topic: "Hygiene",
+        statement: "Hygiene probe alpha statement about market entry timing!!",
+        sourceUrl: "https://example.com/hyg2", sourceTitle: "Hyg source 2",
+        confidence: "amber", promoted: true, promotedAt: new Date(),
+        createdAt: new Date(Date.now() + 2000),
+      },
+      // Stale fact — re-verify succeeds via the pplx stub (has citations).
+      {
+        id: hygStaleId, orgId: "aico", opportunityId: oppId, topic: "Stale",
+        statement: "Old revenue growth claim needing refresh.",
+        sourceUrl: "https://example.test/deep1", sourceTitle: "Deep source",
+        confidence: "green", retrievedAt: staleDate, createdAt: staleDate,
+      },
+      // Dead-source fact — stub returns zero citations for this marker.
+      {
+        id: hygDeadId, orgId: "aico", opportunityId: oppId, topic: "Dead",
+        statement: "DEADSOURCEPROBE claim whose source vanished.",
+        sourceUrl: "https://example.com/gone", sourceTitle: "Gone",
+        confidence: "amber", retrievedAt: staleDate, createdAt: staleDate,
+      },
+    ] as any);
+
+    // Merge on a non-duplicate → 409.
+    const rMergeNotDup = await call("POST", `/opportunities/${oppId}/research/${hygStaleId}/merge`);
+    check("merge: 409 when not flagged duplicate", rMergeNotDup.status === 409 && rMergeNotDup.body?.error === "not-a-duplicate", rMergeNotDup.body);
+
+    // Because the dup is promoted and the canonical is not, the projection
+    // makes the PROMOTED copy canonical → the unpromoted alpha is the dup.
+    const rHygList = await call("GET", `/opportunities/${oppId}/research`);
+    const alphaRow = (rHygList.body ?? []).find((f: any) => f.id === hygCanonicalId);
+    check("merge: promoted copy wins canonical in projection", alphaRow?.duplicateOfId === hygDupId, alphaRow);
+    const rMerge = await call("POST", `/opportunities/${oppId}/research/${hygCanonicalId}/merge`);
+    check("merge: 200 archives the duplicate", rMerge.status === 200 && rMerge.body?.merged === true && rMerge.body?.archivedFactId === hygCanonicalId && rMerge.body?.canonicalFactId === hygDupId, rMerge.body);
+    const rHygList2 = await call("GET", `/opportunities/${oppId}/research`);
+    check("merge: archived dup gone from list", !(rHygList2.body ?? []).some((f: any) => f.id === hygCanonicalId), null);
+    check("merge: replay 404 (already archived)", (await call("POST", `/opportunities/${oppId}/research/${hygCanonicalId}/merge`)).status === 404, null);
+
+    // Promotion carry-over: archive a promoted dup into an unpromoted canonical.
+    const carryCanonId = `hyg_carry_c_${runTag}`;
+    const carryDupId = `hyg_carry_d_${runTag}`;
+    await db.insert(atelierResearchFacts).values([
+      { id: carryCanonId, orgId: "aico", opportunityId: oppId, topic: "Carry", statement: "Carry probe beta statement on regulatory approvals timeline", sourceUrl: "https://example.com/c1", confidence: "green", promoted: true, promotedAt: new Date() },
+      { id: carryDupId, orgId: "aico", opportunityId: oppId, topic: "Carry", statement: "Carry probe beta statement on regulatory approvals timeline??", sourceUrl: "https://example.com/c2", confidence: "amber", promoted: false, createdAt: new Date(Date.now() + 3000) },
+    ] as any);
+    const rMergeCarry = await call("POST", `/opportunities/${oppId}/research/${carryDupId}/merge`);
+    check("merge: unpromoted dup archives into promoted canonical", rMergeCarry.status === 200 && rMergeCarry.body?.canonicalFactId === carryCanonId && rMergeCarry.body?.carriedPromotion === false, rMergeCarry.body);
+
+    // Re-verify success path: retrievedAt refreshed, stale flag clears.
+    const rRev = await call("POST", `/opportunities/${oppId}/research/${hygStaleId}/reverify`);
+    check("reverify: 200 verified", rRev.status === 200 && rRev.body?.verified === true, rRev.body);
+    check("reverify: retrievedAt refreshed (stale cleared)", rRev.body?.fact?.flags?.stale === false && rRev.body?.fact?.flags?.sourceDead === false, rRev.body?.fact);
+    check("reverify: snippet refreshed from retrieval", /Revenue rose 12%/i.test(rRev.body?.fact?.snippet ?? ""), rRev.body?.fact?.snippet);
+    check("reverify: partner-reviewed sourceUrl NOT overwritten", rRev.body?.fact?.sourceUrl === "https://example.test/deep1", rRev.body?.fact?.sourceUrl);
+
+    // Re-verify dead path: zero citations → sourceDeadAt stamped.
+    const rDead = await call("POST", `/opportunities/${oppId}/research/${hygDeadId}/reverify`);
+    check("reverify: dead source marked", rDead.status === 200 && rDead.body?.verified === false && rDead.body?.fact?.flags?.sourceDead === true, rDead.body);
+    const rHygList3 = await call("GET", `/opportunities/${oppId}/research`);
+    const deadRow = (rHygList3.body ?? []).find((f: any) => f.id === hygDeadId);
+    check("reverify: sourceDead flag surfaces in list projection", deadRow?.flags?.sourceDead === true, deadRow?.flags);
+
+    // Snapshot immutability: the first POV's approval-time snapshot contains
+    // factId + dupFactId. Merging dupFactId (archive) must NOT mutate the
+    // frozen snapshot.
+    const [povRowPreMerge] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, povId));
+    const snapBefore = JSON.stringify(povRowPreMerge?.factSnapshot ?? null);
+    const rFactsNow = await call("GET", `/opportunities/${oppId}/research`);
+    const dupNow = (rFactsNow.body ?? []).find((f: any) => f.id === dupFactId);
+    if (dupNow?.duplicateOfId) {
+      const rMergeSnap = await call("POST", `/opportunities/${oppId}/research/${dupFactId}/merge`);
+      check("snapshot-immutability: merge of snapshotted fact 200", rMergeSnap.status === 200, rMergeSnap.body);
+    } else {
+      // The original fact was demoted earlier; archive whichever side is dup.
+      const origNow = (rFactsNow.body ?? []).find((f: any) => f.id === factId);
+      const target = origNow?.duplicateOfId ? factId : dupFactId;
+      const rMergeSnap = await call("POST", `/opportunities/${oppId}/research/${target}/merge`);
+      check("snapshot-immutability: merge of snapshotted fact 200", rMergeSnap.status === 200, rMergeSnap.body);
+    }
+    const [povRowPostMerge] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, povId));
+    check("snapshot-immutability: factSnapshot byte-identical after merge", JSON.stringify(povRowPostMerge?.factSnapshot ?? null) === snapBefore, null);
+
+    // Audit trail entries exist for merge + reverify.
+    const rAudit = await call("GET", `/audit?limit=100`);
+    const auditActions = (rAudit.body ?? []).map((a: any) => a.action);
+    check("audit: fact.merge recorded", auditActions.includes("fact.merge"), auditActions.slice(0, 10));
+    check("audit: fact.reverified recorded", auditActions.includes("fact.reverified"), null);
+    check("audit: fact.source_dead recorded", auditActions.includes("fact.source_dead"), null);
   } finally {
     server.close();
     stub.close();

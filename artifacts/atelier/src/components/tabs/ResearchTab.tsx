@@ -3,6 +3,8 @@ import type { AtelierResearchFact } from "@workspace/api-client-react";
 import {
   useAtelierListResearchFacts,
   useAtelierPromoteResearchFact,
+  useAtelierMergeResearchFact,
+  useAtelierReverifyResearchFact,
   getAtelierListResearchFactsQueryKey,
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
@@ -10,7 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfidenceDot } from "./ConfidenceDot";
-import { ExternalLink, Check, X } from "lucide-react";
+import { ExternalLink, Check, X, GitMerge, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function ResearchTab({ oppId }: { oppId: string }) {
@@ -18,6 +20,11 @@ export function ResearchTab({ oppId }: { oppId: string }) {
   const { toast } = useToast();
   const { data, isLoading } = useAtelierListResearchFacts(oppId);
   const promote = useAtelierPromoteResearchFact();
+  // Task #1027 — fact hygiene actions: merge flagged duplicates, re-verify
+  // stale facts (refresh evidence or mark the source dead).
+  const merge = useAtelierMergeResearchFact();
+  const reverify = useAtelierReverifyResearchFact();
+  const [reverifyingId, setReverifyingId] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<"all" | "promoted" | "candidates">("all");
   // Task #1022 — POV deep-research pass: targeted queries per thesis angle,
   // landing as unpromoted candidate facts for review. Async 202 + poll.
@@ -88,6 +95,40 @@ export function ResearchTab({ oppId }: { oppId: string }) {
     qc.invalidateQueries({ queryKey: getAtelierListResearchFactsQueryKey(oppId) });
     qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
     toast({ title: !current ? "Promoted to evidence" : "Demoted to candidate" });
+  }
+
+  async function mergeDuplicate(id: string) {
+    try {
+      const r = await merge.mutateAsync({ oppId, factId: id });
+      qc.invalidateQueries({ queryKey: getAtelierListResearchFactsQueryKey(oppId) });
+      qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
+      toast({
+        title: "Merged into canonical",
+        description: r.carriedPromotion
+          ? "The duplicate was archived; its promotion carried over to the canonical fact."
+          : "The duplicate was archived.",
+      });
+    } catch (e) {
+      toast({ title: "Could not merge", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" });
+    }
+  }
+
+  async function reverifyFact(id: string) {
+    setReverifyingId(id);
+    try {
+      const r = await reverify.mutateAsync({ oppId, factId: id });
+      qc.invalidateQueries({ queryKey: getAtelierListResearchFactsQueryKey(oppId) });
+      qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
+      toast(
+        r.verified
+          ? { title: "Evidence refreshed", description: "The source was re-confirmed and the retrieval date updated." }
+          : { title: "Source appears dead", description: "No supporting sources were found — the fact is marked accordingly.", variant: "destructive" },
+      );
+    } catch (e) {
+      toast({ title: "Could not re-verify", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" });
+    } finally {
+      setReverifyingId(null);
+    }
   }
 
   return (
@@ -191,6 +232,11 @@ export function ResearchTab({ oppId }: { oppId: string }) {
                         duplicate
                       </span>
                     )}
+                    {f.flags?.sourceDead && (
+                      <span className="text-[10px] uppercase font-mono text-danger tracking-widest border border-danger/40 rounded px-1.5" title="Re-verification found no supporting sources">
+                        source dead
+                      </span>
+                    )}
                     {f.retrievedAt && (
                       <span className="text-[10px] font-mono text-text-faint">
                         {new Date(f.retrievedAt).toLocaleDateString()}
@@ -214,18 +260,44 @@ export function ResearchTab({ oppId }: { oppId: string }) {
                     </a>
                   )}
                 </div>
-                <PillButton
-                  variant={f.promoted ? "ghost" : "primary"}
-                  onClick={() => toggle(f.id, f.promoted)}
-                  disabled={promote.isPending}
-                  className="shrink-0"
-                >
-                  {f.promoted ? (
-                    <span className="inline-flex items-center gap-1"><X className="w-3 h-3" /> Demote</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1"><Check className="w-3 h-3" /> Promote</span>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <PillButton
+                    variant={f.promoted ? "ghost" : "primary"}
+                    onClick={() => toggle(f.id, f.promoted)}
+                    disabled={promote.isPending}
+                  >
+                    {f.promoted ? (
+                      <span className="inline-flex items-center gap-1"><X className="w-3 h-3" /> Demote</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1"><Check className="w-3 h-3" /> Promote</span>
+                    )}
+                  </PillButton>
+                  {f.duplicateOfId && (
+                    <PillButton
+                      variant="ghost"
+                      onClick={() => mergeDuplicate(f.id)}
+                      disabled={merge.isPending}
+                      data-testid={`button-merge-fact-${f.id}`}
+                      title="Archive this duplicate; the canonical fact stays"
+                    >
+                      <span className="inline-flex items-center gap-1"><GitMerge className="w-3 h-3" /> Merge into canonical</span>
+                    </PillButton>
                   )}
-                </PillButton>
+                  {(f.flags?.stale || f.flags?.sourceDead) && (
+                    <PillButton
+                      variant="ghost"
+                      onClick={() => reverifyFact(f.id)}
+                      disabled={reverify.isPending}
+                      data-testid={`button-reverify-fact-${f.id}`}
+                      title="Re-run the source query; refresh the evidence or mark the source dead"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <RefreshCw className={`w-3 h-3 ${reverifyingId === f.id ? "animate-spin" : ""}`} />
+                        {reverifyingId === f.id ? "Re-verifying…" : "Re-verify"}
+                      </span>
+                    </PillButton>
+                  )}
+                </div>
               </div>
             </Card>
           ))}

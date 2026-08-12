@@ -6085,6 +6085,7 @@ export type AtelierResearchFactFlags = {
   stale?: boolean;
   lowConfidence?: boolean;
   unsourced?: boolean;
+  sourceDead?: boolean;
 };
 
 export interface AtelierResearchFact {
@@ -6110,6 +6111,18 @@ export interface AtelierResearchFact {
   duplicateOfId?: string | null;
   /** @nullable */
   runId?: string | null;
+}
+
+export interface AtelierMergeFactResult {
+  merged: boolean;
+  archivedFactId: string;
+  canonicalFactId: string;
+  carriedPromotion: boolean;
+}
+
+export interface AtelierReverifyFactResult {
+  verified: boolean;
+  fact: AtelierResearchFact;
 }
 
 export interface AtelierPromoteFactInput {

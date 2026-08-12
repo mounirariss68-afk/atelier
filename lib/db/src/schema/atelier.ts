@@ -1571,6 +1571,10 @@ export const atelierResearchFacts = pgTable(
     promoted: boolean("promoted").notNull().default(false),
     promotedAt: timestamp("promoted_at"),
     promotedByUserId: text("promoted_by_user_id"),
+    // Task #1027 — re-verify flow: set when a stale fact's source could not
+    // be re-confirmed (query returned no supporting citations). Cleared when
+    // a later re-verify succeeds. Never touched by read-time hygiene.
+    sourceDeadAt: timestamp("source_dead_at"),
     includedInBrief: boolean("included_in_brief").notNull().default(false),
     includedInPov: boolean("included_in_pov").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),

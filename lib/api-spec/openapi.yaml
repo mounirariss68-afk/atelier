@@ -3478,6 +3478,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierResearchFact"
+  # Task #1027 — fact hygiene actions: merge flagged duplicate into canonical,
+  # re-verify a stale fact via the shared research retrieval client.
+  /atelier/opportunities/{oppId}/research/{factId}/merge:
+    post:
+      operationId: atelierMergeResearchFact
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: factId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Duplicate soft-archived into its canonical fact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMergeFactResult"
+  /atelier/opportunities/{oppId}/research/{factId}/reverify:
+    post:
+      operationId: atelierReverifyResearchFact
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: factId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Re-verification outcome and updated fact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierReverifyFactResult"
   /atelier/opportunities/{oppId}/povs:
     get:
       operationId: atelierListPovs
@@ -11203,8 +11245,27 @@ components:
             stale: { type: boolean }
             lowConfidence: { type: boolean }
             unsourced: { type: boolean }
+            # Task #1027 — re-verify pass found no supporting sources.
+            sourceDead: { type: boolean }
         duplicateOfId: { type: ["string", "null"] }
         runId: { type: ["string", "null"] }
+
+    # Task #1027 — fact hygiene actions.
+    AtelierMergeFactResult:
+      type: object
+      required: [merged, archivedFactId, canonicalFactId, carriedPromotion]
+      properties:
+        merged: { type: boolean }
+        archivedFactId: { type: string }
+        canonicalFactId: { type: string }
+        carriedPromotion: { type: boolean }
+
+    AtelierReverifyFactResult:
+      type: object
+      required: [verified, fact]
+      properties:
+        verified: { type: boolean }
+        fact: { $ref: "#/components/schemas/AtelierResearchFact" }
 
     AtelierPromoteFactInput:
       type: object

@@ -96,6 +96,7 @@ import {
   findNearDuplicateFacts,
 } from "../../lib/atelier-agents/pov-quality.js";
 import { buildPovBackgroundContext } from "../../lib/atelier-agents/pov-grounding.js";
+import { perplexitySearch } from "../../lib/atelier-agents/perplexity.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import {
@@ -1231,6 +1232,195 @@ router.post("/opportunities/:oppId/research/:factId/accept-risk", async (req, re
     payloadSummary: `${me.name} accepted risk on unsourced fact "${fact.topic}"${rationale ? ` — "${rationale.slice(0, 120)}"` : ""}.`,
   });
   res.status(201).json({ accepted: true, factId: fact.id, ts: new Date().toISOString() });
+});
+
+// Task #1027 — merge a flagged near-duplicate into its canonical fact.
+// The duplicate relationship is recomputed SERVER-SIDE over the live pool
+// (never trusting the client's duplicateOfId), the duplicate row is
+// soft-archived (deletedAt), and promotion carries over to the canonical
+// so a promoted duplicate never silently drops out of the evidence set.
+// POV factSnapshot blobs are frozen jsonb copies and are never touched.
+// @cli-skip: review-surface hygiene action; no CLI surface
+router.post("/opportunities/:oppId/research/:factId/merge", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rows = await db
+    .select()
+    .from(atelierResearchFacts)
+    .where(
+      and(
+        eq(atelierResearchFacts.opportunityId, req.params.oppId),
+        isNull(atelierResearchFacts.deletedAt),
+      ),
+    );
+  const dup = rows.find((f) => f.id === req.params.factId);
+  if (!dup) {
+    res.status(404).json({ error: "fact-not-found" });
+    return;
+  }
+  // Same projection the list route renders: oldest-first, promoted wins.
+  const dupMap = findNearDuplicateFacts(
+    [...rows]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((f) => ({ id: f.id, statement: f.statement, promoted: f.promoted })),
+  );
+  const canonicalId = dupMap.get(dup.id);
+  if (!canonicalId) {
+    res.status(409).json({
+      error: "not-a-duplicate",
+      reason: "This fact is not currently flagged as a near-duplicate; nothing to merge.",
+    });
+    return;
+  }
+  const canonical = rows.find((f) => f.id === canonicalId);
+  if (!canonical) {
+    res.status(409).json({ error: "canonical-not-found" });
+    return;
+  }
+  const now = new Date();
+  // Soft-archive the duplicate; carry promotion onto the canonical if only
+  // the duplicate was promoted.
+  await db
+    .update(atelierResearchFacts)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(eq(atelierResearchFacts.id, dup.id));
+  if (dup.promoted && !canonical.promoted) {
+    await db
+      .update(atelierResearchFacts)
+      .set({
+        promoted: true,
+        promotedAt: now,
+        promotedByUserId: me.id,
+        includedInPov: true,
+        updatedAt: now,
+      })
+      .where(eq(atelierResearchFacts.id, canonical.id));
+  }
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: req.params.oppId,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "fact.merge",
+    payload: {
+      mergedFactId: dup.id,
+      canonicalFactId: canonical.id,
+      topic: dup.topic,
+      carriedPromotion: dup.promoted && !canonical.promoted,
+    },
+    payloadSummary: `${me.name} merged duplicate fact "${dup.topic}" into its canonical copy.`,
+  });
+  res.json({
+    merged: true,
+    archivedFactId: dup.id,
+    canonicalFactId: canonical.id,
+    carriedPromotion: dup.promoted && !canonical.promoted,
+  });
+});
+
+// Task #1027 — re-verify a stale fact: re-run the source query through the
+// shared Perplexity client. Supporting citations → refresh retrievedAt (+
+// snippet/source metadata) and clear any prior dead mark; no citations →
+// stamp sourceDeadAt so review surfaces show the source is dead. Retrieval
+// transport failures are 502s, never silently treated as "dead".
+// @cli-skip: review-surface hygiene action; no CLI surface
+router.post("/opportunities/:oppId/research/:factId/reverify", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [fact] = await db
+    .select()
+    .from(atelierResearchFacts)
+    .where(
+      and(
+        eq(atelierResearchFacts.id, req.params.factId),
+        eq(atelierResearchFacts.opportunityId, req.params.oppId),
+        isNull(atelierResearchFacts.deletedAt),
+      ),
+    );
+  if (!fact) {
+    res.status(404).json({ error: "fact-not-found" });
+    return;
+  }
+  let result: Awaited<ReturnType<typeof perplexitySearch>>;
+  try {
+    result = await perplexitySearch(
+      `Verify whether this is still accurate and supported by current sources: "${fact.statement}" (topic: ${fact.topic}).`,
+    );
+  } catch (err) {
+    res.status(502).json({
+      error: "reverify-unavailable",
+      reason: err instanceof Error ? err.message : "Research retrieval failed.",
+    });
+    return;
+  }
+  const now = new Date();
+  const verified = result.citations.length > 0;
+  let updated: typeof atelierResearchFacts.$inferSelect;
+  if (verified) {
+    const best =
+      result.citations.find((c) => c.url === fact.sourceUrl) ?? result.citations[0];
+    [updated] = await db
+      .update(atelierResearchFacts)
+      .set({
+        retrievedAt: now,
+        sourceDeadAt: null,
+        snippet: best.snippet ?? fact.snippet,
+        // Only fill source metadata when the fact had none — never overwrite
+        // a partner-reviewed source with a different retrieval hit.
+        sourceUrl: fact.sourceUrl ?? best.url,
+        sourceTitle: fact.sourceTitle ?? best.title ?? null,
+        updatedAt: now,
+      })
+      .where(eq(atelierResearchFacts.id, fact.id))
+      .returning();
+  } else {
+    [updated] = await db
+      .update(atelierResearchFacts)
+      .set({ sourceDeadAt: now, updatedAt: now })
+      .where(eq(atelierResearchFacts.id, fact.id))
+      .returning();
+  }
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: req.params.oppId,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: verified ? "fact.reverified" : "fact.source_dead",
+    payload: {
+      factId: fact.id,
+      topic: fact.topic,
+      verified,
+      citationCount: result.citations.length,
+    },
+    payloadSummary: verified
+      ? `${me.name} re-verified fact "${fact.topic}" — evidence refreshed.`
+      : `${me.name} re-verified fact "${fact.topic}" — no supporting sources found; marked dead.`,
+  });
+  res.json({
+    verified,
+    fact: {
+      id: updated.id,
+      oppId: updated.opportunityId,
+      topic: updated.topic,
+      statement: updated.statement,
+      sourceUrl: updated.sourceUrl,
+      sourceTitle: updated.sourceTitle,
+      snippet: updated.snippet,
+      confidence: updated.confidence as "green" | "amber" | "red",
+      promoted: updated.promoted,
+      promotedAt: updated.promotedAt?.toISOString() ?? null,
+      includedInBrief: updated.includedInBrief,
+      includedInPov: updated.includedInPov,
+      createdAt: updated.createdAt.toISOString(),
+      retrievedAt: (updated.retrievedAt ?? updated.createdAt).toISOString(),
+      flags: factHygieneFlags(updated),
+      runId: updated.runId,
+    },
+  });
 });
 
 // =============================================================

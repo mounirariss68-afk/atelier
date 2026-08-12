@@ -9021,6 +9021,7 @@ export const AtelierListResearchFactsResponseItem = zod.object({
       stale: zod.boolean().optional(),
       lowConfidence: zod.boolean().optional(),
       unsourced: zod.boolean().optional(),
+      sourceDead: zod.boolean().optional(),
     })
     .optional(),
   duplicateOfId: zod.string().nullish(),
@@ -9057,10 +9058,56 @@ export const AtelierPromoteResearchFactResponse = zod.object({
       stale: zod.boolean().optional(),
       lowConfidence: zod.boolean().optional(),
       unsourced: zod.boolean().optional(),
+      sourceDead: zod.boolean().optional(),
     })
     .optional(),
   duplicateOfId: zod.string().nullish(),
   runId: zod.string().nullish(),
+});
+
+export const AtelierMergeResearchFactParams = zod.object({
+  oppId: zod.coerce.string(),
+  factId: zod.coerce.string(),
+});
+
+export const AtelierMergeResearchFactResponse = zod.object({
+  merged: zod.boolean(),
+  archivedFactId: zod.string(),
+  canonicalFactId: zod.string(),
+  carriedPromotion: zod.boolean(),
+});
+
+export const AtelierReverifyResearchFactParams = zod.object({
+  oppId: zod.coerce.string(),
+  factId: zod.coerce.string(),
+});
+
+export const AtelierReverifyResearchFactResponse = zod.object({
+  verified: zod.boolean(),
+  fact: zod.object({
+    id: zod.string(),
+    oppId: zod.string(),
+    topic: zod.string(),
+    statement: zod.string(),
+    sourceUrl: zod.string().nullish(),
+    sourceTitle: zod.string().nullish(),
+    snippet: zod.string().nullish(),
+    confidence: zod.enum(["green", "amber", "red"]),
+    promoted: zod.boolean(),
+    promotedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+    retrievedAt: zod.coerce.date().nullish(),
+    flags: zod
+      .object({
+        stale: zod.boolean().optional(),
+        lowConfidence: zod.boolean().optional(),
+        unsourced: zod.boolean().optional(),
+        sourceDead: zod.boolean().optional(),
+      })
+      .optional(),
+    duplicateOfId: zod.string().nullish(),
+    runId: zod.string().nullish(),
+  }),
 });
 
 export const AtelierListPovsParams = zod.object({
