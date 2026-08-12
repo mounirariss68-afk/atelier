@@ -123,10 +123,13 @@
 
   /* Light glass: whiter fill carries more alpha for readability.
      Task #955 — panel/card alphas lowered so the pale artwork is
-     perceptible behind content, not only in the page gutters. */
-  --glass-card-alpha:    52%;
-  --glass-popover-alpha: 80%;
-  --glass-panel-alpha:   24%;
+     perceptible behind content, not only in the page gutters.
+     Task #985 — dropped further to match the bolder, re-saturated
+     backdrop: the blur does the readability work, the fill only tints.
+     Text stays deep navy (#0A1230) on blurred near-white — still AA. */
+  --glass-card-alpha:    42%;
+  --glass-popover-alpha: 74%;
+  --glass-panel-alpha:   16%;
   /* Task #982 — the hero is a navy "dark island" over the pale backdrop,
      so it needs more fill (plus blur, below) to keep light text AA. */
   --glass-hero-alpha:        82%;
@@ -329,12 +332,15 @@
   [data-theme="light"] #bg-art {
     /* Task #911: light-mode companion of the dark network image, under a
        pale scrim so text/cards stay readable. Task #942: scrim lightened
-       slightly so the artwork's pattern reads through the glass. */
+       slightly so the artwork's pattern reads through the glass.
+       Task #985: artwork re-saturated and the scrim thinned right down so
+       the backdrop is boldly colorful and the glass frost clearly reads —
+       glass surfaces (not this scrim) now carry the readability duty. */
     background-image:
       linear-gradient(160deg,
-        color-mix(in srgb, var(--bg) 56%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 36%, transparent) 55%,
-        color-mix(in srgb, var(--bg-deep) 30%, transparent) 100%),
+        color-mix(in srgb, var(--bg) 26%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 12%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 10%, transparent) 100%),
       url("/light-bg.webp");
     background-size: auto, cover;
     /* Task #932: the artwork layer anchors LEFT so its content reaches the
@@ -384,17 +390,19 @@
         transparent 1.5px),
       /* Task #942: extra soft brand glows across the top-right and centre
          so the pale upper-left of the artwork is no longer a blank wash. */
+      /* Task #985: glows strengthened so even the artwork's paler upper
+         region carries clear color for the glass to frost. */
       radial-gradient(70vh 60vh at 78% 8%,
-        color-mix(in srgb, #5B7CFF 13%, transparent) 0%,
-        color-mix(in srgb, #5B7CFF 5%, transparent) 45%,
+        color-mix(in srgb, #5B7CFF 22%, transparent) 0%,
+        color-mix(in srgb, #5B7CFF 9%, transparent) 45%,
         transparent 72%),
       radial-gradient(80vh 70vh at 42% 55%,
-        color-mix(in srgb, var(--gold-deep) 9%, transparent) 0%,
-        color-mix(in srgb, var(--gold-deep) 3.5%, transparent) 50%,
+        color-mix(in srgb, var(--gold-deep) 16%, transparent) 0%,
+        color-mix(in srgb, var(--gold-deep) 6%, transparent) 50%,
         transparent 75%),
       radial-gradient(60vh 52vh at 96% 68%,
-        color-mix(in srgb, var(--gold-soft) 10%, transparent) 0%,
-        color-mix(in srgb, var(--gold-soft) 4%, transparent) 45%,
+        color-mix(in srgb, var(--gold-soft) 17%, transparent) 0%,
+        color-mix(in srgb, var(--gold-soft) 7%, transparent) 45%,
         transparent 70%);
     background-size: auto, 26px 26px, auto, auto, auto;
     background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
