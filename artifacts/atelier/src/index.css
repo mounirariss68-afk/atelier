@@ -354,6 +354,19 @@
     background-position: center, center center;
     background-repeat: no-repeat, no-repeat;
   }
+  /* Task #998 — the sign-in screen keeps the earlier (pre-#996) watercolor
+     artwork; every in-app page uses the wave backdrop above. The watercolor's
+     interest lives on its left edge, so it re-anchors LEFT (Task #932's
+     original rationale). Scrim stays identical for readability parity. */
+  [data-theme="light"][data-screen="signin"] #bg-art {
+    background-image:
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--bg) 48%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 30%, transparent) 55%,
+        color-mix(in srgb, var(--bg-deep) 24%, transparent) 100%),
+      url("/light-bg-login.webp");
+    background-position: center, left center;
+  }
   @keyframes bg-drift {
     0%   { transform: scale(1.05) translate3d(0, 0, 0); }
     50%  { transform: scale(1.07) translate3d(-0.8vw, 0.6vh, 0); }
