@@ -137,7 +137,18 @@ export interface ScoutBriefInput {
 }
 
 // ── POV version shape (from atelierPovs + atelierPovVersions) ─────────────────
-type PovSection = { id?: string; heading?: string; intent?: string; content?: string; factIds?: string[] };
+// Drafted versions store { id, heading, body, citationIds } (PovDraft in the
+// agent runner); older outline-style versions may carry { intent, content,
+// factIds } instead. The renderer tolerates both.
+type PovSection = {
+  id?: string;
+  heading?: string;
+  intent?: string;
+  content?: string;
+  body?: string;
+  factIds?: string[];
+  citationIds?: string[];
+};
 
 export interface PovVersionInput {
   oppName: string;
@@ -388,9 +399,16 @@ export function buildScoutBriefPdf(
   writeBrandFooters(doc, { generatedAt });
 }
 
+/** The drafted body text of a POV section, tolerant of both stored shapes. */
+function povSectionText(s: PovSection): string {
+  const raw = (s.body && s.body.trim()) || (s.content && s.content.trim()) || "";
+  // Strip HTML tags that may be in body content
+  return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /**
- * Render a POV version. Section order mirrors PovTab: overview, POV
- * sections in version order, citation coverage, sources appendix.
+ * Render a POV version. After the cover: table of contents, POV sections
+ * in version order, citation coverage, sources appendix.
  */
 export function buildPovPdf(
   doc: PDFKit.PDFDocument,
@@ -408,30 +426,39 @@ export function buildPovPdf(
 
   addBrandPage(doc);
 
-  // 1. POV header
+  // 1. POV sections (from version.sections if present, otherwise fall back to body)
+  const sections = (v.sections ?? []).filter((s) => s.heading || povSectionText(s) || s.intent);
+
+  // Table of contents — the client-facing document opens with its outline
+  // (the internal audience/objective "Overview" block is deliberately omitted).
   {
-    const blocks: BrandBlock[] = [];
-    if (pov.audience) blocks.push(block.body(`Audience: ${pov.audience}`));
-    if (pov.objective) blocks.push(block.body(`Objective: ${pov.objective}`));
-    glassSection(doc, "Overview", blocks);
+    const tocBlocks: BrandBlock[] = [];
+    const entries: string[] = sections.length > 0
+      ? sections.map((s) => s.heading || "Untitled section")
+      : [v.body && v.body.trim() ? `Draft v${v.versionNumber}` : "Draft"];
+    if (v.citationCoverage != null) entries.push("Citation Coverage");
+    entries.push("Sources");
+    entries.forEach((heading, idx) => {
+      tocBlocks.push(block.body(`${idx + 1}.  ${heading}`, { font: FONT.semibold, color: BRAND.navy, gapAfter: 6 }));
+    });
+    glassSection(doc, "Contents", tocBlocks);
   }
 
-  // 2. POV sections (from version.sections if present, otherwise fall back to body)
-  const sections = (v.sections ?? []).filter((s) => s.heading || s.content);
   if (sections.length > 0) {
     for (const section of sections) {
       const blocks: BrandBlock[] = [];
-      if (section.content && section.content.trim()) {
-        // Strip HTML tags that may be in body content
-        const stripped = section.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        blocks.push(block.body(stripped));
+      const text = povSectionText(section);
+      if (text) {
+        blocks.push(block.body(text));
       } else if (section.intent) {
         blocks.push(block.italic(`Intent: ${section.intent}`));
       }
-      // Attach citation refs for facts cited in this section
-      const factIds = section.factIds ?? [];
-      const linked = (v.citations as AgentFact[]).filter((f) => f.id && factIds.includes(f.id));
-      const refs = refsFor(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!), sources);
+      // Attach citation refs for facts cited in this section (drafted
+      // versions store citationIds; older outline versions store factIds).
+      const citedIds = section.citationIds ?? section.factIds ?? [];
+      const linked = (v.citations as AgentFact[]).filter((f) => f.id && citedIds.includes(f.id));
+      const urls = [...new Set(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!))];
+      const refs = refsFor(urls, sources);
       if (refs) blocks.push(block.refs(refs, 0));
       glassSection(doc, section.heading ?? null, blocks);
     }
