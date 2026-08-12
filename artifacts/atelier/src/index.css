@@ -986,3 +986,31 @@
     .glass-surface-2 { background-color: var(--bg-elevate-2); }
   }
 }
+
+/* Task #1004 — blinking cursor at the end of streaming chat narration.
+   Pure ::after on the markdown root's last block: no extra DOM node, no
+   markdown re-parse, and (being absolute-free inline content of a fixed
+   1ch-ish glyph) no layout shift while deltas arrive. Removed the moment
+   the final narration frame clears `streaming`. */
+.cli-stream-cursor > :last-child::after {
+  content: "▍";
+  margin-inline-start: 1px;
+  color: var(--gold);
+  animation: cli-cursor-blink 1s steps(2, start) infinite;
+}
+.cli-stream-cursor-static > :last-child::after,
+[data-motion="off"] .cli-stream-cursor > :last-child::after {
+  animation: none;
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cli-stream-cursor > :last-child::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+@keyframes cli-cursor-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}

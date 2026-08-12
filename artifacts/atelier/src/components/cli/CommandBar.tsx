@@ -1588,9 +1588,24 @@ function TurnBody({
                 ))}
               </div>
             )}
-            {narrations.length > 0 && (
-              <Markdown text={narrations.map((n) => n.text).join("\n\n")} />
-            )}
+            {narrations.length > 0 && (() => {
+              // Task #1004 — while the last narration entry is still being
+              // built from text_delta frames, append a subtle blinking
+              // cursor at the end of the streamed text (pure CSS ::after,
+              // so no extra DOM node and no markdown re-parse or layout
+              // shift). It disappears when the final narration frame
+              // reconciles and clears `streaming`.
+              const streamingTail = !!narrations[narrations.length - 1].streaming;
+              return (
+                <Markdown
+                  text={narrations.map((n) => n.text).join("\n\n")}
+                  className={cn(
+                    streamingTail && "cli-stream-cursor",
+                    streamingTail && reduced && "cli-stream-cursor-static",
+                  )}
+                />
+              );
+            })()}
             {hasToolEntries && (
               <div className="flex justify-end border-t border-border-soft pt-1">
                 <button

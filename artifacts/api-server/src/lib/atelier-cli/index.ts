@@ -2234,13 +2234,13 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "contact_update_disposition", confidence: contactId && dispMatch ? "high" : "low", input: { contactId, disposition: dispMatch?.[1] ?? "" } };
   }
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
   // Task #341 — read-side intent routing.
   // Reads are dispatched by phrase patterns shared with the smoke
   // tests. None of these mutate state, so they're confidence:"high"
   // whenever the pattern matches; the orchestrator skips the
   // confirm phase entirely (isWrite:false in the catalog).
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
 
   // Pipeline by stage / forecast.
   if (/\b(pipeline\s+forecast|weighted\s+forecast|forecast\s+summary)\b/i.test(promptRaw)) {
@@ -2411,14 +2411,14 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "home_summary", confidence: "high", input: {} };
   }
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
   // L2C Wave 1 (Task #360, W1-S8) — Codex / CLM, change-orders,
   // deliverable-acceptance routing. Each branch matches the
   // representative prompts shipped with the catalog entries and
   // extracts the canonical id/value the corresponding tool expects.
   // Order matters: more-specific phrases (record acceptance, dispatch
   // contract) must come before broader ones (acceptance, contract).
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
 
   // Counterparty create — "Add … as a (new) counterparty (in <country>)"
   // /  "Create … counterparty …".
@@ -2479,12 +2479,12 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "codex_dpa_review", confidence: dpaId ? "high" : "low", input: { dpaId } };
   }
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
   // L2C Wave 4 (Task #363) — cash application, bank reconciliation,
   // 13-week forecast, renewal motion. These branches must precede the
   // broader Renewal Watchdog branch below ("renewals?" catches
   // "renewal_open" / "renewal_list" otherwise).
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
 
   // Bank statement import — "Import the bank statement".
   if (/\bimport\b.*\bbank\s+statement\b/i.test(promptRaw) || /\bbank\s+statement\b.*\bimport\b/i.test(promptRaw)) {

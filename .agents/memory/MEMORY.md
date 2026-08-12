@@ -157,4 +157,5 @@
 - [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); token re-register re-owns; EXPO_PUSH_BASE_URL stub for probes.
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic `selfnotif_ptask_<id>_<epoch>` reminder cards; every mutation must dismiss stale cards.
 - [Launch deck-graphics policy](launch-deck-graphics.md) — launch site ships from separate project (cognirise.ai); render quirks in launch-*.md topic files.
+- [Merge verifier "=======" false positive](merge-marker-false-positive.md) — marker check is substring-based; `// =====` comment banners block rebase completion — rewrite them to dashes.
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.

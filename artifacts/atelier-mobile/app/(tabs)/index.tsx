@@ -67,8 +67,42 @@ interface PendingAttachment {
   name: string;
 }
 
-/** Very small markdown-ish renderer: bold (**x**) and bullet/numbered lines. */
-function MarkdownText({ text, color }: { text: string; color: string }) {
+/** Task #1004 — blinking cursor rendered inline at the end of streaming
+ * text. Nested Text can't animate opacity reliably, so blink by toggling
+ * the glyph color to transparent — the character stays in the layout the
+ * whole time, so there is no width/line shift while it blinks. */
+function BlinkCursor({ color }: { color: string }) {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setOn((v) => !v), 500);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <Text
+      style={{
+        color: on ? color : "transparent",
+        fontFamily: "PlusJakartaSans_400Regular",
+        fontSize: 14,
+        lineHeight: 20,
+      }}
+    >
+      {"▍"}
+    </Text>
+  );
+}
+
+/** Very small markdown-ish renderer: bold (**x**) and bullet/numbered lines.
+ * `cursor` appends a blinking caret to the end of the last line while the
+ * narration is still streaming (Task #1004). */
+function MarkdownText({
+  text,
+  color,
+  cursor = false,
+}: {
+  text: string;
+  color: string;
+  cursor?: boolean;
+}) {
   const rtl = useRTL();
   const lines = text.split(/\r?\n/);
   return (
@@ -115,6 +149,9 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
                   <Text key={j}>{p}</Text>
                 ),
               )}
+              {cursor && i === lines.length - 1 ? (
+                <BlinkCursor color={color} />
+              ) : null}
             </Text>
           </View>
         );
@@ -622,7 +659,21 @@ function TurnBlock({
                 one character per line. A fixed 92% keeps the text bounded
                 AND stretched. */}
             <View style={{ width: "92%" }}>
-              <MarkdownText text={turn.text} color={c.foreground} />
+              {/* Task #1004 — show a blinking caret while the last
+                  narration trace entry is still streaming deltas; the
+                  final narration frame clears `streaming` and it goes. */}
+              <MarkdownText
+                text={turn.text}
+                color={c.foreground}
+                cursor={(() => {
+                  const last = turn.trace[turn.trace.length - 1];
+                  return !!(
+                    turn.status === "streaming" &&
+                    last?.kind === "narration" &&
+                    last.streaming
+                  );
+                })()}
+              />
             </View>
           </View>
         </View>
