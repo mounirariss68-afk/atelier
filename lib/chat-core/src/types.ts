@@ -11,6 +11,14 @@
 
 export type ChatFrameType =
   | "narration"
+  /** Task #1000 — incremental model-text chunk streamed while the
+   * assistant writes. `{ text, replace?, step? }`: append `text` to the
+   * in-progress streamed segment, or when `replace` is true, swap the
+   * whole segment for `text` (empty string clears it — used when the
+   * server retracts pre-tool prose). A following `narration` frame
+   * carries the final contract-trimmed text and REPLACES the streamed
+   * segment; deltas are never persisted, so replay is unchanged. */
+  | "text_delta"
   | "plan_step"
   | "proposed_plan"
   | "proactive_recap"
@@ -201,6 +209,9 @@ export interface ChatTraceEntry {
   /** Optional phase tag for a progress step; consecutive same-phase
    * heartbeats collapse into a single updating row. */
   phase?: string;
+  /** Task #1000 — true while this narration entry is being built from
+   * `text_delta` frames; the final `narration` frame replaces it. */
+  streaming?: boolean;
 }
 
 export interface ChatNavigateTo {

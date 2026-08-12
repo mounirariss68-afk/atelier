@@ -50,11 +50,54 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
   switch (frame.type) {
     case "narration": {
       const text = String((frame.data as { text?: string }).text ?? "");
+      // Task #1000 — reconcile with a live-streamed segment: the final
+      // narration frame carries the contract-trimmed text and REPLACES
+      // the delta-accumulated entry instead of appending a duplicate.
+      const last = turn.trace[turn.trace.length - 1];
+      if (last && last.kind === "narration" && last.streaming) {
+        const base = turn.text.slice(0, turn.text.length - last.text.length);
+        return {
+          ...turn,
+          status: "streaming",
+          text: base + text,
+          trace: [
+            ...turn.trace.slice(0, -1),
+            { kind: "narration", text, at: frame.receivedAt },
+          ],
+        };
+      }
       return {
         ...turn,
         status: "streaming",
         text: turn.text + text,
         trace: [...turn.trace, { kind: "narration", text, at: frame.receivedAt }],
+      };
+    }
+    case "text_delta": {
+      // Task #1000 — incremental model text. Appends to (or with
+      // `replace: true`, swaps) the current streaming narration entry;
+      // both `text` and the trace stay in sync so web (trace renderer)
+      // and mobile (text renderer) update identically. An empty replace
+      // clears the tentative segment (server retracted pre-tool prose).
+      const d = frame.data as { text?: string; replace?: boolean };
+      const chunk = String(d.text ?? "");
+      const last = turn.trace[turn.trace.length - 1];
+      const hasStream = !!(last && last.kind === "narration" && last.streaming);
+      const prevSeg = hasStream ? last.text : "";
+      const nextSeg = d.replace === true ? chunk : prevSeg + chunk;
+      const baseText = turn.text.slice(0, turn.text.length - prevSeg.length);
+      const baseTrace = hasStream ? turn.trace.slice(0, -1) : turn.trace;
+      if (!nextSeg) {
+        return { ...turn, status: "streaming", text: baseText, trace: baseTrace };
+      }
+      return {
+        ...turn,
+        status: "streaming",
+        text: baseText + nextSeg,
+        trace: [
+          ...baseTrace,
+          { kind: "narration", text: nextSeg, at: frame.receivedAt, streaming: true },
+        ],
       };
     }
     case "plan_step": {

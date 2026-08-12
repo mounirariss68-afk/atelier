@@ -37,7 +37,7 @@
     "test:chat-clarify": "tsx ./tests/chat/clarification-resolver-probe.ts",
     "test:chat-convo": "tsx ./tests/chat/conversation-probe.ts",
     "test:chat-parity": "tsx ./tests/chat/reducer-parity-probe.ts",
-    "test:chat-suite": "tsx ./tests/cli-turn/narration-contract.ts && tsx ./tests/chat/replay-probe.ts && tsx ./tests/chat/recap-probe.ts && tsx ./tests/chat/session-facts-probe.ts && tsx ./tests/chat/clarification-resolver-probe.ts && tsx ./tests/chat/reducer-parity-probe.ts && tsx ./tests/chat/conversation-probe.ts && tsx ./tests/crm/chat-attachment-continuity-probe.ts",
+    "test:chat-suite": "tsx ./tests/cli-turn/narration-contract.ts && tsx ./tests/chat/replay-probe.ts && tsx ./tests/chat/recap-probe.ts && tsx ./tests/chat/session-facts-probe.ts && tsx ./tests/chat/clarification-resolver-probe.ts && tsx ./tests/chat/reducer-parity-probe.ts && tsx ./tests/chat/streaming-probe.ts && tsx ./tests/chat/conversation-probe.ts && tsx ./tests/crm/chat-attachment-continuity-probe.ts",
     "chat:telemetry-rollup": "tsx ./tests/chat/telemetry-rollup.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",

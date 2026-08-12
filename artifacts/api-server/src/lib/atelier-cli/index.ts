@@ -185,6 +185,9 @@ const ALWAYS_INCLUDE_TOOLS: ReadonlySet<string> = new Set([
 
 export type CliFrameType =
   | "narration"
+  /** Task #1000 — incremental model text chunk (live streaming only;
+   * never persisted — replay uses the final `narration` frame). */
+  | "text_delta"
   | "plan_step"
   | "tool_call"
   | "tool_result"
@@ -1570,6 +1573,19 @@ interface ClaudeStep {
   model: string;
 }
 
+/**
+ * Task #1000 — whether the model step streams text token-by-token.
+ * On for live traffic; defaults OFF under NODE_ENV=test so the dozens
+ * of JSON-replying stub-Anthropic probes keep working unchanged.
+ * Explicit ATELIER_CLI_STREAM_TEXT=on/off always wins.
+ */
+function textStreamEnabled(): boolean {
+  const v = (process.env.ATELIER_CLI_STREAM_TEXT ?? "").toLowerCase();
+  if (v === "on") return true;
+  if (v === "off") return false;
+  return process.env.NODE_ENV !== "test";
+}
+
 /** Abstract model dispatch (live Sonnet/Haiku via Anthropic SDK). */
 async function modelStep(args: {
   history: Array<{ role: "user" | "assistant"; content: unknown }>;
@@ -1579,6 +1595,19 @@ async function modelStep(args: {
   tier?: "haiku" | "sonnet";
   /** Task #411 — extra context block (entity neighbourhood) appended to the system prompt. */
   contextBlock?: string | null;
+  /**
+   * Task #1000 — when set, the call uses the Anthropic STREAMING API and
+   * invokes this with the full raw text accumulated so far after each
+   * text chunk. Absent → the classic non-streaming request (all existing
+   * stub probes rely on plain JSON responses).
+   */
+  onTextDelta?: (fullText: string) => void;
+  /** Fired the instant a tool_use content block starts streaming, so the
+   * caller can retract any tentatively streamed pre-tool prose. */
+  onToolUseStart?: () => void;
+  /** Fired before a transient-failure retry so the caller can clear any
+   * partially streamed text. */
+  onStreamReset?: () => void;
 }): Promise<ClaudeStep> {
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
@@ -1642,53 +1671,142 @@ async function modelStep(args: {
       },
       { signal: ac.signal },
     );
+  // Shared tail: cost + stop_reason mapping for both transports.
+  const finishStep = (s: {
+    text: string;
+    toolCall: ClaudeToolCall | null;
+    stopReason: string | null;
+    tokensIn: number;
+    tokensOut: number;
+    model: string;
+  }): ClaudeStep => {
+    const inRate = s.model.includes("haiku") ? 1 : 3;
+    const outRate = s.model.includes("haiku") ? 5 : 15;
+    const costUsd = (s.tokensIn * inRate + s.tokensOut * outRate) / 1_000_000;
+    // Map Anthropic stop_reasons. Only `tool_use` continues the loop;
+    // `end_turn` ends cleanly. `max_tokens`/`pause_turn`/`refusal`/etc.
+    // surface as an explicit aborted step so the orchestrator can mark
+    // the turn `partial` instead of silently succeeding.
+    let stop: "tool_use" | "end_turn" | "aborted";
+    if (s.stopReason === "tool_use") stop = "tool_use";
+    else if (s.stopReason === "end_turn" || s.stopReason === "stop_sequence") stop = "end_turn";
+    else stop = "aborted";
+    // If the model emitted a tool_use block alongside an unsupported
+    // stop reason (e.g. max_tokens), still execute the tool — but mark
+    // aborted on the next iteration if the model bails.
+    if (s.toolCall && stop === "aborted") stop = "tool_use";
+    return {
+      text: s.text.trim(),
+      toolCall: s.toolCall,
+      stop,
+      costUsd,
+      tokensIn: s.tokensIn,
+      tokensOut: s.tokensOut,
+      stopReason: s.stopReason,
+      model: s.model || chosenModel,
+    };
+  };
+  // Task #1000 — streaming transport: one SSE-driven message.create with
+  // stream:true; text chunks fan out live via onTextDelta.
+  const streamOnce = async (): Promise<ClaudeStep> => {
+    const stream = (await anthropic.messages.create(
+      {
+        model: chosenModel,
+        max_tokens: MAX_TOKENS,
+        system: systemBlocks as MsgCreateParams["system"],
+        tools: toolsForCall as MsgCreateParams["tools"],
+        messages: args.history as MsgCreateParams["messages"],
+        stream: true,
+      },
+      { signal: ac.signal },
+    )) as AsyncIterable<Record<string, unknown>>;
+    let text = "";
+    let model = "";
+    let tokensIn = 0;
+    let tokensOut = 0;
+    let stopReason: string | null = null;
+    let tool: { id: string; name: string; json: string } | null = null;
+    for await (const raw of stream) {
+      const ev = raw as {
+        type?: string;
+        message?: { model?: string; usage?: { input_tokens?: number } };
+        content_block?: { type?: string; id?: string; name?: string };
+        delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+        usage?: { output_tokens?: number };
+      };
+      if (ev.type === "message_start") {
+        model = ev.message?.model ?? model;
+        tokensIn = ev.message?.usage?.input_tokens ?? tokensIn;
+      } else if (ev.type === "content_block_start") {
+        if (ev.content_block?.type === "tool_use") {
+          // Last tool_use block wins (mirrors the non-streaming path).
+          tool = { id: ev.content_block.id ?? "", name: ev.content_block.name ?? "", json: "" };
+          args.onToolUseStart?.();
+        }
+      } else if (ev.type === "content_block_delta") {
+        if (ev.delta?.type === "text_delta") {
+          text += ev.delta.text ?? "";
+          args.onTextDelta?.(text);
+        } else if (ev.delta?.type === "input_json_delta" && tool) {
+          tool.json += ev.delta.partial_json ?? "";
+        }
+      } else if (ev.type === "message_delta") {
+        stopReason = ev.delta?.stop_reason ?? stopReason;
+        tokensOut = ev.usage?.output_tokens ?? tokensOut;
+      }
+    }
+    let toolCall: ClaudeToolCall | null = null;
+    if (tool) {
+      let input: Record<string, unknown> = {};
+      try {
+        input = tool.json ? (JSON.parse(tool.json) as Record<string, unknown>) : {};
+      } catch {
+        input = {};
+      }
+      toolCall = { id: tool.id, name: tool.name, input };
+    }
+    return finishStep({ text, toolCall, stopReason, tokensIn, tokensOut, model });
+  };
   try {
-    let resp;
     let attempt = 0;
     // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
-        resp = await callOnce();
-        break;
+        if (args.onTextDelta) {
+          return await streamOnce();
+        }
+        const resp = await callOnce();
+        let text = "";
+        let toolCall: ClaudeToolCall | null = null;
+        for (const block of resp.content) {
+          if (block.type === "text") text += block.text;
+          else if (block.type === "tool_use") {
+            toolCall = {
+              id: block.id,
+              name: block.name,
+              input: (block.input as Record<string, unknown>) ?? {},
+            };
+          }
+        }
+        return finishStep({
+          text,
+          toolCall,
+          stopReason: resp.stop_reason ?? null,
+          tokensIn: resp.usage.input_tokens,
+          tokensOut: resp.usage.output_tokens,
+          model: resp.model ?? "",
+        });
       } catch (err) {
         if (attempt >= RETRY_MAX || !isTransient(err)) throw err;
+        // A retried streaming call must clear any partially streamed text
+        // before the fresh attempt re-streams from the start.
+        args.onStreamReset?.();
         const baseMs = 250 * Math.pow(2, attempt);
         const jitter = Math.floor(Math.random() * 250);
         await new Promise((r) => setTimeout(r, baseMs + jitter));
         attempt++;
       }
     }
-    let text = "";
-    let toolCall: ClaudeToolCall | null = null;
-    for (const block of resp.content) {
-      if (block.type === "text") text += block.text;
-      else if (block.type === "tool_use") {
-        toolCall = {
-          id: block.id,
-          name: block.name,
-          input: (block.input as Record<string, unknown>) ?? {},
-        };
-      }
-    }
-    const tokensIn = resp.usage.input_tokens;
-    const tokensOut = resp.usage.output_tokens;
-    const model = resp.model ?? "";
-    const inRate = model.includes("haiku") ? 1 : 3;
-    const outRate = model.includes("haiku") ? 5 : 15;
-    const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
-    // Map Anthropic stop_reasons. Only `tool_use` continues the loop;
-    // `end_turn` ends cleanly. `max_tokens`/`pause_turn`/`refusal`/etc.
-    // surface as an explicit aborted step so the orchestrator can mark
-    // the turn `partial` instead of silently succeeding.
-    let stop: "tool_use" | "end_turn" | "aborted";
-    if (resp.stop_reason === "tool_use") stop = "tool_use";
-    else if (resp.stop_reason === "end_turn" || resp.stop_reason === "stop_sequence") stop = "end_turn";
-    else stop = "aborted";
-    // If the model emitted a tool_use block alongside an unsupported
-    // stop reason (e.g. max_tokens), still execute the tool — but mark
-    // aborted on the next iteration if the model bails.
-    if (toolCall && stop === "aborted") stop = "tool_use";
-    return { text: text.trim(), toolCall, stop, costUsd, tokensIn, tokensOut, stopReason: resp.stop_reason ?? null, model: model || chosenModel };
   } finally {
     clearTimeout(timer);
   }
@@ -4987,11 +5105,59 @@ export async function runTurn(
         status = "partial";
         break;
       }
+      // Task #1000 — live token streaming state for this model step.
+      // Deltas go straight to `emit` (NEVER through record(): they are
+      // presentation-only and must not be persisted — replay uses the
+      // final `narration` frame). The stream applies the same marker
+      // strip + tool-name scrub as the final text, incrementally: each
+      // chunk re-cleans the accumulated raw text and emits the suffix,
+      // or a `replace` frame when cleaning rewrote already-sent text.
+      // A short hold-back keeps typical one-line pre-tool prose from
+      // ever reaching the client tentatively; longer prose that turns
+      // out to precede a tool call is retracted the instant the
+      // tool_use block starts (empty replace), preserving the
+      // narration contract's flush-only-on-tool-success behavior.
+      const STREAM_HOLDBACK_CHARS = Number(
+        process.env.ATELIER_CLI_STREAM_HOLDBACK ?? 120,
+      );
+      const streamOn = textStreamEnabled();
+      let streamedSent = "";
+      const cleanStreamText = (raw: string): string =>
+        scrubKnownToolNames(
+          raw.replace(/^\s*(?:final|answer|narration)\s*[:\-–—]\s*/i, ""),
+        )?.trimStart() ?? "";
+      const emitStreamDelta = (fullRaw: string): void => {
+        if (aborted) return;
+        const cleaned = cleanStreamText(fullRaw);
+        if (streamedSent.length === 0 && cleaned.length < STREAM_HOLDBACK_CHARS) return;
+        if (cleaned === streamedSent) return;
+        if (cleaned.startsWith(streamedSent)) {
+          emit({
+            type: "text_delta",
+            data: { text: cleaned.slice(streamedSent.length), step },
+          });
+        } else {
+          emit({ type: "text_delta", data: { text: cleaned, replace: true, step } });
+        }
+        streamedSent = cleaned;
+      };
+      const resetStreamDelta = (): void => {
+        if (streamedSent.length === 0) return;
+        streamedSent = "";
+        emit({ type: "text_delta", data: { text: "", replace: true, step } });
+      };
       let claudeStep: ClaudeStep;
       try {
         claudeStep = await modelStep({
           history,
           tools,
+          ...(streamOn
+            ? {
+                onTextDelta: emitStreamDelta,
+                onToolUseStart: resetStreamDelta,
+                onStreamReset: resetStreamDelta,
+              }
+            : {}),
           // Round-7 — drive policy context from the SINGLE typed
           // intent computed pre-LLM (not the legacy `input.intent`
           // which was a free-form caller hint). This satisfies the
@@ -5020,6 +5186,10 @@ export async function runTurn(
             .join("\n\n"),
         });
       } catch (err) {
+        // Task #1000 — retract any partially streamed text so the error
+        // card is not preceded by an orphaned half-answer (and replay,
+        // which never sees deltas, matches the live transcript).
+        resetStreamDelta();
         // Upstream model failed after retry budget — surface a typed
         // `temporarily_unavailable` frame and end the turn `partial` rather
         // than collapsing into a generic internal error.
@@ -5064,6 +5234,9 @@ export async function runTurn(
           looksLikeToolMiss(claudeStep.text)
         ) {
           widenRetryUsed = true;
+          // Task #1000 — the miss prose may have partially streamed;
+          // retract it before the retry step re-streams a fresh answer.
+          resetStreamDelta();
           try {
             const widened = await retrieveCapabilities({
               persona,
@@ -5104,10 +5277,16 @@ export async function runTurn(
             // Task #645 — hold pre-tool narration ("I'll do X…") until the
             // tool result is known; if the tool fails, the optimistic prose
             // would contradict the error card, so it is dropped below.
+            // Task #1000 — onToolUseStart already retracted any streamed
+            // deltas the moment the tool block started; reset again
+            // defensively so nothing tentative survives into the hold.
+            resetStreamDelta();
             pendingNarration = { text: cleanText, step };
           } else if (committedWriteOk) {
             // Task #645 — a committed write's success card is the answer;
-            // suppress the closing prose recap entirely.
+            // suppress the closing prose recap entirely. Task #1000 —
+            // retract any streamed portion of that recap too.
+            resetStreamDelta();
           } else {
             // Task #792 — promise guard: prose emitted with NO tool call
             // while no write has succeeded this turn must not promise a
@@ -5125,9 +5304,19 @@ export async function runTurn(
                 ? trimNarrationForCard(guarded, lastCardData)
                 : guarded;
             if (trimmed) {
+              // Task #1000 — the final narration frame doubles as the
+              // stream finalizer: the shared reducer REPLACES the
+              // delta-accumulated segment with this contract-trimmed
+              // text, so persisted/replayed output stays identical.
               record({ type: "narration", data: { text: trimmed, step } });
+            } else {
+              // Guards dropped the prose entirely — retract whatever
+              // portion may have streamed.
+              resetStreamDelta();
             }
           }
+        } else {
+          resetStreamDelta();
         }
       }
       record({ type: "plan_step", data: { step, hasTool: !!claudeStep.toolCall } });

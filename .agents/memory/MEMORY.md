@@ -124,6 +124,7 @@
 - [Proactive recap outcome lines](atelier-recap-outcomes.md) — recap card composes only from "⇒ outcome" summary segments + open-thread turns; every out-of-runTurn commit path must append its own outcome line.
 - [Chat verbatim replay window](atelier-chat-replay.md) — rollover keeps lineage; facts from tool successes only, every new commit path needs its own ingest; replay/facts beat summaries (atelier-session-facts.md).
 - [Atelier clarification resolver](atelier-clarification-resolver.md) — shared reply classifier; opener sets stay in sync; option picks resume via `id <optionId>` with exact tool-input ids (chat-disambiguation-resume.md).
+- [Chat live text streaming](atelier-chat-text-streaming.md) — text_delta frames are live-only (never persisted); test-env default OFF; every prose-suppression path must retract via reset.
 - [Chat reliability harness](chat-reliability-harness.md) — run validation step `chat-reliability` (test:chat-suite) before merging orchestrator/resolver/chat-core changes; assertAlive = dead-end guard; employee chat is 200+me.*-clamped, not 403.
 - [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
 - [Roster quick-add & login provisioning](atelier-roster-quick-add.md) — direct roster create bypasses the hiring pipeline (same isPartnerOrOps gate); portal logins ONLY via the shared provisionPortalLogin helper.
