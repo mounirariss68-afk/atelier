@@ -5637,6 +5637,44 @@ export interface EngagementSummary {
   raidRedCount: number;
 }
 
+export interface HomeKpiWinRate {
+  winRatePct: number;
+  wonCount: number;
+  closedCount: number;
+  agedCount: number;
+  openCount: number;
+}
+
+export interface HomeKpiHeadcount {
+  total: number;
+  employees: number;
+  contractors: number;
+  staffed: number;
+  bench: number;
+}
+
+export interface HomeKpiAr {
+  openUsd: number;
+  overdueUsd: number;
+  invoiceCount: number;
+  overdueInvoiceCount: number;
+}
+
+export interface HomeKpiBacklog {
+  backlogUsd: number;
+  weightedPipelineUsd: number;
+  next2qPlanUsd: number;
+  coverageRatio: number;
+  targetCoverage: number;
+}
+
+export interface HomeKpis {
+  winRate?: HomeKpiWinRate;
+  headcount?: HomeKpiHeadcount;
+  ar?: HomeKpiAr;
+  backlog?: HomeKpiBacklog;
+}
+
 export interface AtelierHome {
   eyebrowDate: string;
   greeting: string;
@@ -5645,6 +5683,7 @@ export interface AtelierHome {
   pipeline: PipelineStageCount[];
   engagements: EngagementSummary;
   paneC: AtelierAsset[];
+  kpis: HomeKpis;
 }
 
 export type AuditEventActorType =

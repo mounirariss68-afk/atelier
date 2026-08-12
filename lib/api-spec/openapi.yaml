@@ -10582,9 +10582,58 @@ components:
         raidAmberCount: { type: integer }
         raidRedCount: { type: integer }
 
+    HomeKpiWinRate:
+      type: object
+      required: [winRatePct, wonCount, closedCount, agedCount, openCount]
+      properties:
+        winRatePct: { type: number }
+        wonCount: { type: integer }
+        closedCount: { type: integer }
+        agedCount: { type: integer }
+        openCount: { type: integer }
+
+    HomeKpiHeadcount:
+      type: object
+      required: [total, employees, contractors, staffed, bench]
+      properties:
+        total: { type: integer }
+        employees: { type: integer }
+        contractors: { type: integer }
+        staffed: { type: integer }
+        bench: { type: integer }
+
+    HomeKpiAr:
+      type: object
+      required: [openUsd, overdueUsd, invoiceCount, overdueInvoiceCount]
+      properties:
+        openUsd: { type: number }
+        overdueUsd: { type: number }
+        invoiceCount: { type: integer }
+        overdueInvoiceCount: { type: integer }
+
+    HomeKpiBacklog:
+      type: object
+      required: [backlogUsd, weightedPipelineUsd, next2qPlanUsd, coverageRatio, targetCoverage]
+      properties:
+        backlogUsd: { type: number }
+        weightedPipelineUsd: { type: number }
+        next2qPlanUsd: { type: number }
+        coverageRatio: { type: number }
+        targetCoverage: { type: number }
+
+    # Task #983 — role-gated KPI band figures. Each block is present only
+    # when the viewer's role may already see the source page it comes from.
+    HomeKpis:
+      type: object
+      properties:
+        winRate: { $ref: "#/components/schemas/HomeKpiWinRate" }
+        headcount: { $ref: "#/components/schemas/HomeKpiHeadcount" }
+        ar: { $ref: "#/components/schemas/HomeKpiAr" }
+        backlog: { $ref: "#/components/schemas/HomeKpiBacklog" }
+
     AtelierHome:
       type: object
-      required: [eyebrowDate, greeting, persona, paneA, pipeline, engagements, paneC]
+      required: [eyebrowDate, greeting, persona, paneA, pipeline, engagements, paneC, kpis]
       properties:
         eyebrowDate: { type: string }
         greeting: { type: string }
@@ -10599,6 +10648,7 @@ components:
         paneC:
           type: array
           items: { $ref: "#/components/schemas/AtelierAsset" }
+        kpis: { $ref: "#/components/schemas/HomeKpis" }
 
     AuditEvent:
       type: object

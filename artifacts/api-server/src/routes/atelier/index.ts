@@ -12,6 +12,10 @@ import {
   atelierAuditEvents,
   atelierPaneAItems,
   atelierDeliverables,
+  atelierEmployees,
+  atelierContractors,
+  atelierEngagementAccess,
+  atelierInvoice,
 } from "@workspace/db";
 import {
   AtelierGetMeResponse,
@@ -105,7 +109,7 @@ import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
 import payrollRoutes from "./payrollRoutes";
-import financePlanRoutes from "./financePlanRoutes";
+import financePlanRoutes, { computeBacklogKpisForOrg } from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
@@ -732,7 +736,12 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
   const opps = await db
     .select()
     .from(atelierOpportunities)
-    .where(isNull(atelierOpportunities.deletedAt));
+    .where(
+      and(
+        eq(atelierOpportunities.orgId, me.orgId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
   // Task #175 — group directly by the canonical 5-stage funnel (+3 terminals)
   // instead of the retired legacy Identify/Shape/Pursue buckets.
   const pipeline = SALES_STAGES.map((stage) => {
@@ -751,7 +760,12 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
   const engs = await db
     .select()
     .from(atelierEngagements)
-    .where(isNull(atelierEngagements.deletedAt));
+    .where(
+      and(
+        eq(atelierEngagements.orgId, me.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
   const engagements = {
     activeCount: engs.filter((e) => e.plmStage !== "closed").length,
     deliverablesDueThisWeek: engs.reduce(
@@ -787,6 +801,93 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
     bodyOrFileUrl: a.bodyOrFileUrl,
   }));
 
+  // ── Task #983 — role-gated KPI band figures ─────────────────────
+  // Each block mirrors the gate of the page its number comes from:
+  //   winRate   — pipeline data, visible to every org-wide Home viewer.
+  //   headcount — roster list gate (fp/partner/senior_manager/finance/hr).
+  //   ar        — working-capital report gate (fp/partner/finance).
+  //   backlog   — finance plan gate (fp/partner/finance/senior_manager).
+  const OPEN_STAGES = new Set(["suspect", "prospect", "convert", "runner"]);
+  const wonCount = opps.filter((o) => resolveSalesStage(o.salesStage) === "contract").length;
+  const closedCount = opps.filter((o) =>
+    ["contract", "lost", "no_decision", "withdrawn"].includes(resolveSalesStage(o.salesStage)),
+  ).length;
+  const openOpps = opps.filter((o) => OPEN_STAGES.has(resolveSalesStage(o.salesStage)));
+  const kpis: Record<string, unknown> = {
+    winRate: {
+      winRatePct: closedCount > 0 ? Math.round((wonCount / closedCount) * 1000) / 10 : 0,
+      wonCount,
+      closedCount,
+      agedCount: openOpps.filter((o) => o.daysInStage > STALLED_THRESHOLD_DAYS).length,
+      openCount: openOpps.length,
+    },
+  };
+
+  const canSeeRoster = ["founding_partner", "partner", "senior_manager", "finance", "hr"].includes(me.role);
+  if (canSeeRoster) {
+    const [empRows, conRows] = await Promise.all([
+      db
+        .select({ id: atelierEmployees.id, userId: atelierEmployees.userId, status: atelierEmployees.status })
+        .from(atelierEmployees)
+        .where(and(eq(atelierEmployees.orgId, me.orgId), isNull(atelierEmployees.deletedAt))),
+      db
+        .select({ id: atelierContractors.id, status: atelierContractors.status })
+        .from(atelierContractors)
+        .where(and(eq(atelierContractors.orgId, me.orgId), isNull(atelierContractors.deletedAt))),
+    ]);
+    const activeEmps = empRows.filter((e) => e.status === "active");
+    const activeCons = conRows.filter((c) => c.status === "active");
+    // Bench = active employees with no live allocation on a live, non-closed
+    // engagement. Access rows key on the login (atelier_users) id.
+    const liveEngIds = engs.filter((e) => e.plmStage !== "closed").map((e) => e.id);
+    const accessRows = liveEngIds.length
+      ? await db
+          .select({ userId: atelierEngagementAccess.userId })
+          .from(atelierEngagementAccess)
+          .where(
+            and(
+              inArray(atelierEngagementAccess.engagementId, liveEngIds),
+              eq(atelierEngagementAccess.status, "active"),
+              isNull(atelierEngagementAccess.deletedAt),
+            ),
+          )
+      : [];
+    const staffedUserIds = new Set(accessRows.map((r) => r.userId));
+    const staffed = activeEmps.filter((e) => e.userId && staffedUserIds.has(e.userId)).length;
+    kpis.headcount = {
+      total: activeEmps.length + activeCons.length,
+      employees: activeEmps.length,
+      contractors: activeCons.length,
+      staffed,
+      bench: activeEmps.length - staffed,
+    };
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  if (["founding_partner", "partner", "finance"].includes(me.role)) {
+    // Same definition as the working-capital report (cashRoutes.ts): open AR
+    // is non-draft/non-void invoices with an unpaid remainder; overdue is the
+    // subset whose due date has passed.
+    const invoices = (
+      await db
+        .select()
+        .from(atelierInvoice)
+        .where(and(eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt)))
+    ).filter((i) => i.status !== "draft" && i.status !== "void" && i.total - i.amountPaid > 0.01);
+    const today = new Date().toISOString().slice(0, 10);
+    const overdue = invoices.filter((i) => i.dueDate && i.dueDate < today);
+    kpis.ar = {
+      openUsd: round2(invoices.reduce((s, i) => s + (i.total - i.amountPaid), 0)),
+      overdueUsd: round2(overdue.reduce((s, i) => s + (i.total - i.amountPaid), 0)),
+      invoiceCount: invoices.length,
+      overdueInvoiceCount: overdue.length,
+    };
+  }
+
+  if (["founding_partner", "partner", "finance", "senior_manager"].includes(me.role)) {
+    kpis.backlog = await computeBacklogKpisForOrg(me.orgId);
+  }
+
   const now = new Date();
   res.json(
     AtelierGetHomeResponse.parse({
@@ -797,6 +898,7 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
       pipeline,
       engagements,
       paneC,
+      kpis,
     }),
   );
 });

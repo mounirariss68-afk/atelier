@@ -1157,18 +1157,25 @@ export function MeetingsDayView() {
               <MeetingRow m={selectedMeeting} />
             </div>
           )}
+          {/* Task #983 — no full-height hour ruler on an empty day: collapse
+              to a one-line state instead. */}
           {meetings.length === 0 && (
-            <div className="text-sm text-text-mute font-mono" data-testid="meetings-day-empty">
+            <div
+              className="text-sm text-text-mute font-mono border border-dashed border-border-soft rounded-lg px-3 py-2.5"
+              data-testid="meetings-day-empty"
+            >
               No meetings on this day.
             </div>
           )}
-          <DayTimeline
-            meetings={timedMeetings}
-            date={selectedDate}
-            selectedId={selectedMeetingId}
-            onSelect={setSelectedMeetingId}
-            orgDomain={orgDomain}
-          />
+          {timedMeetings.length > 0 && (
+            <DayTimeline
+              meetings={timedMeetings}
+              date={selectedDate}
+              selectedId={selectedMeetingId}
+              onSelect={setSelectedMeetingId}
+              orgDomain={orgDomain}
+            />
+          )}
         </>
       )}
     </div>

@@ -8,6 +8,7 @@
 import type { AtelierAsset } from "./atelierAsset";
 import type { AtelierPersona } from "./atelierPersona";
 import type { EngagementSummary } from "./engagementSummary";
+import type { HomeKpis } from "./homeKpis";
 import type { PaneAItem } from "./paneAItem";
 import type { PipelineStageCount } from "./pipelineStageCount";
 
@@ -19,4 +20,5 @@ export interface AtelierHome {
   pipeline: PipelineStageCount[];
   engagements: EngagementSummary;
   paneC: AtelierAsset[];
+  kpis: HomeKpis;
 }

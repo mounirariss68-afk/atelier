@@ -865,6 +865,27 @@ function computeBacklog(presentation: string, entityFilter: string | null): Back
   };
 }
 
+// Task #983 — headline backlog figures for the Home KPI band. Same
+// hydration + computation as GET /finance/plan/backlog, consolidated
+// (no entity filter), USD presentation, totals only.
+export async function computeBacklogKpisForOrg(orgId: string): Promise<{
+  backlogUsd: number;
+  weightedPipelineUsd: number;
+  next2qPlanUsd: number;
+  coverageRatio: number;
+  targetCoverage: number;
+}> {
+  await hydratePlanFacts(orgId);
+  const { totals, targetCoverage } = computeBacklog("USD", null);
+  return {
+    backlogUsd: totals.backlogUsd,
+    weightedPipelineUsd: totals.weightedPipelineUsd,
+    next2qPlanUsd: totals.next2qPlanUsd,
+    coverageRatio: totals.coverageRatio,
+    targetCoverage,
+  };
+}
+
 // ──────────────────────────────────────────────────────────────
 // Routes
 // ──────────────────────────────────────────────────────────────

@@ -7688,6 +7688,43 @@ export const AtelierGetHomeResponse = zod.object({
       bodyOrFileUrl: zod.string().nullish(),
     }),
   ),
+  kpis: zod.object({
+    winRate: zod
+      .object({
+        winRatePct: zod.number(),
+        wonCount: zod.number(),
+        closedCount: zod.number(),
+        agedCount: zod.number(),
+        openCount: zod.number(),
+      })
+      .optional(),
+    headcount: zod
+      .object({
+        total: zod.number(),
+        employees: zod.number(),
+        contractors: zod.number(),
+        staffed: zod.number(),
+        bench: zod.number(),
+      })
+      .optional(),
+    ar: zod
+      .object({
+        openUsd: zod.number(),
+        overdueUsd: zod.number(),
+        invoiceCount: zod.number(),
+        overdueInvoiceCount: zod.number(),
+      })
+      .optional(),
+    backlog: zod
+      .object({
+        backlogUsd: zod.number(),
+        weightedPipelineUsd: zod.number(),
+        next2qPlanUsd: zod.number(),
+        coverageRatio: zod.number(),
+        targetCoverage: zod.number(),
+      })
+      .optional(),
+  }),
 });
 
 /**

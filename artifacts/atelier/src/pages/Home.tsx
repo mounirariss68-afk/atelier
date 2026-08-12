@@ -1,9 +1,10 @@
 import * as React from "react";
-import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks, getAtelierGetHomeQueryKey } from "@workspace/api-client-react";
+import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks, getAtelierGetHomeQueryKey, type AtelierHome } from "@workspace/api-client-react";
 import { SectionHead, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
+import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock, Briefcase, TrendingUp, Target, Receipt, Layers, Gauge, Percent } from "lucide-react";
+import { KpiCard, type KpiAccent, type KpiGraphic } from "@/components/ui/kpi-card";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { isSelfOnlyRole } from "@/lib/lens";
@@ -583,6 +584,188 @@ function MyOpenTasksCard() {
   );
 }
 
+// ── Task #983 — full-width KPI band under the greeting ─────────────────
+// Card anatomy follows the "Ministry Pulse" reference (label / big number /
+// context caption / tinted icon chip / embedded mini-graphic), styled with
+// the existing Cognirise glass tokens. Tiles are role-gated server-side:
+// finance blocks only arrive in `home.kpis` for roles that already see the
+// finance pages; EAC/margin reuse the engagement-health gate client-side.
+function fmtUsdCompact(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `${sign}$${Math.round(abs / 1000)}K`;
+  return `${sign}$${Math.round(abs).toLocaleString()}`;
+}
+
+function KpiBand({
+  home,
+  health,
+}: {
+  home: AtelierHome;
+  health: EngagementHealthSummary | null;
+}) {
+  const kpis = home.kpis;
+  const tiles: Array<{
+    key: string;
+    label: string;
+    value: React.ReactNode;
+    caption: React.ReactNode;
+    icon: React.ReactNode;
+    accent: KpiAccent;
+    graphic?: KpiGraphic;
+  }> = [];
+
+  // Active engagements — everyone who sees Home.
+  const eng = home.engagements;
+  tiles.push({
+    key: "active-engagements",
+    label: "Active Engagements",
+    value: eng.activeCount,
+    caption: `${eng.deliverablesDueThisWeek} due this week · ${eng.raidRedCount + eng.raidAmberCount} RAID red/amber`,
+    icon: <Briefcase />,
+    accent: "gold",
+    graphic: {
+      kind: "ratio",
+      value: eng.activeCount > 0 ? 1 - (eng.raidRedCount + eng.raidAmberCount) / eng.activeCount : 0,
+    },
+  });
+
+  // Pipeline value — sparkline across the open-stage weighted values.
+  const weightedTotal = home.pipeline.reduce((acc, p) => acc + p.weightedValueUsd, 0);
+  const openOppCount = home.pipeline.reduce((acc, p) => acc + p.count, 0);
+  tiles.push({
+    key: "pipeline-value",
+    label: "Pipeline Value",
+    value: fmtUsdCompact(weightedTotal),
+    caption: `Weighted · ${openOppCount} opportunit${openOppCount === 1 ? "y" : "ies"}`,
+    icon: <TrendingUp />,
+    accent: "gold-deep",
+    graphic: { kind: "spark", points: home.pipeline.map((p) => p.weightedValueUsd) },
+  });
+
+  // Win rate / pipeline aging — from pipeline data.
+  if (kpis?.winRate) {
+    const w = kpis.winRate;
+    tiles.push({
+      key: "win-rate",
+      label: "Win Rate",
+      value: `${w.winRatePct.toFixed(0)}%`,
+      caption:
+        w.closedCount > 0
+          ? `${w.wonCount} of ${w.closedCount} closed won · ${w.agedCount} aged >30d`
+          : `No closed deals yet · ${w.agedCount} aged >30d`,
+      icon: <Target />,
+      accent: "success",
+      graphic: { kind: "ratio", value: w.closedCount > 0 ? w.wonCount / w.closedCount : 0 },
+    });
+  }
+
+  // EAC variance + forecast margin — engagement-health gate (client fetch).
+  if (health) {
+    tiles.push({
+      key: "eac-variance",
+      label: "EAC Variance",
+      value: (
+        <span className={health.totalVacUsd < 0 ? "text-danger" : undefined}>
+          {fmtUsdCompact(health.totalVacUsd)}
+        </span>
+      ),
+      caption: `${health.projectsAtRisk} of ${health.totalEngagements} at risk`,
+      icon: <Gauge />,
+      accent: health.totalVacUsd < 0 ? "danger" : "success",
+      graphic: {
+        kind: "ratio",
+        value: health.totalEngagements > 0 ? health.projectsAtRisk / health.totalEngagements : 0,
+      },
+    });
+    tiles.push({
+      key: "forecast-margin",
+      label: "Forecast Margin",
+      value: `${(health.weightedForecastMarginPct * 100).toFixed(1)}%`,
+      caption: "Portfolio weighted · vs 40% watermark",
+      icon: <Percent />,
+      accent:
+        health.totalEngagements === 0
+          ? "gold"
+          : health.weightedForecastMarginPct < 0.3
+            ? "danger"
+            : health.weightedForecastMarginPct < 0.4
+              ? "warn"
+              : "success",
+      graphic: { kind: "ratio", value: health.weightedForecastMarginPct },
+    });
+  }
+
+  // Headcount / bench — roster gate (server-side).
+  if (kpis?.headcount) {
+    const h = kpis.headcount;
+    tiles.push({
+      key: "headcount",
+      label: "Headcount",
+      value: h.total,
+      caption: `${h.staffed} staffed · ${h.bench} on bench · ${h.contractors} contractors`,
+      icon: <Users />,
+      accent: "gold-soft",
+      graphic: { kind: "ratio", value: h.employees > 0 ? h.staffed / h.employees : 0 },
+    });
+  }
+
+  // Overdue AR — working-capital gate (server-side).
+  if (kpis?.ar) {
+    const ar = kpis.ar;
+    tiles.push({
+      key: "overdue-ar",
+      label: "Overdue AR",
+      value: (
+        <span className={ar.overdueUsd > 0 ? "text-danger" : undefined}>{fmtUsdCompact(ar.overdueUsd)}</span>
+      ),
+      caption: `of ${fmtUsdCompact(ar.openUsd)} open · ${ar.overdueInvoiceCount} of ${ar.invoiceCount} invoices`,
+      icon: <Receipt />,
+      accent: ar.overdueUsd > 0 ? "danger" : "success",
+      graphic: { kind: "ratio", value: ar.openUsd > 0 ? ar.overdueUsd / ar.openUsd : 0 },
+    });
+  }
+
+  // Backlog / contracted revenue — finance-plan gate (server-side).
+  if (kpis?.backlog) {
+    const b = kpis.backlog;
+    tiles.push({
+      key: "backlog",
+      label: "Backlog",
+      value: fmtUsdCompact(b.backlogUsd),
+      caption: `Coverage ${b.coverageRatio.toFixed(1)}× of ${b.targetCoverage.toFixed(1)}× target`,
+      icon: <Layers />,
+      accent: "gold-deep",
+      graphic: {
+        kind: "ratio",
+        value: b.targetCoverage > 0 ? b.coverageRatio / b.targetCoverage : 0,
+      },
+    });
+  }
+
+  if (tiles.length === 0) return null;
+  return (
+    <div
+      className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4"
+      data-testid="home-kpi-band"
+    >
+      {tiles.map((t) => (
+        <KpiCard
+          key={t.key}
+          label={t.label}
+          value={t.value}
+          caption={t.caption}
+          icon={t.icon}
+          accent={t.accent}
+          graphic={t.graphic}
+          data-testid={`kpi-${t.key}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   // Use `isPending` (initial load only) instead of `isLoading` so background
   // refetches — e.g. on window focus or after a persona switch — don't flip
@@ -602,6 +785,11 @@ export default function Home() {
       queryKey: getAtelierGetHomeQueryKey(),
     },
   });
+  // Task #983 — one engagement-pnl summary fetch feeds both the KPI band
+  // and the compact Engagement Health row.
+  const { summary: healthSummary, loaded: healthLoaded } = useEngagementHealth(
+    selfOnly ? undefined : me?.role,
+  );
   React.useEffect(() => {
     if (selfOnly) setLocation("/me", { replace: true });
   }, [selfOnly, setLocation]);
@@ -659,8 +847,13 @@ export default function Home() {
           />
         </div>
 
+        {/* Task #983 — full-width KPI band directly under the greeting. */}
+        <div className="px-6 sm:px-8 pt-6 sm:pt-8">
+          <KpiBand home={home} health={healthSummary} />
+        </div>
+
         <div className="p-6 sm:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
-        
+
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">
           <SectionLabel>What needs me today</SectionLabel>
@@ -690,8 +883,8 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="shrink-0 w-full sm:w-auto">
-                  <PillButton 
-                    variant="ghost" 
+                  <PillButton
+                    variant="ghost"
                     className="w-full sm:w-auto"
                     onClick={() => navigateTo(item.hrefKind, item.hrefTargetId)}
                   >
@@ -701,57 +894,30 @@ export default function Home() {
               </Card>
             ))}
             {home.paneA.length === 0 && (
-              <div className="text-center py-12 text-text-mute font-mono text-sm border border-dashed border-border rounded-lg">
+              <p className="text-sm font-mono text-text-mute border border-dashed border-border rounded-lg px-4 py-2.5">
                 No items require your attention today.
-              </div>
+              </p>
             )}
           </div>
 
-          {/* Workspace shelf — replaces the Ledger / Roster / Finance top-nav entries. */}
-          {me?.role && <WorkspaceShelf role={me.role} />}
           {me?.role && <RenewalShelf role={me.role} />}
           {me?.role && <ContractExpiryShelf role={me.role} />}
-          {/* Task #414 — Wave 2 Engagement Health tile (live EAC variance,
-              projects-at-risk count, open change orders). */}
-          {me?.role && <EngagementHealthTile role={me.role} />}
+          {/* Task #414 — Wave 2 Engagement Health (compact; EAC variance and
+              forecast margin now live in the KPI band above). */}
+          {me?.role && (
+            <EngagementHealthTile role={me.role} summary={healthSummary} loaded={healthLoaded} />
+          )}
         </div>
 
-        {/* PANE B & C Column */}
+        {/* PANE B Column */}
         <div className="space-y-12">
 
           {/* Task #327 — the viewer's Microsoft 365 meetings (next 7 days). */}
           <MyMeetingsCard />
 
-          {/* PANE B: Pipeline & Engagements */}
+          {/* PANE B: Pipeline stages (headline numbers moved to the KPI band). */}
           <div className="space-y-6">
             <SectionLabel>At a glance</SectionLabel>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="p-5 space-y-3">
-                <div className="text-xs font-mono text-text-mute uppercase tracking-wider">Active Engagements</div>
-                <div className="text-3xl font-light text-text">{home.engagements.activeCount}</div>
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-border-soft">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-text-faint">Due this week</span>
-                    <span className="text-text">{home.engagements.deliverablesDueThisWeek}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-text-faint">RAID Red/Amber</span>
-                    <span className="text-warn">{home.engagements.raidAmberCount}</span>
-                    <span className="text-danger">{home.engagements.raidRedCount}</span>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-5 flex flex-col justify-between gap-3">
-                <div className="text-xs font-mono text-text-mute uppercase tracking-wider">Pipeline Value</div>
-                <HeroStat
-                  size="md"
-                  value={`$${(home.pipeline.reduce((acc, p) => acc + p.weightedValueUsd, 0) / 1000000).toFixed(1)}M`}
-                  caption={<span className="normal-case tracking-normal">Weighted total</span>}
-                />
-              </Card>
-            </div>
 
             <Card className="p-0 overflow-hidden">
               <div className="p-3 bg-bg-elevate-2/40 border-b border-border-soft text-xs font-mono text-text-mute uppercase tracking-wider">
@@ -776,35 +942,50 @@ export default function Home() {
             </Card>
           </div>
 
+        </div>
+        </div>
+
+        {/* Task #983 — secondary shelves as a slim full-width row so neither
+            column trails into blank space. */}
+        <div className="px-6 sm:px-8 pb-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <div className="xl:col-span-2">
+            {/* Workspace shelf — replaces the Ledger / Roster / Finance top-nav entries. */}
+            {me?.role && <WorkspaceShelf role={me.role} />}
+          </div>
+
           {/* PANE C: From Atelier */}
           <div className="space-y-6">
             <SectionLabel>From Atelier</SectionLabel>
 
-            <div className="space-y-4">
-              {home.paneC.map((asset) => (
-                <Card key={asset.id} className="p-4 space-y-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <MonoChip>{asset.kind.replace('_', ' ')}</MonoChip>
-                    <button 
-                      onClick={() => handlePullAsset(asset.title)}
-                      className="text-text-mute hover:text-gold transition-colors"
-                      title="Pull into current workspace"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <h4 className="font-medium text-text leading-tight">{asset.title}</h4>
-                  <p className="text-sm text-text-faint line-clamp-2">{asset.abstract}</p>
-                  <div className="text-xs font-mono text-gold/70">{asset.provenance}</div>
-                </Card>
-              ))}
-            </div>
+            {home.paneC.length === 0 ? (
+              <p className="text-sm font-mono text-text-mute border border-dashed border-border rounded-lg px-4 py-2.5">
+                Nothing published yet.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4">
+                {home.paneC.slice(0, 2).map((asset) => (
+                  <Card key={asset.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-start gap-2">
+                      <MonoChip>{asset.kind.replace('_', ' ')}</MonoChip>
+                      <button
+                        onClick={() => handlePullAsset(asset.title)}
+                        className="text-text-mute hover:text-gold transition-colors"
+                        title="Pull into current workspace"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <h4 className="font-medium text-text leading-tight">{asset.title}</h4>
+                    <p className="text-sm text-text-faint line-clamp-2">{asset.abstract}</p>
+                    <div className="text-xs font-mono text-gold/70">{asset.provenance}</div>
+                  </Card>
+                ))}
+              </div>
+            )}
             <Link href="/atelier" className="inline-flex items-center gap-2 text-sm text-gold hover:text-gold-soft transition-colors font-mono uppercase tracking-wider">
               Browse full catalog <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-
-        </div>
         </div>
     </div>
   );
@@ -915,11 +1096,15 @@ const ENGAGEMENT_HEALTH_ROLES = new Set([
   "board_observer",
 ]);
 
-function EngagementHealthTile({ role }: { role: string }) {
+// Task #983 — the engagement-pnl summary feeds both the KPI band (EAC
+// variance, forecast margin) and the compact health row, so it's fetched
+// once here and passed down.
+function useEngagementHealth(role: string | undefined): { summary: EngagementHealthSummary | null; loaded: boolean } {
+  const gated = !!role && ENGAGEMENT_HEALTH_ROLES.has(role);
   const [summary, setSummary] = React.useState<EngagementHealthSummary | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   React.useEffect(() => {
-    if (!ENGAGEMENT_HEALTH_ROLES.has(role)) {
+    if (!gated) {
       setLoaded(true);
       return;
     }
@@ -935,17 +1120,17 @@ function EngagementHealthTile({ role }: { role: string }) {
     return () => {
       alive = false;
     };
-  }, [role]);
+  }, [gated]);
+  if (!gated) return { summary: null, loaded: true };
+  return { summary, loaded };
+}
+
+// Task #983 — EAC variance and forecast margin moved up into the KPI band;
+// this row keeps the remaining register numbers (at-risk, change orders)
+// and collapses to a single line on a cold portfolio instead of $0 tiles.
+function EngagementHealthTile({ role, summary, loaded }: { role: string; summary: EngagementHealthSummary | null; loaded: boolean }) {
   if (!ENGAGEMENT_HEALTH_ROLES.has(role)) return null;
   if (!loaded || !summary) return null;
-  const vacTone = summary.totalVacUsd < 0 ? "red" : summary.totalVacUsd === 0 ? "default" : "green";
-  const vacLabel = `${summary.totalVacUsd < 0 ? "-" : ""}$${Math.abs(Math.round(summary.totalVacUsd)).toLocaleString()}`;
-  const marginTone =
-    summary.weightedForecastMarginPct < 0.30
-      ? "red"
-      : summary.weightedForecastMarginPct < 0.40
-        ? "amber"
-        : "green";
   return (
     <div className="mt-6" data-testid="home-engagement-health">
       <div className="flex items-baseline justify-between mb-2">
@@ -957,47 +1142,38 @@ function EngagementHealthTile({ role }: { role: string }) {
           Open register →
         </Link>
       </div>
-      <Card className="p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">EAC variance</div>
-            <div
-              className={`mt-1 text-lg font-semibold ${vacTone === "red" ? "text-danger" : vacTone === "green" ? "text-green-400" : "text-text"}`}
-              data-testid="tile-eac-variance"
-            >
-              {vacLabel}
+      {summary.totalEngagements === 0 ? (
+        <p
+          className="text-sm font-mono text-text-mute border border-dashed border-border rounded-lg px-4 py-2.5"
+          data-testid="home-engagement-health-empty"
+        >
+          No active engagements yet.
+        </p>
+      ) : (
+        <Card className="p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Projects at risk</div>
+              <div
+                className={`mt-1 text-lg font-semibold ${summary.projectsAtRisk > 0 ? "text-amber" : "text-text"}`}
+                data-testid="tile-projects-at-risk"
+              >
+                {summary.projectsAtRisk}
+                <span className="text-text-faint text-sm font-mono"> / {summary.totalEngagements}</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Open change orders</div>
+              <div
+                className={`mt-1 text-lg font-semibold ${summary.openChangeOrders > 0 ? "text-amber" : "text-text"}`}
+                data-testid="tile-open-change-orders"
+              >
+                {summary.openChangeOrders}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Projects at risk</div>
-            <div
-              className={`mt-1 text-lg font-semibold ${summary.projectsAtRisk > 0 ? "text-amber" : "text-text"}`}
-              data-testid="tile-projects-at-risk"
-            >
-              {summary.projectsAtRisk}
-              <span className="text-text-faint text-sm font-mono"> / {summary.totalEngagements}</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Open change orders</div>
-            <div
-              className={`mt-1 text-lg font-semibold ${summary.openChangeOrders > 0 ? "text-amber" : "text-text"}`}
-              data-testid="tile-open-change-orders"
-            >
-              {summary.openChangeOrders}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Portfolio fcst margin</div>
-            <div
-              className={`mt-1 text-lg font-semibold ${marginTone === "red" ? "text-danger" : marginTone === "amber" ? "text-amber" : "text-green-400"}`}
-              data-testid="tile-portfolio-margin"
-            >
-              {(summary.weightedForecastMarginPct * 100).toFixed(1)}%
-            </div>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }
