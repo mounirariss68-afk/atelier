@@ -1756,6 +1756,7 @@ export async function partnerAgreementItems(orgId: string): Promise<
   }));
 }
 
+// @cli-skip: read-only partner-agreements listing for the Partners hub UI (raw fetch)
 router.get("/partners/agreements", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

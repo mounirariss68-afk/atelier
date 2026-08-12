@@ -184,10 +184,11 @@ export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Prom
 // rescheduling, or deleting the task dismisses its cards at the write
 // site (dismissTaskReminders in meTasksRoutes.ts).
 // ---------------------------------------------------------------------
-import { atelierPersonalTasks, atelierSelfNotifications } from "@workspace/db";
+import { atelierPersonalTasks, atelierSelfNotifications, atelierPushTokens } from "@workspace/db";
 import { lte, isNotNull } from "drizzle-orm";
+import { sendExpoPushMessages } from "../expoPush.js";
 
-export async function runPersonalTaskReminderTick(): Promise<{ inserted: number }> {
+export async function runPersonalTaskReminderTick(): Promise<{ inserted: number; pushed: number }> {
   const now = new Date();
   const due = await db
     .select()
@@ -200,7 +201,7 @@ export async function runPersonalTaskReminderTick(): Promise<{ inserted: number 
         isNull(atelierPersonalTasks.deletedAt),
       ),
     );
-  if (!due.length) return { inserted: 0 };
+  if (!due.length) return { inserted: 0, pushed: 0 };
   const rows = due.map((t) => ({
     id: `selfnotif_ptask_${t.id}_${t.dueAt!.getTime()}`,
     orgId: t.orgId,
@@ -215,7 +216,43 @@ export async function runPersonalTaskReminderTick(): Promise<{ inserted: number 
     .values(rows)
     .onConflictDoNothing({ target: atelierSelfNotifications.id })
     .returning({ id: atelierSelfNotifications.id });
-  return { inserted: inserted.length };
+
+  // Task #1010 — mirror NEWLY inserted cards to registered devices.
+  // Piggybacking on the insert's returning() keeps push idempotent on
+  // exactly the same dedupe key as the in-app card: a (task, dueAt) pair
+  // pushes at most once, ever. Completing/rescheduling before the tick
+  // means the task no longer matches the due query (status != open or a
+  // new dueAt → new key), so stale pushes can't fire; and a card that
+  // already exists (conflict) never re-pushes.
+  let pushed = 0;
+  if (inserted.length) {
+    const insertedIds = new Set(inserted.map((r) => r.id));
+    const newRows = rows.filter((r) => insertedIds.has(r.id));
+    const userIds = Array.from(new Set(newRows.map((r) => r.userId)));
+    const tokens = await db
+      .select()
+      .from(atelierPushTokens)
+      .where(inArray(atelierPushTokens.userId, userIds));
+    const tokensByUser = new Map<string, string[]>();
+    for (const t of tokens) {
+      const list = tokensByUser.get(t.userId) ?? [];
+      list.push(t.token);
+      tokensByUser.set(t.userId, list);
+    }
+    const messages = newRows.flatMap((r) =>
+      (tokensByUser.get(r.userId) ?? []).map((token) => ({
+        to: token,
+        title: r.title,
+        body: r.body,
+        data: { href: r.href, kind: r.kind, notificationId: r.id },
+      })),
+    );
+    if (messages.length) {
+      const res = await sendExpoPushMessages(messages);
+      pushed = res.sent;
+    }
+  }
+  return { inserted: inserted.length, pushed };
 }
 
 export function startLedgerNudgeJob(): void {

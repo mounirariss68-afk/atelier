@@ -148,6 +148,28 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
     mobile: "Me tab → My tasks",
   }),
 
+  // ---- display preferences (Task #827) --------------------------------
+  "patch /me/preferences": excluded({
+    reason: "trivial per-user UI preference (display currency); a chat write adds risk without conversational value",
+    userLabel: "change your display currency preference",
+    web: "Me → Expenses (display currency selector)",
+    mobile: "Expenses tab (display currency selector)",
+  }),
+
+  // ---- device push tokens (Task #1010) --------------------------------
+  "post /me/push-tokens": excluded({
+    reason: "device plumbing — the token only exists on the phone; chat can't register a device",
+    userLabel: "turn on phone push alerts for reminders",
+    web: null,
+    mobile: "Me tab → My tasks & reminders (Phone alerts toggle)",
+  }),
+  "delete /me/push-tokens": excluded({
+    reason: "device plumbing — the token only exists on the phone; chat can't unregister a device",
+    userLabel: "turn off phone push alerts for reminders",
+    web: null,
+    mobile: "Me tab → My tasks & reminders (Phone alerts toggle)",
+  }),
+
   // ---- learning & notifications --------------------------------------
   "post /me/learning/:id/complete": cap("me.learning_complete"),
   "post /me/notifications/:id/dismiss": cap("me.notification_dismiss"),

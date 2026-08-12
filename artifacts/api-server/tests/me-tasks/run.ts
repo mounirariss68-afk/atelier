@@ -18,6 +18,11 @@
  *   4. Reminder tick: due→ONE unread self-notification (idempotent
  *      across ticks); complete/reschedule/delete clears it; a
  *      rescheduled task re-fires ONCE at the new time.
+ *   5. Device push (Task #1010): due reminders mirror to registered
+ *      tokens via a LOCAL Expo stub — new-card-only sends (same dedupe
+ *      key as the in-app card), DeviceNotRegistered pruning, self-scope
+ *      route denial (401 unauthenticated, cross-user delete is a no-op),
+ *      and token re-owning on re-register.
  */
 
 // DB isolation bootstrap — MUST be the first import.
@@ -171,8 +176,104 @@ async function main(): Promise<void> {
     check("completion dismisses all reminder cards", notifs.every((n: any) => n.status === "dismissed"));
     const doneRow = await helpers.getOwnPersonalTask(ORG, A_UID, remTask.id);
     check("completed task stamped completedAt", doneRow?.status === "done" && !!doneRow?.completedAt);
+
+    group("5. Device push mirroring (Task #1010)");
+    const { atelierPushTokens } = D as any;
+    const http = await import("node:http");
+    // Local Expo push stub: records messages; flags one token as dead.
+    const DEAD_TOKEN = "ExponentPushToken[probe-dead]";
+    const received: any[] = [];
+    const stub = http.createServer((req: any, res: any) => {
+      let body = "";
+      req.on("data", (c: any) => (body += c));
+      req.on("end", () => {
+        const msgs = JSON.parse(body);
+        received.push(...msgs);
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            data: msgs.map((m: any) =>
+              m.to === DEAD_TOKEN
+                ? { status: "error", details: { error: "DeviceNotRegistered" } }
+                : { status: "ok" },
+            ),
+          }),
+        );
+      });
+    });
+    stub.listen(0);
+    await new Promise<void>((r) => stub.once("listening", () => r()));
+    process.env.EXPO_PUSH_BASE_URL = `http://127.0.0.1:${(stub.address() as any).port}`;
+
+    const A_TOKEN = "ExponentPushToken[probe-alive]";
+    await db.insert(atelierPushTokens).values([
+      { token: A_TOKEN, orgId: ORG, userId: A_UID, platform: "ios" },
+      { token: DEAD_TOKEN, orgId: ORG, userId: A_UID, platform: "android" },
+    ]);
+
+    const pushTask = await helpers.createPersonalTask({
+      orgId: ORG, userId: A_UID, title: `Push probe ${STAMP}`, dueAt: new Date(Date.now() - 60_000),
+    });
+    const tickRes = await runPersonalTaskReminderTick();
+    const mine = () => received.filter((m: any) => String(m.to).startsWith("ExponentPushToken[probe-"));
+    check("due reminder pushes to BOTH registered tokens", mine().length === 2, mine().map((m: any) => m.to));
+    check("push title mirrors the in-app card", mine()[0]?.title === `Reminder: Push probe ${STAMP}`, mine()[0]?.title);
+    check("push payload carries the /me/tasks href", mine().every((m: any) => m.data?.href === "/me/tasks"));
+    check("tick reports pushed count (dead token excluded)", tickRes.pushed === 1, tickRes);
+    const deadLeft = await db.select().from(atelierPushTokens).where(eq(atelierPushTokens.token, DEAD_TOKEN));
+    check("DeviceNotRegistered token pruned from the registry", deadLeft.length === 0);
+
+    const before = mine().length;
+    await runPersonalTaskReminderTick();
+    check("second tick pushes NOTHING (same dedupe key as the card)", mine().length === before);
+
+    // Completing then re-running never pushes again for this task.
+    await helpers.updatePersonalTask({ orgId: ORG, userId: A_UID, taskId: pushTask.id, patch: { status: "done" } });
+    await runPersonalTaskReminderTick();
+    check("no stale push after completion", mine().length === before);
+
+    group("6. /me/push-tokens self-scope (Task #1010)");
+    const appMod = await import("../../src/app.js");
+    const server = appMod.default.listen(0);
+    await new Promise<void>((r) => server.once("listening", () => r()));
+    const BASE = `http://127.0.0.1:${(server.address() as any).port}/api/atelier`;
+    const call = async (method: string, path: string, uid: string | null, body?: unknown) => {
+      const res = await fetch(`${BASE}${path}`, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          ...(uid ? { cookie: `atelier_persona=${uid}` } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    };
+    try {
+      const anon = await call("POST", "/me/push-tokens", null, { token: A_TOKEN, platform: "ios" });
+      check("unauthenticated registration → 401", anon.status === 401, anon.status);
+      const badTok = await call("POST", "/me/push-tokens", A_UID, { token: "not-a-token" });
+      check("malformed token rejected 400", badTok.status === 400, badTok);
+      const reg = await call("POST", "/me/push-tokens", A_UID, { token: A_TOKEN, platform: "ios" });
+      check("owner registration → 201", reg.status === 201, reg);
+      // Cross-user delete is an ownership no-op — A's token survives.
+      const crossDel = await call("DELETE", "/me/push-tokens", B_UID, { token: A_TOKEN });
+      const stillThere = await db.select().from(atelierPushTokens).where(eq(atelierPushTokens.token, A_TOKEN));
+      check("cross-user delete is a no-op (token survives)", crossDel.status === 200 && stillThere.length === 1 && stillThere[0].userId === A_UID);
+      // Re-register by B RE-OWNS the token (device switched accounts).
+      const reown = await call("POST", "/me/push-tokens", B_UID, { token: A_TOKEN, platform: "ios" });
+      const owned = await db.select().from(atelierPushTokens).where(eq(atelierPushTokens.token, A_TOKEN));
+      check("re-register re-owns the token to the new user", reown.status === 201 && owned[0]?.userId === B_UID);
+      const ownDel = await call("DELETE", "/me/push-tokens", B_UID, { token: A_TOKEN });
+      const gone = await db.select().from(atelierPushTokens).where(eq(atelierPushTokens.token, A_TOKEN));
+      check("owner delete removes the token", ownDel.status === 200 && gone.length === 0);
+    } finally {
+      server.close();
+      stub.close();
+      delete process.env.EXPO_PUSH_BASE_URL;
+    }
   } finally {
     const allUsers = [A_UID, B_UID, BOARD_UID];
+    await db.delete((D as any).atelierPushTokens).where(inArray((D as any).atelierPushTokens.userId, allUsers));
     await db.delete(atelierSelfNotifications).where(inArray(atelierSelfNotifications.userId, allUsers));
     await db.delete(atelierPersonalTasks).where(inArray(atelierPersonalTasks.userId, allUsers));
     await db.delete(atelierUsers).where(inArray(atelierUsers.id, allUsers));

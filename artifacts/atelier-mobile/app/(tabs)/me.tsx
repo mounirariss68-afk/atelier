@@ -55,6 +55,14 @@ import { API_BASE, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
 import { getFileSystem, getSharing } from "@/lib/nativeModules";
 import { runExclusivePick } from "@/lib/pickerGuard";
+import {
+  disableTaskPush,
+  enableTaskPush,
+  getPushEnabledSync,
+  loadPushEnabled,
+  pushSupported,
+  subscribePushEnabled,
+} from "@/lib/pushNotifications";
 import { TextInput } from "react-native";
 
 // ============================================================
@@ -348,6 +356,70 @@ function letterStatusText(l: MyLetter): { label: string; pending: boolean } {
 // Lightweight list: add, complete/reopen, delete. Chat-created
 // reminders ("remind me to call Dr. Hassan at 5pm") show here too.
 // ============================================================
+// Task #1010 — opt-in device push for due reminders. The toggle only
+// flips after the server registration/unregistration succeeds.
+function TaskPushToggle() {
+  const c = useColors();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const [enabled, setEnabled] = useState(getPushEnabledSync());
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    let live = true;
+    void loadPushEnabled().then((v) => { if (live) setEnabled(v); });
+    const un = subscribePushEnabled((v) => setEnabled(v));
+    return () => { live = false; un(); };
+  }, []);
+
+  if (!pushSupported()) return null;
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disableTaskPush();
+        feedback.toast("Phone alerts off", "success");
+      } else {
+        const perm = await enableTaskPush();
+        if (perm === "blocked") {
+          feedback.toast("Notifications are blocked — enable them in system Settings", "error");
+        } else if (perm === "denied") {
+          feedback.toast("Notification permission was not granted", "error");
+        } else {
+          hapticSuccess();
+          feedback.toast("Phone alerts on — reminders will reach this device", "success");
+        }
+      }
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => void toggle()}
+      disabled={busy}
+      style={{ flexDirection: rtl.row, alignItems: "center", gap: 8, opacity: busy ? 0.6 : 1 }}
+      testID="toggle-task-push"
+    >
+      <Feather name={enabled ? "bell" : "bell-off"} size={15} color={enabled ? c.accent : c.mutedForeground} />
+      <Text style={{ color: c.mutedForeground, fontSize: 13, flex: 1, textAlign: rtl.textAlign }}>
+        Phone alerts for due reminders
+      </Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={c.accent} />
+      ) : (
+        <Chip label={enabled ? "On" : "Off"} color={enabled ? c.accent : c.mutedForeground} />
+      )}
+    </Pressable>
+  );
+}
+
 function MyTasksSection() {
   const c = useColors();
   const rtl = useRTL();
@@ -439,6 +511,7 @@ function MyTasksSection() {
         </Text>
         {open.length > 0 ? <Chip label={`${open.length} open`} /> : null}
       </View>
+      <TaskPushToggle />
       <View style={{ flexDirection: rtl.row, gap: 8, alignItems: "center" }}>
         <TextInput
           value={title}

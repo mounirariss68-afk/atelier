@@ -9,6 +9,7 @@ import React, {
 
 import { apiJson, HttpError } from "@/lib/api";
 import { setUnauthorizedHandler } from "@/lib/authEvents";
+import { disableTaskPush, loadPushEnabled } from "@/lib/pushNotifications";
 import { getTokenSync, loadToken, persistToken } from "@/lib/token";
 
 export interface AuthUser {
@@ -165,6 +166,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    // Task #1010 — unregister this device's push token BEFORE the session
+    // dies, so a signed-out phone stops receiving the previous user's
+    // reminder contents. Best-effort: a network failure must never block
+    // logout, but the local opt-in preference is always cleared so the
+    // next enable re-owns the token to the new user.
+    try {
+      if (getTokenSync() && (await loadPushEnabled())) await disableTaskPush();
+    } catch {
+      // best-effort — server-side token stays until re-owned or pruned
+    }
     try {
       if (getTokenSync()) await apiJson("/api/auth/logout", { method: "POST" });
     } catch {

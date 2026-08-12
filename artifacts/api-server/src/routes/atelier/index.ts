@@ -73,6 +73,7 @@ import payRoutes from "./payRoutes";
 // Task #53 — Me lens self-service: timesheets, leave, expense claims.
 import meSelfServiceRoutes from "./meSelfServiceRoutes";
 import meTasksRoutes from "./meTasksRoutes";
+import mePushRoutes from "./mePushRoutes";
 import meSelfBillingRoutes from "./meSelfBillingRoutes";
 import delegationRoutes from "./delegationRoutes";
 // Task #55 — performance reviews/goals + training library.
@@ -357,6 +358,8 @@ router.use(meSelfServiceRoutes);
 router.use(meSelfBillingRoutes);
 // Task #1002 — personal tasks & reminders (/me/tasks, strictly self-scope).
 router.use(meTasksRoutes);
+// Task #1010 — device push-token registration (/me/push-tokens, self-scope).
+router.use(mePushRoutes);
 // Task #386 — EA delegation: partner /me/delegates/* + EA /me/assist/*.
 // Mounted with the other /me routers so the self-only-persona boundary
 // (and the /cli/* block) already covers EA personas.

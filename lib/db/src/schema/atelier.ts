@@ -1690,6 +1690,31 @@ export const atelierSelfNotifications = pgTable(
 );
 
 // ============================================================
+// DEVICE PUSH TOKENS (Me lens) — Task #1010
+// Per-user opt-in Expo push tokens. One row per device token; a user
+// may have several (phone + tablet). Registration/removal is strictly
+// self-scope (/me/push-tokens). Tokens that Expo reports as
+// DeviceNotRegistered are pruned by the push sender.
+// ============================================================
+export const atelierPushTokens = pgTable(
+  "atelier_push_tokens",
+  {
+    // The Expo push token itself is the natural key (globally unique).
+    token: text("token").primaryKey(),
+    orgId: ORG("org_id"),
+    // Owning atelier_users.id — the ONLY user pushes go to.
+    userId: text("user_id").notNull(),
+    platform: text("platform").notNull().default("unknown"), // ios | android | unknown
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_pushtok_user").on(t.userId),
+    index("idx_atelier_pushtok_org").on(t.orgId),
+  ],
+);
+
+// ============================================================
 // PERSONAL TASKS & REMINDERS (Me lens) — Task #1002
 // Lightweight self-scoped to-dos / timed reminders. Owned by ONE
 // atelier_users row; every read/write predicates on org + userId.

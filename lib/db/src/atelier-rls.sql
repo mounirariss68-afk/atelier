@@ -66,6 +66,9 @@ DECLARE
     'atelier_ms_connections',
     -- Task #538 — unified person model core table.
     'atelier_persons',
+    -- Task #1010 — per-user device push tokens (self-scope routes; org
+    -- isolation via the standard org_id policy).
+    'atelier_push_tokens',
     -- Task #513 — unified partner registry + alliance lifecycle tables.
     'atelier_partner_firms','atelier_partner_firm_resources',
     'atelier_partner_targets','atelier_alliance_joint_pipeline',

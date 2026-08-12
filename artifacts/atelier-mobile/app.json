@@ -59,6 +59,12 @@
         }
       ],
       "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#0A1230"
+        }
+      ],
       "expo-secure-store",
       "@react-native-community/datetimepicker"
     ],
