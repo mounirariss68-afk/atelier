@@ -46,9 +46,12 @@ import MeDelegates from "./MeDelegates";
 import MeAssist from "./MeAssist";
 // Task #850 — self-service official letters (list + request + re-download).
 import MeLetters from "./MeLetters";
+// Task #1002 — personal tasks & reminders panel.
+import MeTasks from "./MeTasks";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
+  { id: "tasks", label: "Tasks", href: "/me/tasks" },
   { id: "profile", label: "Profile", href: "/me/profile" },
   { id: "time", label: "Time", href: "/me/time" },
   { id: "expenses", label: "Expenses", href: "/me/expenses" },
@@ -112,6 +115,11 @@ export default function MeHome() {
           lede: weekMeta
             ? `${weekMeta.personName} · week of ${weekMeta.weekStartDate}`
             : "Your hours this week, plus leave requests.",
+        };
+      case "tasks":
+        return {
+          headline: "Tasks & reminders",
+          lede: "Your personal to-dos and timed reminders — only you can see these.",
         };
       case "profile":
         return {
@@ -179,6 +187,7 @@ export default function MeHome() {
         </div>
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
+          {section === "tasks" && <MeTasks />}
           {section === "profile" && <MeProfileSection loading={isLoading} profile={profile} />}
           {section === "time" && <MeTime onWeekMeta={onWeekMeta} />}
           {section === "expenses" && <MeExpenses />}

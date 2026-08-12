@@ -180,6 +180,7 @@ import type {
   AtelierListMyExpenseContexts200,
   AtelierListMyExpenseContextsParams,
   AtelierListMyExpenses200,
+  AtelierListMyTasks200,
   AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
@@ -233,6 +234,9 @@ import type {
   AtelierPersonInsuranceInput,
   AtelierPersona,
   AtelierPersonaSwitchInput,
+  AtelierPersonalTask,
+  AtelierPersonalTaskCreate,
+  AtelierPersonalTaskPatch,
   AtelierPov,
   AtelierPovVersion,
   AtelierPricingAnalystInput,
@@ -7524,6 +7528,340 @@ export const useAtelierDismissMyNotification = <
   TContext
 > => {
   return useMutation(getAtelierDismissMyNotificationMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — the caller's own personal tasks & reminders (self-scope)
+ */
+export const getAtelierListMyTasksUrl = () => {
+  return `/api/atelier/me/tasks`;
+};
+
+export const atelierListMyTasks = async (
+  options?: RequestInit,
+): Promise<AtelierListMyTasks200> => {
+  return customFetch<AtelierListMyTasks200>(getAtelierListMyTasksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyTasksQueryKey = () => {
+  return [`/api/atelier/me/tasks`] as const;
+};
+
+export const getAtelierListMyTasksQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListMyTasksQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyTasks>>
+  > = ({ signal }) => atelierListMyTasks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyTasks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyTasksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyTasks>>
+>;
+export type AtelierListMyTasksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own personal tasks & reminders (self-scope)
+ */
+
+export function useAtelierListMyTasks<
+  TData = Awaited<ReturnType<typeof atelierListMyTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyTasksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — add a personal task or timed reminder
+ */
+export const getAtelierCreateMyTaskUrl = () => {
+  return `/api/atelier/me/tasks`;
+};
+
+export const atelierCreateMyTask = async (
+  atelierPersonalTaskCreate: AtelierPersonalTaskCreate,
+  options?: RequestInit,
+): Promise<AtelierPersonalTask> => {
+  return customFetch<AtelierPersonalTask>(getAtelierCreateMyTaskUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPersonalTaskCreate),
+  });
+};
+
+export const getAtelierCreateMyTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyTask>>,
+    TError,
+    { data: BodyType<AtelierPersonalTaskCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateMyTask>>,
+  TError,
+  { data: BodyType<AtelierPersonalTaskCreate> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateMyTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateMyTask>>,
+    { data: BodyType<AtelierPersonalTaskCreate> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateMyTask(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateMyTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateMyTask>>
+>;
+export type AtelierCreateMyTaskMutationBody =
+  BodyType<AtelierPersonalTaskCreate>;
+export type AtelierCreateMyTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — add a personal task or timed reminder
+ */
+export const useAtelierCreateMyTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyTask>>,
+    TError,
+    { data: BodyType<AtelierPersonalTaskCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateMyTask>>,
+  TError,
+  { data: BodyType<AtelierPersonalTaskCreate> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateMyTaskMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — edit / complete / snooze one of the caller's own tasks
+ */
+export const getAtelierUpdateMyTaskUrl = (id: string) => {
+  return `/api/atelier/me/tasks/${id}`;
+};
+
+export const atelierUpdateMyTask = async (
+  id: string,
+  atelierPersonalTaskPatch: AtelierPersonalTaskPatch,
+  options?: RequestInit,
+): Promise<AtelierPersonalTask> => {
+  return customFetch<AtelierPersonalTask>(getAtelierUpdateMyTaskUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPersonalTaskPatch),
+  });
+};
+
+export const getAtelierUpdateMyTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyTask>>,
+    TError,
+    { id: string; data: BodyType<AtelierPersonalTaskPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyTask>>,
+  TError,
+  { id: string; data: BodyType<AtelierPersonalTaskPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyTask>>,
+    { id: string; data: BodyType<AtelierPersonalTaskPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateMyTask(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyTask>>
+>;
+export type AtelierUpdateMyTaskMutationBody =
+  BodyType<AtelierPersonalTaskPatch>;
+export type AtelierUpdateMyTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — edit / complete / snooze one of the caller's own tasks
+ */
+export const useAtelierUpdateMyTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyTask>>,
+    TError,
+    { id: string; data: BodyType<AtelierPersonalTaskPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyTask>>,
+  TError,
+  { id: string; data: BodyType<AtelierPersonalTaskPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyTaskMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — delete one of the caller's own tasks
+ */
+export const getAtelierDeleteMyTaskUrl = (id: string) => {
+  return `/api/atelier/me/tasks/${id}`;
+};
+
+export const atelierDeleteMyTask = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierDeleteMyTaskUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteMyTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyTask>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteMyTask>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteMyTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteMyTask>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteMyTask(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteMyTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteMyTask>>
+>;
+
+export type AtelierDeleteMyTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — delete one of the caller's own tasks
+ */
+export const useAtelierDeleteMyTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyTask>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteMyTask>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteMyTaskMutationOptions(options));
 };
 
 /**

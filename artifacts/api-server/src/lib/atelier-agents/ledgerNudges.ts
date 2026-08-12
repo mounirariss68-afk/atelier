@@ -173,6 +173,51 @@ export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Prom
   return { drafted };
 }
 
+// ---------------------------------------------------------------------
+// Task #1002 — personal task/reminder due tick. Every 15-minute ticker
+// fire, surface an in-app self-notification card for each OPEN personal
+// task whose due time has arrived. Idempotent across ticks AND across
+// reschedules via the deterministic id
+// `selfnotif_ptask_<taskId>_<dueAtEpoch>` + onConflictDoNothing: the
+// same (task, due time) can only ever produce one card, while a
+// rescheduled task (new dueAt) gets exactly one fresh card. Completing,
+// rescheduling, or deleting the task dismisses its cards at the write
+// site (dismissTaskReminders in meTasksRoutes.ts).
+// ---------------------------------------------------------------------
+import { atelierPersonalTasks, atelierSelfNotifications } from "@workspace/db";
+import { lte, isNotNull } from "drizzle-orm";
+
+export async function runPersonalTaskReminderTick(): Promise<{ inserted: number }> {
+  const now = new Date();
+  const due = await db
+    .select()
+    .from(atelierPersonalTasks)
+    .where(
+      and(
+        eq(atelierPersonalTasks.status, "open"),
+        isNotNull(atelierPersonalTasks.dueAt),
+        lte(atelierPersonalTasks.dueAt, now),
+        isNull(atelierPersonalTasks.deletedAt),
+      ),
+    );
+  if (!due.length) return { inserted: 0 };
+  const rows = due.map((t) => ({
+    id: `selfnotif_ptask_${t.id}_${t.dueAt!.getTime()}`,
+    orgId: t.orgId,
+    userId: t.userId,
+    kind: "personal_task_due",
+    title: `Reminder: ${t.title}`,
+    body: t.notes ? t.notes.slice(0, 500) : "This reminder is now due.",
+    href: "/me/tasks",
+  }));
+  const inserted = await db
+    .insert(atelierSelfNotifications)
+    .values(rows)
+    .onConflictDoNothing({ target: atelierSelfNotifications.id })
+    .returning({ id: atelierSelfNotifications.id });
+  return { inserted: inserted.length };
+}
+
 export function startLedgerNudgeJob(): void {
   if (timer) return;
   // Skip in test runs to avoid background DB chatter.
@@ -196,6 +241,11 @@ export function startLedgerNudgeJob(): void {
     // inside the function, 06:00 GST).
     void runMarginSentinelTick().catch((err) => {
       console.warn("[finance.margin] sentinel tick failed:", err);
+    });
+    // Task #1002: personal task/reminder due cards (idempotent per
+    // (task, dueAt) via deterministic notification ids).
+    void runPersonalTaskReminderTick().catch((err) => {
+      console.warn("[me.tasks] reminder tick failed:", err);
     });
   }, TICK_MS);
   // Don't keep the process alive for this background ticker.

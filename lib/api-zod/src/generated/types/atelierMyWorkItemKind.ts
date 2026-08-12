@@ -13,4 +13,5 @@ export const AtelierMyWorkItemKind = {
   activity: "activity",
   plan_action: "plan_action",
   raid: "raid",
+  personal: "personal",
 } as const;

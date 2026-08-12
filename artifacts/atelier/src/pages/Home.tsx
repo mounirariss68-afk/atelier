@@ -499,6 +499,8 @@ const MY_WORK_KIND_LABEL: Record<string, string> = {
   activity: "Task",
   plan_action: "Plan",
   raid: "RAID",
+  // Task #1002 — personal tasks/reminders merged into the roll-up.
+  personal: "Reminder",
 };
 
 /**

@@ -446,6 +446,35 @@ const anthropicStub = createServer((req, res) => {
       );
       return;
     }
+    // ---- Task #1002 — personal tasks & reminders ----
+    if (/remind me to call dr\.? hassan/i.test(promptText)) {
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_p1`,
+            name: "create_my_task",
+            input: { title: `Call Dr. Hassan ${NT}`, dueTime: "5pm" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
+    if (/what'?s on my list/i.test(promptText)) {
+      send(
+        [{ type: "tool_use", id: `tu_${TAG}_p2`, name: "my_tasks", input: {} }],
+        "tool_use",
+      );
+      return;
+    }
+    if (/mark the hassan call done/i.test(promptText)) {
+      send(
+        [{ type: "tool_use", id: `tu_${TAG}_p3`, name: "complete_my_task", input: { q: "hassan" } }],
+        "tool_use",
+      );
+      return;
+    }
     if (/45 aed taxi/i.test(promptText)) {
       send(
         [
@@ -528,6 +557,8 @@ const {
   atelierMsConnections,
   atelierMeetings,
   atelierExpenses,
+  atelierPersonalTasks,
+  atelierSelfNotifications,
 } = D as any;
 const { eq, inArray, like } = await import("drizzle-orm");
 const { loadSessionFacts } = await import("../../src/lib/atelier-cli/session-facts.js");
@@ -1078,6 +1109,83 @@ try {
   }
 
   // =====================================================================
+  // P1 — Task #1002: "remind me to call Dr. Hassan at 5pm" (employee,
+  // me.* clamp) → two-phase confirm card → commit creates ONE personal
+  // task with a resolved due instant; re-confirm replays (no dup).
+  // P2 — the due-reminder tick emits ONE idempotent self-notification.
+  // P3 — "what's on my list?" reads it back; "mark the Hassan call
+  // done" completes it single-phase and clears the reminder card.
+  // =====================================================================
+  {
+    const t1 = await postTurn({ who: EMP, prompt: "remind me to call Dr. Hassan at 5pm" });
+    assertAlive("P1/ask", t1.frames);
+    const confFrame = t1.frames.find((f) => f.event === "needs_confirmation");
+    check("P1: reminder create issues a two-phase confirm card (no meeting workaround)", !!confFrame, t1.frames.map((f) => f.event));
+    const c1 = await postConfirm(t1.turnId!, EMP);
+    assertAlive("P1/confirm", c1.frames);
+    const rows = await db
+      .select()
+      .from(atelierPersonalTasks)
+      .where(eq(atelierPersonalTasks.title, `Call Dr. Hassan ${NT}`));
+    check(
+      "P1: commit created exactly ONE open task owned by the caller, dueAt resolved from '5pm'",
+      rows.length === 1 && rows[0]?.userId === EMP && rows[0]?.status === "open" && !!rows[0]?.dueAt,
+      rows.map((r: any) => ({ userId: r.userId, status: r.status, dueAt: r.dueAt })),
+    );
+    const c2 = await postConfirm(t1.turnId!, EMP);
+    assertAlive("P1/re-confirm", c2.frames);
+    const rows2 = await db
+      .select()
+      .from(atelierPersonalTasks)
+      .where(eq(atelierPersonalTasks.title, `Call Dr. Hassan ${NT}`));
+    check("P1: re-confirm replays — still exactly one task row", rows2.length === 1, rows2.length);
+
+    // P2 — force the task overdue, then run the reminder tick twice.
+    const taskId = rows[0]!.id as string;
+    const past = new Date(Date.now() - 10 * 60 * 1000);
+    await db.update(atelierPersonalTasks).set({ dueAt: past }).where(eq(atelierPersonalTasks.id, taskId));
+    const { runPersonalTaskReminderTick } = await import("../../src/lib/atelier-agents/ledgerNudges.js");
+    await runPersonalTaskReminderTick();
+    await runPersonalTaskReminderTick();
+    const notifs = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(like(atelierSelfNotifications.id, `selfnotif_ptask_${taskId}_%`));
+    check(
+      "P2: due reminder emits exactly ONE unread self-notification (tick is idempotent)",
+      notifs.length === 1 && notifs[0]?.userId === EMP && notifs[0]?.status === "unread",
+      notifs.map((n: any) => ({ id: n.id, status: n.status })),
+    );
+
+    // P3 — list, then complete via chat; reminder card must clear.
+    const tList = await postTurn({ who: EMP, prompt: "what's on my list?" });
+    assertAlive("P3/list", tList.frames);
+    const listResult = tList.frames.find((f) => f.event === "tool_result");
+    check(
+      "P3: 'what's on my list?' returns the reminder via my_tasks",
+      JSON.stringify(listResult?.data ?? {}).includes(`Call Dr. Hassan ${NT}`),
+      listResult?.data,
+    );
+    const tDone = await postTurn({ who: EMP, prompt: "mark the Hassan call done" });
+    assertAlive("P3/complete", tDone.frames);
+    const after = await db.select().from(atelierPersonalTasks).where(eq(atelierPersonalTasks.id, taskId));
+    check(
+      "P3: chat complete marks the task done (single-phase, reversible)",
+      after[0]?.status === "done" && !!after[0]?.completedAt,
+      after[0] ?? null,
+    );
+    const notifsAfter = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(like(atelierSelfNotifications.id, `selfnotif_ptask_${taskId}_%`));
+    check(
+      "P3: completing dismisses the due-reminder card (no stale nags)",
+      notifsAfter.every((n: any) => n.status === "dismissed"),
+      notifsAfter.map((n: any) => n.status),
+    );
+  }
+
+  // =====================================================================
   // E3 — Task #799: deterministic disambiguation continuation.
   // Two similar cafe drafts → ambiguous submit → needs_disambiguation
   // (tool + field declared) → chip pick / ordinal reply resolve
@@ -1331,6 +1439,14 @@ try {
     if (eids.length > 0) {
       await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, eids));
       await db.delete(atelierExpenses).where(inArray(atelierExpenses.id, eids));
+    }
+    // Task #1002 — personal tasks + their reminder notifications.
+    const ptasks = await db.select().from(atelierPersonalTasks).where(inArray(atelierPersonalTasks.userId, ALL_USERS));
+    if (ptasks.length > 0) {
+      await db
+        .delete(atelierSelfNotifications)
+        .where(inArray(atelierSelfNotifications.userId, ALL_USERS));
+      await db.delete(atelierPersonalTasks).where(inArray(atelierPersonalTasks.userId, ALL_USERS));
     }
     await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, FP));
     await db.delete(atelierUsers).where(inArray(atelierUsers.id, ALL_USERS));

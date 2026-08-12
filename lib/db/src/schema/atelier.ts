@@ -1690,6 +1690,36 @@ export const atelierSelfNotifications = pgTable(
 );
 
 // ============================================================
+// PERSONAL TASKS & REMINDERS (Me lens) — Task #1002
+// Lightweight self-scoped to-dos / timed reminders. Owned by ONE
+// atelier_users row; every read/write predicates on org + userId.
+// dueAt is a UTC instant (natural-language times resolve to the
+// caller's timezone server-side before storage).
+// ============================================================
+export const atelierPersonalTasks = pgTable(
+  "atelier_personal_tasks",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // Owning atelier_users.id — the ONLY user who may see/mutate it.
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    // Optional due instant (UTC). Reminders fire when now >= dueAt.
+    dueAt: timestamp("due_at"),
+    status: text("status").notNull().default("open"), // open | done
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_ptask_user").on(t.userId),
+    index("idx_atelier_ptask_org").on(t.orgId),
+  ],
+);
+
+// ============================================================
 // PROPOSALS (Proposal Composer output, per opportunity) — Task #223
 // ============================================================
 export const atelierProposals = pgTable(

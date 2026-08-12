@@ -135,6 +135,19 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
   "patch /me/emergency-contacts/:id": cap("me.emergency_contact_save"),
   "delete /me/emergency-contacts/:id": cap("me.emergency_contact_delete"),
 
+  // ---- personal tasks & reminders (Task #1002) ------------------------
+  "post /me/tasks": cap("me.task_create"),
+  // PATCH covers edit/complete/snooze/reschedule; chat parity is split
+  // across me.task_complete + me.task_reschedule (both hit this route's
+  // shared helper). Registered against the complete capability.
+  "patch /me/tasks/:id": cap("me.task_complete"),
+  "delete /me/tasks/:id": excluded({
+    reason: "list housekeeping; completing covers the conversational need — deletion stays a deliberate list action",
+    userLabel: "delete a personal task or reminder",
+    web: "Me → Tasks",
+    mobile: "Me tab → My tasks",
+  }),
+
   // ---- learning & notifications --------------------------------------
   "post /me/learning/:id/complete": cap("me.learning_complete"),
   "post /me/notifications/:id/dismiss": cap("me.notification_dismiss"),

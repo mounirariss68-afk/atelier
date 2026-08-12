@@ -1802,6 +1802,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfNotification"
+  /atelier/me/tasks:
+    get:
+      operationId: atelierListMyTasks
+      tags: [atelier]
+      summary: Me lens — the caller's own personal tasks & reminders (self-scope)
+      responses:
+        "200":
+          description: Own personal tasks, open first (overdue-flagged), then done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierPersonalTask" }
+    post:
+      operationId: atelierCreateMyTask
+      tags: [atelier]
+      summary: Me lens — add a personal task or timed reminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPersonalTaskCreate"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersonalTask"
+  /atelier/me/tasks/{id}:
+    patch:
+      operationId: atelierUpdateMyTask
+      tags: [atelier]
+      summary: Me lens — edit / complete / snooze one of the caller's own tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPersonalTaskPatch"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersonalTask"
+    delete:
+      operationId: atelierDeleteMyTask
+      tags: [atelier]
+      summary: Me lens — delete one of the caller's own tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOkResponse"
   /atelier/me/approvals:
     get:
       operationId: atelierGetMyApprovals
@@ -8295,7 +8368,7 @@ components:
       required: [id, kind, title, overdue, href]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [activity, plan_action, raid] }
+        kind: { type: string, enum: [activity, plan_action, raid, personal] }
         type: { type: ["string", "null"] }
         title: { type: string }
         dueDate: { type: ["string", "null"] }
@@ -9514,6 +9587,37 @@ components:
         href: { type: ["string", "null"] }
         status: { type: string, enum: [unread, dismissed] }
         createdAt: { type: string }
+
+    # ---- Personal tasks & reminders (Task #1002) ----
+    AtelierPersonalTask:
+      type: object
+      required: [id, title, status, overdue, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        notes: { type: ["string", "null"] }
+        # UTC ISO instant, or null for an undated to-do.
+        dueAt: { type: ["string", "null"] }
+        status: { type: string, enum: [open, done] }
+        overdue: { type: boolean }
+        completedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+    AtelierPersonalTaskCreate:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+        dueAt: { type: ["string", "null"], description: "UTC ISO instant" }
+    AtelierPersonalTaskPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+        dueAt: { type: ["string", "null"], description: "UTC ISO instant" }
+        status: { type: string, enum: [open, done] }
 
     # ---- Pending-approvals digest (Task #78) ----
     AtelierMyApprovalItem:

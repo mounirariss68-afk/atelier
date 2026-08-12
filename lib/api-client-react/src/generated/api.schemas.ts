@@ -2427,6 +2427,7 @@ export const AtelierMyWorkItemKind = {
   activity: "activity",
   plan_action: "plan_action",
   raid: "raid",
+  personal: "personal",
 } as const;
 
 export interface AtelierMyWorkItem {
@@ -3950,6 +3951,73 @@ export interface AtelierSelfNotification {
   href?: string | null;
   status: AtelierSelfNotificationStatus;
   createdAt: string;
+}
+
+export type AtelierPersonalTaskStatus =
+  (typeof AtelierPersonalTaskStatus)[keyof typeof AtelierPersonalTaskStatus];
+
+export const AtelierPersonalTaskStatus = {
+  open: "open",
+  done: "done",
+} as const;
+
+export interface AtelierPersonalTask {
+  id: string;
+  title: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  dueAt?: string | null;
+  status: AtelierPersonalTaskStatus;
+  overdue: boolean;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface AtelierPersonalTaskCreate {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title: string;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+  /**
+   * UTC ISO instant
+   * @nullable
+   */
+  dueAt?: string | null;
+}
+
+export type AtelierPersonalTaskPatchStatus =
+  (typeof AtelierPersonalTaskPatchStatus)[keyof typeof AtelierPersonalTaskPatchStatus];
+
+export const AtelierPersonalTaskPatchStatus = {
+  open: "open",
+  done: "done",
+} as const;
+
+export interface AtelierPersonalTaskPatch {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+  /**
+   * UTC ISO instant
+   * @nullable
+   */
+  dueAt?: string | null;
+  status?: AtelierPersonalTaskPatchStatus;
 }
 
 export type AtelierMyApprovalItemKind =
@@ -9333,6 +9401,10 @@ export type AtelierCreateMyEmergencyContact201 = {
 
 export type AtelierUpdateMyEmergencyContact200 = {
   contact: AtelierEmergencyContact;
+};
+
+export type AtelierListMyTasks200 = {
+  tasks: AtelierPersonalTask[];
 };
 
 export type AtelierListPerformanceReviewsParams = {

@@ -36,6 +36,7 @@ import {
   atelierActivities,
   atelierPersons,
   atelierRaidItems,
+  atelierPersonalTasks,
 } from "@workspace/db";
 import {
   resolveStructuredNameInput,
@@ -3968,7 +3969,7 @@ router.delete("/accounts/:accountId/activities/:activityId", async (req, res) =>
 router.get("/my-open-tasks", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [activityRows, actionRows, raidRows] = await Promise.all([
+  const [activityRows, actionRows, raidRows, personalRows] = await Promise.all([
     db
       .select()
       .from(atelierActivities)
@@ -4015,6 +4016,19 @@ router.get("/my-open-tasks", async (req, res) => {
         ),
       )
       .orderBy(desc(atelierRaidItems.createdAt)),
+    // Task #1002 — personal tasks/reminders (strictly own rows).
+    db
+      .select()
+      .from(atelierPersonalTasks)
+      .where(
+        and(
+          eq(atelierPersonalTasks.orgId, me.orgId),
+          eq(atelierPersonalTasks.userId, me.id),
+          eq(atelierPersonalTasks.status, "open"),
+          isNull(atelierPersonalTasks.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPersonalTasks.createdAt)),
   ]);
   // Resolve the account names for all referenced accounts in one query.
   const accountIds = Array.from(
@@ -4043,7 +4057,7 @@ router.get("/my-open-tasks", async (req, res) => {
   };
   interface MyWorkItemWire {
     id: string;
-    kind: "activity" | "plan_action" | "raid";
+    kind: "activity" | "plan_action" | "raid" | "personal";
     type: string | null;
     title: string;
     dueDate: string | null;
@@ -4103,6 +4117,24 @@ router.get("/my-open-tasks", async (req, res) => {
         engagementId: r.engagementId,
         engagementName,
         href: `/engagements/${r.engagementId}`,
+        createdAt: new Date(r.createdAt).toISOString(),
+      }),
+    ),
+    ...personalRows.map(
+      (r): MyWorkItemWire => ({
+        id: r.id,
+        kind: "personal",
+        type: "task",
+        title: r.title,
+        // Roll-up rows carry date-only strings; render the due DATE and
+        // let the Me Tasks panel show the exact time.
+        dueDate: r.dueAt ? r.dueAt.toISOString().slice(0, 10) : null,
+        overdue: !!r.dueAt && r.dueAt.getTime() < Date.now(),
+        accountId: null,
+        accountName: null,
+        engagementId: null,
+        engagementName: null,
+        href: "/me/tasks",
         createdAt: new Date(r.createdAt).toISOString(),
       }),
     ),

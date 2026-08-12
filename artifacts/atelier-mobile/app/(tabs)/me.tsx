@@ -4,6 +4,10 @@ import {
   useAtelierCreateMyDocument,
   useAtelierGetMyProfile,
   useAtelierListMyDocuments,
+  useAtelierListMyTasks,
+  useAtelierCreateMyTask,
+  useAtelierUpdateMyTask,
+  useAtelierDeleteMyTask,
   useAtelierReplaceMyDocumentScan,
   useAtelierUploadMyPhoto,
 } from "@workspace/api-client-react";
@@ -337,6 +341,187 @@ function letterStatusText(l: MyLetter): { label: string; pending: boolean } {
   }
   if (l.delivered) return { label: `Emailed to ${l.emailTo ?? "you"}`, pending: false };
   return { label: "Issued — download below", pending: false };
+}
+
+// ============================================================
+// Task #1002 — personal tasks & reminders (self-scope /me/tasks).
+// Lightweight list: add, complete/reopen, delete. Chat-created
+// reminders ("remind me to call Dr. Hassan at 5pm") show here too.
+// ============================================================
+function MyTasksSection() {
+  const c = useColors();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const { t } = useI18n();
+  const list = useAtelierListMyTasks();
+  const createTask = useAtelierCreateMyTask();
+  const updateTask = useAtelierUpdateMyTask();
+  const deleteTask = useAtelierDeleteMyTask();
+  const [title, setTitle] = useState("");
+
+  // Refresh whenever the Me tab regains focus (chat writes elsewhere).
+  const refetch = list.refetch;
+  const firstFocus = React.useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void refetch();
+    }, [refetch]),
+  );
+
+  const tasks = list.data?.tasks ?? [];
+  const open = tasks.filter((x) => x.status === "open");
+  const done = tasks.filter((x) => x.status === "done").slice(0, 3);
+
+  const add = useCallback(async () => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      await createTask.mutateAsync({ data: { title: trimmed } });
+      setTitle("");
+      await refetch();
+      hapticSuccess();
+    } catch {
+      hapticError();
+      feedback.toast(t("common.error"), "error");
+    }
+  }, [title, createTask, refetch, feedback, t]);
+
+  const setStatus = useCallback(
+    async (id: string, status: "open" | "done") => {
+      try {
+        await updateTask.mutateAsync({ id, data: { status } });
+        await refetch();
+        hapticSuccess();
+      } catch {
+        hapticError();
+        feedback.toast(t("common.error"), "error");
+      }
+    },
+    [updateTask, refetch, feedback, t],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      try {
+        await deleteTask.mutateAsync({ id });
+        await refetch();
+      } catch {
+        hapticError();
+        feedback.toast(t("common.error"), "error");
+      }
+    },
+    [deleteTask, refetch, feedback, t],
+  );
+
+  const fmtDue = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <Card style={{ gap: 10 }}>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+        <Feather name="check-circle" size={16} color={c.accent} />
+        <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, textAlign: rtl.textAlign }}>
+          My tasks & reminders
+        </Text>
+        {open.length > 0 ? <Chip label={`${open.length} open`} /> : null}
+      </View>
+      <View style={{ flexDirection: rtl.row, gap: 8, alignItems: "center" }}>
+        <TextInput
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Add a task…"
+          placeholderTextColor={c.mutedForeground}
+          onSubmitEditing={add}
+          returnKeyType="done"
+          style={{
+            flex: 1,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 10,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            color: c.text,
+            textAlign: rtl.textAlign,
+          }}
+          testID="input-mobile-task-title"
+        />
+        <Pressable
+          onPress={add}
+          disabled={!title.trim() || createTask.isPending}
+          style={{ opacity: !title.trim() || createTask.isPending ? 0.5 : 1, padding: 8 }}
+          testID="button-mobile-task-add"
+        >
+          <Feather name="plus-circle" size={22} color={c.accent} />
+        </Pressable>
+      </View>
+      {list.isLoading ? <Skeleton height={40} /> : null}
+      {!list.isLoading && open.length === 0 ? (
+        <Text style={{ color: c.mutedForeground, fontSize: 13, textAlign: rtl.textAlign }}>
+          Nothing open. Add one above — or ask Riser to “remind me to call Dr. Hassan at 5pm”.
+        </Text>
+      ) : null}
+      {open.map((task) => {
+        const dueTxt = fmtDue(task.dueAt);
+        return (
+          <View
+            key={task.id}
+            style={{ flexDirection: rtl.row, alignItems: "center", gap: 10, paddingVertical: 4 }}
+            testID={`row-mobile-task-${task.id}`}
+          >
+            <Pressable onPress={() => void setStatus(task.id, "done")} hitSlop={8} testID={`button-mobile-task-done-${task.id}`}>
+              <Feather name="circle" size={18} color={c.mutedForeground} />
+            </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: c.text, fontSize: 14, textAlign: rtl.textAlign }} numberOfLines={2}>
+                {task.title}
+              </Text>
+              {dueTxt ? (
+                <Text
+                  style={{ color: task.overdue ? c.destructive : c.mutedForeground, fontSize: 11, textAlign: rtl.textAlign }}
+                >
+                  {dueTxt}
+                  {task.overdue ? " · overdue" : ""}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={() => void remove(task.id)} hitSlop={8} testID={`button-mobile-task-delete-${task.id}`}>
+              <Feather name="trash-2" size={16} color={c.mutedForeground} />
+            </Pressable>
+          </View>
+        );
+      })}
+      {done.map((task) => (
+        <View
+          key={task.id}
+          style={{ flexDirection: rtl.row, alignItems: "center", gap: 10, paddingVertical: 2, opacity: 0.6 }}
+        >
+          <Pressable onPress={() => void setStatus(task.id, "open")} hitSlop={8} testID={`button-mobile-task-reopen-${task.id}`}>
+            <Feather name="check-circle" size={18} color={c.accent} />
+          </Pressable>
+          <Text
+            style={{ color: c.mutedForeground, fontSize: 14, flex: 1, textDecorationLine: "line-through", textAlign: rtl.textAlign }}
+            numberOfLines={1}
+          >
+            {task.title}
+          </Text>
+        </View>
+      ))}
+    </Card>
+  );
 }
 
 function LettersSection() {
@@ -1378,6 +1563,9 @@ export default function MeScreen() {
             ))}
           </View>
         )}
+
+        {/* Task #1002 — personal tasks & reminders. */}
+        <MyTasksSection />
 
         {/* Task #850 — official letters: history + re-download + request. */}
         <LettersSection />

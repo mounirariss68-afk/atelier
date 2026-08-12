@@ -259,6 +259,8 @@ export const LENSES: readonly LensDef[] = [
     shortcutKey: "7",
     sections: [
       { id: "overview", label: "Overview", href: "/me", icon: LayoutDashboard },
+      // Task #1002 — personal tasks & reminders (self-scope, every role).
+      { id: "tasks", label: "Tasks", href: "/me/tasks", icon: ClipboardCheck },
       { id: "profile", label: "Profile", href: "/me/profile", icon: User },
       { id: "time", label: "Time", href: "/me/time", icon: Clock },
       { id: "expenses", label: "Expenses", href: "/me/expenses", icon: Receipt },

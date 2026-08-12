@@ -72,6 +72,7 @@ import meRoutes from "./meRoutes";
 import payRoutes from "./payRoutes";
 // Task #53 — Me lens self-service: timesheets, leave, expense claims.
 import meSelfServiceRoutes from "./meSelfServiceRoutes";
+import meTasksRoutes from "./meTasksRoutes";
 import meSelfBillingRoutes from "./meSelfBillingRoutes";
 import delegationRoutes from "./delegationRoutes";
 // Task #55 — performance reviews/goals + training library.
@@ -354,6 +355,8 @@ router.use(meSelfServiceRoutes);
 // Task #430 — self-billed (RCTI) invoice self-scope surfaces for
 // contractors + partner-firm resources: view, download, dispute.
 router.use(meSelfBillingRoutes);
+// Task #1002 — personal tasks & reminders (/me/tasks, strictly self-scope).
+router.use(meTasksRoutes);
 // Task #386 — EA delegation: partner /me/delegates/* + EA /me/assist/*.
 // Mounted with the other /me routers so the self-only-persona boundary
 // (and the /cli/* block) already covers EA personas.

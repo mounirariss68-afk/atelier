@@ -1220,6 +1220,32 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
+    "id": "me.tasks",
+    "title": "Tasks",
+    "description": "Tasks — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
+    "path": "/me/tasks",
+    "breadcrumb": [
+      "Me",
+      "Tasks"
+    ],
+    "keywords": [],
+    "roles": [
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "contractor",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer",
+      "employee"
+    ],
+    "parameterized": false
+  },
+  {
     "id": "me.time",
     "title": "Time",
     "description": "Time — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",

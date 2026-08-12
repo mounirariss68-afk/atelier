@@ -69,6 +69,8 @@ import "./me-write-capabilities.js";
 import "./me-write-capabilities-parity.js";
 // Task #845 — self-service signed salary & employment letters.
 import "./me-letter-capabilities.js";
+// Task #1002 — personal tasks & reminders (create/list/complete/reschedule).
+import "./me-task-capabilities.js";
 // Task #800 — EA-assist chat capabilities (prepare/edit/resubmit items
 // on behalf of a partner). Acting-for context comes only from the
 // caller's own delegation grants; every write is dual-attributed and

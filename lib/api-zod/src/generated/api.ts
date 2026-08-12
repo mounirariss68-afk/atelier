@@ -5472,6 +5472,77 @@ export const AtelierDismissMyNotificationResponse = zod.object({
 });
 
 /**
+ * @summary Me lens — the caller's own personal tasks & reminders (self-scope)
+ */
+export const AtelierListMyTasksResponse = zod.object({
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      notes: zod.string().nullish(),
+      dueAt: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Me lens — add a personal task or timed reminder
+ */
+export const atelierCreateMyTaskBodyTitleMax = 300;
+
+export const atelierCreateMyTaskBodyNotesMax = 2000;
+
+export const AtelierCreateMyTaskBody = zod.object({
+  title: zod.string().min(1).max(atelierCreateMyTaskBodyTitleMax),
+  notes: zod.string().max(atelierCreateMyTaskBodyNotesMax).nullish(),
+  dueAt: zod.string().nullish().describe("UTC ISO instant"),
+});
+
+/**
+ * @summary Me lens — edit / complete / snooze one of the caller's own tasks
+ */
+export const AtelierUpdateMyTaskParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateMyTaskBodyTitleMax = 300;
+
+export const atelierUpdateMyTaskBodyNotesMax = 2000;
+
+export const AtelierUpdateMyTaskBody = zod.object({
+  title: zod.string().min(1).max(atelierUpdateMyTaskBodyTitleMax).optional(),
+  notes: zod.string().max(atelierUpdateMyTaskBodyNotesMax).nullish(),
+  dueAt: zod.string().nullish().describe("UTC ISO instant"),
+  status: zod.enum(["open", "done"]).optional(),
+});
+
+export const AtelierUpdateMyTaskResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  notes: zod.string().nullish(),
+  dueAt: zod.string().nullish(),
+  status: zod.enum(["open", "done"]),
+  overdue: zod.boolean(),
+  completedAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Me lens — delete one of the caller's own tasks
+ */
+export const AtelierDeleteMyTaskParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteMyTaskResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * Digest of submitted timesheets, pending leave requests and submitted
 expense claims that THIS caller may decide. Scoping mirrors the real
 decision gates (org-chart leave routing, engagement-scoped senior
@@ -34913,7 +34984,7 @@ export const AtelierGetMyOpenTasksResponse = zod.object({
   items: zod.array(
     zod.object({
       id: zod.string(),
-      kind: zod.enum(["activity", "plan_action", "raid"]),
+      kind: zod.enum(["activity", "plan_action", "raid", "personal"]),
       type: zod.string().nullish(),
       title: zod.string(),
       dueDate: zod.string().nullish(),
