@@ -248,18 +248,6 @@ const queryClient = new QueryClient({
   }),
 });
 
-/** Task #998 — the sign-in screen keeps its own light-mode artwork while
- * every in-app page uses the newer wave backdrop. A data attribute on <html>
- * lets CSS swap the #bg-art image; removed again on unmount so the app
- * backdrop returns the moment the user is signed in. */
-function SignInScreen() {
-  React.useEffect(() => {
-    document.documentElement.setAttribute("data-screen", "signin");
-    return () => document.documentElement.removeAttribute("data-screen");
-  }, []);
-  return <SignIn />;
-}
-
 /** Renders the login screen for any route while unauthenticated. */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, mustChangePassword } = useAuth();
@@ -297,7 +285,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (status === "unauthenticated") return <SignInScreen />;
+  if (status === "unauthenticated") return <SignIn />;
   // Task #5 — after a partner reset, block the app behind a forced change
   // (the server also 403s every data route until it's done).
   if (mustChangePassword) return <ForcePasswordChange />;
