@@ -387,6 +387,15 @@ function TaskPushToggle() {
           feedback.toast("Notifications are blocked — enable them in system Settings", "error");
         } else if (perm === "denied") {
           feedback.toast("Notification permission was not granted", "error");
+        } else if (perm === "local-only") {
+          // Task #1035 — remote push can't work here (Expo Go preview / no
+          // EAS project id). Reminders still fire via device-local
+          // notifications while the app is installed on this device.
+          hapticSuccess();
+          feedback.toast(
+            "This preview can't receive server alerts — reminders will still ring on this device at their due time. The installed App Store app gets full phone alerts.",
+            "success",
+          );
         } else {
           hapticSuccess();
           feedback.toast("Phone alerts on — reminders will reach this device", "success");
@@ -445,6 +454,31 @@ function MyTasksSection() {
   );
 
   const tasks = list.data?.tasks ?? [];
+
+  // Task #1035 — in local alert mode (remote push unavailable), keep the
+  // device-scheduled due-task reminders in sync with the latest list.
+  const tasksRef = React.useRef(tasks);
+  tasksRef.current = tasks;
+  React.useEffect(() => {
+    if (!list.data) return;
+    void import("@/lib/taskLocalReminders").then(({ syncTaskLocalReminders }) =>
+      syncTaskLocalReminders(list.data.tasks ?? []),
+    );
+  }, [list.data]);
+  // …and re-sync immediately when the alerts toggle flips on (the pref
+  // listener fires from enableTaskPush's local-only path), so already-loaded
+  // due tasks get their reminders without waiting for a list refetch.
+  React.useEffect(
+    () =>
+      subscribePushEnabled((on) => {
+        if (!on) return;
+        void import("@/lib/taskLocalReminders").then(({ syncTaskLocalReminders }) =>
+          syncTaskLocalReminders(tasksRef.current),
+        );
+      }),
+    [],
+  );
+
   const open = tasks.filter((x) => x.status === "open");
   const done = tasks.filter((x) => x.status === "done").slice(0, 3);
 

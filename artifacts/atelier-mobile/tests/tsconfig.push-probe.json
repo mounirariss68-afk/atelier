@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "expo-constants": ["tests/mocks/expo-constants.ts"],
+      "expo-notifications": ["tests/mocks/expo-notifications.ts"],
+      "@react-native-async-storage/async-storage": ["tests/mocks/async-storage.ts"],
+      "react-native": ["tests/mocks/react-native.ts"],
+      "@/lib/api": ["tests/mocks/api.ts"],
+      "@/*": ["./*"]
+    }
+  }
+}
