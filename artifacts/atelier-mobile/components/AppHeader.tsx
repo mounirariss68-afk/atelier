@@ -2,17 +2,15 @@ import React from "react";
 import { Image, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Glass, WEB_TOP_INSET, softShadow } from "@/components/ui";
+import { WEB_TOP_INSET, softShadow } from "@/components/ui";
 import { useRTL } from "@/contexts/I18nContext";
-import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 
-// Task #1003 — unified glass page header: Cognirise logo on the left,
-// page title on the right, over the app's standard glass treatment
-// (Liquid Glass / BlurView / web backdrop blur / solid fallback — all
-// handled by the shared <Glass> primitive). Replaces the per-screen
-// ad-hoc headers (opaque navy islands, plain rows).
-const logoLight = require("@/assets/images/cognirise-logo-light.png");
+// Task #1008 — solid dark-navy page header matching the web top bar
+// (~#141C42) in BOTH themes: white Cognirise logo on the left, white
+// page title on the right. Replaces the Task #1003 glass treatment,
+// which washed out over the light background.
+const NAVY = "#141C42";
 const logoDark = require("@/assets/images/cognirise-logo-dark-bg.png");
 
 export function AppHeader({
@@ -28,20 +26,18 @@ export function AppHeader({
 }) {
   const c = useColors();
   const rtl = useRTL();
-  const scheme = useThemeScheme();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
 
   return (
-    <Glass
-      radius={24}
+    <View
       style={[
         {
-          borderTopLeftRadius: 0,
-          borderTopRightRadius: 0,
-          borderTopWidth: 0,
-          borderLeftWidth: 0,
-          borderRightWidth: 0,
+          backgroundColor: NAVY,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+          borderBottomWidth: 1,
+          borderColor: "rgba(255,255,255,0.10)",
           paddingTop: topPad,
           paddingBottom: 12,
           paddingHorizontal: 16,
@@ -57,7 +53,7 @@ export function AppHeader({
         }}
       >
         <Image
-          source={scheme === "dark" ? logoDark : logoLight}
+          source={logoDark}
           style={{ width: 104, height: 28 }}
           resizeMode="contain"
           accessibilityLabel="Cognirise"
@@ -68,7 +64,7 @@ export function AppHeader({
           <Text
             numberOfLines={1}
             style={{
-              color: c.foreground,
+              color: "#FFFFFF",
               fontFamily: "PlusJakartaSans_800ExtraBold",
               fontSize: 19,
               letterSpacing: -0.3,
@@ -80,7 +76,7 @@ export function AppHeader({
             <Text
               numberOfLines={1}
               style={{
-                color: c.mutedForeground,
+                color: "rgba(238,241,250,0.72)",
                 fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 12,
               }}
@@ -90,6 +86,6 @@ export function AppHeader({
           ) : null}
         </View>
       </View>
-    </Glass>
+    </View>
   );
 }

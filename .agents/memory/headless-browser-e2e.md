@@ -16,5 +16,6 @@ The app sits behind the global login gate, so screenshot tools can't exercise it
 
 **Auth without a password:** mint a session directly — random hex token, insert its sha256 into `atelier_auth_sessions` (token_hash/user_id/email/expires_at) via psql, set cookie `atelier_auth_session=<token>` on localhost in puppeteer. Delete the row after. Note: puppeteer scripts must live inside the workspace (not /tmp) to resolve node_modules; className checks for active tabs must exact-match `text-gold` (hover:text-gold false-positives).
 
+- Expo web read-only UI checks: log in as the boot-seeded demo account via curl (`client:"mobile"` gives a `token`), write it to localStorage `atelier_session_token` (+ `atelier_theme_pref` to force a theme) via evaluateOnNewDocument — no form driving needed. Use `waitUntil: "load"` + a fixed delay; networkidle never settles on the expo dev server.
 - Pick the NEWEST /nix/store chromium explicitly (`ls -d /nix/store/*chromium*/bin/chromium`, take highest version); a bare glob's first match is an ancient (92/98) build that hangs on launch until the shell times out.
 - Vite dev server (e.g. :24797) does NOT proxy /api — drive the browser at the shared proxy `http://localhost:80/<path>` or auth/session calls miss and login screen shows.

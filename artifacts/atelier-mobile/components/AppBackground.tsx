@@ -41,10 +41,13 @@ export function AppBackground() {
       <LinearGradient
         colors={
           dark
-            ? [
-                "rgba(7, 11, 34, 0.78)",
-                "rgba(10, 18, 48, 0.58)",
-                "rgba(7, 11, 34, 0.48)",
+            ? // Task #1008 — the old 0.78/0.58 navy scrim over an
+              // already-dark crop hid the artwork entirely; keep it much
+              // lighter (the portrait crop now carries more structure too).
+              [
+                "rgba(7, 11, 34, 0.42)",
+                "rgba(10, 18, 48, 0.28)",
+                "rgba(7, 11, 34, 0.22)",
               ]
             : [
                 "rgba(246, 247, 251, 0.78)",

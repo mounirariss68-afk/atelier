@@ -864,8 +864,10 @@ export default function ChatScreen() {
         title={t("tab.chat")}
         actions={
           <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
-            <IconButton icon="clock" onPress={openHistory} filled />
-            <IconButton icon="edit" onPress={() => chat.newChat()} filled />
+            {/* Task #1008 — header is solid navy in both themes; force
+                white glyphs so they stay legible in light mode too. */}
+            <IconButton icon="clock" onPress={openHistory} filled color="#FFFFFF" />
+            <IconButton icon="edit" onPress={() => chat.newChat()} filled color="#FFFFFF" />
           </View>
         }
       />
