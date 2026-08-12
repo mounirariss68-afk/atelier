@@ -90,7 +90,12 @@ export default function Opportunity() {
     query: { enabled: !!oppId, queryKey: getAtelierGetStageHistoryQueryKey(oppId) },
   });
 
-  const [activeTab, setActiveTab] = React.useState<TabId>("brief");
+  // Task #1020 — background-job notifications deep-link to a specific tab
+  // (e.g. ?tab=pov after a draft finishes); honor it on first render.
+  const [activeTab, setActiveTab] = React.useState<TabId>(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && TABS.some((tab) => tab.id === t) ? (t as TabId) : "brief";
+  });
   const [qualifierOpen, setQualifierOpen] = React.useState(false);
   const [moveOpen, setMoveOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);

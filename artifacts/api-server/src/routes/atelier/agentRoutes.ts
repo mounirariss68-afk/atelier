@@ -90,6 +90,13 @@ import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 import { canSeeAccount } from "./accountRoutes.js";
+import {
+  startBackgroundJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  getLatestJob,
+  hasRunningJob,
+} from "../../lib/background-jobs.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
@@ -1304,12 +1311,12 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
 // gets 502'd by the proxy after ~1–2 min. Same start-then-poll contract as
 // the account agents: route validates + registers a launch + returns 202,
 // the client polls GET /povs/:povId/draft-status until done/failed.
-type PovLaunch =
-  | { status: "running"; kind: "draft" | "revise"; startedAt: number }
-  | { status: "failed"; kind: "draft" | "revise"; error: string; at: number }
-  | { status: "done"; kind: "draft" | "revise"; versionId: string; versionNumber: number; at: number };
-const povLaunches = new Map<string, PovLaunch>();
+// Task #1020 — launch state now lives in the durable background-job
+// registry (atelier_background_jobs), so status survives restarts, shows
+// in the global indicator, and notifies the starter on completion.
+const POV_JOB_KINDS = ["pov_draft", "pov_revise"];
 const POV_MIN_CITATION_COVERAGE = 0.6;
+const povResultHref = (oppId: string) => `/opportunities/${oppId}?tab=pov`;
 
 // @cli-skip: transient launch status for the POV tab poller; not a data read
 router.get("/povs/:povId/draft-status", async (req, res) => {
@@ -1320,14 +1327,18 @@ router.get("/povs/:povId/draft-status", async (req, res) => {
     res.status(404).json({ error: "pov-not-found" });
     return;
   }
-  const l = povLaunches.get(req.params.povId);
-  if (!l) {
+  const job = await getLatestJob(POV_JOB_KINDS, pov.id, me.orgId);
+  const kind = job?.kind === "pov_revise" ? "revise" : "draft";
+  if (!job) {
     res.json({ status: "idle" });
     return;
   }
-  if (l.status === "running") res.json({ status: "running", kind: l.kind });
-  else if (l.status === "failed") res.json({ status: "failed", kind: l.kind, error: l.error });
-  else res.json({ status: "done", kind: l.kind, versionId: l.versionId, versionNumber: l.versionNumber });
+  if (job.status === "running") res.json({ status: "running", kind });
+  else if (job.status === "failed") res.json({ status: "failed", kind, error: job.error ?? "failed" });
+  else {
+    const r = (job.result ?? {}) as { versionId?: string; versionNumber?: number };
+    res.json({ status: "done", kind, versionId: r.versionId, versionNumber: r.versionNumber });
+  }
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -1408,12 +1419,27 @@ router.post("/povs/:povId/draft", async (req, res) => {
     thesis: pov.objective ?? "",
     sections: (pov.outline as PovOutline["sections"]) ?? [],
   };
-  if (povLaunches.get(pov.id)?.status === "running") {
+  if (await hasRunningJob(POV_JOB_KINDS, pov.id, me.orgId)) {
     res.status(409).json({ error: "pov-run-in-progress", reason: "A draft is already being generated for this POV." });
     return;
   }
-  povLaunches.set(pov.id, { status: "running", kind: "draft", startedAt: Date.now() });
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: "pov_draft",
+    lockKey: "pov", // draft + revise are mutually exclusive on one POV
+    targetType: "pov",
+    targetId: pov.id,
+    label: `POV draft — "${pov.title}"`,
+    resultHref: povResultHref(opp.id),
+  });
+  if (!jobId) {
+    // Lost the atomic-start race to a concurrent request.
+    res.status(409).json({ error: "pov-run-in-progress", reason: "A draft is already being generated for this POV." });
+    return;
+  }
   const povId = pov.id;
+  const povTitleForNotify = pov.title;
   const meId = me.id;
   void (async () => {
     try {
@@ -1431,12 +1457,11 @@ router.post("/povs/:povId/draft", async (req, res) => {
       // the partner promotes more facts or tightens the outline instead of
       // shipping thin work.
       if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-        povLaunches.set(povId, {
-          status: "failed",
-          kind: "draft",
-          error: `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
-          at: Date.now(),
-        });
+        await failBackgroundJob(
+          jobId,
+          `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
+          { notifyTitle: `POV draft needs more evidence — "${povTitleForNotify}"` },
+        );
         return;
       }
       // Version number = max + 1.
@@ -1463,10 +1488,14 @@ router.post("/povs/:povId/draft", async (req, res) => {
         .update(atelierPovs)
         .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
         .where(eq(atelierPovs.id, povId));
-      povLaunches.set(povId, { status: "done", kind: "draft", versionId, versionNumber: next, at: Date.now() });
+      await completeBackgroundJob(jobId, {
+        result: { versionId, versionNumber: next },
+        notifyTitle: `POV draft ready — "${povTitleForNotify}"`,
+        notifyBody: `Version ${next} is ready to review.`,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      povLaunches.set(povId, { status: "failed", kind: "draft", error: msg, at: Date.now() });
+      await failBackgroundJob(jobId, msg, { notifyTitle: `POV draft failed — "${povTitleForNotify}"` });
     }
   })();
   res.status(202).json({ started: true });
@@ -1532,7 +1561,7 @@ router.patch("/povs/:povId", async (req, res) => {
     // Draft-in-flight guard: the background draft snapshots the outline at
     // launch; letting the outline change mid-run would freeze an unapproved
     // outline when the run lands.
-    if (povLaunches.get(pov.id)?.status === "running") {
+    if (await hasRunningJob(POV_JOB_KINDS, pov.id, me.orgId)) {
       res.status(409).json({
         error: "pov-run-in-progress",
         reason: "A draft is currently being generated from this outline. Wait for it to finish before editing.",
@@ -1590,7 +1619,7 @@ router.post("/povs/:povId/outline/regenerate", async (req, res) => {
     });
     return;
   }
-  if (povLaunches.get(pov.id)?.status === "running") {
+  if (await hasRunningJob(POV_JOB_KINDS, pov.id, me.orgId)) {
     res.status(409).json({
       error: "pov-run-in-progress",
       reason: "A draft is currently being generated from this outline. Wait for it to finish before regenerating.",
@@ -1736,11 +1765,25 @@ router.post("/povs/:povId/revise", async (req, res) => {
     thesis: pov.objective ?? "",
     sections: (pov.outline as PovOutline["sections"]) ?? [],
   };
-  if (povLaunches.get(pov.id)?.status === "running") {
+  if (await hasRunningJob(POV_JOB_KINDS, pov.id, me.orgId)) {
     res.status(409).json({ error: "pov-run-in-progress", reason: "A revision is already being generated for this POV." });
     return;
   }
-  povLaunches.set(pov.id, { status: "running", kind: "revise", startedAt: Date.now() });
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: "pov_revise",
+    lockKey: "pov", // draft + revise are mutually exclusive on one POV
+    targetType: "pov",
+    targetId: pov.id,
+    label: `POV revision — "${pov.title}"`,
+    resultHref: povResultHref(opp.id),
+  });
+  if (!jobId) {
+    // Lost the atomic-start race to a concurrent request.
+    res.status(409).json({ error: "pov-run-in-progress", reason: "A revision is already being generated for this POV." });
+    return;
+  }
   const povId = pov.id;
   const povTitle = pov.title;
   const meId = me.id;
@@ -1758,12 +1801,11 @@ router.post("/povs/:povId/revise", async (req, res) => {
         priorDraftHtml: base.body ?? "",
       });
       if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-        povLaunches.set(povId, {
-          status: "failed",
-          kind: "revise",
-          error: `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
-          at: Date.now(),
-        });
+        await failBackgroundJob(
+          jobId,
+          `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
+          { notifyTitle: `POV revision needs more evidence — "${povTitle}"` },
+        );
         return;
       }
       const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
@@ -1797,10 +1839,14 @@ router.post("/povs/:povId/revise", async (req, res) => {
         payload: { feedback, baseVersionNumber: base.versionNumber, newVersionNumber: next } as never,
         payloadSummary: `${meName} revised POV "${povTitle}" → v${next}.`,
       });
-      povLaunches.set(povId, { status: "done", kind: "revise", versionId, versionNumber: next, at: Date.now() });
+      await completeBackgroundJob(jobId, {
+        result: { versionId, versionNumber: next },
+        notifyTitle: `POV revision ready — "${povTitle}"`,
+        notifyBody: `Version ${next} is ready to review.`,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      povLaunches.set(povId, { status: "failed", kind: "revise", error: msg, at: Date.now() });
+      await failBackgroundJob(jobId, msg, { notifyTitle: `POV revision failed — "${povTitle}"` });
     }
   })();
   res.status(202).json({ started: true });

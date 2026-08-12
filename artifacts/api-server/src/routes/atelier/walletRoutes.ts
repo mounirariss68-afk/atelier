@@ -45,6 +45,13 @@ import {
 } from "@workspace/db";
 // Task #383 — taxonomy + merchant memory.
 import { learnMerchantMapping } from "../../lib/atelier-expense-categorizer.js";
+import {
+  startBackgroundJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  getJobById,
+  hasRunningJob,
+} from "../../lib/background-jobs.js";
 import { resolveCategoryPair, policyKeyFor } from "../../lib/atelier-expense-taxonomy.js";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
@@ -1977,15 +1984,11 @@ router.get("/wallet/merchants/unmatched", async (req, res) => {
   });
 });
 
-interface EnrichmentRunState {
-  id: string;
-  status: "running" | "done" | "failed";
-  startedAt: string;
-  result?: { processed: number; classified: number; inserted: number; remainingPending: number };
-  error?: string;
-}
-const enrichmentRuns = new Map<string, EnrichmentRunState>();
-let enrichmentActive = false;
+// Task #1020 — enrichment run state now lives in the durable
+// background-job registry (job id doubles as the public runId), so status
+// survives restarts, shows in the global indicator, and notifies the
+// starter when the batch finishes.
+const ENRICHMENT_TARGET_ID = "org-merchants";
 
 // @cli-skip: leadership admin action; no CLI shape (Task #396)
 router.post("/wallet/merchants/enrich", async (req, res) => {
@@ -1995,25 +1998,35 @@ router.post("/wallet/merchants/enrich", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  if (enrichmentActive) {
+  if (await hasRunningJob(["merchant_enrichment"], ENRICHMENT_TARGET_ID, me.orgId)) {
     res.status(409).json({ error: "enrichment-already-running" });
     return;
   }
   const runId = rid("enr");
-  const state: EnrichmentRunState = {
+  const started = await startBackgroundJob({
     id: runId,
-    status: "running",
-    startedAt: new Date().toISOString(),
-  };
-  enrichmentRuns.set(runId, state);
-  enrichmentActive = true;
+    orgId: me.orgId,
+    userId: me.id,
+    kind: "merchant_enrichment",
+    targetType: "merchant_registry",
+    targetId: ENRICHMENT_TARGET_ID,
+    label: "Merchant enrichment",
+  });
+  if (!started) {
+    // Lost the atomic-start race to a concurrent request.
+    res.status(409).json({ error: "enrichment-already-running" });
+    return;
+  }
   // Return instantly; the LLM batch continues in the background (proxy
   // 502s held requests — see the async-launch pattern).
   void (async () => {
     try {
       const result = await runMerchantEnrichment();
-      state.status = "done";
-      state.result = result;
+      await completeBackgroundJob(runId, {
+        result,
+        notifyTitle: "Merchant enrichment finished",
+        notifyBody: `${result.inserted} merchants added (${result.processed} processed, ${result.remainingPending} still pending).`,
+      });
       await audit({
         entityType: "merchant_enrichment",
         entityId: runId,
@@ -2023,10 +2036,9 @@ router.post("/wallet/merchants/enrich", async (req, res) => {
         summary: `Merchant enrichment: ${result.inserted} merchants added (${result.processed} processed, ${result.remainingPending} still pending).`,
       });
     } catch (err) {
-      state.status = "failed";
-      state.error = err instanceof Error ? err.message : String(err);
-    } finally {
-      enrichmentActive = false;
+      await failBackgroundJob(runId, err instanceof Error ? err.message : String(err), {
+        notifyTitle: "Merchant enrichment failed",
+      });
     }
   })();
   res.status(202).json({ runId, status: "running" });
@@ -2040,12 +2052,18 @@ router.get("/wallet/merchants/enrich/:runId", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const state = enrichmentRuns.get(req.params.runId);
-  if (!state) {
+  const job = await getJobById(req.params.runId, me.orgId);
+  if (!job || job.kind !== "merchant_enrichment") {
     res.status(404).json({ error: "run-not-found" });
     return;
   }
-  res.json(state);
+  res.json({
+    id: job.id,
+    status: job.status,
+    startedAt: job.createdAt.toISOString(),
+    ...(job.status === "done" && job.result ? { result: job.result } : {}),
+    ...(job.status === "failed" ? { error: job.error ?? "failed" } : {}),
+  });
 });
 
 // =============================================================

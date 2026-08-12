@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
 import { ManagePicker, LensSectionTabs } from "@/components/layout/ManagePicker";
+import { BackgroundWorkBell } from "@/components/layout/BackgroundWorkBell";
 import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -231,9 +232,10 @@ export function TopNav() {
           )}
           <ThemeToggle />
           <MotionToggle />
-          <button className="text-text-mute hover:text-text transition-colors">
-            <Bell className="w-4 h-4" />
-          </button>
+          {/* Task #1020 — the bell is now the global background-work
+              indicator + notifications. Alliance partners are server-locked
+              out of /me/* so they keep no bell rather than a dead poll. */}
+          {!alliancePartner && <BackgroundWorkBell />}
           
           {me && personas && (
             <DropdownMenu>

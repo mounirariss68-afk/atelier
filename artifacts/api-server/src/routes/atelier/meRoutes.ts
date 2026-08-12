@@ -28,7 +28,9 @@ import {
   atelierTrainingMaterials,
   atelierTrainingCompletions,
   atelierTimesheetWeeks,
+  atelierAgentRuns,
 } from "@workspace/db";
+import { listJobsForUser } from "../../lib/background-jobs.js";
 import {
   AtelierGetMyProfileResponse,
   AtelierListMyNotificationsResponse,
@@ -314,6 +316,72 @@ router.post("/me/notifications/:id/dismiss", async (req, res, next) => {
       return;
     }
     res.json(AtelierDismissMyNotificationResponse.parse(notifToWire(row)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #1020 — global background-work indicator. Self-scoped: only jobs
+// the caller started. Returns durable background jobs (running + recently
+// finished) PLUS any still-running durable agent runs the caller triggered
+// that aren't already represented by a running job on the same target
+// (strategy developer, procurement navigator, account mappers, …), so all
+// long-running agent work surfaces in one place.
+// @cli-skip: transient job-status poll for the shell indicator; no CLI shape (Task #1020)
+router.get("/me/background-jobs", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const jobs = await listJobsForUser(me.id);
+    const runningTargets = new Set(
+      jobs.filter((j) => j.status === "running").map((j) => j.targetId),
+    );
+    const runs = await db
+      .select({
+        id: atelierAgentRuns.id,
+        agentId: atelierAgentRuns.agentId,
+        targetId: atelierAgentRuns.targetId,
+        targetLabel: atelierAgentRuns.targetLabel,
+        statusMessage: atelierAgentRuns.statusMessage,
+        createdAt: atelierAgentRuns.createdAt,
+      })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.triggeredByUserId, me.id),
+          eq(atelierAgentRuns.status, "running"),
+          isNull(atelierAgentRuns.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(10);
+    const extra = runs
+      .filter((r) => !r.targetId || !runningTargets.has(r.targetId))
+      .map((r) => ({
+        id: `run_${r.id}`,
+        kind: r.agentId,
+        label: r.targetLabel || r.statusMessage || "Agent run",
+        status: "running" as const,
+        error: null,
+        resultHref: `/agents/monitor/runs/${r.id}`,
+        startedAt: r.createdAt.toISOString(),
+        finishedAt: null,
+      }));
+    res.json({
+      jobs: [
+        ...jobs.map((j) => ({
+          id: j.id,
+          kind: j.kind,
+          label: j.label,
+          status: j.status,
+          error: j.error,
+          resultHref: j.resultHref,
+          startedAt: j.createdAt.toISOString(),
+          finishedAt: j.finishedAt ? j.finishedAt.toISOString() : null,
+        })),
+        ...extra,
+      ],
+    });
   } catch (err) {
     next(err);
   }

@@ -1715,6 +1715,59 @@ export const atelierPushTokens = pgTable(
 );
 
 // ============================================================
+// BACKGROUND JOBS — Task #1020
+// Durable registry for long-running background agent work (POV drafts,
+// receipt parsing, pricing research, alliance evaluation, merchant
+// enrichment…). Replaces the per-feature in-memory launch maps so job
+// status survives restarts, is visible from any page, and can notify
+// the starter on completion. Status is running | done | failed; a boot
+// sweep marks orphaned "running" rows failed ("interrupted") so the UI
+// never waits forever after a restart.
+// ============================================================
+export const atelierBackgroundJobs = pgTable(
+  "atelier_background_jobs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // atelier_users.id who started the job — the only user who sees it
+    // in /me/background-jobs and receives the completion notification.
+    startedByUserId: text("started_by_user_id").notNull(),
+    // Machine kind, e.g. pov_draft | pov_revise | receipt_parse |
+    // pricing_research | alliance_cartographer | alliance_mapper |
+    // merchant_enrichment
+    kind: text("kind").notNull(),
+    // Concurrency key: kinds that must be mutually exclusive on the same
+    // target share a lockKey (e.g. pov_draft + pov_revise → "pov").
+    // Defaults to the kind for everything else.
+    lockKey: text("lock_key").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    // Human label shown in the global indicator ("POV draft — Acme…").
+    label: text("label").notNull(),
+    status: text("status").notNull().default("running"), // running | done | failed
+    error: text("error"),
+    // Deep link to the result once done (web route).
+    resultHref: text("result_href"),
+    // Kind-specific result payload for per-feature status endpoints.
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    finishedAt: timestamp("finished_at"),
+  },
+  (t) => [
+    index("idx_atelier_bgjobs_user").on(t.startedByUserId),
+    index("idx_atelier_bgjobs_target").on(t.kind, t.targetId),
+    index("idx_atelier_bgjobs_status").on(t.status),
+    // Atomic duplicate-start guard: at most ONE running job per
+    // (org, lockKey, target). Concurrent launches race on this index and
+    // the loser gets a unique violation → startBackgroundJob returns null.
+    uniqueIndex("uq_atelier_bgjobs_running")
+      .on(t.orgId, t.lockKey, t.targetId)
+      .where(sql`status = 'running'`),
+  ],
+);
+
+// ============================================================
 // PERSONAL TASKS & REMINDERS (Me lens) — Task #1002
 // Lightweight self-scoped to-dos / timed reminders. Owned by ONE
 // atelier_users row; every read/write predicates on org + userId.

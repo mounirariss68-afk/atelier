@@ -50,6 +50,12 @@ import {
 } from "../../lib/atelier-pricing-structures.js";
 import { PRICING_TREND_GUIDANCE } from "../../lib/atelier-pricing-trends.js";
 import { runPricingStrategist, runPricingAnalyst, runPricingResearcher } from "../../lib/atelier-agents/runner.js";
+import {
+  startBackgroundJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  getLatestJob,
+} from "../../lib/background-jobs.js";
 import { atelierAgentRuns } from "@workspace/db";
 import { canViewEngagementCosting } from "./personaRoles.js";
 import { withRls } from "./rls.js";
@@ -888,16 +894,11 @@ router.post("/opportunities/:oppId/pricing/handoff-billing", async (req, res) =>
 // Review-only: output lands as a suggestion snapshot on the pricing row
 // (pricingResearcherOutput) and is NEVER auto-applied to economic terms.
 // Launch returns 202 immediately (proxy times out held requests); the
-// client polls the status route. In-memory launch map bridges the gap
-// before the durable agent_run row exists.
+// client polls the status route. Task #1020 — launch state lives in the
+// durable background-job registry (atelier_background_jobs) so it
+// survives restarts, shows in the global indicator, and notifies the
+// starter when the research lands.
 // =============================================================
-type ResearcherLaunchState = {
-  status: "running" | "succeeded" | "failed";
-  error: string | null;
-  runId: string | null;
-  startedAt: number;
-};
-const researcherLaunches = new Map<string, ResearcherLaunchState>();
 
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/pricing/researcher", async (req, res) => {
@@ -905,9 +906,9 @@ router.post("/opportunities/:oppId/pricing/researcher", async (req, res) => {
   if (!me) return;
   if (!requirePartner(me, res)) return;
   const oppId = req.params.oppId;
-  const inFlight = researcherLaunches.get(oppId);
+  const inFlight = await getLatestJob(["pricing_research"], oppId, me.orgId);
   if (inFlight?.status === "running") {
-    res.status(202).json({ status: "running", runId: inFlight.runId });
+    res.status(202).json({ status: "running", runId: null });
     return;
   }
   const [opp] = await db
@@ -925,8 +926,21 @@ router.post("/opportunities/:oppId/pricing/researcher", async (req, res) => {
     return;
   }
   const focus = typeof req.body?.focus === "string" && req.body.focus.trim() ? req.body.focus.trim().slice(0, 500) : undefined;
-  const launch: ResearcherLaunchState = { status: "running", error: null, runId: null, startedAt: Date.now() };
-  researcherLaunches.set(oppId, launch);
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: "pricing_research",
+    targetType: "opportunity",
+    targetId: oppId,
+    label: `Pricing research — "${opp.name}"`,
+    resultHref: `/opportunities/${oppId}?tab=commercials`,
+  });
+  if (!jobId) {
+    // Lost the atomic-start race — another request already launched it.
+    res.status(202).json({ status: "running", runId: null });
+    return;
+  }
+  const oppNameForNotify = opp.name;
   void (async () => {
     try {
       const result = await runPricingResearcher({
@@ -937,11 +951,15 @@ router.post("/opportunities/:oppId/pricing/researcher", async (req, res) => {
         actorLabel: me.name,
         focus,
       });
-      launch.status = "succeeded";
-      launch.runId = result.runId;
+      await completeBackgroundJob(jobId, {
+        result: { runId: result.runId },
+        notifyTitle: `Pricing research ready — "${oppNameForNotify}"`,
+        notifyBody: "Market findings are ready to review on the Pricing tab.",
+      });
     } catch (err) {
-      launch.status = "failed";
-      launch.error = err instanceof Error ? err.message : "researcher-failed";
+      await failBackgroundJob(jobId, err instanceof Error ? err.message : "researcher-failed", {
+        notifyTitle: `Pricing research failed — "${oppNameForNotify}"`,
+      });
     }
   })();
   res.status(202).json({ status: "running" });
@@ -956,7 +974,7 @@ router.get("/opportunities/:oppId/pricing/researcher", async (req, res) => {
     .select()
     .from(atelierDealPricings)
     .where(and(eq(atelierDealPricings.opportunityId, oppId), isNull(atelierDealPricings.deletedAt)));
-  const launch = researcherLaunches.get(oppId);
+  const launch = await getLatestJob(["pricing_research"], oppId, me.orgId);
   if (launch?.status === "running") {
     // Surface the live phase from the run row when it exists already.
     const [row] = await db

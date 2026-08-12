@@ -96,6 +96,13 @@ import {
   learnMerchantMapping,
 } from "../../lib/atelier-expense-categorizer.js";
 import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
+import {
+  startBackgroundJob,
+  reapStaleRunningJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  getLatestJob,
+} from "../../lib/background-jobs.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
   ObjectStorageService,
@@ -2529,33 +2536,17 @@ router.post("/me/expenses/:id/parse-receipt", async (req, res, next) => {
 // Task #411 — automatic receipt pipeline: the parse is LLM-heavy (vision
 // extraction + Expense Auditor) and can run for minutes. A held request
 // gets 502'd by the proxy, so clients launch here and poll below.
-// In-memory launch map keyed by expense id (same pattern as the wallet
-// merchant-enrichment runs).
+// Task #1020 — launch state now lives in the durable background-job
+// registry (atelier_background_jobs) so it survives restarts, shows in
+// the global indicator, and notifies the starter when the read finishes.
 // =====================================================================
-interface ParseLaunchState {
-  status: "running" | "done" | "failed";
-  startedAt: number;
-  result?: Record<string, unknown>;
-  error?: { status: number; body: Record<string, unknown> };
-}
-const parseLaunches = new Map<string, ParseLaunchState>();
-
-// Watchdog: a launch that has been "running" longer than this is considered
-// wedged — reported as failed and eligible for relaunch (the abandoned
-// promise can no longer write into the map because we swap the entry out).
+// Watchdog: a job that has been "running" longer than this is considered
+// wedged — reported as failed and eligible for relaunch (a zombie promise
+// can only settle its OWN superseded row, never the relaunched one).
 const PARSE_LAUNCH_STALE_MS = 10 * 60 * 1000;
 
-function launchIsStaleRunning(state: ParseLaunchState): boolean {
-  return state.status === "running" && Date.now() - state.startedAt > PARSE_LAUNCH_STALE_MS;
-}
-
-function sweepParseLaunches() {
-  const cutoff = Date.now() - 15 * 60 * 1000;
-  for (const [key, state] of parseLaunches) {
-    if (state.startedAt < cutoff && (state.status !== "running" || launchIsStaleRunning(state))) {
-      parseLaunches.delete(key);
-    }
-  }
+function jobIsStaleRunning(job: { status: string; createdAt: Date }): boolean {
+  return job.status === "running" && Date.now() - job.createdAt.getTime() > PARSE_LAUNCH_STALE_MS;
 }
 
 // @cli-skip: self-scope async receipt parse launch; no CLI shape (Task #411)
@@ -2568,38 +2559,55 @@ router.post("/me/expenses/:id/parse-receipt-async", async (req, res, next) => {
       res.status(400).json({ error: "no-receipt", message: "Attach a receipt first, then parse it." });
       return;
     }
-    sweepParseLaunches();
-    const existing = parseLaunches.get(row.id);
-    if (existing?.status === "running" && !launchIsStaleRunning(existing)) {
+    const existing = await getLatestJob(["receipt_parse"], row.id, me.orgId);
+    if (existing?.status === "running" && !jobIsStaleRunning(existing)) {
       res.status(202).json({ status: "running" });
       return;
     }
-    const launch: ParseLaunchState = { status: "running", startedAt: Date.now() };
-    parseLaunches.set(row.id, launch);
+    if (existing?.status === "running") {
+      // Stale watchdog hit — fail the dead row or the running-unique index
+      // would block the relaunch below.
+      await reapStaleRunningJob(["receipt_parse"], row.id, me.orgId, PARSE_LAUNCH_STALE_MS);
+    }
+    const jobId = await startBackgroundJob({
+      orgId: me.orgId,
+      userId: me.id,
+      kind: "receipt_parse",
+      targetType: "expense",
+      targetId: row.id,
+      label: "Reading your receipt",
+    });
+    if (!jobId) {
+      // Lost the atomic-start race — another request is already parsing.
+      res.status(202).json({ status: "running" });
+      return;
+    }
     void parseReceiptForExpense({ row, me, via: "me-lens-auto" })
-      .then((result) => {
+      .then(async (result) => {
         if (result.ok) {
-          launch.status = "done";
-          launch.result = {
-            expense: claimToWire(result.expense),
-            runId: result.runId,
-            proposal: result.proposal,
-            policyFindings: result.policyFindings,
-          };
+          await completeBackgroundJob(jobId, {
+            result: {
+              expense: claimToWire(result.expense),
+              runId: result.runId,
+              proposal: result.proposal,
+              policyFindings: result.policyFindings,
+            },
+            notifyTitle: "Receipt read — expense details filled in",
+            notifyBody: "Open the expense to review what was found.",
+          });
         } else {
-          launch.status = "failed";
-          launch.error = { status: result.status, body: result.body };
+          await failBackgroundJob(jobId, `parse-failed (${result.status})`, {
+            result: { wireError: { status: result.status, body: result.body } },
+            notifyTitle: "Receipt could not be read",
+          });
         }
       })
-      .catch((err) => {
-        launch.status = "failed";
-        launch.error = {
-          status: 502,
-          body: {
-            error: "parse-crashed",
-            message: err instanceof Error ? err.message : String(err),
-          },
-        };
+      .catch(async (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        await failBackgroundJob(jobId, message, {
+          result: { wireError: { status: 502, body: { error: "parse-crashed", message } } },
+          notifyTitle: "Receipt could not be read",
+        });
       });
     res.status(202).json({ status: "running" });
   } catch (err) {
@@ -2626,14 +2634,14 @@ router.get("/me/expenses/:id/parse-receipt-status", async (req, res, next) => {
       res.status(404).json({ error: "expense-not-found" });
       return;
     }
-    const launch = parseLaunches.get(row.id);
-    if (!launch) {
+    const job = await getLatestJob(["receipt_parse"], row.id, me.orgId);
+    if (!job) {
       res.json({ status: "none" });
       return;
     }
-    if (launchIsStaleRunning(launch)) {
+    if (jobIsStaleRunning(job)) {
       // Watchdog: report a wedged run as failed so the client can offer a
-      // retry; the relaunch path above swaps the entry out.
+      // retry; the relaunch path above inserts a fresh job row.
       res.json({
         status: "failed",
         error: {
@@ -2643,10 +2651,21 @@ router.get("/me/expenses/:id/parse-receipt-status", async (req, res, next) => {
       });
       return;
     }
+    const stored = (job.result ?? {}) as { wireError?: unknown } & Record<string, unknown>;
+    if (job.status === "failed") {
+      res.json({
+        status: "failed",
+        error:
+          stored.wireError ?? {
+            status: 502,
+            body: { error: "parse-crashed", message: job.error ?? "failed" },
+          },
+      });
+      return;
+    }
     res.json({
-      status: launch.status,
-      ...(launch.result ? { result: launch.result } : {}),
-      ...(launch.error ? { error: launch.error } : {}),
+      status: job.status,
+      ...(job.status === "done" ? { result: stored } : {}),
     });
   } catch (err) {
     next(err);

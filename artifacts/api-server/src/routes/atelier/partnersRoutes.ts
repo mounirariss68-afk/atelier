@@ -38,6 +38,13 @@ import {
   atelierDealPricings,
 } from "@workspace/db";
 import { normalizeCostLines } from "../../lib/atelier-pricing-structures.js";
+import {
+  startBackgroundJob,
+  reapStaleRunningJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  getLatestJob,
+} from "../../lib/background-jobs.js";
 import { atelierAgentRuns } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { audit } from "./engagementRoutes";
@@ -488,9 +495,12 @@ router.post("/partners/firms", async (req, res, next) => {
     // capability profile). Neither can fail the create.
     void refreshPartnerFirmRag(id);
     if (!(await alreadyRunningInDb("alliance_cartographer", id))) {
-      launchAllianceAgent({
+      await launchAllianceAgent({
         agentId: "alliance_cartographer",
         firmId: id,
+        firmName: b.name,
+        orgId: me.orgId,
+        userId: me.id,
         run: () => runAllianceCartographerAndQueue(id, me.id, { chainMapper: true }),
       });
     }
@@ -1040,9 +1050,12 @@ router.post("/partners/targets/:id/promote", async (req, res, next) => {
     // created ones: entity embedding + capability research run.
     void refreshPartnerFirmRag(firmId);
     if (!(await alreadyRunningInDb("alliance_cartographer", firmId))) {
-      launchAllianceAgent({
+      await launchAllianceAgent({
         agentId: "alliance_cartographer",
         firmId,
+        firmName: target.name,
+        orgId: me.orgId,
+        userId: me.id,
         run: () => runAllianceCartographerAndQueue(firmId, me.id, { chainMapper: true }),
       });
     }
@@ -1846,27 +1859,40 @@ router.get("/partners/co-deliver", async (req, res, next) => {
 // background, return 202 immediately; the client polls the status route.
 // Bespoke raw-fetch routes — deliberately NOT in the OpenAPI spec.
 
+// Task #1020 — launch state now lives in the durable background-job
+// registry (atelier_background_jobs): survives restarts, shows in the
+// global indicator, and notifies the starter on completion.
 type AllianceLaunchState = {
   status: "running" | "succeeded" | "failed";
   error: string | null;
   runId: string | null;
   proposedCount: number | null;
   summary: Record<string, unknown> | null;
-  startedAt: number;
 };
-const allianceLaunches = new Map<string, AllianceLaunchState>();
-const allianceLaunchKey = (agentId: string, firmId: string) => `${agentId}:${firmId}`;
-// Watchdog: a launch entry stuck "running" past 30 minutes is dead (process
-// kept going but the promise never settled) — treat as failed on read.
+// Watchdog: a job stuck "running" past 30 minutes is dead (process kept
+// going but the promise never settled) — treat as failed on read.
 const LAUNCH_STALE_MS = 30 * 60 * 1000;
 
-function readLaunch(agentId: string, firmId: string): AllianceLaunchState | null {
-  const launch = allianceLaunches.get(allianceLaunchKey(agentId, firmId));
-  if (!launch) return null;
-  if (launch.status === "running" && Date.now() - launch.startedAt > LAUNCH_STALE_MS) {
-    return { ...launch, status: "failed", error: "The run timed out — please retry." };
+async function readLaunch(agentId: string, firmId: string, orgId?: string | null): Promise<AllianceLaunchState | null> {
+  const job = await getLatestJob([agentId], firmId, orgId ?? undefined);
+  if (!job) return null;
+  if (job.status === "running" && Date.now() - job.createdAt.getTime() > LAUNCH_STALE_MS) {
+    return { status: "failed", error: "The run timed out — please retry.", runId: null, proposedCount: null, summary: null };
   }
-  return launch;
+  if (job.status === "running") {
+    return { status: "running", error: null, runId: null, proposedCount: null, summary: null };
+  }
+  if (job.status === "failed") {
+    return { status: "failed", error: job.error ?? "failed", runId: null, proposedCount: null, summary: null };
+  }
+  const r = (job.result ?? {}) as { runId?: string; proposedCount?: number; summary?: Record<string, unknown> };
+  return {
+    status: "succeeded",
+    error: null,
+    runId: r.runId ?? null,
+    proposedCount: r.proposedCount ?? null,
+    summary: r.summary ?? null,
+  };
 }
 
 async function alreadyRunningInDb(agentId: string, firmId: string): Promise<boolean> {
@@ -1885,41 +1911,45 @@ async function alreadyRunningInDb(agentId: string, firmId: string): Promise<bool
   return Boolean(row);
 }
 
-function launchAllianceAgent(args: {
+async function launchAllianceAgent(args: {
   agentId: "alliance_cartographer" | "alliance_executive_mapper";
   firmId: string;
+  firmName: string;
+  orgId: string | null;
+  userId: string;
   run: () => Promise<{ runId: string; proposedCount: number } & Record<string, unknown>>;
-}): void {
-  const key = allianceLaunchKey(args.agentId, args.firmId);
-  allianceLaunches.set(key, {
-    status: "running",
-    error: null,
-    runId: null,
-    proposedCount: null,
-    summary: null,
-    startedAt: Date.now(),
+}): Promise<void> {
+  const friendly =
+    args.agentId === "alliance_cartographer" ? "Partner evaluation" : "Partner people sweep";
+  // A stale "running" row (dead promise) would block the relaunch via the
+  // running-unique index — fail it first (same 30-min watchdog as reads).
+  await reapStaleRunningJob([args.agentId], args.firmId, args.orgId, LAUNCH_STALE_MS);
+  const jobId = await startBackgroundJob({
+    orgId: args.orgId,
+    userId: args.userId,
+    kind: args.agentId,
+    targetType: "partner_firm",
+    targetId: args.firmId,
+    label: `${friendly} — "${args.firmName}"`,
+    resultHref: "/partners/identify",
   });
+  if (!jobId) return; // lost the atomic-start race — a run is already live
   void (async () => {
     try {
       const result = await args.run();
       const { runId, proposedCount, ...rest } = result;
-      allianceLaunches.set(key, {
-        status: "succeeded",
-        error: null,
-        runId,
-        proposedCount,
-        summary: rest,
-        startedAt: Date.now(),
+      await completeBackgroundJob(jobId, {
+        result: { runId, proposedCount, summary: rest },
+        notifyTitle: `${friendly} finished — "${args.firmName}"`,
+        notifyBody:
+          proposedCount > 0
+            ? `${proposedCount} proposed update${proposedCount === 1 ? "" : "s"} to review.`
+            : "No new updates were proposed.",
       });
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
-      allianceLaunches.set(key, {
-        status: "failed",
-        error: raw,
-        runId: null,
-        proposedCount: null,
-        summary: null,
-        startedAt: Date.now(),
+      await failBackgroundJob(jobId, raw, {
+        notifyTitle: `${friendly} failed — "${args.firmName}"`,
       });
       console.warn(`[atelier] ${args.agentId} run failed for firm ${args.firmId}`, raw);
     }
@@ -1935,7 +1965,7 @@ router.post("/partners/firms/:id/agents/alliance-cartographer/run", async (req, 
     if (!ensureEditor(me, res)) return;
     const firm = await getFirm(me, req.params.id);
     if (!firm) return void res.status(404).json({ error: "not-found" });
-    const launch = readLaunch("alliance_cartographer", firm.id);
+    const launch = await readLaunch("alliance_cartographer", firm.id, me.orgId);
     if (launch?.status === "running" || (await alreadyRunningInDb("alliance_cartographer", firm.id))) {
       return void res.status(409).json({
         error: "alliance-cartographer-already-running",
@@ -1944,9 +1974,12 @@ router.post("/partners/firms/:id/agents/alliance-cartographer/run", async (req, 
     }
     const contextNotes =
       typeof req.body?.contextNotes === "string" ? req.body.contextNotes.slice(0, 2000) : null;
-    launchAllianceAgent({
+    await launchAllianceAgent({
       agentId: "alliance_cartographer",
       firmId: firm.id,
+      firmName: firm.name,
+      orgId: me.orgId,
+      userId: me.id,
       run: () => runAllianceCartographerAndQueue(firm.id, me.id, { contextNotes }),
     });
     await audit({
@@ -1972,7 +2005,7 @@ router.post("/partners/firms/:id/agents/alliance-mapper/run", async (req, res, n
     if (!ensureEditor(me, res)) return;
     const firm = await getFirm(me, req.params.id);
     if (!firm) return void res.status(404).json({ error: "not-found" });
-    const launch = readLaunch("alliance_executive_mapper", firm.id);
+    const launch = await readLaunch("alliance_executive_mapper", firm.id, me.orgId);
     if (
       launch?.status === "running" ||
       (await alreadyRunningInDb("alliance_executive_mapper", firm.id))
@@ -1982,9 +2015,12 @@ router.post("/partners/firms/:id/agents/alliance-mapper/run", async (req, res, n
         message: "An alliance executive sweep is already running for this partner.",
       });
     }
-    launchAllianceAgent({
+    await launchAllianceAgent({
       agentId: "alliance_executive_mapper",
       firmId: firm.id,
+      firmName: firm.name,
+      orgId: me.orgId,
+      userId: me.id,
       run: () => runAllianceMapperAndQueue(firm.id, me.id),
     });
     await audit({
@@ -2012,7 +2048,7 @@ router.get("/partners/firms/:id/agents/status", async (req, res, next) => {
     const agents = ["alliance_cartographer", "alliance_executive_mapper"] as const;
     const out: Record<string, unknown> = {};
     for (const agentId of agents) {
-      const launch = readLaunch(agentId, firm.id);
+      const launch = await readLaunch(agentId, firm.id, me.orgId);
       const [latest] = await db
         .select({
           id: atelierAgentRuns.id,

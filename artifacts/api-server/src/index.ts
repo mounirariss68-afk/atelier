@@ -1,4 +1,9 @@
 import app from "./app";
+
+// Captured BEFORE the server accepts any traffic: the background-job boot
+// sweep only fails "running" rows created before this instant, so jobs
+// started by THIS process (between listen and the async sweep) are safe.
+const PROCESS_BOOT_TIME = new Date();
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
@@ -56,6 +61,16 @@ app.listen(port, (err) => {
   // strictly one after another; each still logs its own failure and never
   // blocks the next.
   void (async () => {
+    // Task #1020 — the previous process may have died mid-background-job.
+    // Mark orphaned "running" jobs failed so pollers and the global
+    // indicator resolve ("interrupted — try again") instead of spinning.
+    await (async () => {
+      const { sweepInterruptedBackgroundJobs } = await import("./lib/background-jobs");
+      const n = await sweepInterruptedBackgroundJobs(PROCESS_BOOT_TIME);
+      if (n > 0) logger.info({ swept: n }, "Marked orphaned background jobs as interrupted");
+    })().catch((err) => {
+      logger.error({ err }, "Background-job boot sweep failed");
+    });
     await ensureAtelierAuthSeed().catch((err) => {
       logger.error(
         { err },
