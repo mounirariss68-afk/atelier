@@ -7,6 +7,7 @@
 import {
   shouldEmitProactiveRecap,
   composeRecapCard,
+  buildRecapPayload,
   describeTurnOutcome,
   outcomeOf,
   isTrivialRecapLine,
@@ -241,6 +242,43 @@ console.log("[6] parsing — outcomeOf round-trip");
       "Done: expense create",
   );
   check("no segment → null", outcomeOf("[09:00:01] file receipt → success") === null);
+}
+
+console.log("[7] /recap payload — outcome-first with legacy-only fallback (Task #992)");
+{
+  const withOutcomes = buildRecapPayload({ rollingSummary: outcomeSummary, openThreads: [] });
+  check(
+    "outcome-bearing summary → accomplishments, NO raw trace lines",
+    withOutcomes.accomplishments.length === 2 && withOutcomes.recap.length === 0,
+  );
+  check(
+    "accomplishment is the outcome phrase",
+    withOutcomes.accomplishments[0] === "Done: expense create — Marriott",
+  );
+  const legacyOnly = buildRecapPayload({ rollingSummary: legacyEchoSummary, openThreads: [] });
+  check(
+    "legacy-only summary → falls back to raw trace lines",
+    legacyOnly.accomplishments.length === 0 && legacyOnly.recap.length === 2,
+  );
+  const threads = ["You were in the middle of confirming expense create — it was never committed."];
+  const withThreads = buildRecapPayload({ rollingSummary: outcomeSummary, openThreads: threads });
+  check(
+    "open threads pass through alongside accomplishments",
+    withThreads.openThreads.length === 1 && withThreads.accomplishments.length === 2,
+  );
+  const empty = buildRecapPayload({ rollingSummary: "", openThreads: [] });
+  check(
+    "empty summary → all-empty payload (no invented content)",
+    empty.accomplishments.length === 0 && empty.recap.length === 0 && empty.openThreads.length === 0,
+  );
+  const manyLegacy = Array.from(
+    { length: 14 },
+    (_, i) => `[0${i % 10}:00:00] legacy prompt number ${i} → success (1 tool)`,
+  ).join("\n");
+  check(
+    "legacy fallback caps at last 10 lines",
+    buildRecapPayload({ rollingSummary: manyLegacy, openThreads: [] }).recap.length === 10,
+  );
 }
 
 console.log(`\nrecap-probe: ${pass} passed, ${fail} failed`);

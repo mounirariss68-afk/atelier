@@ -2476,6 +2476,74 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
  * "opportunity_move_stage" → "move the opportunity stage". Falls
  * back to a simple space-joined form if no verb is recognized.
  */
+/**
+ * Task #978/#992 — shared open-thread detection: unresolved items from
+ * prior turns (a draft that was never confirmed, a question that was
+ * never answered) survive in atelierCliTurns even across restarts.
+ * Used by both the proactive "Catching you up" card and the explicit
+ * /recap capability so the two stay consistent. Never throws.
+ */
+export async function collectRecapOpenThreads(args: {
+  sessionId: string;
+  excludeTurnId?: string | null;
+}): Promise<string[]> {
+  try {
+    const statusFilter = inArray(atelierCliTurns.status, [
+      "awaiting_confirmation",
+      "awaiting_clarification",
+    ]);
+    const openRows = await db
+      .select({
+        id: atelierCliTurns.id,
+        status: atelierCliTurns.status,
+        pendingWrite: atelierCliTurns.pendingWrite,
+        frames: atelierCliTurns.frames,
+      })
+      .from(atelierCliTurns)
+      .where(
+        args.excludeTurnId
+          ? and(
+              eq(atelierCliTurns.sessionId, args.sessionId),
+              ne(atelierCliTurns.id, args.excludeTurnId),
+              statusFilter,
+            )
+          : and(eq(atelierCliTurns.sessionId, args.sessionId), statusFilter),
+      )
+      .orderBy(desc(atelierCliTurns.createdAt))
+      .limit(3);
+    const threads: string[] = [];
+    for (const row of openRows) {
+      if (row.status === "awaiting_confirmation") {
+        const pw = row.pendingWrite as { tool?: string } | null;
+        const what =
+          pw && typeof pw.tool === "string" ? humanizeToolName(pw.tool) : "a change";
+        threads.push(
+          `You were in the middle of confirming ${what} — it was never committed.`,
+        );
+      } else {
+        const frames = Array.isArray(row.frames)
+          ? (row.frames as Array<{ type?: string; data?: { question?: unknown } }>)
+          : [];
+        const nc = [...frames].reverse().find((f) => f?.type === "needs_clarification");
+        const q = typeof nc?.data?.question === "string" ? nc.data.question.trim() : "";
+        threads.push(
+          q
+            ? `I asked: “${q.slice(0, 140)}” — still waiting on your answer.`
+            : "I asked you a question that's still waiting on an answer.",
+        );
+      }
+    }
+    return [...new Set(threads)].slice(0, 3);
+  } catch (err) {
+    console.error(
+      "[atelier-cli] recap open-thread lookup failed",
+      args.sessionId,
+      err instanceof Error ? err.message : String(err),
+    );
+    return [];
+  }
+}
+
 export function humanizeToolName(toolName: string): string {
   const parts = toolName.split("_");
   const verbObjectMap: Record<string, string> = {
@@ -3600,58 +3668,10 @@ export async function runTurn(
     // queried once genuine dormancy is established (cheap guard).
     let recapOpenThreads: string[] = [];
     if (lastTurnAt > 0 && dormantMs > PROACTIVE_RECAP_DORMANT_MS) {
-      try {
-        const openRows = await db
-          .select({
-            id: atelierCliTurns.id,
-            status: atelierCliTurns.status,
-            pendingWrite: atelierCliTurns.pendingWrite,
-            frames: atelierCliTurns.frames,
-          })
-          .from(atelierCliTurns)
-          .where(
-            and(
-              eq(atelierCliTurns.sessionId, session.id),
-              ne(atelierCliTurns.id, turnId),
-              inArray(atelierCliTurns.status, [
-                "awaiting_confirmation",
-                "awaiting_clarification",
-              ]),
-            ),
-          )
-          .orderBy(desc(atelierCliTurns.createdAt))
-          .limit(3);
-        for (const row of openRows) {
-          if (row.status === "awaiting_confirmation") {
-            const pw = row.pendingWrite as { tool?: string } | null;
-            const what =
-              pw && typeof pw.tool === "string"
-                ? humanizeToolName(pw.tool)
-                : "a change";
-            recapOpenThreads.push(
-              `You were in the middle of confirming ${what} — it was never committed.`,
-            );
-          } else {
-            const frames = Array.isArray(row.frames)
-              ? (row.frames as Array<{ type?: string; data?: { question?: unknown } }>)
-              : [];
-            const nc = [...frames].reverse().find((f) => f?.type === "needs_clarification");
-            const q = typeof nc?.data?.question === "string" ? nc.data.question.trim() : "";
-            recapOpenThreads.push(
-              q
-                ? `I asked: “${q.slice(0, 140)}” — still waiting on your answer.`
-                : "I asked you a question that's still waiting on an answer.",
-            );
-          }
-        }
-        recapOpenThreads = [...new Set(recapOpenThreads)].slice(0, 3);
-      } catch (err) {
-        console.error(
-          "[atelier-cli] recap open-thread lookup failed",
-          turnId,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
+      recapOpenThreads = await collectRecapOpenThreads({
+        sessionId: session.id,
+        excludeTurnId: turnId,
+      });
     }
     if (
       shouldEmitProactiveRecap({

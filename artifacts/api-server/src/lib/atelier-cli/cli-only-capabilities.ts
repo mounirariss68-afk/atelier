@@ -44,6 +44,8 @@ import {
   defineCapability,
   getSessionDraft,
 } from "./capability-catalog.js";
+import { buildRecapPayload } from "./recap-relevance.js";
+import { collectRecapOpenThreads } from "./index.js";
 import { resolveAccount } from "./resolvers/index.js";
 import { checkAndRecord } from "./outbound-rate-limit.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
@@ -750,10 +752,17 @@ defineCapability({
       .where(eq(atelierCliSessions.id, ctx.sessionId))
       .limit(1);
     const draft = getSessionDraft(ctx.sessionId);
-    const recentLines = (sess?.rollingSummary ?? "")
-      .split("\n")
-      .filter((l) => l.trim().length > 0)
-      .slice(-10);
+    // Task #992 — lead with the composed outcome summary (same composer
+    // as the proactive "Catching you up" card, Task #978) plus open
+    // threads. Raw trace lines appear ONLY as a legacy fallback when no
+    // composed summary exists (rolling summary predates outcome segments).
+    const recapPayload = buildRecapPayload({
+      rollingSummary: sess?.rollingSummary,
+      openThreads: await collectRecapOpenThreads({
+        sessionId: ctx.sessionId,
+        excludeTurnId: ctx.turnId,
+      }),
+    });
     const entities = Object.entries(draft.entities)
       .sort((a, b) => b[1].at - a[1].at)
       .slice(0, 6)
@@ -762,7 +771,10 @@ defineCapability({
     return {
       ok: true,
       data: {
-        recap: recentLines,
+        // Task #992 — outcome-first recap. `accomplishments` mirrors the
+        // proactive card's composed outcome lines; `recap` carries raw
+        // trace lines ONLY when no composed summary exists.
+        ...recapPayload,
         entities,
         turnCount: sess?.turnCount ?? 0,
         lastTurnAt: sess?.lastTurnAt ?? null,

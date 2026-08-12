@@ -142,6 +142,30 @@ export function composeRecapCard(
 }
 
 /**
+ * Task #992 — build the explicit /recap (meta.recap) payload. Leads with
+ * the composed outcome summary (same composer as the proactive card,
+ * Task #978) plus open threads; the raw rolling-summary trace lines are
+ * exposed ONLY as a legacy fallback when no composed summary exists, so
+ * the command can never restate raw traces alongside the outcome lines.
+ */
+export function buildRecapPayload(args: {
+  rollingSummary: string | null | undefined;
+  openThreads: string[];
+  maxLegacyLines?: number;
+}): { accomplishments: string[]; openThreads: string[]; recap: string[] } {
+  const card = composeRecapCard(args.rollingSummary);
+  const accomplishments = card?.accomplishments ?? [];
+  const recap =
+    accomplishments.length > 0
+      ? []
+      : (args.rollingSummary ?? "")
+          .split("\n")
+          .filter((l) => l.trim().length > 0)
+          .slice(-(args.maxLegacyLines ?? 10));
+  return { accomplishments, openThreads: args.openThreads, recap };
+}
+
+/**
  * Trigger decision: recap only after genuine dormancy. A cold in-memory
  * draft (server restart / navigation) is NOT a resume signal — the client
  * still has the conversation on screen.
