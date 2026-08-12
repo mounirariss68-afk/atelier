@@ -179,9 +179,9 @@ const ALWAYS_INCLUDE_TOOLS: ReadonlySet<string> = new Set([
   "present_choices",
 ]);
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 1. Types
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export type CliFrameType =
   | "narration"
@@ -288,9 +288,9 @@ export interface RunTurnInput {
   async?: boolean;
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 2. IDs + util
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -528,9 +528,9 @@ export class CliQuotaExceededError extends Error {
   }
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 3. Tool registry
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export interface ToolContext {
   persona: CliPersona;
@@ -1051,9 +1051,9 @@ export function isIrreversibleTool(name: string): boolean {
   return findByToolName(name)?.irreversible === true;
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 4. Concurrency lock + budget
-// =====================================================================
+// ---------------------------------------------------------------------
 
 /**
  * Per-user FIFO queue. The CLI must serialize turns per user (so a slow
@@ -1281,9 +1281,9 @@ async function ensureUserDailyQuota(userId: string): Promise<void> {
   }
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 5. Sessions
-// =====================================================================
+// ---------------------------------------------------------------------
 
 /**
  * Inactivity-reset window: after this many ms of silence, the next call
@@ -1367,9 +1367,9 @@ export async function getOrCreateSession(
   return row;
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 6. Loop
-// =====================================================================
+// ---------------------------------------------------------------------
 
 // Task #645 — deterministic backstops against narration that duplicates
 // or contradicts result cards live in ./narration-contract.ts (pure,
@@ -1856,7 +1856,7 @@ async function modelStep(args: {
   }
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // Task #416 — Auto-generated session titles.
 //
 // After a session's first completed turn we fire a tiny Haiku call that
@@ -1865,7 +1865,7 @@ async function modelStep(args: {
 // garbage output is swallowed and the session simply stays untitled.
 // The UPDATE is guarded on `title IS NULL` so a concurrent turn (or a
 // stale in-memory session row) can never overwrite an existing title.
-// =====================================================================
+// ---------------------------------------------------------------------
 
 const SESSION_TITLE_MAX_CHARS = 60;
 
@@ -1941,14 +1941,14 @@ export async function generateAndSaveSessionTitle(
   }
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // Task #338 — Natural-language → catalog routing.
 //
 // `routePromptToCapability` is a pure heuristic that maps an unstructured
 // prompt to a capability + extracted input. Available as a pre-filter
 // for the live model. Each branch picks the first thing that matches
 // and stops — keep cheap+deterministic.
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export interface RoutedCapability {
   toolName: string;
@@ -2234,13 +2234,13 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "contact_update_disposition", confidence: contactId && dispMatch ? "high" : "low", input: { contactId, disposition: dispMatch?.[1] ?? "" } };
   }
 
-  // ===================================================================
+  // -------------------------------------------------------------------
   // Task #341 — read-side intent routing.
   // Reads are dispatched by phrase patterns shared with the smoke
   // tests. None of these mutate state, so they're confidence:"high"
   // whenever the pattern matches; the orchestrator skips the
   // confirm phase entirely (isWrite:false in the catalog).
-  // ===================================================================
+  // -------------------------------------------------------------------
 
   // Pipeline by stage / forecast.
   if (/\b(pipeline\s+forecast|weighted\s+forecast|forecast\s+summary)\b/i.test(promptRaw)) {
@@ -2411,14 +2411,14 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "home_summary", confidence: "high", input: {} };
   }
 
-  // =====================================================================
+  // -------------------------------------------------------------------
   // L2C Wave 1 (Task #360, W1-S8) — Codex / CLM, change-orders,
   // deliverable-acceptance routing. Each branch matches the
   // representative prompts shipped with the catalog entries and
   // extracts the canonical id/value the corresponding tool expects.
   // Order matters: more-specific phrases (record acceptance, dispatch
   // contract) must come before broader ones (acceptance, contract).
-  // =====================================================================
+  // -------------------------------------------------------------------
 
   // Counterparty create — "Add … as a (new) counterparty (in <country>)"
   // /  "Create … counterparty …".
@@ -2479,12 +2479,12 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "codex_dpa_review", confidence: dpaId ? "high" : "low", input: { dpaId } };
   }
 
-  // =====================================================================
+  // -------------------------------------------------------------------
   // L2C Wave 4 (Task #363) — cash application, bank reconciliation,
   // 13-week forecast, renewal motion. These branches must precede the
   // broader Renewal Watchdog branch below ("renewals?" catches
   // "renewal_open" / "renewal_list" otherwise).
-  // =====================================================================
+  // -------------------------------------------------------------------
 
   // Bank statement import — "Import the bank statement".
   if (/\bimport\b.*\bbank\s+statement\b/i.test(promptRaw) || /\bbank\s+statement\b.*\bimport\b/i.test(promptRaw)) {
@@ -6403,9 +6403,9 @@ export async function runTurn(
   }
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // 7. Confirm phase
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export async function confirmPendingWrite(
   turnId: string,
@@ -6857,9 +6857,9 @@ export async function cancelPendingWrite(
   return { status: "cancelled" };
 }
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // SSE writer helper for the route layer.
-// =====================================================================
+// ---------------------------------------------------------------------
 
 export function writeSseFrame(res: Response, frame: CliFrame): void {
   res.write(`event: ${frame.type}\n`);

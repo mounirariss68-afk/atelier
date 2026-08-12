@@ -12,6 +12,7 @@ import {
   setAuthTokenGetter,
   setBaseUrl,
 } from "@workspace/api-client-react";
+import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -31,6 +32,11 @@ import { ThemeProvider, useThemePref, useThemeScheme } from "@/contexts/ThemeCon
 import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
+import {
+  routeForNotificationResponse,
+  stashPushRoute,
+  takePushRoute,
+} from "@/lib/pushRoute";
 import { getTokenSync } from "@/lib/token";
 
 // ---------------------------------------------------------------------------
@@ -73,11 +79,63 @@ function ThemeGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Task #1015 — deep-link on notification tap. The pending-route stash lives
+// in lib/pushRoute.ts; this flag ensures the cold-start response is read once.
+let coldStartResponseConsumed = false;
+
 function Gate() {
   const { ready, token, mustChangePassword } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const colors = useColors();
+
+  const consumePendingRoute = React.useCallback(() => {
+    // Gate redirects handle the not-ready / logged-out / must-change cases;
+    // the route stays stashed until navigation is allowed.
+    const route = takePushRoute(ready && !!token && !mustChangePassword);
+    if (route) router.push(route as never);
+  }, [ready, token, mustChangePassword, router]);
+
+  // Keep the latest callback available to the long-lived listener below, so a
+  // warm-app tap uses current auth state (not the first render's closure).
+  const consumeRef = React.useRef(consumePendingRoute);
+  useEffect(() => {
+    consumeRef.current = consumePendingRoute;
+  }, [consumePendingRoute]);
+
+  // Foreground/background taps.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const route = routeForNotificationResponse(response);
+      if (route) {
+        stashPushRoute(route);
+        consumeRef.current();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Cold start: the tap that launched the app.
+  useEffect(() => {
+    if (coldStartResponseConsumed) return;
+    coldStartResponseConsumed = true;
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        const route = routeForNotificationResponse(response);
+        if (route) {
+          stashPushRoute(route);
+          consumeRef.current();
+        }
+      })
+      .catch(() => {
+        // best effort — app just opens normally
+      });
+  }, []);
+
+  // Consume a stashed route once auth becomes ready (cold start ordering).
+  useEffect(() => {
+    consumePendingRoute();
+  }, [consumePendingRoute]);
 
   useEffect(() => {
     if (!ready) return;

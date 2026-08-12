@@ -16,6 +16,10 @@ import { Platform } from "react-native";
 import { API_BASE, authHeader } from "@/lib/api";
 
 const PREF_KEY = "atelier.taskPush.enabled";
+
+// Task #1015 — tap deep-linking helpers live in the pure module lib/pushRoute.ts
+// (no expo imports) so they can be probed under tsx; re-exported for callers.
+export { routeForNotificationResponse, routeForPushHref } from "@/lib/pushRoute";
 const TOKEN_KEY = "atelier.taskPush.token";
 
 export function pushSupported(): boolean {
