@@ -566,6 +566,7 @@ export * from "./atelierPersonaSwitchInput";
 export * from "./atelierPersonInsurance";
 export * from "./atelierPersonInsuranceInput";
 export * from "./atelierPov";
+export * from "./atelierPovLaunch";
 export * from "./atelierPovOutlineSection";
 export * from "./atelierPovStatus";
 export * from "./atelierPovVersion";

@@ -1,34 +1,10 @@
 ---
-name: Atelier POV revision loop invariants
-description: How the POV outline→draft→revise lifecycle and its status guards fit together.
+name: Atelier POV revision loop
+description: POV outline/draft/revise lifecycle invariants and async draft launch contract
 ---
 
-The POV lifecycle is status-driven: `outline` → `drafted` → `approved`, with
-`revise` looping back to `drafted`.
-
-- **Approving the *outline* run (`ag_pov_author`) must NOT flip status to
-  "approved".** Only approving the *draft* run (`ag_pov_draft`) does.
-  **Why:** the draft route guards on `status === "outline"`; if outline approval
-  set status to "approved", the very draft it authorised would be rejected. This
-  was a real bug — the decision route used to flip both pov_author and pov_draft.
-
-- **Draft route is single-shot per outline approval:** it 409s unless
-  `status === "outline"`. Replays can't mint versions — reviewers use
-  `POST /povs/:id/revise` (feedback required) which always creates a new numbered
-  version, keeps priors, advances `currentVersionId`, and resets status to
-  `drafted` (needs re-approval).
-
-- **Outline is frozen after a draft exists:** PATCH outline and
-  `outline/regenerate` both 409 unless `status === "outline"`. Title/objective
-  are editable at any status.
-
-- **PDF route (`/opportunities/:oppId/pov.pdf`) honours `?povId=` and
-  `?versionId=`** — export the on-screen POV/version, not just the newest POV.
-  UI must pass both. It is a raw route (NOT in openapi.yaml), so no codegen.
-
-- **Rendered draft HTML is sanitized client-side with DOMPurify** in PovTab
-  before `dangerouslySetInnerHTML`.
-
-- Offline probe: `tests/crm/pov-revision-probe.ts` (validation step
-  `pov-revision`). Stub Anthropic distinguishes draft from outline by the
-  `"Phase B (sections)"` directive substring in the request body.
+- Outline approval must NOT set "approved" (draft route guards on status "outline"); revise loops back to drafted; PDF honours ?povId/?versionId.
+- Draft and revise are ASYNC (2026-08-12): routes validate, register an in-memory `povLaunches` entry keyed on povId, run `runPovDraft` in a background IIFE, return 202 `{started:true}`. Client polls raw-fetch GET `/povs/:povId/draft-status` (idle/running/failed/done{versionId,versionNumber}).
+  **Why:** full multi-section drafts run minutes; the generic 45s LLM abort killed them ("Request was aborted"), and the proxy 502s requests held >1–2 min.
+  **How to apply:** only "done" is success — client treats mid-run "idle" as "server restarted, run lost". Outline PATCH + regenerate 409 (`pov-run-in-progress`) while a launch is running (draft snapshots the outline at launch). Duplicate draft/revise start → 409. Citation-coverage gate (<0.6) becomes a failed launch, not a 422.
+- `callClaudeJson` accepts per-call `timeoutMs`; POV uses ATELIER_POV_TIMEOUT_MS (default 240s).

@@ -1299,6 +1299,37 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
   res.status(201).json(povWire(pov));
 });
 
+// ── POV draft/revise async launches ─────────────────────────────────────────
+// Full multi-section drafts run for minutes; holding the HTTP request open
+// gets 502'd by the proxy after ~1–2 min. Same start-then-poll contract as
+// the account agents: route validates + registers a launch + returns 202,
+// the client polls GET /povs/:povId/draft-status until done/failed.
+type PovLaunch =
+  | { status: "running"; kind: "draft" | "revise"; startedAt: number }
+  | { status: "failed"; kind: "draft" | "revise"; error: string; at: number }
+  | { status: "done"; kind: "draft" | "revise"; versionId: string; versionNumber: number; at: number };
+const povLaunches = new Map<string, PovLaunch>();
+const POV_MIN_CITATION_COVERAGE = 0.6;
+
+// @cli-skip: transient launch status for the POV tab poller; not a data read
+router.get("/povs/:povId/draft-status", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  if (!pov || pov.deletedAt) {
+    res.status(404).json({ error: "pov-not-found" });
+    return;
+  }
+  const l = povLaunches.get(req.params.povId);
+  if (!l) {
+    res.json({ status: "idle" });
+    return;
+  }
+  if (l.status === "running") res.json({ status: "running", kind: l.kind });
+  else if (l.status === "failed") res.json({ status: "failed", kind: l.kind, error: l.error });
+  else res.json({ status: "done", kind: l.kind, versionId: l.versionId, versionNumber: l.versionNumber });
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/povs/:povId/draft", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -1377,64 +1408,68 @@ router.post("/povs/:povId/draft", async (req, res) => {
     thesis: pov.objective ?? "",
     sections: (pov.outline as PovOutline["sections"]) ?? [],
   };
-  const { runId, draft } = await runPovDraft({
-    opportunityId: opp.id,
-    opportunityName: opp.name,
-    outline,
-    promotedFacts: promoted,
-    triggeredByUserId: me.id,
-    actorLabel: "POV Author · Sections+Critic+Stylist",
-  });
-  // Task #653 — citation-coverage gate. The draft self-reports the share of
-  // sections whose claims cite a promoted fact. Below the floor the argument is
-  // under-evidenced; reject (without persisting a version) so the partner
-  // promotes more facts or tightens the outline instead of shipping thin work.
-  const POV_MIN_CITATION_COVERAGE = 0.6;
-  if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-    res.status(422).json({
-      error: "insufficient-citation-coverage",
-      citationCoverage: draft.citationCoverage,
-      minimum: POV_MIN_CITATION_COVERAGE,
-      reason: `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
-    });
+  if (povLaunches.get(pov.id)?.status === "running") {
+    res.status(409).json({ error: "pov-run-in-progress", reason: "A draft is already being generated for this POV." });
     return;
   }
-  // Version number = max + 1.
-  const versions = await db
-    .select()
-    .from(atelierPovVersions)
-    .where(and(eq(atelierPovVersions.povId, pov.id), isNull(atelierPovVersions.deletedAt)));
-  const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
-  const versionId = rid("povv");
-  const [version] = await db
-    .insert(atelierPovVersions)
-    .values({
-      id: versionId,
-      povId: pov.id,
-      versionNumber: next,
-      body: draft.html,
-      sections: draft.sections as never,
-      citations: promoted as never,
-      citationCoverage: draft.citationCoverage,
-      notes: draft.voiceFlags?.join(" · ") || null,
-      createdByUserId: me.id,
-    })
-    .returning();
-  await db
-    .update(atelierPovs)
-    .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
-    .where(eq(atelierPovs.id, pov.id));
-  res.json({
-    id: version.id,
-    povId: version.povId,
-    versionNumber: version.versionNumber,
-    body: version.body,
-    sections: version.sections,
-    citations: version.citations,
-    citationCoverage: version.citationCoverage,
-    notes: version.notes,
-    createdAt: version.createdAt.toISOString(),
-  });
+  povLaunches.set(pov.id, { status: "running", kind: "draft", startedAt: Date.now() });
+  const povId = pov.id;
+  const meId = me.id;
+  void (async () => {
+    try {
+      const { runId, draft } = await runPovDraft({
+        opportunityId: opp.id,
+        opportunityName: opp.name,
+        outline,
+        promotedFacts: promoted,
+        triggeredByUserId: meId,
+        actorLabel: "POV Author · Sections+Critic+Stylist",
+      });
+      // Task #653 — citation-coverage gate. The draft self-reports the share of
+      // sections whose claims cite a promoted fact. Below the floor the argument
+      // is under-evidenced; fail the launch (without persisting a version) so
+      // the partner promotes more facts or tightens the outline instead of
+      // shipping thin work.
+      if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
+        povLaunches.set(povId, {
+          status: "failed",
+          kind: "draft",
+          error: `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
+          at: Date.now(),
+        });
+        return;
+      }
+      // Version number = max + 1.
+      const versions = await db
+        .select()
+        .from(atelierPovVersions)
+        .where(and(eq(atelierPovVersions.povId, povId), isNull(atelierPovVersions.deletedAt)));
+      const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
+      const versionId = rid("povv");
+      await db
+        .insert(atelierPovVersions)
+        .values({
+          id: versionId,
+          povId,
+          versionNumber: next,
+          body: draft.html,
+          sections: draft.sections as never,
+          citations: promoted as never,
+          citationCoverage: draft.citationCoverage,
+          notes: draft.voiceFlags?.join(" · ") || null,
+          createdByUserId: meId,
+        });
+      await db
+        .update(atelierPovs)
+        .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
+        .where(eq(atelierPovs.id, povId));
+      povLaunches.set(povId, { status: "done", kind: "draft", versionId, versionNumber: next, at: Date.now() });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      povLaunches.set(povId, { status: "failed", kind: "draft", error: msg, at: Date.now() });
+    }
+  })();
+  res.status(202).json({ started: true });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -1494,6 +1529,16 @@ router.patch("/povs/:povId", async (req, res) => {
       });
       return;
     }
+    // Draft-in-flight guard: the background draft snapshots the outline at
+    // launch; letting the outline change mid-run would freeze an unapproved
+    // outline when the run lands.
+    if (povLaunches.get(pov.id)?.status === "running") {
+      res.status(409).json({
+        error: "pov-run-in-progress",
+        reason: "A draft is currently being generated from this outline. Wait for it to finish before editing.",
+      });
+      return;
+    }
     patch.outline = parsed.data.outline as never;
     changed.outline = parsed.data.outline;
   }
@@ -1542,6 +1587,13 @@ router.post("/povs/:povId/outline/regenerate", async (req, res) => {
     res.status(409).json({
       error: "pov-not-in-outline",
       reason: "The outline can only be regenerated before a draft exists. Use 'request changes' to revise a drafted POV.",
+    });
+    return;
+  }
+  if (povLaunches.get(pov.id)?.status === "running") {
+    res.status(409).json({
+      error: "pov-run-in-progress",
+      reason: "A draft is currently being generated from this outline. Wait for it to finish before regenerating.",
     });
     return;
   }
@@ -1684,69 +1736,74 @@ router.post("/povs/:povId/revise", async (req, res) => {
     thesis: pov.objective ?? "",
     sections: (pov.outline as PovOutline["sections"]) ?? [],
   };
-  const { runId, draft } = await runPovDraft({
-    opportunityId: opp.id,
-    opportunityName: opp.name,
-    outline,
-    promotedFacts: promoted,
-    triggeredByUserId: me.id,
-    actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
-    revisionFeedback: feedback,
-    priorDraftHtml: base.body ?? "",
-  });
-  const POV_MIN_CITATION_COVERAGE = 0.6;
-  if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
-    res.status(422).json({
-      error: "insufficient-citation-coverage",
-      citationCoverage: draft.citationCoverage,
-      minimum: POV_MIN_CITATION_COVERAGE,
-      reason: `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
-    });
+  if (povLaunches.get(pov.id)?.status === "running") {
+    res.status(409).json({ error: "pov-run-in-progress", reason: "A revision is already being generated for this POV." });
     return;
   }
-  const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
-  const versionId = rid("povv");
-  const [version] = await db
-    .insert(atelierPovVersions)
-    .values({
-      id: versionId,
-      povId: pov.id,
-      versionNumber: next,
-      body: draft.html,
-      sections: draft.sections as never,
-      citations: promoted as never,
-      citationCoverage: draft.citationCoverage,
-      notes: draft.voiceFlags?.join(" · ") || null,
-      createdByUserId: me.id,
-    })
-    .returning();
-  // A new revision resets the POV to "drafted" so it must be re-approved.
-  await db
-    .update(atelierPovs)
-    .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
-    .where(eq(atelierPovs.id, pov.id));
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "pov",
-    entityId: pov.id,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "pov.revise",
-    payload: { feedback, baseVersionNumber: base.versionNumber, newVersionNumber: next } as never,
-    payloadSummary: `${me.name} revised POV "${pov.title}" → v${next}.`,
-  });
-  res.json({
-    id: version.id,
-    povId: version.povId,
-    versionNumber: version.versionNumber,
-    body: version.body,
-    sections: version.sections,
-    citations: version.citations,
-    citationCoverage: version.citationCoverage,
-    notes: version.notes,
-    createdAt: version.createdAt.toISOString(),
-  });
+  povLaunches.set(pov.id, { status: "running", kind: "revise", startedAt: Date.now() });
+  const povId = pov.id;
+  const povTitle = pov.title;
+  const meId = me.id;
+  const meName = me.name;
+  void (async () => {
+    try {
+      const { runId, draft } = await runPovDraft({
+        opportunityId: opp.id,
+        opportunityName: opp.name,
+        outline,
+        promotedFacts: promoted,
+        triggeredByUserId: meId,
+        actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
+        revisionFeedback: feedback,
+        priorDraftHtml: base.body ?? "",
+      });
+      if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
+        povLaunches.set(povId, {
+          status: "failed",
+          kind: "revise",
+          error: `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
+          at: Date.now(),
+        });
+        return;
+      }
+      const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
+      const versionId = rid("povv");
+      await db
+        .insert(atelierPovVersions)
+        .values({
+          id: versionId,
+          povId,
+          versionNumber: next,
+          body: draft.html,
+          sections: draft.sections as never,
+          citations: promoted as never,
+          citationCoverage: draft.citationCoverage,
+          notes: draft.voiceFlags?.join(" · ") || null,
+          createdByUserId: meId,
+        });
+      // A new revision resets the POV to "drafted" so it must be re-approved.
+      await db
+        .update(atelierPovs)
+        .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
+        .where(eq(atelierPovs.id, povId));
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "pov",
+        entityId: povId,
+        actorType: "human",
+        actorId: meId,
+        actorLabel: meName,
+        action: "pov.revise",
+        payload: { feedback, baseVersionNumber: base.versionNumber, newVersionNumber: next } as never,
+        payloadSummary: `${meName} revised POV "${povTitle}" → v${next}.`,
+      });
+      povLaunches.set(povId, { status: "done", kind: "revise", versionId, versionNumber: next, at: Date.now() });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      povLaunches.set(povId, { status: "failed", kind: "revise", error: msg, at: Date.now() });
+    }
+  })();
+  res.status(202).json({ started: true });
 });
 
 // =============================================================

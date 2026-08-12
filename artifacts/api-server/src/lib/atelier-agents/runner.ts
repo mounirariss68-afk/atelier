@@ -535,10 +535,18 @@ export function extractFirstJsonObject(text: string): string | null {
 async function callClaudeJson<T>(
   model: string,
   systemPrompt: string,
-  userPrompt: string): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
+  userPrompt: string,
+  opts?: {
+    /**
+     * Per-call abort budget override. Long-form generations (e.g. the POV
+     * Author writing a full multi-section draft) routinely exceed the generic
+     * 45s agent budget and would otherwise die with "Request was aborted".
+     */
+    timeoutMs?: number;
+  }): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
-  const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
+  const timeoutMs = opts?.timeoutMs ?? Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   const resp = await anthropic.messages
     .create(
@@ -1176,6 +1184,8 @@ export async function runPovDraft(args: {
             ? { reviewerFeedback: args.revisionFeedback, priorDraftHtml: args.priorDraftHtml ?? "" }
             : {}),
         }),
+        // Full multi-section drafts run well past the generic 45s budget.
+        { timeoutMs: Number(process.env.ATELIER_POV_TIMEOUT_MS ?? 240000) },
       );
       await ctx.progress(85, "Stylist polish");
       return {

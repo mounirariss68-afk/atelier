@@ -9084,41 +9084,10 @@ export const AtelierStartPovBody = zod.object({
 });
 
 /**
- * @summary Generate full draft after outline approval (Phases B/C/D)
+ * @summary Start generating the full draft after outline approval (Phases B/C/D). Runs in the background — poll /povs/{povId}/draft-status.
  */
 export const AtelierDraftPovParams = zod.object({
   povId: zod.coerce.string(),
-});
-
-export const AtelierDraftPovResponse = zod.object({
-  id: zod.string(),
-  povId: zod.string(),
-  versionNumber: zod.number(),
-  body: zod.string(),
-  sections: zod.array(
-    zod.object({
-      id: zod.string().optional(),
-      heading: zod.string().optional(),
-      body: zod.string().optional(),
-      citationIds: zod.array(zod.string()).optional(),
-    }),
-  ),
-  citations: zod
-    .array(
-      zod.object({
-        id: zod.string().optional(),
-        topic: zod.string(),
-        statement: zod.string(),
-        sourceUrl: zod.string().nullish(),
-        sourceTitle: zod.string().nullish(),
-        snippet: zod.string().nullish(),
-        confidence: zod.enum(["green", "amber", "red"]),
-      }),
-    )
-    .optional(),
-  citationCoverage: zod.number().nullish(),
-  notes: zod.string().nullish(),
-  createdAt: zod.coerce.date(),
 });
 
 export const AtelierListPovVersionsParams = zod.object({
@@ -9233,7 +9202,7 @@ export const AtelierRegeneratePovOutlineResponse = zod.object({
 });
 
 /**
- * @summary Request changes to a drafted POV — produces a new numbered version
+ * @summary Start a revision of a drafted POV — produces a new numbered version in the background. Poll /povs/{povId}/draft-status.
  */
 export const AtelierRevisePovParams = zod.object({
   povId: zod.coerce.string(),
@@ -9242,37 +9211,6 @@ export const AtelierRevisePovParams = zod.object({
 export const AtelierRevisePovBody = zod.object({
   feedback: zod.string(),
   baseVersionId: zod.string().optional(),
-});
-
-export const AtelierRevisePovResponse = zod.object({
-  id: zod.string(),
-  povId: zod.string(),
-  versionNumber: zod.number(),
-  body: zod.string(),
-  sections: zod.array(
-    zod.object({
-      id: zod.string().optional(),
-      heading: zod.string().optional(),
-      body: zod.string().optional(),
-      citationIds: zod.array(zod.string()).optional(),
-    }),
-  ),
-  citations: zod
-    .array(
-      zod.object({
-        id: zod.string().optional(),
-        topic: zod.string(),
-        statement: zod.string(),
-        sourceUrl: zod.string().nullish(),
-        sourceTitle: zod.string().nullish(),
-        snippet: zod.string().nullish(),
-        confidence: zod.enum(["green", "amber", "red"]),
-      }),
-    )
-    .optional(),
-  citationCoverage: zod.number().nullish(),
-  notes: zod.string().nullish(),
-  createdAt: zod.coerce.date(),
 });
 
 export const AtelierListOpportunityMeetingsParams = zod.object({

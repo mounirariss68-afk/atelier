@@ -180,6 +180,39 @@ function ActivePov({
 
   const [outlineFeedback, setOutlineFeedback] = React.useState("");
   const [draftFeedback, setDraftFeedback] = React.useState("");
+  // True while a background draft/revision run is in flight (start → poll → done).
+  const [generating, setGenerating] = React.useState<null | "draft" | "revise">(null);
+  const unmountedRef = React.useRef(false);
+  React.useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
+
+  /**
+   * Poll the launch status until the background run finishes. Only "done" is
+   * success; "idle" mid-run means the server restarted and the run was lost.
+   * Bounded at ~10 minutes; stops silently on unmount.
+   */
+  async function pollDraftStatus(): Promise<{ status: string; error?: string; versionId?: string; versionNumber?: number }> {
+    for (let i = 0; i < 200; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (unmountedRef.current) return { status: "cancelled" };
+      try {
+        const r = await fetch(`/api/atelier/povs/${encodeURIComponent(pov.id)}/draft-status`, { credentials: "include" });
+        if (!r.ok) continue;
+        const body = (await r.json()) as { status: string; error?: string; versionId?: string; versionNumber?: number };
+        if (body.status === "idle") {
+          return { status: "failed", error: "The run was interrupted (server restarted). Please try again." };
+        }
+        if (body.status !== "running") return body;
+      } catch {
+        // transient network blip — keep polling
+      }
+    }
+    return { status: "failed", error: "Timed out waiting for the run to finish. Check back shortly or try again." };
+  }
 
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: getAtelierListPovsQueryKey(oppId) });
@@ -217,10 +250,20 @@ function ActivePov({
         await onDecision("approve", "Outline approved");
       }
       await draftMut.mutateAsync({ povId: pov.id });
-      invalidateAll();
-      toast({ title: "Draft generated", description: "Review and approve." });
+      setGenerating("draft");
+      toast({ title: "Drafting started", description: "The POV Author is writing the full draft — this can take a few minutes." });
+      const done = await pollDraftStatus();
+      if (done.status === "done") {
+        invalidateAll();
+        if (done.versionId) setSelectedVersionId(done.versionId);
+        toast({ title: "Draft ready", description: "Review and approve." });
+      } else if (done.status === "failed") {
+        toast({ title: "Could not generate draft", description: done.error ?? "Try again.", variant: "destructive" });
+      }
     } catch (e) {
       toast({ title: "Could not generate draft", description: errText(e, "Try again."), variant: "destructive" });
+    } finally {
+      setGenerating(null);
     }
   }
 
@@ -230,16 +273,25 @@ function ActivePov({
       return;
     }
     try {
-      const created = await reviseMut.mutateAsync({
+      await reviseMut.mutateAsync({
         povId: pov.id,
         data: { feedback: draftFeedback, baseVersionId: selected?.id },
       });
-      invalidateAll();
-      setSelectedVersionId(created.id);
-      setDraftFeedback("");
-      toast({ title: `Revision v${created.versionNumber} ready`, description: "Review and approve." });
+      setGenerating("revise");
+      toast({ title: "Revision started", description: "The POV Author is rewriting — this can take a few minutes." });
+      const done = await pollDraftStatus();
+      if (done.status === "done") {
+        invalidateAll();
+        if (done.versionId) setSelectedVersionId(done.versionId);
+        setDraftFeedback("");
+        toast({ title: done.versionNumber ? `Revision v${done.versionNumber} ready` : "Revision ready", description: "Review and approve." });
+      } else if (done.status === "failed") {
+        toast({ title: "Could not revise POV", description: done.error ?? "Try again.", variant: "destructive" });
+      }
     } catch (e) {
       toast({ title: "Could not revise POV", description: errText(e, "Try again."), variant: "destructive" });
+    } finally {
+      setGenerating(null);
     }
   }
 
@@ -347,10 +399,10 @@ function ActivePov({
               <PillButton
                 variant="primary"
                 onClick={approveOutlineAndDraft}
-                disabled={draftMut.isPending}
+                disabled={draftMut.isPending || generating === "draft"}
                 data-testid="button-approve-outline"
               >
-                {draftMut.isPending ? "Drafting…" : "Approve outline & generate draft"}
+                {draftMut.isPending || generating === "draft" ? "Drafting… (a few minutes)" : "Approve outline & generate draft"}
               </PillButton>
             </div>
           </div>
@@ -401,10 +453,10 @@ function ActivePov({
               <PillButton
                 variant="primary"
                 onClick={requestChanges}
-                disabled={reviseMut.isPending}
+                disabled={reviseMut.isPending || generating === "revise"}
                 data-testid="button-request-changes"
               >
-                {reviseMut.isPending ? "Revising…" : "Request changes"}
+                {reviseMut.isPending || generating === "revise" ? "Revising… (a few minutes)" : "Request changes"}
               </PillButton>
             </div>
           </div>

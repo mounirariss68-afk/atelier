@@ -3522,19 +3522,19 @@ paths:
     post:
       operationId: atelierDraftPov
       tags: [atelier]
-      summary: Generate full draft after outline approval (Phases B/C/D)
+      summary: Start generating the full draft after outline approval (Phases B/C/D). Runs in the background — poll /povs/{povId}/draft-status.
       parameters:
         - in: path
           name: povId
           required: true
           schema: { type: string }
       responses:
-        "200":
-          description: New POV version
+        "202":
+          description: Draft generation started
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AtelierPovVersion"
+                $ref: "#/components/schemas/AtelierPovLaunch"
   /atelier/povs/{povId}/versions:
     get:
       operationId: atelierListPovVersions
@@ -3603,7 +3603,7 @@ paths:
     post:
       operationId: atelierRevisePov
       tags: [atelier]
-      summary: Request changes to a drafted POV — produces a new numbered version
+      summary: Start a revision of a drafted POV — produces a new numbered version in the background. Poll /povs/{povId}/draft-status.
       parameters:
         - in: path
           name: povId
@@ -3616,12 +3616,12 @@ paths:
             schema:
               $ref: "#/components/schemas/AtelierRevisePovInput"
       responses:
-        "200":
-          description: New POV version incorporating the requested changes
+        "202":
+          description: Revision started
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AtelierPovVersion"
+                $ref: "#/components/schemas/AtelierPovLaunch"
   /atelier/opportunities/{oppId}/meetings:
     get:
       operationId: atelierListOpportunityMeetings
@@ -11260,6 +11260,11 @@ components:
         runId: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
 
+    AtelierPovLaunch:
+      type: object
+      required: [started]
+      properties:
+        started: { type: boolean }
     AtelierPovVersion:
       type: object
       required: [id, povId, versionNumber, body, sections, createdAt]

@@ -188,10 +188,22 @@ async function main() {
     const povAfterApprove = (rAfterApprove.body ?? []).find((p: any) => p.id === povId);
     check("decision: outline approve keeps status 'outline'", povAfterApprove?.status === "outline", povAfterApprove);
 
+    // Draft/revise are async now: 202 {started} then poll /draft-status.
+    async function pollLaunch(): Promise<any> {
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        const s = await call("GET", `/povs/${povId}/draft-status`);
+        if (s.body?.status && s.body.status !== "running") return s.body;
+      }
+      return { status: "timeout" };
+    }
+
     // 5. Draft (v1)
     const rDraft = await call("POST", `/povs/${povId}/draft`);
-    check("draft: 200 v1 created", rDraft.status === 200 && rDraft.body?.versionNumber === 1, rDraft.body);
-    const v1Id = rDraft.body?.id as string;
+    check("draft: 202 started", rDraft.status === 202 && rDraft.body?.started === true, rDraft.body);
+    const dDone = await pollLaunch();
+    check("draft: launch done v1", dDone.status === "done" && dDone.versionNumber === 1, dDone);
+    const v1Id = dDone.versionId as string;
 
     // 5b. Replay draft → 409
     const rDraftReplay = await call("POST", `/povs/${povId}/draft`);
@@ -199,8 +211,10 @@ async function main() {
 
     // 6. Revise → v2
     const rRevise = await call("POST", `/povs/${povId}/revise`, { feedback: "Sharpen the close.", baseVersionId: v1Id });
-    check("revise: 200 v2 created", rRevise.status === 200 && rRevise.body?.versionNumber === 2, rRevise.body);
-    const v2Id = rRevise.body?.id as string;
+    check("revise: 202 started", rRevise.status === 202 && rRevise.body?.started === true, rRevise.body);
+    const rDone = await pollLaunch();
+    check("revise: launch done v2", rDone.status === "done" && rDone.versionNumber === 2, rDone);
+    const v2Id = rDone.versionId as string;
 
     const rVersions = await call("GET", `/povs/${povId}/versions`);
     check("revise: both versions kept", (rVersions.body ?? []).length === 2, rVersions.body?.map((v: any) => v.versionNumber));

@@ -238,6 +238,7 @@ import type {
   AtelierPersonalTaskCreate,
   AtelierPersonalTaskPatch,
   AtelierPov,
+  AtelierPovLaunch,
   AtelierPovVersion,
   AtelierPricingAnalystInput,
   AtelierPricingAnalystResult,
@@ -14692,7 +14693,7 @@ export const useAtelierStartPov = <
 };
 
 /**
- * @summary Generate full draft after outline approval (Phases B/C/D)
+ * @summary Start generating the full draft after outline approval (Phases B/C/D). Runs in the background — poll /povs/{povId}/draft-status.
  */
 export const getAtelierDraftPovUrl = (povId: string) => {
   return `/api/atelier/povs/${povId}/draft`;
@@ -14701,8 +14702,8 @@ export const getAtelierDraftPovUrl = (povId: string) => {
 export const atelierDraftPov = async (
   povId: string,
   options?: RequestInit,
-): Promise<AtelierPovVersion> => {
-  return customFetch<AtelierPovVersion>(getAtelierDraftPovUrl(povId), {
+): Promise<AtelierPovLaunch> => {
+  return customFetch<AtelierPovLaunch>(getAtelierDraftPovUrl(povId), {
     ...options,
     method: "POST",
   });
@@ -14753,7 +14754,7 @@ export type AtelierDraftPovMutationResult = NonNullable<
 export type AtelierDraftPovMutationError = ErrorType<unknown>;
 
 /**
- * @summary Generate full draft after outline approval (Phases B/C/D)
+ * @summary Start generating the full draft after outline approval (Phases B/C/D). Runs in the background — poll /povs/{povId}/draft-status.
  */
 export const useAtelierDraftPov = <
   TError = ErrorType<unknown>,
@@ -15033,7 +15034,7 @@ export const useAtelierRegeneratePovOutline = <
 };
 
 /**
- * @summary Request changes to a drafted POV — produces a new numbered version
+ * @summary Start a revision of a drafted POV — produces a new numbered version in the background. Poll /povs/{povId}/draft-status.
  */
 export const getAtelierRevisePovUrl = (povId: string) => {
   return `/api/atelier/povs/${povId}/revise`;
@@ -15043,8 +15044,8 @@ export const atelierRevisePov = async (
   povId: string,
   atelierRevisePovInput: AtelierRevisePovInput,
   options?: RequestInit,
-): Promise<AtelierPovVersion> => {
-  return customFetch<AtelierPovVersion>(getAtelierRevisePovUrl(povId), {
+): Promise<AtelierPovLaunch> => {
+  return customFetch<AtelierPovLaunch>(getAtelierRevisePovUrl(povId), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -15097,7 +15098,7 @@ export type AtelierRevisePovMutationBody = BodyType<AtelierRevisePovInput>;
 export type AtelierRevisePovMutationError = ErrorType<unknown>;
 
 /**
- * @summary Request changes to a drafted POV — produces a new numbered version
+ * @summary Start a revision of a drafted POV — produces a new numbered version in the background. Poll /povs/{povId}/draft-status.
  */
 export const useAtelierRevisePov = <
   TError = ErrorType<unknown>,

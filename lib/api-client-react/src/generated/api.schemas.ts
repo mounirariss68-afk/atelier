@@ -6160,6 +6160,10 @@ export interface AtelierPov {
   createdAt: string;
 }
 
+export interface AtelierPovLaunch {
+  started: boolean;
+}
+
 export type AtelierPovVersionSectionsItem = {
   id?: string;
   heading?: string;
