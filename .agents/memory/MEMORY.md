@@ -121,6 +121,7 @@
 - [Statutory filings & payroll](atelier-statutory-filings.md) — overdue derived at read time, audited mark-filed/reopen; payroll invariants in [atelier-statutory-payroll.md](atelier-statutory-payroll.md).
 - [Atelier chat travel tools](atelier-travel-tools.md) — flights=Ignav, hotels=StayingAPI; tools DB-free, booking deep-link only; prefs masked outside self+fp/hr (atelier-travel-profile.md, atelier-travel-*.md).
 - [Procurement Navigator invariants](atelier-procurement-navigator.md) — deterministic GCC routing (not prompt-only); approve keeps manual status; account tabs deep-link via ?tab=.
+- [Proactive recap outcome lines](atelier-recap-outcomes.md) — recap card composes only from "⇒ outcome" summary segments + open-thread turns; every out-of-runTurn commit path must append its own outcome line.
 - [Chat verbatim replay window](atelier-chat-replay.md) — rollover keeps lineage; facts from tool successes only, every new commit path needs its own ingest; replay/facts beat summaries (atelier-session-facts.md).
 - [Atelier clarification resolver](atelier-clarification-resolver.md) — shared reply classifier; opener sets stay in sync; option picks resume via `id <optionId>` with exact tool-input ids (chat-disambiguation-resume.md).
 - [Chat reliability harness](chat-reliability-harness.md) — run validation step `chat-reliability` (test:chat-suite) before merging orchestrator/resolver/chat-core changes; assertAlive = dead-end guard; employee chat is 200+me.*-clamped, not 403.

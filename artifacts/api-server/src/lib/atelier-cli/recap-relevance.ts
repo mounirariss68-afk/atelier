@@ -41,21 +41,104 @@ export function isTrivialRecapLine(line: string): boolean {
 }
 
 /**
- * Compose the recap summary from the rolling summary: the last `maxLines`
- * non-trivial trace lines, or `null` when nothing is worth recapping
- * (in which case the recap frame must be suppressed entirely).
+ * Task #978 — outcome segment separator inside a rolling-summary line.
+ * Appended by the turn-persist path when the turn achieved something:
+ *   `[HH:MM:SS] <redacted prompt> → <status> (N tools) ⇒ <outcome phrase>`
+ * The prompt is redacted BEFORE the line is built and never contains a
+ * "⇒", so splitting on the LAST occurrence is safe.
  */
-export function composeRecapSummary(
+export const RECAP_OUTCOME_SEP = " ⇒ ";
+
+/** Max length of a persisted outcome phrase (keeps the 2KB summary cap sane). */
+const OUTCOME_MAX_LEN = 140;
+
+/**
+ * Compose a plain-language outcome phrase for a finished turn from
+ * structural signals (never from the prompt text — PII stays out).
+ * Returns null when the turn accomplished nothing describable.
+ */
+export function describeTurnOutcome(args: {
+  status: string;
+  toolCalls: Array<{ tool: string; ok?: boolean; isWrite?: boolean }>;
+  /** Entities recorded on the session draft DURING this turn. */
+  entities?: Array<{ kind: string; label: string }>;
+  /** Tool of an uncommitted pending write, when status is awaiting_confirmation. */
+  pendingTool?: string | null;
+  /** e.g. humanizeToolName from the orchestrator ("account_create" → "create an account"). */
+  humanizeTool: (toolName: string) => string;
+}): string | null {
+  const labels = (args.entities ?? [])
+    .map((e) => e.label)
+    .filter((l) => typeof l === "string" && l.trim().length > 0)
+    .slice(0, 3);
+  const labelSuffix = labels.length ? ` — ${labels.join(", ")}` : "";
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const cap = (s: string) =>
+    s.length > OUTCOME_MAX_LEN ? s.slice(0, OUTCOME_MAX_LEN - 1) + "…" : s;
+
+  const okWrites = uniq(
+    args.toolCalls.filter((c) => c.ok === true && c.isWrite === true).map((c) => c.tool),
+  );
+  if (okWrites.length > 0 && (args.status === "success" || args.status === "partial")) {
+    const done = okWrites.map((t) => args.humanizeTool(t)).join("; ");
+    return cap(`Done: ${done}${labelSuffix}`);
+  }
+  if (args.status === "awaiting_confirmation") {
+    const what = args.pendingTool ? args.humanizeTool(args.pendingTool) : "a change";
+    return cap(`Drafted ${what}${labelSuffix} — awaiting your confirmation`);
+  }
+  if (args.status === "awaiting_clarification") {
+    return "Asked you a follow-up question that wasn't answered";
+  }
+  const okReads = uniq(
+    args.toolCalls.filter((c) => c.ok === true && c.isWrite !== true).map((c) => c.tool),
+  );
+  if (
+    okReads.length > 0 &&
+    (args.status === "success" || args.status === "read_only_no_op")
+  ) {
+    return cap(`Looked up ${okReads.map((t) => args.humanizeTool(t)).join("; ")}${labelSuffix}`);
+  }
+  return null;
+}
+
+/** Extract the outcome segment of a rolling-summary line, if present. */
+export function outcomeOf(line: string): string | null {
+  const idx = line.lastIndexOf(RECAP_OUTCOME_SEP);
+  if (idx < 0) return null;
+  const out = line.slice(idx + RECAP_OUTCOME_SEP.length).trim();
+  return out.length > 0 ? out : null;
+}
+
+export interface RecapCard {
+  /** Plain-language outcome lines ("Done: create an expense — Marriott"). */
+  accomplishments: string[];
+}
+
+/**
+ * Task #978 — compose the outcome-oriented recap card from the rolling
+ * summary. ONLY lines carrying a real outcome segment contribute; legacy
+ * prompt-echo lines (no `⇒`) never produce a card by themselves, so the
+ * card cannot degrade back into restating what the user typed. Returns
+ * null when there is no substance (the frame must then be suppressed
+ * unless open threads exist).
+ */
+export function composeRecapCard(
   rollingSummary: string | null | undefined,
-  maxLines = 5,
-): string | null {
+  maxItems = 5,
+): RecapCard | null {
   if (!rollingSummary) return null;
-  const meaningful = rollingSummary
-    .split("\n")
-    .filter((l) => l.trim().length > 0)
-    .filter((l) => !isTrivialRecapLine(l));
-  if (meaningful.length === 0) return null;
-  return meaningful.slice(-maxLines).join("\n");
+  const outcomes: string[] = [];
+  for (const line of rollingSummary.split("\n")) {
+    if (line.trim().length === 0 || isTrivialRecapLine(line)) continue;
+    const out = outcomeOf(line);
+    if (!out) continue;
+    // Collapse immediate repeats ("Looked up …" three times in a row).
+    if (outcomes[outcomes.length - 1] === out) continue;
+    outcomes.push(out);
+  }
+  if (outcomes.length === 0) return null;
+  return { accomplishments: outcomes.slice(-maxItems) };
 }
 
 /**
@@ -70,12 +153,17 @@ export function shouldEmitProactiveRecap(args: {
   lastTurnAtMs: number;
   nowMs: number;
   rollingSummary: string | null | undefined;
+  /** Task #978 — unresolved items (pending confirm / unanswered question). */
+  openThreads?: string[];
   dormantThresholdMs?: number;
 }): boolean {
   const threshold = args.dormantThresholdMs ?? PROACTIVE_RECAP_DORMANT_MS;
-  if (!args.rollingSummary || args.rollingSummary.length === 0) return false;
   if (args.lastTurnAtMs <= 0) return false;
   const dormantMs = args.nowMs - args.lastTurnAtMs;
   if (dormantMs <= threshold) return false;
-  return composeRecapSummary(args.rollingSummary) !== null;
+  // Substance rule (Task #978): a card renders only when the composed
+  // outcome summary has real accomplishments OR there are open threads to
+  // pick back up. Legacy prompt-echo lines alone never qualify.
+  if ((args.openThreads ?? []).length > 0) return true;
+  return composeRecapCard(args.rollingSummary) !== null;
 }

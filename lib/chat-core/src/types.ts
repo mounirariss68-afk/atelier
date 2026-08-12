@@ -131,6 +131,10 @@ export interface ChatProactiveRecap {
   turnCount: number;
   dormantMs?: number;
   entities?: Array<{ kind: string; id: string; label: string }>;
+  /** Task #978 — plain-language outcome lines ("Done: create an expense — Marriott"). */
+  accomplishments?: string[];
+  /** Task #978 — unresolved items to pick back up ("You were in the middle of…"). */
+  openThreads?: string[];
 }
 
 export interface ChatPlanStep {

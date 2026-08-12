@@ -279,14 +279,31 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
         turnCount?: number;
         dormantMs?: number;
         entities?: Array<{ kind: string; id: string; label: string }>;
+        accomplishments?: string[];
+        openThreads?: string[];
       };
+      // Task #978 — never surface a contentless recap, even if a stale or
+      // legacy server frame slips through: drop the frame entirely when it
+      // carries no accomplishments, no open threads and no summary text.
+      const accomplishments = Array.isArray(d.accomplishments)
+        ? d.accomplishments.filter((x) => typeof x === "string" && x.trim().length > 0)
+        : [];
+      const openThreads = Array.isArray(d.openThreads)
+        ? d.openThreads.filter((x) => typeof x === "string" && x.trim().length > 0)
+        : [];
+      const summary = d.summary ?? "";
+      if (accomplishments.length === 0 && openThreads.length === 0 && summary.trim().length === 0) {
+        return turn;
+      }
       return {
         ...turn,
         proactiveRecap: {
-          summary: d.summary ?? "",
+          summary,
           turnCount: d.turnCount ?? 0,
           dormantMs: d.dormantMs,
           entities: d.entities ?? [],
+          accomplishments,
+          openThreads,
         },
       };
     }

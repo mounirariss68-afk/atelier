@@ -46,7 +46,10 @@ import {
 } from "./replay.js";
 import {
   shouldEmitProactiveRecap,
-  composeRecapSummary,
+  composeRecapCard,
+  describeTurnOutcome,
+  RECAP_OUTCOME_SEP,
+  PROACTIVE_RECAP_DORMANT_MS,
 } from "./recap-relevance.js";
 import {
   extractFactsFromToolEvent,
@@ -3591,13 +3594,74 @@ export async function runTurn(
         err instanceof Error ? err.message : String(err),
       );
     }
+    // Task #978 — open-thread detection: unresolved items from prior turns
+    // (a draft that was never confirmed, a question that was never
+    // answered) survive in atelierCliTurns even across restarts. Only
+    // queried once genuine dormancy is established (cheap guard).
+    let recapOpenThreads: string[] = [];
+    if (lastTurnAt > 0 && dormantMs > PROACTIVE_RECAP_DORMANT_MS) {
+      try {
+        const openRows = await db
+          .select({
+            id: atelierCliTurns.id,
+            status: atelierCliTurns.status,
+            pendingWrite: atelierCliTurns.pendingWrite,
+            frames: atelierCliTurns.frames,
+          })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.sessionId, session.id),
+              ne(atelierCliTurns.id, turnId),
+              inArray(atelierCliTurns.status, [
+                "awaiting_confirmation",
+                "awaiting_clarification",
+              ]),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(3);
+        for (const row of openRows) {
+          if (row.status === "awaiting_confirmation") {
+            const pw = row.pendingWrite as { tool?: string } | null;
+            const what =
+              pw && typeof pw.tool === "string"
+                ? humanizeToolName(pw.tool)
+                : "a change";
+            recapOpenThreads.push(
+              `You were in the middle of confirming ${what} — it was never committed.`,
+            );
+          } else {
+            const frames = Array.isArray(row.frames)
+              ? (row.frames as Array<{ type?: string; data?: { question?: unknown } }>)
+              : [];
+            const nc = [...frames].reverse().find((f) => f?.type === "needs_clarification");
+            const q = typeof nc?.data?.question === "string" ? nc.data.question.trim() : "";
+            recapOpenThreads.push(
+              q
+                ? `I asked: “${q.slice(0, 140)}” — still waiting on your answer.`
+                : "I asked you a question that's still waiting on an answer.",
+            );
+          }
+        }
+        recapOpenThreads = [...new Set(recapOpenThreads)].slice(0, 3);
+      } catch (err) {
+        console.error(
+          "[atelier-cli] recap open-thread lookup failed",
+          turnId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
     if (
       shouldEmitProactiveRecap({
         lastTurnAtMs: lastTurnAt,
         nowMs: Date.now(),
         rollingSummary: session.rollingSummary,
+        openThreads: recapOpenThreads,
       })
     ) {
+      const recapCard = composeRecapCard(session.rollingSummary);
       const draftEntities = Object.values(draftPriorToTurn.entities)
         .sort((a, b) => b.at - a.at)
         .slice(0, 5)
@@ -3607,7 +3671,11 @@ export async function runTurn(
       emit({
         type: "proactive_recap",
         data: {
-          summary: composeRecapSummary(session.rollingSummary) ?? "",
+          // Legacy `summary` stays populated for older clients; new
+          // clients render the structured lists below.
+          summary: (recapCard?.accomplishments ?? []).join("\n"),
+          accomplishments: recapCard?.accomplishments ?? [],
+          openThreads: recapOpenThreads,
           turnCount: session.turnCount ?? 0,
           dormantMs,
           entities: draftEntities,
@@ -5813,7 +5881,33 @@ export async function runTurn(
       // Task #332 — strip PII out of the prompt before it lands in
       // the durable rolling session summary.
       const promptForSummary = redactText(input.prompt).text.slice(0, 120);
-      const summaryLine = `[${new Date().toISOString().slice(11, 19)}] ${promptForSummary} → ${status}${toolCalls.length ? ` (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})` : ""}`;
+      // Task #978 — persist a plain-language outcome phrase alongside the
+      // line so the proactive recap can say what was ACCOMPLISHED, not
+      // replay the prompt. Built from structural signals only (tool names,
+      // entity labels recorded this turn) — never from the prompt text, so
+      // the PII redaction guarantee holds.
+      let turnOutcome: string | null = null;
+      try {
+        const draftNow = getSessionDraft(session.id);
+        const turnEntities = Object.values(draftNow.entities)
+          .filter((e) => e.at >= t0)
+          .sort((a, b) => b.at - a.at)
+          .map((e) => ({ kind: e.kind, label: e.label }));
+        turnOutcome = describeTurnOutcome({
+          status,
+          toolCalls: toolCalls.map((c) => ({
+            tool: String(c.tool),
+            ok: c.ok === true,
+            isWrite: findToolByName(String(c.tool))?.isWrite === true,
+          })),
+          entities: turnEntities,
+          pendingTool: (pendingWrite as { tool?: string } | null)?.tool ?? null,
+          humanizeTool: humanizeToolName,
+        });
+      } catch {
+        turnOutcome = null;
+      }
+      const summaryLine = `[${new Date().toISOString().slice(11, 19)}] ${promptForSummary} → ${status}${toolCalls.length ? ` (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})` : ""}${turnOutcome ? `${RECAP_OUTCOME_SEP}${turnOutcome}` : ""}`;
       const nextSummary = ((session.rollingSummary ?? "") + "\n" + summaryLine)
         .split("\n")
         .filter((l) => l.trim().length > 0)
@@ -6131,6 +6225,47 @@ export async function confirmPendingWrite(
           ? (dataObj.id as string)
           : undefined,
     });
+    // Task #978 — the confirm commit runs OUTSIDE runTurn, so the rolling
+    // summary would otherwise remember this only as "awaiting_confirmation"
+    // and the recap could never say the write actually landed. Append a
+    // committed-outcome line (best-effort; same caps as the turn path).
+    try {
+      const label =
+        typeof dataObj.name === "string"
+          ? dataObj.name
+          : typeof dataObj.title === "string"
+            ? dataObj.title
+            : null;
+      const outcome = describeTurnOutcome({
+        status: "success",
+        toolCalls: [{ tool: pending.tool, ok: true, isWrite: true }],
+        entities: label ? [{ kind: "entity", label }] : [],
+        humanizeTool: humanizeToolName,
+      });
+      if (outcome) {
+        const [srow] = await db
+          .select({ rollingSummary: atelierCliSessions.rollingSummary })
+          .from(atelierCliSessions)
+          .where(eq(atelierCliSessions.id, turn.sessionId))
+          .limit(1);
+        const line = `[${new Date().toISOString().slice(11, 19)}] (confirmed) → success${RECAP_OUTCOME_SEP}${outcome}`;
+        const next = ((srow?.rollingSummary ?? "") + "\n" + line)
+          .split("\n")
+          .filter((l) => l.trim().length > 0)
+          .slice(-30)
+          .join("\n");
+        await db
+          .update(atelierCliSessions)
+          .set({ rollingSummary: next.slice(0, 2000), updatedAt: new Date() })
+          .where(eq(atelierCliSessions.id, turn.sessionId));
+      }
+    } catch (err) {
+      console.error(
+        "[atelier-cli] confirm rolling-summary append failed",
+        turnId,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   const newStatus: CliTurnStatus = result.ok ? "success" : "error";

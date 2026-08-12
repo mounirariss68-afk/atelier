@@ -526,6 +526,84 @@ function TurnBlock({
         </View>
       ) : null}
 
+      {turn.proactiveRecap &&
+      ((turn.proactiveRecap.accomplishments?.length ?? 0) > 0 ||
+        (turn.proactiveRecap.openThreads?.length ?? 0) > 0 ||
+        turn.proactiveRecap.summary) ? (
+        /* Task #978 — "Catching you up" card (shared proactive_recap frame,
+           same gold treatment as web). Outcome bullets + open threads. */
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#C9A24E55",
+            borderRadius: 10,
+            padding: 10,
+            gap: 4,
+          }}
+        >
+          <Text
+            style={{
+              color: "#C9A24E",
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {t("chat.recapTitle")}
+          </Text>
+          {(turn.proactiveRecap.accomplishments?.length
+            ? turn.proactiveRecap.accomplishments
+            : turn.proactiveRecap.summary
+              ? turn.proactiveRecap.summary.split("\n")
+              : []
+          ).map((a, i) => (
+            <Text
+              key={i}
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_400Regular",
+                fontSize: 13,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {"• "}
+              {a}
+            </Text>
+          ))}
+          {(turn.proactiveRecap.openThreads?.length ?? 0) > 0 ? (
+            <View style={{ gap: 2, paddingTop: 2 }}>
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {t("chat.recapStillOpen")}
+              </Text>
+              {turn.proactiveRecap.openThreads!.map((o, i) => (
+                <Text
+                  key={i}
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontSize: 12,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {o}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {turn.text ? (
         /* Task #941 — Riser's avatar sits at the start of every assistant
            reply. rtl.row flips it to the correct side in Arabic, and it's

@@ -152,6 +152,7 @@ export const STRINGS = {
   refusalRequested: { en: "Request logged. Thanks.", ar: "تم تسجيل الطلب. شكرًا." },
   recapTitle: { en: "Catching you up", ar: "تذكير سريع" },
   recapDormantHours: { en: "Dormant {h}h", ar: "غير نشط {h} س" },
+  recapOpenThreads: { en: "Still open", ar: "ما زال مفتوحًا" },
   // Task #498 — auto-nav toast strings.
   autoNavToastTitle: {
     en: "Jumped to {label}",

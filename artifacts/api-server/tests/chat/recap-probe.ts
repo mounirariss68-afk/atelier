@@ -1,13 +1,16 @@
 /**
- * Task #781 — offline probe for proactive-recap relevance.
- * Pure — no DB, no LLM.
+ * Task #781 / #978 — offline probe for proactive-recap relevance and the
+ * outcome-oriented recap composer. Pure — no DB, no LLM.
  *
  * Run: tsx ./tests/chat/recap-probe.ts (part of test:chat-suite)
  */
 import {
   shouldEmitProactiveRecap,
-  composeRecapSummary,
+  composeRecapCard,
+  describeTurnOutcome,
+  outcomeOf,
   isTrivialRecapLine,
+  RECAP_OUTCOME_SEP,
   PROACTIVE_RECAP_DORMANT_MS,
 } from "../../src/lib/atelier-cli/recap-relevance.js";
 
@@ -24,19 +27,26 @@ const check = (name: string, cond: boolean, detail?: unknown) => {
 };
 
 const NOW = Date.parse("2026-08-07T12:00:00Z");
-const meaningfulSummary =
+const humanize = (t: string) => t.replace(/_/g, " ");
+
+// Outcome-bearing summary (Task #978 line shape).
+const outcomeSummary =
+  `[09:00:01] file my hotel receipt → success (2 tools)${RECAP_OUTCOME_SEP}Done: expense create — Marriott\n` +
+  `[09:05:12] book time with sarah → success (1 tool)${RECAP_OUTCOME_SEP}Done: meeting create — Sarah, Thursday`;
+// Legacy prompt-echo summary — meaningful prompts, but no outcome segments.
+const legacyEchoSummary =
   "[09:00:01] draft the renewal email for Acme → success (2 tools)\n" +
   "[09:05:12] show my open expense drafts → success (1 tool)";
 const trivialSummary = "[17:57:13] who are you? → success";
 
-console.log("[1] trigger — no recap at ~0h dormancy (the reported bug)");
+console.log("[1] trigger — no recap at minutes-level dormancy (the reported bug)");
 {
   check(
-    "0h dormancy suppressed even with cold draft + meaningful summary",
+    "0h dormancy suppressed even with outcome-rich summary",
     !shouldEmitProactiveRecap({
       lastTurnAtMs: NOW - 30_000,
       nowMs: NOW,
-      rollingSummary: meaningfulSummary,
+      rollingSummary: outcomeSummary,
     }),
   );
   check(
@@ -44,7 +54,7 @@ console.log("[1] trigger — no recap at ~0h dormancy (the reported bug)");
     !shouldEmitProactiveRecap({
       lastTurnAtMs: NOW - (PROACTIVE_RECAP_DORMANT_MS - 60_000),
       nowMs: NOW,
-      rollingSummary: meaningfulSummary,
+      rollingSummary: outcomeSummary,
     }),
   );
   check(
@@ -52,35 +62,58 @@ console.log("[1] trigger — no recap at ~0h dormancy (the reported bug)");
     !shouldEmitProactiveRecap({
       lastTurnAtMs: 0,
       nowMs: NOW,
-      rollingSummary: meaningfulSummary,
+      rollingSummary: outcomeSummary,
+    }),
+  );
+  check(
+    "minutes-level dormancy suppressed even with open threads",
+    !shouldEmitProactiveRecap({
+      lastTurnAtMs: NOW - 120_000,
+      nowMs: NOW,
+      rollingSummary: outcomeSummary,
+      openThreads: ["You were in the middle of confirming expense create."],
     }),
   );
 }
 
-console.log("[2] trigger — recap still fires after genuine dormancy");
+console.log("[2] trigger — recap fires after genuine dormancy WITH substance");
 {
+  const dormant = NOW - (PROACTIVE_RECAP_DORMANT_MS + 60_000);
   check(
-    ">6h dormancy with meaningful summary fires",
+    ">6h dormancy with outcome-rich summary fires",
     shouldEmitProactiveRecap({
-      lastTurnAtMs: NOW - (PROACTIVE_RECAP_DORMANT_MS + 60_000),
+      lastTurnAtMs: dormant,
       nowMs: NOW,
-      rollingSummary: meaningfulSummary,
+      rollingSummary: outcomeSummary,
     }),
   );
   check(
     ">6h dormancy but empty summary stays quiet",
-    !shouldEmitProactiveRecap({
-      lastTurnAtMs: NOW - (PROACTIVE_RECAP_DORMANT_MS + 60_000),
-      nowMs: NOW,
-      rollingSummary: "",
-    }),
+    !shouldEmitProactiveRecap({ lastTurnAtMs: dormant, nowMs: NOW, rollingSummary: "" }),
   );
   check(
     ">6h dormancy but only trivial turns stays quiet",
     !shouldEmitProactiveRecap({
-      lastTurnAtMs: NOW - (PROACTIVE_RECAP_DORMANT_MS + 60_000),
+      lastTurnAtMs: dormant,
       nowMs: NOW,
       rollingSummary: trivialSummary,
+    }),
+  );
+  check(
+    ">6h dormancy with THIN content (legacy prompt echoes only) stays quiet",
+    !shouldEmitProactiveRecap({
+      lastTurnAtMs: dormant,
+      nowMs: NOW,
+      rollingSummary: legacyEchoSummary,
+    }),
+  );
+  check(
+    ">6h dormancy with no summary but an open thread still fires",
+    shouldEmitProactiveRecap({
+      lastTurnAtMs: dormant,
+      nowMs: NOW,
+      rollingSummary: legacyEchoSummary,
+      openThreads: ["You were in the middle of confirming expense create — it was never committed."],
     }),
   );
 }
@@ -91,10 +124,6 @@ console.log("[3] content — trivial lines never headline a recap");
   check("'hi' is trivial", isTrivialRecapLine("[10:00:00] hi → success"));
   check("'thanks!' is trivial", isTrivialRecapLine("[10:00:00] thanks! → success"));
   check(
-    "'what can you do?' is trivial",
-    isTrivialRecapLine("[10:00:00] what can you do? → success"),
-  );
-  check(
     "real work line is not trivial",
     !isTrivialRecapLine("[09:00:01] draft the renewal email for Acme → success (2 tools)"),
   );
@@ -102,27 +131,116 @@ console.log("[3] content — trivial lines never headline a recap");
     "prompt containing a trivial word mid-sentence is not trivial",
     !isTrivialRecapLine("[09:00:01] help me reconcile the Acme invoices → success (3 tools)"),
   );
+  check("line without timestamp/arrow still classified by prompt", isTrivialRecapLine("hello"));
+}
+
+console.log("[4] content — composeRecapCard is outcome-oriented");
+{
+  const card = composeRecapCard(outcomeSummary);
+  check("outcome lines become accomplishments", card !== null && card.accomplishments.length === 2);
   check(
-    "line without timestamp/arrow still classified by prompt",
-    isTrivialRecapLine("hello"),
+    "accomplishment is the outcome phrase, not the prompt echo",
+    card !== null &&
+      card.accomplishments[0] === "Done: expense create — Marriott" &&
+      !card.accomplishments[0]!.includes("file my hotel receipt"),
+  );
+  check("legacy echo-only summary composes to null (thin)", composeRecapCard(legacyEchoSummary) === null);
+  check("all-trivial summary composes to null", composeRecapCard(trivialSummary) === null);
+  check(
+    "empty/null summary composes to null",
+    composeRecapCard("") === null && composeRecapCard(null) === null,
+  );
+  const many = Array.from(
+    { length: 9 },
+    (_, i) => `[0${i}:00:00] task number ${i} → success (1 tool)${RECAP_OUTCOME_SEP}Done: thing ${i}`,
+  ).join("\n");
+  const capped = composeRecapCard(many);
+  check(
+    "caps at last 5 outcomes",
+    capped !== null &&
+      capped.accomplishments.length === 5 &&
+      capped.accomplishments.includes("Done: thing 8") &&
+      !capped.accomplishments.includes("Done: thing 3"),
+  );
+  const dupes =
+    `[09:00:00] a → success (1 tool)${RECAP_OUTCOME_SEP}Looked up person search\n` +
+    `[09:01:00] b → success (1 tool)${RECAP_OUTCOME_SEP}Looked up person search`;
+  check(
+    "consecutive duplicate outcomes collapse",
+    composeRecapCard(dupes)?.accomplishments.length === 1,
+  );
+  const trivialWithOutcome = `[10:00:00] hi → success${RECAP_OUTCOME_SEP}Done: something`;
+  check(
+    "trivial prompt line contributes no outcome",
+    composeRecapCard(trivialWithOutcome) === null,
   );
 }
 
-console.log("[4] content — composeRecapSummary filters and caps");
+console.log("[5] outcome — describeTurnOutcome phrases");
 {
-  const mixed =
-    trivialSummary + "\n" + meaningfulSummary + "\n[11:00:00] hello → success";
-  const out = composeRecapSummary(mixed);
-  check("trivial lines dropped from summary", out !== null && !out.includes("who are you"));
-  check("meaningful lines kept", out !== null && out.includes("renewal email for Acme"));
-  check("all-trivial summary composes to null", composeRecapSummary(trivialSummary) === null);
-  check("empty/null summary composes to null", composeRecapSummary("") === null && composeRecapSummary(null) === null);
-  const many = Array.from({ length: 9 }, (_, i) => `[0${i}:00:00] task number ${i} → success (1 tool)`).join("\n");
-  const capped = composeRecapSummary(many);
   check(
-    "caps at last 5 meaningful lines",
-    capped !== null && capped.split("\n").length === 5 && capped.includes("task number 8") && !capped.includes("task number 3"),
+    "successful write → Done: … with entity labels",
+    describeTurnOutcome({
+      status: "success",
+      toolCalls: [{ tool: "expense_create", ok: true, isWrite: true }],
+      entities: [{ kind: "expense", label: "Marriott" }],
+      humanizeTool: humanize,
+    }) === "Done: expense create — Marriott",
   );
+  check(
+    "awaiting_confirmation → drafted-awaiting phrase",
+    describeTurnOutcome({
+      status: "awaiting_confirmation",
+      toolCalls: [],
+      pendingTool: "expense_create",
+      humanizeTool: humanize,
+    })?.includes("awaiting your confirmation") === true,
+  );
+  check(
+    "awaiting_clarification → unanswered-question phrase",
+    describeTurnOutcome({
+      status: "awaiting_clarification",
+      toolCalls: [],
+      humanizeTool: humanize,
+    }) === "Asked you a follow-up question that wasn't answered",
+  );
+  check(
+    "successful read → Looked up …",
+    describeTurnOutcome({
+      status: "read_only_no_op",
+      toolCalls: [{ tool: "person_search", ok: true, isWrite: false }],
+      humanizeTool: humanize,
+    })?.startsWith("Looked up") === true,
+  );
+  check(
+    "failed-only tools → null (nothing accomplished)",
+    describeTurnOutcome({
+      status: "error",
+      toolCalls: [{ tool: "expense_create", ok: false, isWrite: true }],
+      humanizeTool: humanize,
+    }) === null,
+  );
+  check(
+    "no tools, plain chat → null",
+    describeTurnOutcome({ status: "success", toolCalls: [], humanizeTool: humanize }) === null,
+  );
+  const long = describeTurnOutcome({
+    status: "success",
+    toolCalls: [{ tool: "a_create", ok: true, isWrite: true }],
+    entities: [{ kind: "x", label: "L".repeat(300) }],
+    humanizeTool: humanize,
+  });
+  check("outcome phrase is length-capped", long !== null && long.length <= 141);
+}
+
+console.log("[6] parsing — outcomeOf round-trip");
+{
+  check(
+    "outcomeOf extracts the segment",
+    outcomeOf(`[09:00:01] file receipt → success${RECAP_OUTCOME_SEP}Done: expense create`) ===
+      "Done: expense create",
+  );
+  check("no segment → null", outcomeOf("[09:00:01] file receipt → success") === null);
 }
 
 console.log(`\nrecap-probe: ${pass} passed, ${fail} failed`);

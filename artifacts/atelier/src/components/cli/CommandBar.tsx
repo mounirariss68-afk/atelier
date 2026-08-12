@@ -1657,11 +1657,38 @@ function TurnBody({
                 </div>
               )}
           </div>
-          {turn.proactiveRecap.summary && (
-            <div className="text-xs text-text leading-relaxed whitespace-pre-wrap">
-              {turn.proactiveRecap.summary}
-            </div>
+          {turn.proactiveRecap.accomplishments &&
+          turn.proactiveRecap.accomplishments.length > 0 ? (
+            <ul className="text-xs text-text leading-relaxed space-y-0.5" data-testid="cli-recap-accomplishments">
+              {turn.proactiveRecap.accomplishments.map((a, i) => (
+                <li key={i} className="flex gap-1.5">
+                  <span className="text-gold" aria-hidden>
+                    •
+                  </span>
+                  <span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            turn.proactiveRecap.summary && (
+              <div className="text-xs text-text leading-relaxed whitespace-pre-wrap">
+                {turn.proactiveRecap.summary}
+              </div>
+            )
           )}
+          {turn.proactiveRecap.openThreads &&
+            turn.proactiveRecap.openThreads.length > 0 && (
+              <div className="pt-1 space-y-0.5" data-testid="cli-recap-open-threads">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-text-mute">
+                  {s("recapOpenThreads", locale)}
+                </div>
+                {turn.proactiveRecap.openThreads.map((o, i) => (
+                  <div key={i} className="text-xs text-text-mute leading-relaxed">
+                    {o}
+                  </div>
+                ))}
+              </div>
+            )}
           {turn.proactiveRecap.entities && turn.proactiveRecap.entities.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
               {turn.proactiveRecap.entities.map((e) => (
