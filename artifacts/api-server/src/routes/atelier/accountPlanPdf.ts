@@ -50,7 +50,7 @@ type Persona = { id: string; role: string; name: string; orgId?: string };
 
 const RISK_SEVERITY_COLOR: Record<string, string> = {
   red: "#C0392B",
-  amber: "#E89E2C",
+  amber: "#B45309", // web --warn (light) — semantic status color, not the old golden accent
   green: "#2E7D5B",
 };
 const GOAL_STATUS_LABEL: Record<string, string> = {

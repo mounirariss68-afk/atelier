@@ -28,11 +28,18 @@ import { fileURLToPath } from "node:url";
 import { loadBoardPackLogo } from "./atelier-board-pack-logo.js";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
+// Mirrors the Atelier web tokens (src/index.css). Like the web app, the
+// `gold*` names are retained for stability but resolve to the Cognirise
+// magenta accent (light-theme values — PDFs are light surfaces). Never
+// use amber/golden hues: they are not Cognirise colors.
 export const BRAND = {
   navy: "#0E1F3D",
   navyDeep: "#0A1730",
-  gold: "#E89E2C",
-  goldSoft: "#F3C577",
+  gold: "#A6348F", // Cognirise magenta (AA on light surfaces)
+  goldSoft: "#C45BB8", // brighter magenta — accents on dark/navy surfaces
+  coral: "#FF7B5A",
+  purple: "#8A5BD6",
+  blue: "#5B7CFF",
   ink: "#1F2A3D",
   muted: "#5B6B7C",
   faint: "#8A97A8",
@@ -42,6 +49,49 @@ export const BRAND = {
   danger: "#B91C1C",
   white: "#FFFFFF",
 } as const;
+
+/** Cognirise signature gradient stops (blue→purple→magenta→coral). */
+const COG_GRAD: ReadonlyArray<readonly [number, string]> = [
+  [0, BRAND.blue],
+  [0.35, BRAND.purple],
+  [0.65, BRAND.goldSoft],
+  [1, BRAND.coral],
+];
+
+function cogGradRule(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number): void {
+  const grad = doc.linearGradient(x, y, x + w, y);
+  for (const [stop, color] of COG_GRAD) grad.stop(stop, color);
+  doc.rect(x, y, w, h).fill(grad);
+}
+
+// ── Backdrop artwork ─────────────────────────────────────────────────────────
+// Approved Cognirise backdrop art (portrait JPEG crops of the web app's
+// light-bg-wave / dark-bg backdrops, pre-rendered into assets/). Null when
+// unresolvable — pages fall back to the vector gradient wash.
+// Returns a stable file-path STRING (not a Buffer): pdfkit keys its image
+// registry on string sources, so the same path is embedded as ONE image
+// XObject reused across every page instead of re-embedded per page.
+// "./assets/" first — that's the dist layout (build.mjs copies the JPEGs
+// next to the bundle); the deeper candidates cover the source tree in dev.
+const BG_CANDIDATE_DIRS = ["./assets/", "../assets/", "../../assets/", "../../../assets/"] as const;
+const bgPathCache = new Map<string, string | null>();
+function loadBgAsset(file: string): string | null {
+  const hit = bgPathCache.get(file);
+  if (hit !== undefined) return hit;
+  let found: string | null = null;
+  for (const dir of BG_CANDIDATE_DIRS) {
+    try {
+      const p = fileURLToPath(new URL(`${dir}${file}`, import.meta.url));
+      readFileSync(p); // existence + readability check
+      found = p;
+      break;
+    } catch {
+      // try next candidate
+    }
+  }
+  bgPathCache.set(file, found);
+  return found;
+}
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 export const PAGE = {
@@ -164,13 +214,22 @@ function paintPageChrome(doc: PDFKit.PDFDocument): void {
   const w = doc.page.width;
   const h = doc.page.height;
   doc.save();
-  // Ice gradient wash — the print stand-in for the app's navy glass backdrop.
-  const grad = doc.linearGradient(0, 0, 0, h);
-  grad.stop(0, "#E9EFF7").stop(0.3, "#F5F8FC").stop(1, "#FBFCFE");
-  doc.rect(0, 0, w, h).fill(grad);
-  // Navy strip + gold hairline at the very top.
+  // Approved light wave artwork behind everything (glassmorphism print
+  // translation) with a near-white scrim so panels/text stay readable;
+  // vector ice gradient as fallback when the asset is unavailable.
+  const bg = loadBgAsset("pdf-bg-light.jpg");
+  if (bg) {
+    doc.image(bg, 0, 0, { width: w, height: h });
+    doc.fillOpacity(0.6).rect(0, 0, w, h).fill("#F6F7FB");
+    doc.fillOpacity(1);
+  } else {
+    const grad = doc.linearGradient(0, 0, 0, h);
+    grad.stop(0, "#E9EFF7").stop(0.3, "#F5F8FC").stop(1, "#FBFCFE");
+    doc.rect(0, 0, w, h).fill(grad);
+  }
+  // Navy strip + Cognirise gradient hairline at the very top.
   doc.rect(0, 0, w, 8).fill(BRAND.navy);
-  doc.rect(0, 8, w, 1.6).fill(BRAND.gold);
+  cogGradRule(doc, 0, 8, w, 1.6);
   // Wordmark, top-left of the header zone.
   const s = state(doc);
   if (s.logo) {
@@ -217,18 +276,28 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
 
   const w = doc.page.width;
   const h = doc.page.height;
-  // Navy gradient backdrop.
-  const grad = doc.linearGradient(0, 0, w, h);
-  grad.stop(0, BRAND.navyDeep).stop(0.55, BRAND.navy).stop(1, "#16305A");
-  doc.rect(0, 0, w, h).fill(grad);
-  // Soft glass orbs — large translucent circles echoing the UI backdrop.
-  doc.save();
-  doc.fillOpacity(0.05).circle(w - 60, 120, 150).fill(BRAND.white);
-  doc.fillOpacity(0.04).circle(70, h - 130, 190).fill(BRAND.goldSoft);
-  doc.fillOpacity(1);
-  doc.restore();
-  // Gold top rule.
-  doc.rect(0, 0, w, 6).fill(BRAND.gold);
+  // Approved dark backdrop artwork with a navy scrim for text contrast;
+  // vector navy gradient as fallback when the asset is unavailable.
+  const bg = loadBgAsset("pdf-bg-dark.jpg");
+  if (bg) {
+    doc.image(bg, 0, 0, { width: w, height: h });
+    doc.save();
+    doc.fillOpacity(0.42).rect(0, 0, w, h).fill(BRAND.navyDeep);
+    doc.fillOpacity(1);
+    doc.restore();
+  } else {
+    const grad = doc.linearGradient(0, 0, w, h);
+    grad.stop(0, BRAND.navyDeep).stop(0.55, BRAND.navy).stop(1, "#16305A");
+    doc.rect(0, 0, w, h).fill(grad);
+    // Soft glass orbs — large translucent circles echoing the UI backdrop.
+    doc.save();
+    doc.fillOpacity(0.05).circle(w - 60, 120, 150).fill(BRAND.white);
+    doc.fillOpacity(0.04).circle(70, h - 130, 190).fill(BRAND.goldSoft);
+    doc.fillOpacity(1);
+    doc.restore();
+  }
+  // Cognirise gradient top rule.
+  cogGradRule(doc, 0, 0, w, 6);
 
   // Glass card.
   const cardX = 64;
@@ -259,10 +328,10 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
   doc
     .font(FONT.semibold)
     .fontSize(10)
-    .fillColor(BRAND.gold)
+    .fillColor(BRAND.goldSoft)
     .text(opts.docType.toUpperCase(), inX, y, { width: inW, characterSpacing: 2 });
   y = doc.y + 10;
-  doc.moveTo(inX, y).lineTo(inX + 64, y).strokeColor(BRAND.gold).lineWidth(1.4).stroke();
+  cogGradRule(doc, inX, y - 0.7, 64, 1.4);
   y += 16;
 
   doc.font(FONT.bold).fontSize(25).fillColor(BRAND.white).text(opts.title, inX, y, { width: inW });
@@ -276,7 +345,7 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
   }
   if (opts.badge) {
     y += 8;
-    doc.font(FONT.semibold).fontSize(10).fillColor(BRAND.goldSoft).text(opts.badge, inX, y, { width: inW });
+    doc.font(FONT.semibold).fontSize(10).fillColor(BRAND.coral).text(opts.badge, inX, y, { width: inW });
     y = doc.y;
   }
 

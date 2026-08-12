@@ -141,7 +141,12 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   // dist/index.mjs, so it MUST ship alongside the bundle. Fail the build
   // loudly if it can't be packaged — a silent miss would make the prod
   // boot seed a no-op.
-  const runtimeAssets = ["scripts/assets/non-equity-partner-agreement-template-v3.docx"];
+  const runtimeAssets = [
+    "scripts/assets/non-equity-partner-agreement-template-v3.docx",
+    // Task #1007 — approved Cognirise backdrop artwork for the PDF brand kit.
+    "assets/pdf-bg-light.jpg",
+    "assets/pdf-bg-dark.jpg",
+  ];
   await mkdir(path.resolve(distDir, "assets"), { recursive: true });
   for (const rel of runtimeAssets) {
     const src = path.resolve(artifactDir, rel);
