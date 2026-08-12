@@ -22,7 +22,6 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull } from "drizzle-orm";
-import PDFDocument from "pdfkit";
 import { STALLED_THRESHOLD_DAYS } from "../../lib/atelier-agents/pipeline.js";
 import {
   db,
@@ -39,6 +38,17 @@ import {
   atelierOpportunityStageTransitions,
 } from "@workspace/db";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBrandDoc,
+  addBrandPage,
+  glassSection,
+  brandTable,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  PAGE,
+} from "../../lib/atelier-pdf-brand.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -700,30 +710,40 @@ router.get("/reports/:id/export.pdf", async (req, res) => {
   const result = (row.lastRunSnapshot as { rows: Array<Record<string, unknown>>; summary?: string } | null) ?? { rows: [], summary: "" };
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", contentDispositionFilename("inline", `${row.id}.pdf`));
-  const doc = new PDFDocument({ size: "A4", margin: 48 });
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
+  const doc = createBrandDoc();
   doc.pipe(res);
-  doc.rect(0, 0, doc.page.width, 64).fill("#0E1F3D");
-  doc.fillColor("#E89E2C").fontSize(20).text("Cognirise Atelier", 48, 22);
-  doc.fillColor("#FFFFFF").fontSize(10).text("Report export", 48, 46);
-  doc.moveDown(3);
-  doc.fillColor("#0E1F3D").fontSize(18).text(row.name);
-  doc.moveDown(0.5);
-  doc.fillColor("#444").fontSize(10).text(`Template: ${row.templateId}`);
-  if (result.summary) doc.moveDown(0.5).fillColor("#0E1F3D").fontSize(11).text(result.summary);
-  doc.moveDown(1);
+  addBrandPage(doc);
+  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text(row.name, PAGE.left, doc.y);
+  doc.font(FONT.medium).fontSize(9.5).fillColor(BRAND.gold).text("Report export", PAGE.left, doc.y + 2);
+  doc
+    .font(FONT.regular)
+    .fontSize(9)
+    .fillColor(BRAND.muted)
+    .text(`Template: ${row.templateId}`, PAGE.left, doc.y + 4);
+  doc.moveDown(0.8);
+  doc.x = PAGE.left;
+  if (result.summary) glassSection(doc, "Summary", [block.body(result.summary)]);
   const cols = Array.from(new Set(result.rows.flatMap((r) => Object.keys(r))));
   if (cols.length) {
-    doc.fillColor("#0E1F3D").fontSize(10).text(cols.join("   |   "), { underline: true });
-    doc.moveDown(0.3);
-    for (const r of result.rows.slice(0, 60)) {
-      doc.fillColor("#222").fontSize(10).text(cols.map((c) => String(r[c] ?? "")).join("   |   "));
-    }
+    const colW = Math.max(60, Math.floor(PAGE.contentW / cols.length));
+    brandTable(
+      doc,
+      cols.map((c) => ({ label: c, width: colW })),
+      result.rows.slice(0, 60).map((r) => cols.map((c) => String(r[c] ?? ""))),
+      { fontSize: 8.5 },
+    );
     if (result.rows.length > 60) {
-      doc.moveDown(0.5).fillColor("#888").fontSize(9).text(`(${result.rows.length - 60} more rows truncated — use CSV export for full data)`);
+      doc
+        .font(FONT.regular)
+        .fontSize(9)
+        .fillColor(BRAND.faint)
+        .text(`(${result.rows.length - 60} more rows truncated — use CSV export for full data)`, PAGE.left, doc.y + 4);
     }
   } else {
-    doc.fillColor("#888").text("No rows.");
+    glassSection(doc, null, [block.italic("No rows.")]);
   }
+  writeBrandFooters(doc, { label: `Cognirise · Atelier · report ${row.id}` });
   doc.end();
 });
 

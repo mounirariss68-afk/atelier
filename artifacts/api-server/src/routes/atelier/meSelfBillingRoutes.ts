@@ -22,8 +22,7 @@ import {
   atelierContractors,
   atelierPartnerFirmResources,
 } from "@workspace/db";
-import PDFDocument from "pdfkit";
-import { writeSelfBilledInvoicePdf } from "../../lib/selfBilledInvoicePdf.js";
+import { createSelfBilledInvoiceDoc, writeSelfBilledInvoicePdf } from "../../lib/selfBilledInvoicePdf.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 type Me = typeof atelierUsers.$inferSelect;
@@ -161,7 +160,7 @@ router.get("/me/self-billing/:id/pdf", async (req, res, next) => {
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${inv.invoiceNumber}.pdf`));
-    const doc = new PDFDocument({ size: "A4", margin: 48 });
+    const doc = createSelfBilledInvoiceDoc();
     doc.pipe(res);
     writeSelfBilledInvoicePdf(doc, inv);
     doc.end();

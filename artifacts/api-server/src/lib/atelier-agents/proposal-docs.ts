@@ -1,7 +1,15 @@
 import { mkdirSync, createWriteStream, existsSync } from "node:fs";
+import {
+  createBrandDoc,
+  addBrandPage,
+  brandCover,
+  glassSection,
+  writeBrandFooters,
+  block,
+  type BrandBlock,
+} from "../atelier-pdf-brand.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } from "docx";
 import {
   PROPOSAL_SPINE,
@@ -96,38 +104,34 @@ export async function generateProposalDocs(
   await import("node:fs/promises").then((m) => m.writeFile(htmlPath, html, "utf8"));
 
   // ---- PDF (pdfkit) — projected from the shared block model. ----
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
   await new Promise<void>((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = createBrandDoc();
     const stream = createWriteStream(pdfPath);
     stream.on("finish", () => resolve());
     stream.on("error", reject);
     doc.pipe(stream);
-    if (COGNIRISE_PROPOSAL_LOGO) {
-      doc.image(COGNIRISE_PROPOSAL_LOGO, { width: 130 });
-      doc.moveDown(0.8);
-    }
-    doc.fontSize(20).text(input.title, { underline: false });
-    doc.moveDown(0.3);
+    const subLines: string[] = [];
     if (input.recipient) {
-      doc.fontSize(10).fillColor("#666").text(`Prepared for ${input.recipient.recipientName}${
-        input.recipient.recipientOrg ? ` · ${input.recipient.recipientOrg}` : ""
-      }`);
-      doc.fillColor("black");
+      subLines.push(
+        `Prepared for ${input.recipient.recipientName}${
+          input.recipient.recipientOrg ? ` · ${input.recipient.recipientOrg}` : ""
+        }`,
+      );
     }
-    if (input.winThemes.length) {
-      doc.fontSize(10).fillColor("#888").text(`Win themes: ${input.winThemes.join(" · ")}`);
-      doc.fillColor("black");
-    }
-    doc.moveDown(0.5);
+    if (input.winThemes.length) subLines.push(`Win themes: ${input.winThemes.join(" · ")}`);
+    brandCover(doc, { docType: "Proposal", title: input.title, subLines });
+    addBrandPage(doc);
     for (const s of sectionBlocks) {
-      if (s.isCover) continue; // cover is reflected in the title block above
-      doc.fontSize(14).text(s.name);
-      doc.fontSize(9).fillColor("#888").text(`owner: ${s.ownerAgent}  ·  status: ${s.status}`);
-      doc.fillColor("black");
-      doc.moveDown(0.25);
-      for (const b of s.blocks) renderBlockPdf(doc, b);
-      doc.moveDown(0.5);
+      if (s.isCover) continue; // cover is reflected in the branded cover page
+      const blocks: BrandBlock[] = [
+        block.muted(`owner: ${s.ownerAgent}  ·  status: ${s.status}`, { size: 8 }),
+        block.gap(3),
+      ];
+      for (const b of s.blocks) appendBlockBrand(blocks, b);
+      glassSection(doc, s.name, blocks);
     }
+    writeBrandFooters(doc, { label: `Cognirise — ${input.title}` });
     doc.end();
   });
 
@@ -191,39 +195,31 @@ export async function generateProposalDocs(
 // re-introducing renderer-specific business logic.
 // =============================================================
 
-type Pdf = InstanceType<typeof PDFDocument>;
-
-function renderBlockPdf(doc: Pdf, b: ProposalBlock): void {
+function appendBlockBrand(out: BrandBlock[], b: ProposalBlock): void {
   switch (b.kind) {
     case "paragraph":
-      doc.fontSize(11).text(b.text, { align: "left" });
-      doc.moveDown(0.4);
+      out.push(block.body(b.text), block.gap(3));
       return;
     case "heading":
-      doc.fontSize(b.level === 3 ? 13 : 11).fillColor("#0f172a").text(b.text);
-      doc.fillColor("black");
-      doc.moveDown(0.2);
+      out.push(block.strong(b.text, { size: b.level === 3 ? 11.5 : 10 }));
       return;
     case "bullets":
-      for (const it of b.items) doc.fontSize(11).text(`• ${it}`);
-      doc.moveDown(0.3);
+      for (const it of b.items) out.push(block.bullet(it));
+      out.push(block.gap(2));
       return;
     case "kv":
-      for (const r of b.rows) doc.fontSize(11).text(`${r.label}: ${r.value}`);
-      doc.moveDown(0.3);
+      for (const r of b.rows) out.push(block.body(`${r.label}: ${r.value}`, { size: 9.5 }));
+      out.push(block.gap(2));
       return;
     case "table": {
-      if (b.headers) {
-        doc.fontSize(10).fillColor("#666").text(b.headers.join("  |  "));
-        doc.fillColor("black");
-      }
+      if (b.headers) out.push(block.muted(b.headers.join("  |  "), { size: 8.5 }));
       for (const row of b.rows) {
         const isStatusFirst = b.statusColIndex === 0;
         const prefix = isStatusFirst ? `[${row[0].toUpperCase()}] ` : "";
         const rest = isStatusFirst ? row.slice(1) : row;
-        doc.fontSize(10).text(`${prefix}${rest.join("  ·  ")}`);
+        out.push(block.body(`${prefix}${rest.join("  ·  ")}`, { size: 9 }));
       }
-      doc.moveDown(0.3);
+      out.push(block.gap(2));
       return;
     }
   }

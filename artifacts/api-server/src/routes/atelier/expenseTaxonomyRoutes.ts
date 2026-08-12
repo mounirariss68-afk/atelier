@@ -11,7 +11,6 @@
  *   GET  /wallet/expenses/export                       client-ready CSV / PDF (redacted)
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import PDFDocument from "pdfkit";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
@@ -37,6 +36,15 @@ import { suggestCategory } from "../../lib/atelier-expense-categorizer.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
 import { isHeicPayload, convertHeicToJpeg } from "../../lib/atelier-heic.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBrandDoc,
+  addBrandPage,
+  brandTable,
+  writeBrandFooters,
+  BRAND,
+  FONT,
+  PAGE,
+} from "../../lib/atelier-pdf-brand.js";
 
 const router: IRouter = Router();
 type Me = typeof atelierUsers.$inferSelect;
@@ -663,51 +671,49 @@ router.get("/wallet/expenses/export", async (req, res) => {
   // PDF
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `expenses-${req.query.engagementId}.pdf`));
-  const doc = new PDFDocument({ size: "A4", margin: 48 });
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
+  const doc = createBrandDoc();
   doc.pipe(res);
-  doc.fontSize(16).text("Reimbursable Expenses", { continued: false });
-  doc.moveDown(0.3);
-  doc.fontSize(10).fillColor("#555");
-  if (accountName) doc.text(`Client: ${accountName}`);
-  doc.text(`Engagement: ${engagementName}`);
-  doc.text(`Generated: ${new Date().toISOString().slice(0, 10)}`);
+  addBrandPage(doc);
+  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Reimbursable Expenses", PAGE.left, doc.y);
+  const metaBits = [
+    accountName ? `Client: ${accountName}` : null,
+    `Engagement: ${engagementName}`,
+    `Generated: ${new Date().toISOString().slice(0, 10)}`,
+  ].filter(Boolean) as string[];
+  doc
+    .font(FONT.regular)
+    .fontSize(9)
+    .fillColor(BRAND.muted)
+    .text(metaBits.join("   ·   "), PAGE.left, doc.y + 3);
   doc.moveDown(0.8);
-  doc.fillColor("#000");
+  doc.x = PAGE.left;
   const cols = [
-    { key: "refNo", label: "Ref", w: 24 },
-    { key: "date", label: "Date", w: 55 },
-    { key: "merchant", label: "Merchant", w: 90 },
-    { key: "subCategoryLabel", label: "Category", w: 90 },
-    { key: "description", label: "Description", w: 120 },
-    { key: "usdNet", label: "Net (USD)", w: 55 },
-    { key: "usdBilled", label: "Billed (USD)", w: 60 },
+    { key: "refNo", label: "Ref", w: 26 },
+    { key: "date", label: "Date", w: 56 },
+    { key: "merchant", label: "Merchant", w: 84 },
+    { key: "subCategoryLabel", label: "Category", w: 84 },
+    { key: "description", label: "Description", w: 123 },
+    { key: "usdNet", label: "Net (USD)", w: 52, align: "right" as const },
+    { key: "usdBilled", label: "Billed (USD)", w: 58, align: "right" as const },
   ] as const;
-  let y = doc.y;
-  let x = 48;
-  doc.fontSize(8).font("Helvetica-Bold");
-  for (const c of cols) {
-    doc.text(c.label, x, y, { width: c.w });
-    x += c.w + 4;
-  }
-  doc.font("Helvetica");
-  y += 14;
-  for (const r of rows) {
-    if (y > 780) {
-      doc.addPage();
-      y = 48;
-    }
-    x = 48;
-    for (const c of cols) {
-      const raw = r[c.key];
-      const txt =
-        c.key === "refNo" ? String(r.refNo) : typeof raw === "number" ? raw.toFixed(2) : String(raw);
-      doc.text(txt.slice(0, 60), x, y, { width: c.w });
-      x += c.w + 4;
-    }
-    y += 14;
-  }
-  y += 8;
-  doc.font("Helvetica-Bold").fontSize(9).text(`Total billed: $${total.toFixed(2)}`, 48, y);
+  brandTable(
+    doc,
+    cols.map((c) => ({ label: c.label, width: c.w, align: (c as { align?: "right" }).align })),
+    rows.map((r) =>
+      cols.map((c) => {
+        const raw = r[c.key];
+        const txt = c.key === "refNo" ? String(r.refNo) : typeof raw === "number" ? raw.toFixed(2) : String(raw);
+        return txt.slice(0, 60);
+      }),
+    ),
+    { fontSize: 8 },
+  );
+  doc
+    .font(FONT.bold)
+    .fontSize(10)
+    .fillColor(BRAND.navy)
+    .text(`Total billed: $${total.toFixed(2)}`, PAGE.left, doc.y + 6, { width: PAGE.contentW, align: "right" });
 
   // Numbered receipt appendix: one page per receipt, matching the Ref column.
   // Image receipts (JPEG/PNG) are embedded; other formats (e.g. PDF receipts)
@@ -715,25 +721,25 @@ router.get("/wallet/expenses/export", async (req, res) => {
   const withReceipts = rows.filter((r) => r.receiptFileRef);
   if (withReceipts.length > 0) {
     const svc = new ObjectStorageService();
-    doc.addPage();
-    doc.font("Helvetica-Bold").fontSize(14).text("Receipt Appendix", 48, 48);
+    addBrandPage(doc);
+    doc.font(FONT.bold).fontSize(15).fillColor(BRAND.navy).text("Receipt Appendix", PAGE.left, doc.y);
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(9)
-      .fillColor("#555")
+      .fillColor(BRAND.muted)
       .text(
         `${withReceipts.length} receipt(s), numbered to match the Ref column of the expense table.`,
-        48,
+        PAGE.left,
         doc.y + 4,
       );
-    doc.fillColor("#000");
     for (const r of withReceipts) {
-      doc.addPage();
+      addBrandPage(doc);
       doc
-        .font("Helvetica-Bold")
+        .font(FONT.semibold)
         .fontSize(11)
-        .text(`Receipt ${r.refNo} — ${r.merchant} · ${r.date} · $${r.usdNet.toFixed(2)}`, 48, 48);
-      doc.font("Helvetica").fontSize(9);
+        .fillColor(BRAND.navy)
+        .text(`Receipt ${r.refNo} — ${r.merchant} · ${r.date} · $${r.usdNet.toFixed(2)}`, PAGE.left, PAGE.contentTop + 8);
+      doc.font(FONT.regular).fontSize(9);
       let embedded = false;
       if (r.receiptFileRef && r.receiptFileRef.startsWith("/objects/")) {
         try {
@@ -742,14 +748,14 @@ router.get("/wallet/expenses/export", async (req, res) => {
           const mediaType = (dl.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
           if (mediaType === "image/jpeg" || mediaType === "image/png") {
             const bytes = Buffer.from(await dl.arrayBuffer());
-            doc.image(bytes, 48, 80, { fit: [500, 680], align: "center" });
+            doc.image(bytes, PAGE.left, PAGE.contentTop + 34, { fit: [PAGE.contentW, 640], align: "center" });
             embedded = true;
           } else {
             // Task #554 — HEIC receipts convert to JPEG for the appendix.
             const bytes = Buffer.from(await dl.arrayBuffer());
             if (isHeicPayload(bytes, mediaType)) {
               const jpeg = await convertHeicToJpeg(bytes);
-              doc.image(jpeg, 48, 80, { fit: [500, 680], align: "center" });
+              doc.image(jpeg, PAGE.left, PAGE.contentTop + 34, { fit: [PAGE.contentW, 640], align: "center" });
               embedded = true;
             }
           }
@@ -761,16 +767,17 @@ router.get("/wallet/expenses/export", async (req, res) => {
       }
       if (!embedded) {
         doc
-          .fillColor("#555")
+          .fillColor(BRAND.muted)
           .text(
             "Receipt document is held on file in a non-embeddable format and is available on request.",
-            48,
-            84,
+            PAGE.left,
+            PAGE.contentTop + 38,
           )
-          .fillColor("#000");
+          .fillColor(BRAND.ink);
       }
     }
   }
+  writeBrandFooters(doc, { label: `Cognirise · Atelier · expense export · ${engagementName}` });
   doc.end();
 });
 

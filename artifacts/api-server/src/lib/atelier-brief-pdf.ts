@@ -1,219 +1,76 @@
 /**
  * Atelier — Cognirise-branded PDF renderer for research briefs and POVs.
  *
- * Shared primitives (cover page, section headings, bullet lists, evidence
- * items with source footnotes, page footers with page numbers + generation
- * date) that all three PDF exports reuse. Three top-level build functions:
+ * Task #1007 — restyled on the shared glassmorphism brand kit
+ * (atelier-pdf-brand.ts): navy glass cover, ice backdrop wash, rounded
+ * glass panels per section, gold accents, Plus Jakarta Sans, logo on
+ * every page. Three top-level build functions:
  *
  *   buildAccountResearchBriefPdf  — Account Cartographer brief
  *   buildScoutBriefPdf            — Pursuit Scout opportunity brief
  *   buildPovPdf                   — POV current version
  *
- * Branding follows the existing board-pack / client-invoice conventions:
- *   Navy  #0E1F3D  (headings, title text)
- *   Gold  #E89E2C  (rules, accents, confidence note)
- *   Grey  #6b7280  (body text, sub-labels)
- *
- * The Cognirise navy wordmark is loaded via the established sibling-asset
- * loader (loadBoardPackLogo); falls back to a text header when the asset is
- * unavailable (dev without a dist build, or the asset was moved).
- *
- * NOTE: all callers must set `autoFirstPage: false` and `bufferPages: true`
- * so the footer page-number pass can write over already-rendered pages.
- * The helper `createBriefDoc()` returns a PDFDocument pre-configured this way.
+ * NOTE: callers get the pre-configured document from `createBriefDoc()`
+ * (autoFirstPage:false + bufferPages:true so the footer page-number pass
+ * can stamp already-rendered pages) and remain responsible for doc.end().
  */
 
-import PDFDocument from "pdfkit";
-import { loadBoardPackLogo } from "./atelier-board-pack-logo.js";
-
-// ── Branding constants ────────────────────────────────────────────────────────
-const NAVY = "#0E1F3D";
-const GOLD = "#E89E2C";
-const GREY = "#6b7280";
-const LEFT = 56;
-const RIGHT = 539;
-const PAGE_W = RIGHT - LEFT; // usable width
-
-// Logo loaded once — null if the asset can't be resolved.
-const BRIEF_LOGO: Buffer | null = loadBoardPackLogo();
+import {
+  createBrandDoc,
+  addBrandPage,
+  brandCover,
+  glassSection,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  type BrandBlock,
+} from "./atelier-pdf-brand.js";
 
 // ── Document factory ──────────────────────────────────────────────────────────
 
 /** Create a pdfkit document pre-configured for buffered multi-page export. */
 export function createBriefDoc(): PDFKit.PDFDocument {
-  return new PDFDocument({ size: "A4", margin: LEFT, autoFirstPage: false, bufferPages: true });
+  return createBrandDoc();
 }
 
-// ── Shared primitives ─────────────────────────────────────────────────────────
+// ── Shared source-registry helpers ────────────────────────────────────────────
 
-function addPage(doc: PDFKit.PDFDocument): void {
-  doc.addPage();
-}
+type SourceRegistry = Array<{ url: string; index: number }>;
 
-function coverPage(
-  doc: PDFKit.PDFDocument,
-  opts: {
-    docType: string;
-    entityName: string;
-    subLine?: string | null;
-    generatedAt: Date;
-    confidenceBadge?: string | null;
-  },
-): void {
-  addPage(doc);
-  let y = LEFT;
-
-  // Logo or text fallback
-  if (BRIEF_LOGO) {
-    doc.image(BRIEF_LOGO, LEFT, y, { width: 120 });
-    y += 56;
-  } else {
-    doc.font("Helvetica-Bold").fontSize(18).fillColor(NAVY).text("COGNIRISE", LEFT, y);
-    y += 30;
-  }
-
-  doc.font("Helvetica").fontSize(10).fillColor(GOLD).text("Atelier — Professional Services", LEFT, y);
-  y += 18;
-
-  // Thin gold rule
-  doc.moveTo(LEFT, y).lineTo(RIGHT, y).strokeColor(GOLD).lineWidth(0.8).stroke();
-  y += 20;
-
-  // Document type label
-  doc.font("Helvetica-Bold").fontSize(22).fillColor(NAVY).text(opts.docType, LEFT, y, { width: PAGE_W });
-  y = doc.y + 8;
-
-  // Entity name
-  doc.font("Helvetica").fontSize(14).fillColor(GREY).text(opts.entityName, LEFT, y, { width: PAGE_W });
-  y = doc.y + 4;
-
-  // Optional sub-line (opportunity name for Scout brief, audience for POV)
-  if (opts.subLine) {
-    doc.font("Helvetica").fontSize(11).fillColor(GREY).text(opts.subLine, LEFT, y, { width: PAGE_W });
-    y = doc.y + 4;
-  }
-
-  // Generation date
-  const dateStr = opts.generatedAt.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+function refsFor(urls: string[] | undefined, sources: SourceRegistry): string | null {
+  const list = urls ?? [];
+  if (!list.length) return null;
+  const refs = list.map((url) => {
+    const existing = sources.find((s) => s.url === url);
+    if (existing) return `[${existing.index}]`;
+    const idx = sources.length + 1;
+    sources.push({ url, index: idx });
+    return `[${idx}]`;
   });
-  doc.font("Helvetica").fontSize(10).fillColor(GREY).text(`Generated ${dateStr}`, LEFT, doc.y + 8, { width: PAGE_W });
-  y = doc.y + 4;
-
-  // Confidence badge
-  if (opts.confidenceBadge) {
-    doc.font("Helvetica").fontSize(10).fillColor(GOLD).text(`Confidence: ${opts.confidenceBadge}`, LEFT, doc.y + 6, { width: PAGE_W });
-  }
-
-  // Confidentiality footer at bottom of cover
-  doc
-    .font("Helvetica")
-    .fontSize(8)
-    .fillColor(GREY)
-    .text(
-      "Confidential — prepared by Cognirise. Not for distribution outside the intended recipient.",
-      LEFT,
-      doc.page.height - 70,
-      { width: PAGE_W, align: "center" },
-    );
+  return refs.join(" ");
 }
 
-function sectionHeading(doc: PDFKit.PDFDocument, title: string): void {
-  // Ensure we have enough room; add page if too close to the bottom
-  if (doc.y > doc.page.height - 120) {
-    addPage(doc);
-  }
-  doc.moveDown(0.6);
-  doc.font("Helvetica-Bold").fontSize(13).fillColor(NAVY).text(title, LEFT, doc.y, { width: PAGE_W });
-  const ruleY = doc.y + 2;
-  doc.moveTo(LEFT, ruleY).lineTo(RIGHT, ruleY).strokeColor(GOLD).lineWidth(0.5).stroke();
-  doc.moveDown(0.5);
-}
-
-function bodyText(doc: PDFKit.PDFDocument, text: string, colour: string = "#000"): void {
-  doc.font("Helvetica").fontSize(10).fillColor(colour).text(text, LEFT, doc.y, { width: PAGE_W });
-  doc.moveDown(0.3);
-}
-
-function notYetAvailable(doc: PDFKit.PDFDocument): void {
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .fillColor(GREY)
-    .text("Not yet available.", LEFT, doc.y, { width: PAGE_W });
-  doc.moveDown(0.4);
-}
-
-function bulletList(doc: PDFKit.PDFDocument, items: string[]): void {
-  if (!items.length) { notYetAvailable(doc); return; }
-  for (const item of items) {
-    doc.font("Helvetica").fontSize(10).fillColor("#000").text(`• ${item}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-    doc.moveDown(0.2);
-  }
-  doc.moveDown(0.3);
-}
-
-/**
- * Render one evidence item: bold claim text, then an indented italic evidence
- * line, then `[n1, n2]` citation refs. Returns the footnote indices used so
- * the caller can build the sources appendix.
- */
-function evidenceItem(
-  doc: PDFKit.PDFDocument,
+function evidenceBlocks(
   item: { text: string; evidence?: string; sourceUrls?: string[] },
-  sourceRegistry: Array<{ url: string; index: number }>,
-): void {
-  doc.font("Helvetica-Bold").fontSize(10).fillColor("#000").text(`• ${item.text}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-  if (item.evidence) {
-    doc.font("Helvetica-Oblique").fontSize(9).fillColor(GREY).text(item.evidence, LEFT + 20, doc.y, { width: PAGE_W - 20 });
-  }
-  const urls = item.sourceUrls ?? [];
-  if (urls.length > 0) {
-    const refs = urls.map((url) => {
-      const existing = sourceRegistry.find((s) => s.url === url);
-      if (existing) return `[${existing.index}]`;
-      const idx = sourceRegistry.length + 1;
-      sourceRegistry.push({ url, index: idx });
-      return `[${idx}]`;
-    });
-    doc.font("Helvetica").fontSize(8).fillColor(GOLD).text(refs.join(" "), LEFT + 20, doc.y, { width: PAGE_W - 20 });
-  }
-  doc.moveDown(0.35);
+  sources: SourceRegistry,
+): BrandBlock[] {
+  const out: BrandBlock[] = [block.bullet(item.text, { bold: true })];
+  if (item.evidence) out.push(block.italic(item.evidence, { indent: 12, size: 8.5 }));
+  const refs = refsFor(item.sourceUrls, sources);
+  if (refs) out.push(block.refs(refs, 12));
+  return out;
 }
 
-function sourcesAppendix(doc: PDFKit.PDFDocument, registry: Array<{ url: string; index: number }>): void {
+function sourcesAppendix(doc: PDFKit.PDFDocument, registry: SourceRegistry): void {
   if (!registry.length) return;
-  sectionHeading(doc, "Sources");
-  for (const s of registry) {
-    doc.font("Helvetica").fontSize(8.5).fillColor(GREY).text(`[${s.index}] ${s.url}`, LEFT, doc.y, { width: PAGE_W, link: s.url });
-    doc.moveDown(0.25);
-  }
-}
-
-/** Write page-number + date footers across all buffered pages. */
-function writeFooters(doc: PDFKit.PDFDocument, generatedAt: Date): void {
-  const range = doc.bufferedPageRange();
-  const total = range.count;
-  const dateStr = generatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  for (let i = 0; i < total; i++) {
-    doc.switchToPage(range.start + i);
-    const footerY = doc.page.height - 40;
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor(GREY)
-      .text(`Cognirise — Confidential`, LEFT, footerY, { width: PAGE_W / 2 });
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor(GREY)
-      .text(`${dateStr}   Page ${i + 1} of ${total}`, LEFT + PAGE_W / 2, footerY, {
-        width: PAGE_W / 2,
-        align: "right",
-      });
-  }
+  glassSection(
+    doc,
+    "Sources",
+    registry.map((s) =>
+      block.muted(`[${s.index}] ${s.url}`, { size: 8, gapAfter: 3, link: s.url }),
+    ),
+  );
 }
 
 // ── Account research brief shape (from atelierAccounts.researchBrief) ─────────
@@ -305,149 +162,108 @@ export interface PovVersionInput {
 /**
  * Render the Account Cartographer research brief into a pre-configured
  * PDFDocument. The caller is responsible for calling doc.end() and piping
- * the output.
- *
- * Section order mirrors the in-app ProfileTab:
- *   1. The One Thing + Why-Now Hypothesis
- *   2. What's Changing
- *   3. Executive Tensions
- *   4. Service-Line Fit
- *   5. Partner Ecosystem
- *   6. Business Units (if present)
- *   7. Mandate Angles
- *   8. Open Questions
- *   9. Stress Test (if present)
+ * the output. Section order mirrors the in-app ProfileTab.
  */
 export function buildAccountResearchBriefPdf(
   doc: PDFKit.PDFDocument,
   input: AccountResearchBriefInput,
 ): void {
   const { accountName, researchBrief: b, generatedAt } = input;
-  const sources: Array<{ url: string; index: number }> = [];
+  const sources: SourceRegistry = [];
 
-  coverPage(doc, {
+  brandCover(doc, {
     docType: "Client Research Brief",
-    entityName: accountName,
+    title: accountName,
     generatedAt,
   });
 
-  addPage(doc);
+  addBrandPage(doc);
 
   // 1. The one thing + why-now
   if (b.singleMostImportant) {
-    sectionHeading(doc, "The One Thing That Matters");
-    bodyText(doc, b.singleMostImportant);
-    if (b.whyNowHypothesis) {
-      doc.font("Helvetica-Oblique").fontSize(10).fillColor(GREY).text(
-        `Why now: ${b.whyNowHypothesis}`, LEFT, doc.y, { width: PAGE_W },
-      );
-      doc.moveDown(0.4);
-    }
+    const blocks: BrandBlock[] = [block.body(b.singleMostImportant, { size: 10.5 })];
+    if (b.whyNowHypothesis) blocks.push(block.italic(`Why now: ${b.whyNowHypothesis}`));
+    glassSection(doc, "The One Thing That Matters", blocks);
   }
 
   // 2. What's changing
-  sectionHeading(doc, "What's Changing");
-  if ((b.whatsChanging ?? []).length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const item of b.whatsChanging) evidenceItem(doc, item, sources);
-  }
+  glassSection(doc, "What's Changing", (b.whatsChanging ?? []).flatMap((i) => evidenceBlocks(i, sources)));
 
   // 3. Executive tensions
-  sectionHeading(doc, "Executive Tensions");
-  if ((b.executiveTensions ?? []).length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const item of b.executiveTensions) evidenceItem(doc, item, sources);
-  }
+  glassSection(doc, "Executive Tensions", (b.executiveTensions ?? []).flatMap((i) => evidenceBlocks(i, sources)));
 
   // 4. Service-line fit
-  sectionHeading(doc, "Service-Line Fit");
-  if ((b.serviceLineFit ?? []).length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const item of b.serviceLineFit) {
-      evidenceItem(doc, { text: `${item.serviceLine}: ${item.signal}`, evidence: "", sourceUrls: item.sourceUrls }, sources);
-    }
-  }
+  glassSection(
+    doc,
+    "Service-Line Fit",
+    (b.serviceLineFit ?? []).flatMap((item) =>
+      evidenceBlocks({ text: `${item.serviceLine}: ${item.signal}`, sourceUrls: item.sourceUrls }, sources),
+    ),
+  );
 
   // 5. Partner ecosystem
-  sectionHeading(doc, "Partner Ecosystem");
-  if ((b.partnerEcosystem ?? []).length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const item of b.partnerEcosystem) {
+  glassSection(
+    doc,
+    "Partner Ecosystem",
+    (b.partnerEcosystem ?? []).flatMap((item) => {
       const detail = [item.relationship, item.serviceLineGap ? `Gap: ${item.serviceLineGap}` : null]
-        .filter(Boolean).join(" · ");
-      evidenceItem(doc, { text: `${item.partner}: ${detail}`, sourceUrls: item.sourceUrls }, sources);
-    }
-  }
+        .filter(Boolean)
+        .join(" · ");
+      return evidenceBlocks({ text: `${item.partner}: ${detail}`, sourceUrls: item.sourceUrls }, sources);
+    }),
+  );
 
   // 6. Business units (optional)
   if ((b.businessUnits ?? []).length > 0) {
-    sectionHeading(doc, "Business Units");
-    for (const bu of b.businessUnits!) {
-      const brands = bu.brands.length > 0 ? ` (${bu.brands.join(", ")})` : "";
-      const note = bu.note ? ` — ${bu.note}` : "";
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#000").text(`• ${bu.name}${brands}${note}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      doc.moveDown(0.25);
-    }
-    doc.moveDown(0.2);
+    glassSection(
+      doc,
+      "Business Units",
+      b.businessUnits!.map((bu) => {
+        const brands = bu.brands.length > 0 ? ` (${bu.brands.join(", ")})` : "";
+        const note = bu.note ? ` — ${bu.note}` : "";
+        return block.bullet(`${bu.name}${brands}${note}`, { bold: true });
+      }),
+    );
   }
 
   // 7. Mandate angles
-  sectionHeading(doc, "Mandate Angles");
-  if ((b.mandateAngles ?? []).length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const m of b.mandateAngles) {
-      doc.font("Helvetica-Bold").fontSize(11).fillColor(NAVY).text(m.title, LEFT, doc.y, { width: PAGE_W });
-      doc.moveDown(0.15);
+  glassSection(
+    doc,
+    "Mandate Angles",
+    (b.mandateAngles ?? []).flatMap((m) => {
+      const blocks: BrandBlock[] = [block.strong(m.title)];
       if ((m.serviceLines ?? []).length > 0) {
-        doc.font("Helvetica").fontSize(9).fillColor(GREY).text(`Service lines: ${m.serviceLines.join(", ")}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-        doc.moveDown(0.15);
+        blocks.push(block.muted(`Service lines: ${m.serviceLines.join(", ")}`, { indent: 10, size: 8.5 }));
       }
-      doc.font("Helvetica").fontSize(10).fillColor("#000").text(`Tension: ${m.tension}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      doc.moveDown(0.1);
-      doc.font("Helvetica").fontSize(10).fillColor("#000").text(`Why now: ${m.whyNow}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      doc.moveDown(0.1);
-      doc.font("Helvetica").fontSize(10).fillColor("#000").text(`Entry stakeholder: ${m.entryStakeholder}`, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      const sUrls = m.sourceUrls ?? [];
-      if (sUrls.length > 0) {
-        const refs = sUrls.map((url) => {
-          const ex = sources.find((s) => s.url === url);
-          if (ex) return `[${ex.index}]`;
-          const idx = sources.length + 1;
-          sources.push({ url, index: idx });
-          return `[${idx}]`;
-        });
-        doc.font("Helvetica").fontSize(8).fillColor(GOLD).text(refs.join(" "), LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      }
-      doc.moveDown(0.5);
-    }
-  }
+      blocks.push(
+        block.body(`Tension: ${m.tension}`, { indent: 10 }),
+        block.body(`Why now: ${m.whyNow}`, { indent: 10 }),
+        block.body(`Entry stakeholder: ${m.entryStakeholder}`, { indent: 10 }),
+      );
+      const refs = refsFor(m.sourceUrls, sources);
+      if (refs) blocks.push(block.refs(refs, 10));
+      blocks.push(block.gap(6));
+      return blocks;
+    }),
+  );
 
   // 8. Open questions
   if ((b.openQuestions ?? []).length > 0) {
-    sectionHeading(doc, "Open Questions");
-    bulletList(doc, b.openQuestions);
+    glassSection(doc, "Open Questions", b.openQuestions.map((q) => block.bullet(q)));
   }
 
   // 9. Stress test (optional)
   if (b.stressTest) {
     const st = b.stressTest;
-    sectionHeading(doc, "Stress Test");
+    const blocks: BrandBlock[] = [];
     if (st.revisedHypothesis) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Revised hypothesis:", LEFT, doc.y, { width: PAGE_W });
-      bodyText(doc, st.revisedHypothesis);
+      blocks.push(block.label("Revised hypothesis:"), block.body(st.revisedHypothesis));
     }
     if ((st.failureScenarios ?? []).length > 0) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Failure scenarios:", LEFT, doc.y, { width: PAGE_W });
-      bulletList(doc, st.failureScenarios);
+      blocks.push(block.label("Failure scenarios:"), ...st.failureScenarios.map((s) => block.bullet(s)));
     }
     if ((st.likelyObjections ?? []).length > 0) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Likely objections:", LEFT, doc.y, { width: PAGE_W });
-      bulletList(doc, st.likelyObjections);
+      blocks.push(block.label("Likely objections:"), ...st.likelyObjections.map((s) => block.bullet(s)));
     }
     const assumptions = st.assumptions ?? {};
     const allAssumptions = [
@@ -456,138 +272,110 @@ export function buildAccountResearchBriefPdf(
       ...(assumptions.uncertain ?? []).map((a) => `[uncertain] ${a}`),
     ];
     if (allAssumptions.length > 0) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Assumptions:", LEFT, doc.y, { width: PAGE_W });
-      bulletList(doc, allAssumptions);
+      blocks.push(block.label("Assumptions:"), ...allAssumptions.map((a) => block.bullet(a)));
     }
     if ((st.evidenceToStrengthen ?? []).length > 0) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Evidence to strengthen hypothesis:", LEFT, doc.y, { width: PAGE_W });
+      blocks.push(block.label("Evidence to strengthen hypothesis:"));
       for (const e of st.evidenceToStrengthen) {
-        bodyText(doc, `• ${e.evidence} (find at: ${e.whereToFind})`);
+        blocks.push(block.bullet(`${e.evidence} (find at: ${e.whereToFind})`));
       }
     }
+    glassSection(doc, "Stress Test", blocks);
   }
 
   sourcesAppendix(doc, sources);
-  writeFooters(doc, generatedAt);
+  writeBrandFooters(doc, { generatedAt });
 }
 
 /**
- * Render the Pursuit Scout opportunity brief.
- *
- * Section order mirrors BriefTab:
- *   1. Account Snapshot (one-liner, scale, recent moves)
- *   2. Buyer Landscape (likely buyers, power map)
- *   3. 5C Draft (Client, Competition, Capability, Capacity, Contract)
- *   4. Open Questions
- *   5. Research Completeness summary
- *   6. Sources appendix
+ * Render the Pursuit Scout opportunity brief. Section order mirrors
+ * BriefTab: snapshot, buyer landscape, 5C draft, open questions,
+ * completeness, sources appendix.
  */
 export function buildScoutBriefPdf(
   doc: PDFKit.PDFDocument,
   input: ScoutBriefInput,
 ): void {
   const { oppName, accountName, brief: b, facts, confidence, completeness, generatedAt } = input;
-  const sources: Array<{ url: string; index: number }> = [];
+  const sources: SourceRegistry = [];
 
-  coverPage(doc, {
+  brandCover(doc, {
     docType: "Pursuit Research Brief",
-    entityName: accountName,
-    subLine: oppName,
+    title: accountName,
+    subLines: [oppName],
+    badge: confidence ? `Confidence: ${confidence}` : null,
     generatedAt,
-    confidenceBadge: confidence,
   });
 
-  addPage(doc);
+  addBrandPage(doc);
 
   // 1. Account snapshot
-  sectionHeading(doc, "Account Snapshot");
-  if (b.accountSnapshot?.oneLiner) {
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(NAVY).text(b.accountSnapshot.oneLiner, LEFT, doc.y, { width: PAGE_W });
-    doc.moveDown(0.3);
-  }
-  if (b.accountSnapshot?.scaleHint) {
-    bodyText(doc, b.accountSnapshot.scaleHint, GREY);
-  }
-  if ((b.accountSnapshot?.recentMoves ?? []).length > 0) {
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Recent moves:", LEFT, doc.y, { width: PAGE_W });
-    bulletList(doc, b.accountSnapshot.recentMoves);
-  } else {
-    notYetAvailable(doc);
+  {
+    const blocks: BrandBlock[] = [];
+    if (b.accountSnapshot?.oneLiner) blocks.push(block.strong(b.accountSnapshot.oneLiner));
+    if (b.accountSnapshot?.scaleHint) blocks.push(block.muted(b.accountSnapshot.scaleHint));
+    if ((b.accountSnapshot?.recentMoves ?? []).length > 0) {
+      blocks.push(block.label("Recent moves:"), ...b.accountSnapshot.recentMoves.map((m) => block.bullet(m)));
+    }
+    glassSection(doc, "Account Snapshot", blocks);
   }
 
   // 2. Buyer landscape
-  sectionHeading(doc, "Buyer Landscape");
-  const likelyBuyers = b.buyerLandscape?.likelyBuyers ?? [];
-  if (likelyBuyers.length === 0) {
-    notYetAvailable(doc);
-  } else {
-    for (const bu of likelyBuyers) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(bu.title, LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      doc.font("Helvetica").fontSize(10).fillColor("#000").text(bu.rationale, LEFT + 20, doc.y, { width: PAGE_W - 20 });
-      doc.moveDown(0.3);
+  {
+    const blocks: BrandBlock[] = [];
+    for (const bu of b.buyerLandscape?.likelyBuyers ?? []) {
+      blocks.push(block.strong(bu.title, { indent: 10, size: 10 }), block.body(bu.rationale, { indent: 20 }));
     }
-  }
-  if (b.buyerLandscape?.powerMap) {
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Power map:", LEFT, doc.y, { width: PAGE_W });
-    bodyText(doc, b.buyerLandscape.powerMap);
+    if (b.buyerLandscape?.powerMap) {
+      blocks.push(block.label("Power map:"), block.body(b.buyerLandscape.powerMap));
+    }
+    glassSection(doc, "Buyer Landscape", blocks);
   }
 
   // 3. 5C draft
-  sectionHeading(doc, "5C Draft");
-  const FIVE_C_KEYS: Array<[string, string]> = [
-    ["client", "Client"],
-    ["competition", "Competition"],
-    ["capability", "Capability"],
-    ["capacity", "Capacity"],
-    ["contract", "Contract"],
-  ];
-  for (const [key, label] of FIVE_C_KEYS) {
-    const text = (b.fiveCDraft ?? {})[key];
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(label, LEFT, doc.y, { width: PAGE_W });
-    if (text && text.trim()) {
-      bodyText(doc, text);
-      // Attach fact-citation refs for facts linked to this 5C dimension
-      const linked = facts.filter((f) => {
-        const topic = (f.topic ?? "").toLowerCase();
-        return topic.includes(key) || topic.includes(label.toLowerCase());
-      });
-      if (linked.length > 0) {
-        const refs = linked
-          .filter((f) => f.sourceUrl)
-          .map((f) => {
-            const existing = sources.find((s) => s.url === f.sourceUrl);
-            if (existing) return `[${existing.index}]`;
-            const idx = sources.length + 1;
-            sources.push({ url: f.sourceUrl!, index: idx });
-            return `[${idx}]`;
-          });
-        if (refs.length > 0) {
-          doc.font("Helvetica").fontSize(8).fillColor(GOLD).text(refs.join(" "), LEFT + 10, doc.y, { width: PAGE_W - 10 });
-          doc.moveDown(0.2);
-        }
+  {
+    const FIVE_C_KEYS: Array<[string, string]> = [
+      ["client", "Client"],
+      ["competition", "Competition"],
+      ["capability", "Capability"],
+      ["capacity", "Capacity"],
+      ["contract", "Contract"],
+    ];
+    const blocks: BrandBlock[] = [];
+    for (const [key, label] of FIVE_C_KEYS) {
+      const text = (b.fiveCDraft ?? {})[key];
+      blocks.push(block.label(label));
+      if (text && text.trim()) {
+        blocks.push(block.body(text));
+        // Attach fact-citation refs for facts linked to this 5C dimension
+        const linked = facts.filter((f) => {
+          const topic = (f.topic ?? "").toLowerCase();
+          return topic.includes(key) || topic.includes(label.toLowerCase());
+        });
+        const refs = refsFor(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!), sources);
+        if (refs) blocks.push(block.refs(refs, 10));
+      } else {
+        blocks.push(block.italic("Not researched — re-run Scout to fill this in.", { indent: 10 }));
       }
-    } else {
-      doc.font("Helvetica-Oblique").fontSize(10).fillColor(GREY).text("Not researched — re-run Scout to fill this in.", LEFT + 10, doc.y, { width: PAGE_W - 10 });
-      doc.moveDown(0.3);
+      blocks.push(block.gap(4));
     }
-    doc.moveDown(0.25);
+    glassSection(doc, "5C Draft", blocks);
   }
 
   // 4. Open questions
   if ((b.openQuestions ?? []).length > 0) {
-    sectionHeading(doc, "Open Questions");
-    bulletList(doc, b.openQuestions);
+    glassSection(doc, "Open Questions", b.openQuestions.map((q) => block.bullet(q)));
   }
 
   // 5. Research completeness summary
   if (completeness) {
-    sectionHeading(doc, "Research Completeness");
-    bodyText(doc, `Score: ${completeness.score}%`);
-    bodyText(doc, `Facts: ${completeness.factCount} total · ${completeness.sourcedFactCount} with sources`);
-    bodyText(
-      doc,
-      `Confidence mix: ${completeness.confidenceMix.green} green / ${completeness.confidenceMix.amber} amber / ${completeness.confidenceMix.red} red`,
-    );
+    glassSection(doc, "Research Completeness", [
+      block.body(`Score: ${completeness.score}%`),
+      block.body(`Facts: ${completeness.factCount} total · ${completeness.sourcedFactCount} with sources`),
+      block.body(
+        `Confidence mix: ${completeness.confidenceMix.green} green / ${completeness.confidenceMix.amber} amber / ${completeness.confidenceMix.red} red`,
+      ),
+    ]);
   }
 
   // 6. Sources from all facts with URLs (not already in registry)
@@ -597,91 +385,69 @@ export function buildScoutBriefPdf(
     }
   }
   sourcesAppendix(doc, sources);
-  writeFooters(doc, generatedAt);
+  writeBrandFooters(doc, { generatedAt });
 }
 
 /**
- * Render a POV version.
- *
- * Section order mirrors PovTab:
- *   1. Title / audience / objective
- *   2. POV sections in version order (heading + content)
- *   3. Citation coverage note
- *   4. Sources appendix
+ * Render a POV version. Section order mirrors PovTab: overview, POV
+ * sections in version order, citation coverage, sources appendix.
  */
 export function buildPovPdf(
   doc: PDFKit.PDFDocument,
   input: PovVersionInput,
 ): void {
   const { oppName, pov, version: v, generatedAt } = input;
-  const sources: Array<{ url: string; index: number }> = [];
+  const sources: SourceRegistry = [];
 
-  coverPage(doc, {
+  brandCover(doc, {
     docType: "Point of View",
-    entityName: pov.title,
-    subLine: oppName + (pov.audience ? ` · For ${pov.audience}` : ""),
+    title: pov.title,
+    subLines: [oppName + (pov.audience ? ` · For ${pov.audience}` : "")],
     generatedAt,
   });
 
-  addPage(doc);
+  addBrandPage(doc);
 
   // 1. POV header
-  sectionHeading(doc, "Overview");
-  if (pov.audience) bodyText(doc, `Audience: ${pov.audience}`);
-  if (pov.objective) bodyText(doc, `Objective: ${pov.objective}`);
-  doc.moveDown(0.3);
+  {
+    const blocks: BrandBlock[] = [];
+    if (pov.audience) blocks.push(block.body(`Audience: ${pov.audience}`));
+    if (pov.objective) blocks.push(block.body(`Objective: ${pov.objective}`));
+    glassSection(doc, "Overview", blocks);
+  }
 
   // 2. POV sections (from version.sections if present, otherwise fall back to body)
   const sections = (v.sections ?? []).filter((s) => s.heading || s.content);
   if (sections.length > 0) {
     for (const section of sections) {
-      if (section.heading) {
-        sectionHeading(doc, section.heading);
-      }
+      const blocks: BrandBlock[] = [];
       if (section.content && section.content.trim()) {
         // Strip HTML tags that may be in body content
         const stripped = section.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        bodyText(doc, stripped);
+        blocks.push(block.body(stripped));
       } else if (section.intent) {
-        doc.font("Helvetica-Oblique").fontSize(10).fillColor(GREY).text(`Intent: ${section.intent}`, LEFT, doc.y, { width: PAGE_W });
-        doc.moveDown(0.3);
+        blocks.push(block.italic(`Intent: ${section.intent}`));
       }
       // Attach citation refs for facts cited in this section
       const factIds = section.factIds ?? [];
       const linked = (v.citations as AgentFact[]).filter((f) => f.id && factIds.includes(f.id));
-      for (const f of linked) {
-        if (f.sourceUrl && !sources.find((s) => s.url === f.sourceUrl)) {
-          sources.push({ url: f.sourceUrl, index: sources.length + 1 });
-        }
-      }
-      if (linked.length > 0) {
-        const refs = linked.filter((f) => f.sourceUrl).map((f) => {
-          const s = sources.find((x) => x.url === f.sourceUrl);
-          return s ? `[${s.index}]` : "";
-        }).filter(Boolean);
-        if (refs.length > 0) {
-          doc.font("Helvetica").fontSize(8).fillColor(GOLD).text(refs.join(" "), LEFT, doc.y, { width: PAGE_W });
-          doc.moveDown(0.2);
-        }
-      }
+      const refs = refsFor(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!), sources);
+      if (refs) blocks.push(block.refs(refs, 0));
+      glassSection(doc, section.heading ?? null, blocks);
     }
   } else if (v.body && v.body.trim()) {
     // Fall back to HTML body stripped of tags
-    sectionHeading(doc, `Draft v${v.versionNumber}`);
     const stripped = v.body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    bodyText(doc, stripped);
+    glassSection(doc, `Draft v${v.versionNumber}`, [block.body(stripped)]);
   } else {
-    notYetAvailable(doc);
+    glassSection(doc, "Draft", []);
   }
 
   // 3. Citation coverage note
   if (v.citationCoverage != null) {
-    sectionHeading(doc, "Citation Coverage");
-    bodyText(doc, `${Math.round(v.citationCoverage * 100)}% of sections cite evidence.`);
-    if (v.notes) {
-      doc.font("Helvetica-Oblique").fontSize(9).fillColor(GREY).text(`Notes: ${v.notes}`, LEFT, doc.y, { width: PAGE_W });
-      doc.moveDown(0.3);
-    }
+    const blocks: BrandBlock[] = [block.body(`${Math.round(v.citationCoverage * 100)}% of sections cite evidence.`)];
+    if (v.notes) blocks.push(block.italic(`Notes: ${v.notes}`, { size: 8.5 }));
+    glassSection(doc, "Citation Coverage", blocks);
   }
 
   // 4. All remaining citations
@@ -691,5 +457,8 @@ export function buildPovPdf(
     }
   }
   sourcesAppendix(doc, sources);
-  writeFooters(doc, generatedAt);
+  writeBrandFooters(doc, { generatedAt });
 }
+
+// Re-export brand tokens for callers that add small custom touches.
+export { BRAND, FONT };

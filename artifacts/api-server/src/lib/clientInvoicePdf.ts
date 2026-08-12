@@ -3,17 +3,32 @@
  *
  * Renders an issued Atelier client invoice (atelier_invoice + lines)
  * as a Cognirise-branded A4 document, either streamed to a browser
- * response or buffered for an email attachment. Follows the shared
- * pdfkit branding used by the audit-trail export (navy #0E1F3D ink,
- * gold #E89E2C rules).
+ * response or buffered for an email attachment. Task #1007 — restyled
+ * on the shared glassmorphism brand kit (atelier-pdf-brand.ts): ice
+ * backdrop wash, glass panels, navy/gold palette, Plus Jakarta Sans,
+ * wordmark chrome on every page.
  *
  * Drafts are intentionally NOT renderable here: the routes only call
  * this for invoices that already minted a number (issued/paid/void),
  * and a VOID watermark line is added for voided invoices so a stale
  * PDF can never pass as a live receivable.
+ *
+ * Callers create the document with `createClientInvoiceDoc()` and stay
+ * responsible for piping + doc.end().
  */
-import PDFDocument from "pdfkit";
 import type { atelierInvoice, atelierInvoiceLine } from "@workspace/db";
+import {
+  createBrandDoc,
+  addBrandPage,
+  glassSection,
+  brandTable,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  PAGE,
+  type BrandBlock,
+} from "./atelier-pdf-brand.js";
 
 type Invoice = typeof atelierInvoice.$inferSelect;
 type InvoiceLine = typeof atelierInvoiceLine.$inferSelect;
@@ -25,11 +40,10 @@ export interface ClientInvoicePdfArgs {
   engagementName?: string | null;
 }
 
-const NAVY = "#0E1F3D";
-const GOLD = "#E89E2C";
-const GREY = "#6b7280";
-const LEFT = 56;
-const RIGHT = 539;
+/** Create the pre-configured brand document for the invoice. */
+export function createClientInvoiceDoc(): PDFKit.PDFDocument {
+  return createBrandDoc();
+}
 
 function money(n: number, currency: string): string {
   return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -39,111 +53,114 @@ export function writeClientInvoicePdf(doc: PDFKit.PDFDocument, args: ClientInvoi
   const { invoice: inv, lines } = args;
   const currency = inv.currency;
 
-  // Header
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(20).text("COGNIRISE", LEFT, 56);
-  doc.fillColor(GOLD).font("Helvetica").fontSize(10).text("Atelier — Professional Services", LEFT);
-  doc.moveDown(0.8);
+  addBrandPage(doc);
 
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text(
-    inv.status === "void" ? "INVOICE (VOID)" : "INVOICE",
-    LEFT,
-  );
-  doc.moveDown(0.3);
-  doc.font("Helvetica").fontSize(10).fillColor(NAVY);
-  doc.text(`Invoice number: ${inv.invoiceNumber ?? "—"}`);
-  if (inv.issuedAt) doc.text(`Issue date: ${inv.issuedAt.toISOString().slice(0, 10)}`);
-  if (inv.dueDate) doc.text(`Due date: ${inv.dueDate}`);
-  doc.text(`Jurisdiction: ${inv.jurisdiction}`);
-  if (args.engagementName) doc.text(`Engagement: ${args.engagementName}`);
-  doc.moveDown(0.8);
+  // Title band.
+  doc
+    .font(FONT.bold)
+    .fontSize(19)
+    .fillColor(inv.status === "void" ? BRAND.danger : BRAND.navy)
+    .text(inv.status === "void" ? "INVOICE (VOID)" : "INVOICE", PAGE.left, doc.y);
+  doc
+    .font(FONT.medium)
+    .fontSize(9.5)
+    .fillColor(BRAND.gold)
+    .text("Atelier — Professional Services", PAGE.left, doc.y + 2);
+  doc.moveDown(0.9);
 
-  // Bill-to block
+  // Invoice meta + bill-to as glass panels.
+  const metaBlocks: BrandBlock[] = [
+    block.body(`Invoice number: ${inv.invoiceNumber ?? "—"}`, { font: FONT.semibold, color: BRAND.navy }),
+  ];
+  if (inv.issuedAt) metaBlocks.push(block.body(`Issue date: ${inv.issuedAt.toISOString().slice(0, 10)}`));
+  if (inv.dueDate) metaBlocks.push(block.body(`Due date: ${inv.dueDate}`));
+  metaBlocks.push(block.body(`Jurisdiction: ${inv.jurisdiction}`));
+  if (args.engagementName) metaBlocks.push(block.body(`Engagement: ${args.engagementName}`));
+  glassSection(doc, null, metaBlocks);
+
   const billTo = inv.billTo ?? {};
-  doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Bill to");
-  doc.font("Helvetica").fontSize(10).fillColor("#333");
+  const billBlocks: BrandBlock[] = [];
   const billToName = billTo.name || args.accountName || "—";
-  doc.text(billToName);
-  if (billTo.address) doc.text(billTo.address);
-  if (billTo.country) doc.text(billTo.country);
-  if (billTo.vatId) doc.text(`VAT/Tax ID: ${billTo.vatId}`);
-  if (billTo.contactEmail) doc.text(billTo.contactEmail);
-  doc.moveDown(0.8);
+  billBlocks.push(block.body(billToName, { font: FONT.semibold, color: BRAND.navy }));
+  if (billTo.address) billBlocks.push(block.body(billTo.address));
+  if (billTo.country) billBlocks.push(block.body(billTo.country));
+  if (billTo.vatId) billBlocks.push(block.body(`VAT/Tax ID: ${billTo.vatId}`));
+  if (billTo.contactEmail) billBlocks.push(block.body(billTo.contactEmail));
+  glassSection(doc, "Bill To", billBlocks);
 
-  doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor(GOLD).lineWidth(0.7).stroke();
-  doc.moveDown(0.5);
+  // Lines table.
+  brandTable(
+    doc,
+    [
+      { label: "Description", width: 258 },
+      { label: "Qty", width: 55, align: "right" },
+      { label: "Unit price", width: 80, align: "right" },
+      { label: "Amount", width: 90, align: "right" },
+    ],
+    lines.map((l) => [
+      l.description,
+      l.qty.toLocaleString("en-US", { maximumFractionDigits: 2 }),
+      l.unitPrice.toFixed(2),
+      l.amount.toFixed(2),
+    ]),
+    { fontSize: 9 },
+  );
 
-  // Lines table
-  let y = doc.y;
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY);
-  doc.text("Description", LEFT, y, { width: 270, lineBreak: false });
-  doc.text("Qty", 340, y, { width: 50, align: "right", lineBreak: false });
-  doc.text("Unit price", 395, y, { width: 65, align: "right", lineBreak: false });
-  doc.text("Amount", 465, y, { width: 74, align: "right" });
-  doc.moveTo(LEFT, doc.y + 2).lineTo(RIGHT, doc.y + 2).strokeColor(GREY).lineWidth(0.5).stroke();
-  doc.moveDown(0.4);
-
-  doc.font("Helvetica").fontSize(9).fillColor("#333");
-  for (const l of lines) {
-    y = doc.y;
-    if (y > 720) {
-      doc.addPage();
-      y = doc.y;
-    }
-    const descHeight = doc.heightOfString(l.description, { width: 270 });
-    doc.text(l.description, LEFT, y, { width: 270, lineBreak: false });
-    doc.text(l.qty.toLocaleString("en-US", { maximumFractionDigits: 2 }), 340, y, { width: 50, align: "right", lineBreak: false });
-    doc.text(l.unitPrice.toFixed(2), 395, y, { width: 65, align: "right", lineBreak: false });
-    doc.text(l.amount.toFixed(2), 465, y, { width: 74, align: "right" });
-    doc.y = y + Math.max(descHeight, 12) + 2;
-  }
-  doc.moveTo(LEFT, doc.y + 2).lineTo(RIGHT, doc.y + 2).strokeColor(GREY).lineWidth(0.5).stroke();
-  doc.moveDown(0.8);
-
-  // Totals
-  doc.font("Helvetica").fontSize(10).fillColor(NAVY);
-  doc.text(`Subtotal: ${money(inv.subtotal, currency)}`, 320, doc.y, { width: 219, align: "right" });
-  doc.text(`VAT (${inv.vatRatePct}%): ${money(inv.vatAmount, currency)}`, 320, doc.y, { width: 219, align: "right" });
-  doc.font("Helvetica-Bold").fontSize(12);
-  doc.text(`Total due: ${money(inv.total, currency)}`, 320, doc.y, { width: 219, align: "right" });
+  // Totals — right-aligned emphasis block.
+  doc.font(FONT.regular).fontSize(10).fillColor(BRAND.ink);
+  doc.text(`Subtotal: ${money(inv.subtotal, currency)}`, 320, doc.y, { width: PAGE.right - 320, align: "right" });
+  doc.text(`VAT (${inv.vatRatePct}%): ${money(inv.vatAmount, currency)}`, 320, doc.y, { width: PAGE.right - 320, align: "right" });
+  doc.font(FONT.bold).fontSize(12).fillColor(BRAND.navy);
+  doc.text(`Total due: ${money(inv.total, currency)}`, 320, doc.y + 2, { width: PAGE.right - 320, align: "right" });
   if (inv.amountPaid > 0) {
-    doc.font("Helvetica").fontSize(10);
-    doc.text(`Paid to date: ${money(inv.amountPaid, currency)}`, 320, doc.y, { width: 219, align: "right" });
-    doc.text(`Balance: ${money(Math.max(0, Math.round((inv.total - inv.amountPaid) * 100) / 100), currency)}`, 320, doc.y, { width: 219, align: "right" });
+    doc.font(FONT.regular).fontSize(10).fillColor(BRAND.ink);
+    doc.text(`Paid to date: ${money(inv.amountPaid, currency)}`, 320, doc.y, { width: PAGE.right - 320, align: "right" });
+    doc.text(
+      `Balance: ${money(Math.max(0, Math.round((inv.total - inv.amountPaid) * 100) / 100), currency)}`,
+      320,
+      doc.y,
+      { width: PAGE.right - 320, align: "right" },
+    );
   }
 
   if (inv.status === "void") {
     doc.moveDown(1);
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#b91c1c");
+    doc.font(FONT.bold).fontSize(11).fillColor(BRAND.danger);
     doc.text(
       `VOIDED${inv.voidedAt ? ` on ${inv.voidedAt.toISOString().slice(0, 10)}` : ""}${inv.voidedReason ? ` — ${inv.voidedReason}` : ""}. This invoice is not payable.`,
-      LEFT,
+      PAGE.left,
       doc.y,
-      { width: RIGHT - LEFT },
+      { width: PAGE.contentW },
     );
   }
 
   if (inv.notes) {
     doc.moveDown(1);
-    doc.font("Helvetica").fontSize(9).fillColor(GREY);
-    doc.text(`Notes: ${inv.notes}`, LEFT, doc.y, { width: RIGHT - LEFT });
+    doc.font(FONT.regular).fontSize(9).fillColor(BRAND.muted);
+    doc.text(`Notes: ${inv.notes}`, PAGE.left, doc.y, { width: PAGE.contentW });
   }
 
   doc.moveDown(1.2);
-  doc.font("Helvetica").fontSize(8).fillColor(GREY);
+  doc.font(FONT.regular).fontSize(8).fillColor(BRAND.muted);
   doc.text(
     inv.dueDate
       ? `Payment is due by ${inv.dueDate}. Please quote invoice number ${inv.invoiceNumber ?? ""} with your remittance.`
       : `Please quote invoice number ${inv.invoiceNumber ?? ""} with your remittance.`,
-    LEFT,
+    PAGE.left,
     doc.y,
-    { width: RIGHT - LEFT },
+    { width: PAGE.contentW },
   );
+
+  writeBrandFooters(doc, {
+    label: `Cognirise — Invoice ${inv.invoiceNumber ?? ""}`.trim(),
+    generatedAt: inv.issuedAt ?? new Date(),
+  });
 }
 
 /** Render the client invoice PDF fully into a Buffer. */
 export function renderClientInvoicePdfBuffer(args: ClientInvoicePdfArgs): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 56 });
+    const doc = createClientInvoiceDoc();
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));

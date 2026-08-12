@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import PDFDocument from "pdfkit";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import {
   atelierAuditEvents,
@@ -12,6 +11,17 @@ import {
 import { withRls } from "./rls";
 import { resolveUserIdForPerson } from "./meRoutes";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBrandDoc,
+  addBrandPage,
+  glassSection,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  PAGE,
+  type BrandBlock,
+} from "../../lib/atelier-pdf-brand.js";
 
 const ENTITY_TYPES = new Set([
   "account",
@@ -71,65 +81,43 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
     contentDispositionFilename("attachment", filename),
   );
 
-  const doc = new PDFDocument({ size: "A4", margin: 56 });
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
+  const doc = createBrandDoc();
   doc.pipe(res);
+  addBrandPage(doc);
 
-  // Cover header
+  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Immutable Audit Trail", PAGE.left, doc.y);
   doc
-    .fillColor("#0E1F3D")
-    .font("Helvetica-Bold")
-    .fontSize(20)
-    .text("ATELIER", { align: "left" });
-  doc
-    .fillColor("#E89E2C")
-    .font("Helvetica")
-    .fontSize(10)
-    .text("Cognirise Employee Portal — Immutable Audit Trail", { align: "left" });
-  doc.moveDown(0.8);
+    .font(FONT.medium)
+    .fontSize(9.5)
+    .fillColor(BRAND.gold)
+    .text("Atelier — Cognirise Employee Portal", PAGE.left, doc.y + 2);
+  doc.moveDown(0.9);
 
-  doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(12);
-  doc.text(`Entity: ${entityType} / ${entityId}`);
-  doc.font("Helvetica").fontSize(10).fillColor("#444");
-  doc.text(`Generated: ${new Date().toISOString()}`);
-  doc.text(`Persona: ${req.atelierPersona?.name ?? "(unknown)"}`);
-  doc.text(`Events: ${rows.length}`);
-  doc.moveDown(0.8);
-  doc.moveTo(56, doc.y).lineTo(539, doc.y).strokeColor("#E89E2C").lineWidth(0.7).stroke();
-  doc.moveDown(0.6);
+  glassSection(doc, null, [
+    block.body(`Entity: ${entityType} / ${entityId}`, { font: FONT.semibold, color: BRAND.navy }),
+    block.muted(`Generated: ${new Date().toISOString()}`),
+    block.muted(`Persona: ${req.atelierPersona?.name ?? "(unknown)"}`),
+    block.muted(`Events: ${rows.length}`),
+  ]);
 
+  const eventBlocks: BrandBlock[] = [];
   if (rows.length === 0) {
-    doc.fillColor("#999").font("Helvetica-Oblique").fontSize(11);
-    doc.text("No audit events recorded for this entity.");
+    eventBlocks.push(block.italic("No audit events recorded for this entity."));
   }
-
   for (const r of rows) {
-    doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(10);
-    doc.text(`${r.ts.toISOString()}  ·  ${r.actorType.toUpperCase()}  ·  ${r.actorLabel}`);
-    doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(11);
-    doc.text(r.action);
+    eventBlocks.push(
+      block.muted(`${r.ts.toISOString()}  ·  ${r.actorType.toUpperCase()}  ·  ${r.actorLabel}`, { size: 8 }),
+      block.strong(r.action, { size: 10 }),
+    );
     if (r.payloadSummary) {
-      doc.fillColor("#444").font("Helvetica").fontSize(10);
-      doc.text(r.payloadSummary, { indent: 12, lineGap: 1 });
+      eventBlocks.push(block.body(r.payloadSummary, { indent: 10, size: 9, color: BRAND.ink }));
     }
-    doc.moveDown(0.5);
+    eventBlocks.push(block.gap(7));
   }
+  glassSection(doc, "Audit Events", eventBlocks);
 
-  // Footer
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(range.start + i);
-    doc
-      .fillColor("#999")
-      .font("Helvetica")
-      .fontSize(8)
-      .text(
-        `Cognirise · Atelier · ${entityType}/${entityId} · page ${i + 1} of ${range.count}`,
-        56,
-        780,
-        { width: 483, align: "center" },
-      );
-  }
-
+  writeBrandFooters(doc, { label: `Cognirise · Atelier · ${entityType}/${entityId}` });
   doc.end();
 }
 
@@ -248,67 +236,48 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     contentDispositionFilename("attachment", filename),
   );
 
-  const doc = new PDFDocument({ size: "A4", margin: 56 });
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
+  const doc = createBrandDoc();
   doc.pipe(res);
+  addBrandPage(doc);
 
+  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Per-Person Audit Pack", PAGE.left, doc.y);
   doc
-    .fillColor("#0E1F3D")
-    .font("Helvetica-Bold")
-    .fontSize(20)
-    .text("ATELIER", { align: "left" });
-  doc
-    .fillColor("#E89E2C")
-    .font("Helvetica")
-    .fontSize(10)
-    .text("Cognirise Employee Portal — Per-Person Audit Pack", { align: "left" });
-  doc.moveDown(0.8);
+    .font(FONT.medium)
+    .fontSize(9.5)
+    .fillColor(BRAND.gold)
+    .text("Atelier — Cognirise Employee Portal", PAGE.left, doc.y + 2);
+  doc.moveDown(0.9);
 
-  doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(12);
-  doc.text(`Person: ${personLabel}`);
-  doc.font("Helvetica").fontSize(10).fillColor("#444");
-  doc.text(`Person ID: ${personId}`);
-  doc.text(`Onboardings included: ${onboardingIds.length}`);
-  doc.text(`Offboardings included: ${offboardingIds.length}`);
-  doc.text(`Generated: ${new Date().toISOString()}`);
-  doc.text(`Signed by: ${req.atelierPersona?.name ?? "(unknown)"} (${req.atelierPersona?.role ?? "?"})`);
-  doc.text(`Events: ${rows.length}`);
-  doc.moveDown(0.8);
-  doc.moveTo(56, doc.y).lineTo(539, doc.y).strokeColor("#E89E2C").lineWidth(0.7).stroke();
-  doc.moveDown(0.6);
+  glassSection(doc, null, [
+    block.body(`Person: ${personLabel}`, { font: FONT.semibold, color: BRAND.navy }),
+    block.muted(`Person ID: ${personId}`),
+    block.muted(`Onboardings included: ${onboardingIds.length}`),
+    block.muted(`Offboardings included: ${offboardingIds.length}`),
+    block.muted(`Generated: ${new Date().toISOString()}`),
+    block.muted(`Signed by: ${req.atelierPersona?.name ?? "(unknown)"} (${req.atelierPersona?.role ?? "?"})`),
+    block.muted(`Events: ${rows.length}`),
+  ]);
 
+  const eventBlocks: BrandBlock[] = [];
   if (rows.length === 0) {
-    doc.fillColor("#999").font("Helvetica-Oblique").fontSize(11);
-    doc.text("No audit events recorded for this person.");
+    eventBlocks.push(block.italic("No audit events recorded for this person."));
   }
-
   for (const r of rows) {
-    doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(10);
-    doc.text(`${r.ts.toISOString()}  ·  ${r.actorType.toUpperCase()}  ·  ${r.actorLabel}`);
-    doc.fillColor("#666").font("Helvetica").fontSize(9);
-    doc.text(`${r.entityType} / ${r.entityId}`);
-    doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(11);
-    doc.text(r.action);
+    eventBlocks.push(
+      block.muted(`${r.ts.toISOString()}  ·  ${r.actorType.toUpperCase()}  ·  ${r.actorLabel}`, { size: 8 }),
+      block.muted(`${r.entityType} / ${r.entityId}`, { size: 8 }),
+      block.strong(r.action, { size: 10 }),
+    );
     if (r.payloadSummary) {
-      doc.fillColor("#444").font("Helvetica").fontSize(10);
-      doc.text(r.payloadSummary, { indent: 12, lineGap: 1 });
+      eventBlocks.push(block.body(r.payloadSummary, { indent: 10, size: 9, color: BRAND.ink }));
     }
-    doc.moveDown(0.5);
+    eventBlocks.push(block.gap(7));
   }
+  glassSection(doc, "Audit Events", eventBlocks);
 
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(range.start + i);
-    doc
-      .fillColor("#999")
-      .font("Helvetica")
-      .fontSize(8)
-      .text(
-        `Cognirise · Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""} · page ${i + 1} of ${range.count}`,
-        56,
-        780,
-        { width: 483, align: "center" },
-      );
-  }
-
+  writeBrandFooters(doc, {
+    label: `Cognirise · Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""}`,
+  });
   doc.end();
 }

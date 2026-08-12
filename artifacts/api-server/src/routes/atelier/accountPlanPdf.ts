@@ -14,7 +14,6 @@
 // restricted / board personas — mirroring the account-360 gate.
 // ============================================================
 import type { Request, Response } from "express";
-import PDFDocument from "pdfkit";
 import { and, eq, isNull, inArray, desc } from "drizzle-orm";
 import {
   db,
@@ -34,14 +33,20 @@ import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBrandDoc,
+  addBrandPage,
+  glassSection,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  PAGE,
+  type BrandBlock,
+} from "../../lib/atelier-pdf-brand.js";
 
 type Persona = { id: string; role: string; name: string; orgId?: string };
 
-const NAVY = "#0E1F3D";
-const GOLD = "#E89E2C";
-const INK = "#333333";
-const MUTE = "#777777";
-const LINE = "#D8DCE4";
 
 const RISK_SEVERITY_COLOR: Record<string, string> = {
   red: "#C0392B",
@@ -206,6 +211,7 @@ export async function accountPlanPdfHandler(
   }
 
   // ---------- render ----------
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
   const brand = account.brandName ?? account.name;
   const filename = `atelier-account-plan-${brand.replace(/\s+/g, "_")}-${account.id}.pdf`;
   res.setHeader("Content-Type", "application/pdf");
@@ -214,35 +220,17 @@ export async function accountPlanPdfHandler(
     contentDispositionFilename("attachment", filename),
   );
 
-  const doc = new PDFDocument({ size: "A4", margin: 48 });
-  const LEFT = 48;
-  const RIGHT = 547; // 595 - 48
-  const WIDTH = RIGHT - LEFT;
+  const doc = createBrandDoc();
   doc.pipe(res);
-
-  const hr = () => {
-    doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor(LINE).lineWidth(0.6).stroke();
-    doc.moveDown(0.5);
-  };
-  const sectionTitle = (label: string) => {
-    if (doc.y > 720) doc.addPage();
-    doc.moveDown(0.4);
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(11).text(label.toUpperCase(), LEFT);
-    doc.moveTo(LEFT, doc.y + 1).lineTo(RIGHT, doc.y + 1).strokeColor(GOLD).lineWidth(0.8).stroke();
-    doc.moveDown(0.5);
-  };
+  addBrandPage(doc);
 
   // Header band.
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(20).text("ATELIER", LEFT);
+  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text(brand, PAGE.left, doc.y);
   doc
-    .fillColor(GOLD)
-    .font("Helvetica")
+    .font(FONT.medium)
     .fontSize(9.5)
-    .text("Cognirise · Account Plan & QBR Brief", LEFT);
-  doc.moveDown(0.6);
-
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text(brand, LEFT);
-  doc.fillColor(MUTE).font("Helvetica").fontSize(9.5);
+    .fillColor(BRAND.gold)
+    .text("Account Plan & QBR Brief", PAGE.left, doc.y + 2);
   const meta = [
     account.sector,
     account.country,
@@ -250,251 +238,186 @@ export async function accountPlanPdfHandler(
     account.status,
     ownerName ? `Owner: ${ownerName}` : null,
   ].filter(Boolean) as string[];
-  doc.text(meta.join("   ·   "), LEFT);
-  doc.fillColor(MUTE).fontSize(8.5).text(
-    `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · by ${me.name}`,
-    LEFT,
-  );
-  doc.moveDown(0.4);
-  hr();
+  doc.font(FONT.regular).fontSize(9).fillColor(BRAND.muted).text(meta.join("   ·   "), PAGE.left, doc.y + 4);
+  doc
+    .font(FONT.regular)
+    .fontSize(8)
+    .fillColor(BRAND.faint)
+    .text(
+      `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · by ${me.name}`,
+      PAGE.left,
+      doc.y + 1,
+    );
+  doc.moveDown(0.8);
+  doc.x = PAGE.left;
 
   // ---------- Strategy ----------
-  sectionTitle("Account Strategy");
-  if (strategy?.winHypothesis) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Win hypothesis", LEFT);
-    doc.fillColor(INK).font("Helvetica").fontSize(9.5).text(strategy.winHypothesis, LEFT, doc.y, {
-      width: WIDTH,
-    });
-    doc.moveDown(0.3);
+  {
+    const blocks: BrandBlock[] = [];
+    if (strategy?.winHypothesis) {
+      blocks.push(block.label("Win hypothesis"), block.body(strategy.winHypothesis));
+    }
+    if (account.cogniriseHypothesis) {
+      blocks.push(block.label("Cognirise hypothesis"), block.body(account.cogniriseHypothesis));
+    }
+    const serviceLines = strategy?.targetServiceLines ?? [];
+    if (serviceLines.length) {
+      blocks.push(block.label("Target service lines"), block.body(serviceLines.join(" · ")));
+    }
+    const keyPlays = strategy?.keyPlays ?? [];
+    if (keyPlays.length) {
+      blocks.push(block.label("Key plays"), ...keyPlays.map((p) => block.bullet(p)));
+    }
+    const priorities = account.strategicPriorities ?? [];
+    if (priorities.length) {
+      blocks.push(block.label("Client strategic priorities"), ...priorities.map((p) => block.bullet(p)));
+    }
+    if (!blocks.length) blocks.push(block.italic("No strategy captured yet."));
+    glassSection(doc, "Account Strategy", blocks);
   }
-  if (account.cogniriseHypothesis) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Cognirise hypothesis", LEFT);
-    doc.fillColor(INK).font("Helvetica").fontSize(9.5).text(account.cogniriseHypothesis, LEFT, doc.y, {
-      width: WIDTH,
-    });
-    doc.moveDown(0.3);
-  }
-  const serviceLines = strategy?.targetServiceLines ?? [];
-  if (serviceLines.length) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Target service lines", LEFT);
-    doc.fillColor(INK).font("Helvetica").fontSize(9.5).text(serviceLines.join(" · "), LEFT, doc.y, {
-      width: WIDTH,
-    });
-    doc.moveDown(0.3);
-  }
-  const keyPlays = strategy?.keyPlays ?? [];
-  if (keyPlays.length) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Key plays", LEFT);
-    doc.fillColor(INK).font("Helvetica").fontSize(9.5);
-    for (const p of keyPlays) doc.text(`•  ${p}`, LEFT + 6, doc.y, { width: WIDTH - 6 });
-    doc.moveDown(0.3);
-  }
-  const priorities = account.strategicPriorities ?? [];
-  if (priorities.length) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Client strategic priorities", LEFT);
-    doc.fillColor(INK).font("Helvetica").fontSize(9.5);
-    for (const p of priorities) doc.text(`•  ${p}`, LEFT + 6, doc.y, { width: WIDTH - 6 });
-    doc.moveDown(0.3);
-  }
-  if (
-    !strategy?.winHypothesis &&
-    !account.cogniriseHypothesis &&
-    !serviceLines.length &&
-    !keyPlays.length &&
-    !priorities.length
-  ) {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").fontSize(9.5).text("No strategy captured yet.", LEFT);
-  }
-  doc.moveDown(0.2);
 
   // ---------- Goal progress ----------
-  sectionTitle("Goal Progress");
-  if (!plan.goalProgress.length) {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").fontSize(9.5).text("No strategy objectives defined.", LEFT);
-  } else {
-    for (const g of plan.goalProgress) {
-      if (doc.y > 740) doc.addPage();
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text(g.text, LEFT, doc.y, {
-        width: WIDTH - 90,
-        continued: false,
-      });
-      const statusY = doc.y - 12;
-      doc
-        .fillColor(MUTE)
-        .font("Helvetica-Bold")
-        .fontSize(8.5)
-        .text(GOAL_STATUS_LABEL[g.status] ?? g.status, RIGHT - 90, statusY < 0 ? doc.y : statusY, {
-          width: 90,
-          align: "right",
+  {
+    const blocks: BrandBlock[] = [];
+    if (!plan.goalProgress.length) {
+      blocks.push(block.italic("No strategy objectives defined."));
+    } else {
+      for (const g of plan.goalProgress) {
+        blocks.push({
+          kind: "row",
+          cells: [
+            { text: g.text, width: 365, font: FONT.semibold, size: 9.5, color: BRAND.navy },
+            { text: GOAL_STATUS_LABEL[g.status] ?? g.status, width: 90, align: "right", font: FONT.semibold, size: 8.5, color: BRAND.muted },
+          ],
+          gapAfter: 2,
         });
-      const bits: string[] = [];
-      if (g.currentValue || g.targetValue) {
-        bits.push(`${g.currentValue ?? "—"} of ${g.targetValue ?? "—"}`);
+        const bits: string[] = [];
+        if (g.currentValue || g.targetValue) {
+          bits.push(`${g.currentValue ?? "—"} of ${g.targetValue ?? "—"}`);
+        }
+        if (g.targetDate) bits.push(`by ${g.targetDate}`);
+        if (g.note) bits.push(g.note);
+        if (bits.length) blocks.push(block.muted(bits.join("  ·  "), { indent: 6, size: 8.5 }));
+        blocks.push(block.gap(4));
       }
-      if (g.targetDate) bits.push(`by ${g.targetDate}`);
-      if (g.note) bits.push(g.note);
-      if (bits.length) {
-        doc.fillColor(INK).font("Helvetica").fontSize(8.5).text(bits.join("  ·  "), LEFT + 6, doc.y, {
-          width: WIDTH - 6,
-        });
-      }
-      doc.moveDown(0.35);
     }
+    glassSection(doc, "Goal Progress", blocks);
   }
-  doc.moveDown(0.1);
 
   // ---------- Team & stakeholders ----------
-  sectionTitle("Account Team & Key Stakeholders");
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Cognirise team", LEFT);
-  doc.fillColor(INK).font("Helvetica").fontSize(9.5);
-  const teamLines: string[] = [];
-  if (ownerName) teamLines.push(`${ownerName} — Account owner`);
-  for (const t of teamRows) {
-    const u = userById.get(t.userId);
-    if (!u || u.id === account.partnerOwnerId) continue;
-    teamLines.push(`${u.name} — ${t.roleOnAccount.replace(/_/g, " ")}`);
-  }
-  if (teamLines.length) {
-    for (const l of teamLines) doc.text(`•  ${l}`, LEFT + 6, doc.y, { width: WIDTH - 6 });
-  } else {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").text("No team assigned.", LEFT + 6);
-  }
-  doc.moveDown(0.3);
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text("Client stakeholders", LEFT);
-  doc.fillColor(INK).font("Helvetica").fontSize(9.5);
-  if (contacts.length) {
-    for (const c of contacts) {
-      const role = [c.title, c.disposition].filter(Boolean).join(" · ");
-      doc.text(`•  ${c.fullName}${role ? ` — ${role}` : ""}`, LEFT + 6, doc.y, { width: WIDTH - 6 });
+  {
+    const blocks: BrandBlock[] = [block.label("Cognirise team")];
+    const teamLines: string[] = [];
+    if (ownerName) teamLines.push(`${ownerName} — Account owner`);
+    for (const t of teamRows) {
+      const u = userById.get(t.userId);
+      if (!u || u.id === account.partnerOwnerId) continue;
+      teamLines.push(`${u.name} — ${t.roleOnAccount.replace(/_/g, " ")}`);
     }
-  } else {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").text("No contacts recorded.", LEFT + 6);
+    if (teamLines.length) blocks.push(...teamLines.map((l) => block.bullet(l)));
+    else blocks.push(block.italic("No team assigned.", { indent: 6 }));
+    blocks.push(block.gap(4), block.label("Client stakeholders"));
+    if (contacts.length) {
+      for (const c of contacts) {
+        const role = [c.title, c.disposition].filter(Boolean).join(" · ");
+        blocks.push(block.bullet(`${c.fullName}${role ? ` — ${role}` : ""}`));
+      }
+    } else {
+      blocks.push(block.italic("No contacts recorded.", { indent: 6 }));
+    }
+    glassSection(doc, "Account Team & Key Stakeholders", blocks);
   }
-  doc.moveDown(0.2);
 
   // ---------- Financials (gated) ----------
-  sectionTitle("Financial Summary");
-  if (!canSeeFinancials || !financials) {
-    doc
-      .fillColor(MUTE)
-      .font("Helvetica-Oblique")
-      .fontSize(9.5)
-      .text("Financial detail is restricted for this persona.", LEFT);
-  } else {
-    const f = financials;
-    const pairs: Array<[string, string]> = [
-      ["Contract value", fmtUsd(f.contractValueUsd)],
-      ["Active engagement value", fmtUsd(f.activeEngagementValueUsd)],
-      ["Recognised revenue", fmtUsd(f.recognisedRevenueUsd)],
-      ["Gross margin", `${Math.round(f.grossMarginPct * 100)}%`],
-      ["Open pipeline", fmtUsd(f.openPipelineUsd)],
-      ["Weighted pipeline", fmtUsd(f.weightedPipelineUsd)],
-      ["AR outstanding", fmtUsd(f.arOutstandingUsd)],
-      ["AR overdue", fmtUsd(f.arOverdueUsd)],
-    ];
-    const colW = WIDTH / 2;
-    let startY = doc.y;
-    pairs.forEach(([label, val], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = LEFT + col * colW;
-      const y = startY + row * 16;
-      doc.fillColor(MUTE).font("Helvetica").fontSize(8.5).text(label, x, y, { width: colW - 10 });
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text(val, x + colW - 90, y - 1, {
-        width: 80,
-        align: "right",
-      });
-    });
-    doc.y = startY + Math.ceil(pairs.length / 2) * 16 + 2;
-    doc
-      .fillColor(MUTE)
-      .font("Helvetica")
-      .fontSize(8)
-      .text(
-        `${f.activeEngagementCount} active / ${f.engagementCount} engagements · ${f.openOpportunityCount} open opportunities · ${f.overdueInvoiceCount} overdue invoices`,
-        LEFT,
-        doc.y,
+  {
+    const blocks: BrandBlock[] = [];
+    if (!canSeeFinancials || !financials) {
+      blocks.push(block.italic("Financial detail is restricted for this persona."));
+    } else {
+      const f = financials;
+      const pairs: Array<[string, string]> = [
+        ["Contract value", fmtUsd(f.contractValueUsd)],
+        ["Active engagement value", fmtUsd(f.activeEngagementValueUsd)],
+        ["Recognised revenue", fmtUsd(f.recognisedRevenueUsd)],
+        ["Gross margin", `${Math.round(f.grossMarginPct * 100)}%`],
+        ["Open pipeline", fmtUsd(f.openPipelineUsd)],
+        ["Weighted pipeline", fmtUsd(f.weightedPipelineUsd)],
+        ["AR outstanding", fmtUsd(f.arOutstandingUsd)],
+        ["AR overdue", fmtUsd(f.arOverdueUsd)],
+      ];
+      for (let i = 0; i < pairs.length; i += 2) {
+        const cells: Array<{ text: string; width: number; align?: "left" | "right"; font?: string; size?: number; color?: string }> = [];
+        for (const pair of [pairs[i], pairs[i + 1]].filter(Boolean) as Array<[string, string]>) {
+          cells.push(
+            { text: pair[0], width: 130, size: 8.5, color: BRAND.muted },
+            { text: pair[1], width: 90, align: "right", font: FONT.semibold, size: 9.5, color: BRAND.navy },
+          );
+        }
+        blocks.push({ kind: "row", cells, gapAfter: 5 });
+      }
+      blocks.push(
+        block.muted(
+          `${f.activeEngagementCount} active / ${f.engagementCount} engagements · ${f.openOpportunityCount} open opportunities · ${f.overdueInvoiceCount} overdue invoices`,
+          { size: 8 },
+        ),
       );
+    }
+    glassSection(doc, "Financial Summary", blocks);
   }
-  doc.moveDown(0.2);
 
   // ---------- Risk register ----------
-  sectionTitle("Account Risk Register");
-  const openRisks = plan.riskRegister.filter((r) => r.status !== "closed");
-  if (!openRisks.length) {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").fontSize(9.5).text("No open risks.", LEFT);
-  } else {
-    for (const r of openRisks) {
-      if (doc.y > 745) doc.addPage();
-      const dotY = doc.y + 4;
-      doc
-        .circle(LEFT + 3, dotY, 3)
-        .fillColor(RISK_SEVERITY_COLOR[r.severity] ?? GOLD)
-        .fill();
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text(
-        `${r.kind.toUpperCase()} · ${r.description}`,
-        LEFT + 12,
-        doc.y,
-        { width: WIDTH - 12 },
-      );
-      const sub: string[] = [];
-      if (r.ownerName) sub.push(`Owner: ${r.ownerName}`);
-      if (r.dueDate) sub.push(`Due ${r.dueDate}`);
-      sub.push(r.status);
-      if (r.mitigation) sub.push(`Mitigation: ${r.mitigation}`);
-      doc.fillColor(INK).font("Helvetica").fontSize(8.5).text(sub.join("  ·  "), LEFT + 12, doc.y, {
-        width: WIDTH - 12,
-      });
-      doc.moveDown(0.35);
+  {
+    const blocks: BrandBlock[] = [];
+    const openRisks = plan.riskRegister.filter((r) => r.status !== "closed");
+    if (!openRisks.length) {
+      blocks.push(block.italic("No open risks."));
+    } else {
+      for (const r of openRisks) {
+        blocks.push({
+          kind: "text",
+          text: `${r.kind.toUpperCase()} · ${r.description}`,
+          font: FONT.semibold,
+          size: 9.5,
+          color: RISK_SEVERITY_COLOR[r.severity] ?? BRAND.gold,
+          gapAfter: 1,
+        });
+        const sub: string[] = [];
+        if (r.ownerName) sub.push(`Owner: ${r.ownerName}`);
+        if (r.dueDate) sub.push(`Due ${r.dueDate}`);
+        sub.push(r.status);
+        if (r.mitigation) sub.push(`Mitigation: ${r.mitigation}`);
+        blocks.push(block.muted(sub.join("  ·  "), { indent: 6, size: 8.5 }), block.gap(4));
+      }
     }
+    glassSection(doc, "Account Risk Register", blocks);
   }
-  doc.moveDown(0.1);
 
   // ---------- Next actions ----------
-  sectionTitle("Next Actions");
-  const openActions = plan.actionPlan.filter(
-    (a) => a.status !== "done" && a.status !== "cancelled",
-  );
-  if (!openActions.length) {
-    doc.fillColor(MUTE).font("Helvetica-Oblique").fontSize(9.5).text("No open actions.", LEFT);
-  } else {
-    for (const a of openActions) {
-      if (doc.y > 745) doc.addPage();
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9.5).text(
-        `[${a.priority.toUpperCase()}] ${a.title}`,
-        LEFT,
-        doc.y,
-        { width: WIDTH },
-      );
-      const sub: string[] = [];
-      if (a.ownerName) sub.push(`Owner: ${a.ownerName}`);
-      if (a.dueDate) sub.push(`Due ${a.dueDate}`);
-      sub.push(ACTION_STATUS_LABEL[a.status] ?? a.status);
-      if (a.linkedObjectiveText) sub.push(`Objective: ${a.linkedObjectiveText}`);
-      else if (a.linkedPlay) sub.push(`Play: ${a.linkedPlay}`);
-      if (a.source === "promoted") sub.push("from AI suggestion");
-      doc.fillColor(INK).font("Helvetica").fontSize(8.5).text(sub.join("  ·  "), LEFT + 6, doc.y, {
-        width: WIDTH - 6,
-      });
-      doc.moveDown(0.35);
+  {
+    const blocks: BrandBlock[] = [];
+    const openActions = plan.actionPlan.filter(
+      (a) => a.status !== "done" && a.status !== "cancelled",
+    );
+    if (!openActions.length) {
+      blocks.push(block.italic("No open actions."));
+    } else {
+      for (const a of openActions) {
+        blocks.push(block.strong(`[${a.priority.toUpperCase()}] ${a.title}`, { size: 9.5 }));
+        const sub: string[] = [];
+        if (a.ownerName) sub.push(`Owner: ${a.ownerName}`);
+        if (a.dueDate) sub.push(`Due ${a.dueDate}`);
+        sub.push(ACTION_STATUS_LABEL[a.status] ?? a.status);
+        if (a.linkedObjectiveText) sub.push(`Objective: ${a.linkedObjectiveText}`);
+        else if (a.linkedPlay) sub.push(`Play: ${a.linkedPlay}`);
+        if (a.source === "promoted") sub.push("from AI suggestion");
+        blocks.push(block.muted(sub.join("  ·  "), { indent: 6, size: 8.5 }), block.gap(4));
+      }
     }
+    glassSection(doc, "Next Actions", blocks);
   }
 
   // ---------- Footer ----------
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(range.start + i);
-    doc
-      .fillColor(MUTE)
-      .font("Helvetica")
-      .fontSize(7.5)
-      .text(
-        `Cognirise · Atelier · ${brand} account plan · confidential · page ${i + 1} of ${range.count}`,
-        LEFT,
-        805,
-        { width: WIDTH, align: "center" },
-      );
-  }
+  writeBrandFooters(doc, { label: `Cognirise · Atelier · ${brand} account plan · confidential` });
 
   doc.end();
 }

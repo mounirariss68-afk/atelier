@@ -31,7 +31,6 @@
  * everyone else can read.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import PDFDocument from "pdfkit";
 import { desc } from "drizzle-orm";
 import { db, atelierUsers, atelierFinancePlanCommits } from "@workspace/db";
 import { listFinanceEntities, type FinanceEntityInfo } from "./financeEntitiesRoutes";
@@ -50,6 +49,18 @@ import {
 } from "./financeGlStatements";
 import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBrandDoc,
+  addBrandPage,
+  brandCover,
+  glassSection,
+  brandTable,
+  writeBrandFooters,
+  block,
+  BRAND,
+  FONT,
+  PAGE,
+} from "../../lib/atelier-pdf-brand.js";
 
 const router: IRouter = Router();
 
@@ -1175,7 +1186,8 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", contentDispositionFilename("inline", `board-pack-${period.id}.pdf`));
-  const doc = new PDFDocument({ size: "A4", margin: 56 });
+  // Task #1007 — rendered on the shared glassmorphism brand kit.
+  const doc = createBrandDoc();
   doc.pipe(res);
 
   const CCY_SYMBOL: Record<string, string> = { USD: "$", GBP: "£", EUR: "€" };
@@ -1185,25 +1197,19 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     : `${currency} ${Math.round(n).toLocaleString("en-GB")}`;
   const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-  if (BOARD_PACK_LOGO) {
-    doc.image(BOARD_PACK_LOGO, { width: 120 });
-    doc.moveDown(0.8);
-  }
-  doc.fillColor("#000").fontSize(20).text("Cognirise Group — Board Pack", { align: "left" });
-  doc.fontSize(12).fillColor("#666").text(`Period: ${period.label} · Presentation currency: ${currency}`);
-  doc.moveDown(0.5);
-  doc.fillColor("#000").fontSize(11).text(`Generated ${new Date().toISOString().slice(0, 10)} for ${me.name} (${me.role})`);
-  doc.moveDown(1.5);
+  brandCover(doc, {
+    docType: "Board Pack",
+    title: "Cognirise Group",
+    subLines: [
+      `Period: ${period.label} · Presentation currency: ${currency}`,
+      `Generated ${new Date().toISOString().slice(0, 10)} for ${me.name} (${me.role})`,
+    ],
+  });
+  addBrandPage(doc);
 
-  doc.fontSize(14).text("1. Executive summary");
-  doc.moveDown(0.3);
-  doc.fontSize(10);
-  for (const c of commentary) { doc.text(`• ${c}`); }
-  doc.moveDown(1);
+  glassSection(doc, "1. Executive Summary", commentary.map((c) => block.bullet(c)));
 
-  doc.fontSize(14).text(`2. Consolidated P&L (YTD, ${currency})`);
-  doc.moveDown(0.3);
-  doc.fontSize(9);
+  sectionHeading(doc, `2. Consolidated P&L (YTD, ${currency})`);
   const pnlRows: Array<[string, number, number, number, number]> = [
     ["Net revenue", consPnl.actual.netRevenue, consPnl.budget.netRevenue, consPnl.forecast.netRevenue, consPnl.priorYear.netRevenue],
     ["Direct cost", -consPnl.actual.directCost, -consPnl.budget.directCost, -consPnl.forecast.directCost, -consPnl.priorYear.directCost],
@@ -1216,13 +1222,10 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     ["Net income", consPnl.actual.netIncome, consPnl.budget.netIncome, consPnl.forecast.netIncome, consPnl.priorYear.netIncome],
   ];
   drawTable(doc, ["Line", "Actual", "Budget", "Forecast", "PY"], pnlRows.map((r) => [r[0], fmt(r[1]), fmt(r[2]), fmt(r[3]), fmt(r[4])]));
-  doc.moveDown(0.3);
-  doc.fontSize(9).fillColor("#666").text(`Eliminations: IC revenue ${fmt(elimsPnlOut.intercoRevenueGbp)} netted against IC cost (zero net P&L impact).`);
-  doc.fillColor("#000");
+  doc.font(FONT.regular).fontSize(9).fillColor(BRAND.muted).text(`Eliminations: IC revenue ${fmt(elimsPnlOut.intercoRevenueGbp)} netted against IC cost (zero net P&L impact).`, PAGE.left, doc.y + 2, { width: PAGE.contentW });
 
-  doc.addPage();
-  doc.fontSize(14).text(`3. Consolidated Balance Sheet (period close, ${currency})`);
-  doc.moveDown(0.3);
+  addBrandPage(doc);
+  sectionHeading(doc, `3. Consolidated Balance Sheet (period close, ${currency})`);
   drawTable(doc, ["Line", "Amount"], [
     ["Cash", fmt(consBsOut.cash)],
     ["AR", fmt(consBsOut.ar)],
@@ -1240,13 +1243,10 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     ["Total equity", fmt(consBsOut.totalEquity)],
     ["Total L&E", fmt(consBsOut.totalLiabilitiesAndEquity)],
   ]);
-  doc.moveDown(0.3);
-  doc.fontSize(9).fillColor("#666").text(`IC eliminations: AR/AP ${fmt(elimsBsOut.intercoArGbp)} · IC loans ${fmt(elimsBsOut.intercoLoanGbp)}.`);
-  doc.fillColor("#000");
+  doc.font(FONT.regular).fontSize(9).fillColor(BRAND.muted).text(`IC eliminations: AR/AP ${fmt(elimsBsOut.intercoArGbp)} · IC loans ${fmt(elimsBsOut.intercoLoanGbp)}.`, PAGE.left, doc.y + 2, { width: PAGE.contentW });
 
   doc.moveDown(1);
-  doc.fontSize(14).text(`4. Consolidated Cash Flow (YTD, ${currency})`);
-  doc.moveDown(0.3);
+  sectionHeading(doc, `4. Consolidated Cash Flow (YTD, ${currency})`);
   drawTable(doc, ["Line", "Amount"], [
     ["Net income", fmt(consCf.netIncome)],
     ["Depreciation", fmt(consCf.depreciation)],
@@ -1259,41 +1259,42 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     ["Net change in cash", fmt(consCf.netChangeInCash)],
   ]);
 
-  doc.addPage();
-  doc.fontSize(14).text("5. Profitability — top 5 revenue / bottom 5 margin");
+  addBrandPage(doc);
+  sectionHeading(doc, "5. Profitability — top 5 revenue / bottom 5 margin");
+  doc.font(FONT.semibold).fontSize(10.5).fillColor(BRAND.ink).text("Top 5 by revenue (YTD)", PAGE.left, doc.y);
   doc.moveDown(0.3);
-  doc.fontSize(11).text("Top 5 by revenue (YTD)");
   drawTable(doc, ["Engagement", "Client", "Partner", "Revenue", "GM%"],
     top5Revenue.map((r) => [r.engagementName.slice(0, 36), r.client, r.partner, fmt(r.revenueGbp), fmtPct(r.grossMarginPct)]));
   doc.moveDown(0.5);
-  doc.fontSize(11).text("Bottom 5 by gross margin %");
+  doc.font(FONT.semibold).fontSize(10.5).fillColor(BRAND.ink).text("Bottom 5 by gross margin %", PAGE.left, doc.y);
+  doc.moveDown(0.3);
   drawTable(doc, ["Engagement", "Client", "Partner", "Revenue", "GM%"],
     bottom5Margin.map((r) => [r.engagementName.slice(0, 36), r.client, r.partner, fmt(r.revenueGbp), fmtPct(r.grossMarginPct)]));
 
   doc.moveDown(1);
-  doc.fontSize(14).text("6. Outlook & key risks");
-  doc.moveDown(0.3);
-  doc.fontSize(10);
-  for (const r of risks) { doc.text(`• ${r}`); }
+  glassSection(doc, "6. Outlook & Key Risks", risks.map((r) => block.bullet(r)));
 
+  writeBrandFooters(doc, { label: `Cognirise Group · Board pack · ${period.label}` });
   doc.end();
 });
 
+// Task #1007 — brand-kit table + gold-ruled section heading helpers.
+function sectionHeading(doc: PDFKit.PDFDocument, text: string) {
+  doc.font(FONT.bold).fontSize(13).fillColor(BRAND.navy).text(text, PAGE.left, doc.y, { width: PAGE.contentW });
+  const y = doc.y + 3;
+  doc.moveTo(PAGE.left, y).lineTo(PAGE.left + 42, y).strokeColor(BRAND.gold).lineWidth(1.4).stroke();
+  doc.y = y + 8;
+  doc.x = PAGE.left;
+}
+
 function drawTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][]) {
-  const startX = doc.x;
-  const colWidth = (doc.page.width - doc.page.margins.left - doc.page.margins.right) / headers.length;
-  doc.fontSize(9).fillColor("#666");
-  let y = doc.y;
-  headers.forEach((h, i) => doc.text(h, startX + i * colWidth, y, { width: colWidth - 4, align: i === 0 ? "left" : "right" }));
-  y += 14;
-  doc.moveTo(startX, y - 2).lineTo(startX + colWidth * headers.length, y - 2).strokeColor("#999").stroke();
-  doc.fillColor("#000").fontSize(9);
-  for (const row of rows) {
-    row.forEach((c, i) => doc.text(c, startX + i * colWidth, y, { width: colWidth - 4, align: i === 0 ? "left" : "right" }));
-    y += 13;
-  }
-  doc.x = startX;
-  doc.y = y + 4;
+  const colWidth = Math.floor(PAGE.contentW / headers.length);
+  brandTable(
+    doc,
+    headers.map((h, i) => ({ label: h, width: colWidth, align: i === 0 ? ("left" as const) : ("right" as const) })),
+    rows,
+    { fontSize: 9 },
+  );
 }
 
 // ----- Schedules (in-memory)

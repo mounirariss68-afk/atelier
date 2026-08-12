@@ -48,8 +48,8 @@ import {
   isRestrictedPersona,
   isBoardObserver,
 } from "./personaRoles.js";
-import PDFDocument from "pdfkit";
 import {
+  createClientInvoiceDoc,
   writeClientInvoicePdf,
   renderClientInvoicePdfBuffer,
   type ClientInvoicePdfArgs,
@@ -673,7 +673,7 @@ router.get("/wallet/invoices/:id/pdf", async (req, res) => {
   res.setHeader("Content-Type", "application/pdf");
   const disposition = req.query.download === "1" ? "attachment" : "inline";
   res.setHeader("Content-Disposition", contentDispositionFilename(disposition, filename));
-  const doc = new PDFDocument({ size: "A4", margin: 56 });
+  const doc = createClientInvoiceDoc();
   doc.pipe(res);
   writeClientInvoicePdf(doc, loaded.args);
   doc.end();
