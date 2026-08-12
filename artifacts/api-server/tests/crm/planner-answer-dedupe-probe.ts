@@ -145,6 +145,16 @@ async function main() {
       "answer turn did not re-ask the planner question",
       !emitted.some((f) => f.type === "needs_clarification"),
     );
+    // Chain handoff regression pin: a confirmed plan must NOT strand the
+    // user on the plan card — the turn must continue into the model loop
+    // and actually run the flight search for leg 1.
+    check(
+      "confirmed plan chains into travel_search_flights (no stranded card)",
+      emitted.some(
+        (f) => f.type === "tool_call" && f.data?.tool === "travel_search_flights",
+      ),
+      emitted.map((f) => `${f.type}:${f.data?.tool ?? ""}`),
+    );
     const [srcAfter] = await db
       .select({ status: atelierCliTurns.status })
       .from(atelierCliTurns)

@@ -1391,6 +1391,41 @@ export {
   stripDeadEndDocumentAdvice,
 } from "./narration-contract.js";
 
+// Hallucinated tool-name recovery — find the unique close match for a
+// mistyped tool name among the menu shown to the model. Token-overlap
+// based (names are snake_case): accept only when ≥2/3 of the longer
+// name's tokens match AND the winner clearly beats the runner-up, so
+// "request_employment_certificate" → "request_employment_letter" but
+// genuinely unknown names stay unresolved.
+export function closestToolName(raw: string, menu: string[]): string | null {
+  const want = raw.trim().toLowerCase();
+  if (!want) return null;
+  const wantTokens = new Set(want.split(/[^a-z0-9]+/).filter(Boolean));
+  if (wantTokens.size === 0) return null;
+  let best: { name: string; score: number } | null = null;
+  let second = 0;
+  for (const name of menu) {
+    const n = name.trim().toLowerCase();
+    if (!n || n === want) continue;
+    const tokens = n.split(/[^a-z0-9]+/).filter(Boolean);
+    if (tokens.length === 0) continue;
+    let shared = 0;
+    for (const t of tokens) if (wantTokens.has(t)) shared++;
+    const score = shared / Math.max(tokens.length, wantTokens.size);
+    if (!best || score > best.score) {
+      second = best?.score ?? 0;
+      best = { name, score };
+    } else if (score > second) {
+      second = score;
+    }
+  }
+  if (!best || best.score < 2 / 3) return null;
+  // Require a clear margin over the runner-up — a marginal winner is not a
+  // confident correction and should fall through to the model-side retry.
+  if (best.score - second < 0.2) return null;
+  return best.name;
+}
+
 const SYSTEM_PROMPT = [
   // Task #771 Riser overhaul — persona rename.
   // Task #947 — Riser is a friendly AI assistant with no gender.
@@ -1437,6 +1472,15 @@ const SYSTEM_PROMPT = [
   "9. NEVER promise a write you have not completed. Do not say \"I'll save/attach/log X now\"",
   "   unless you are calling the tool in the same step. If a save cannot be done, say only",
   "   what IS possible — never a promise followed by a refusal.",
+  // Task: employment-letter chat regression — the model listed every letter
+  // type/language/delivery option as a prose bullet list instead of calling
+  // the tool, whose clarification renders proper dropdowns and text boxes.
+  "10. STRUCTURED FORMS OVER PROSE MENUS: when the user's request maps to a tool that",
+  "   gathers details (letter/certificate requests, expense drafts, meeting scheduling, …),",
+  "   call that tool IMMEDIATELY with whatever the user already provided. If details are",
+  "   missing, the tool returns a structured clarification form with dropdowns and input",
+  "   boxes. NEVER enumerate a tool's options or required fields as a prose/bullet list —",
+  "   asking in prose instead of calling the tool is a hard failure.",
   "",
   // Task #792 — personal-document uploads must consult the user's existing
   // documents before choosing create vs attach, and chat is the ONLY
@@ -4146,6 +4190,10 @@ export async function runTurn(
     let pendingWrite: { tool: string; input: Record<string, unknown> } | null = null;
     let runtimeError: string | null = null;
     let clarificationHandled = false;
+    // Set when a deterministic clarification continuation succeeded with a
+    // multi-step `nextStep` directive — the model loop must still run to
+    // finish the flow (e.g. travel_plan_trip → travel_search_flights).
+    let chainAfterClarification = false;
     const stepResults: Array<Record<string, unknown>> = [];
     const writeStepCount = (): number =>
       toolCalls.filter((c) => findToolByName(String(c.tool), persona)?.isWrite).length;
@@ -4176,6 +4224,9 @@ export async function runTurn(
     // tool exists.
     let tools = retrieved.tools;
     let widenRetryUsed = false;
+    // One model-side retry per turn for a hallucinated tool name with no
+    // confident menu match (see the unknown-tool branch below).
+    let unknownToolRetryUsed = false;
     // Task #644 — resolution telemetry: intent + surfaced tools, so
     // real-world "couldn't understand" cases are diagnosable from logs.
     console.log(
@@ -4972,7 +5023,41 @@ export async function runTurn(
           if (dr.pendingClarification && dr.pendingClarification.tool === pc.tool) {
             dr.pendingClarification = null;
           }
-          status = "success";
+          // Multi-step chain handoff: some tools (travel_plan_trip, …)
+          // succeed with a `nextStep` directive that instructs the model
+          // to CONTINUE the flow (e.g. run travel_search_flights for leg
+          // 1). Ending the turn here would strand the user on the
+          // intermediate card with no results — so instead of finishing,
+          // hand the result to the model loop and let it follow the
+          // directive.
+          const chainDirective =
+            cont.data &&
+            typeof cont.data === "object" &&
+            typeof (cont.data as { nextStep?: unknown }).nextStep === "string" &&
+            ((cont.data as { nextStep: string }).nextStep ?? "").trim()
+              ? (cont.data as { nextStep: string }).nextStep.trim()
+              : null;
+          if (chainDirective) {
+            chainAfterClarification = true;
+            console.log(
+              `[cli-telemetry] ${JSON.stringify({
+                evt: "clarification_chain_to_model",
+                turnId,
+                tool: pc.tool,
+              })}`,
+            );
+            history.push({
+              role: "user",
+              content:
+                `(system continuation — not a user message) The pending question was answered and ` +
+                `${pc.tool} already ran successfully with input ${JSON.stringify(mergedInput)}. ` +
+                `Its result: ${JSON.stringify(cont.data)}. ` +
+                `Continue the flow NOW by following this directive: ${chainDirective} ` +
+                `Do NOT re-run ${pc.tool} and do NOT re-ask anything the result already answers.`,
+            });
+          } else {
+            status = "success";
+          }
         } else {
           record({
             type: "error",
@@ -4984,7 +5069,11 @@ export async function runTurn(
           status = "error";
           runtimeError = cont.errorMessage ?? cont.errorCode ?? "tool_error";
         }
-        clarificationHandled = true;
+        // Chain handoff (see above): when the continuation result carries
+        // a nextStep directive, the model loop must still run — leave
+        // clarificationHandled false so the loop executes with the seeded
+        // history. Every other outcome ends the turn here as before.
+        clarificationHandled = !chainAfterClarification;
         // Task #184 — the continuation consumed the paused question, so
         // mark its source turn resolved. Without this, the restore
         // endpoint (and the cross-session rehydration above) would
@@ -5321,6 +5410,32 @@ export async function runTurn(
       }
       record({ type: "plan_step", data: { step, hasTool: !!claudeStep.toolCall } });
 
+      // Hallucinated tool-name recovery: the model occasionally invents a
+      // near-miss name (e.g. `request_employment_certificate` for
+      // `request_employment_letter`), which used to kill the whole turn
+      // with a red "tool not registered" error. If the mistyped name has
+      // exactly one clearly-best match in the menu the model was shown,
+      // silently substitute it BEFORE the history push below (so the
+      // transcript stays consistent) and before the self-only clamp /
+      // resolution further down.
+      if (claudeStep.toolCall && !findToolByName(claudeStep.toolCall.name, persona)) {
+        const corrected = closestToolName(
+          claudeStep.toolCall.name,
+          tools.map((t) => String((t as { name?: unknown }).name ?? "")),
+        );
+        if (corrected && findToolByName(corrected, persona)) {
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "tool_name_corrected",
+              turnId,
+              from: claudeStep.toolCall.name,
+              to: corrected,
+            })}`,
+          );
+          claudeStep.toolCall.name = corrected;
+        }
+      }
+
       // Build the assistant turn we send back to the model on the next step.
       const assistantContent: Array<Record<string, unknown>> = [];
       if (claudeStep.text) assistantContent.push({ type: "text", text: claudeStep.text });
@@ -5461,6 +5576,33 @@ export async function runTurn(
       }
       const tool = findToolByName(tc.name, persona);
       if (!tool) {
+        // No confident correction was possible. Feed the miss back to the
+        // model (once) so it can pick a real tool from its menu instead of
+        // killing the whole turn with a red "not registered" error card.
+        if (!unknownToolRetryUsed) {
+          unknownToolRetryUsed = true;
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({ evt: "unknown_tool_retry", turnId, tool: tc.name })}`,
+          );
+          history.push({
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: tc.id,
+                content: JSON.stringify({
+                  ok: false,
+                  error: {
+                    code: "unknown_tool",
+                    message: `No tool named "${tc.name}" exists. Re-check the exact tool names in your tool list and call the correct one to complete the user's request.`,
+                  },
+                }),
+                is_error: true,
+              },
+            ],
+          });
+          continue;
+        }
         record({
           type: "error",
           data: { code: "unknown_tool", message: `tool ${tc.name} not registered` },

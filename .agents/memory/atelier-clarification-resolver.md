@@ -17,3 +17,8 @@ One shared subsystem (`clarification-resolver.ts` in atelier-cli) owns clarifica
 **Why:** raw-text merges + the old shape heuristic produced non-sensical loops (re-asking answered questions, dropping questions on a heuristic miss).
 
 **How to apply:** any new clarification-emitting tool gets typed resolution for free via `fields[].inputType/options`; new command verbs must be added to BOTH opener sets; migration matrix lives in `CLARIFICATION-MIGRATION.md` next to the module.
+
+## Chained tools after a clarification answer
+Rule: the deterministic clarification continuation must NOT end the turn on plain tool success when the result carries a string `nextStep` directive — it hands the result into the model loop (`clarification_chain_to_model` telemetry) so multi-step flows (trip plan → per-leg flight search) finish.
+**Why:** ending the turn stranded mobile users on the raw "Trip plan confirmed" card with no flight results.
+**How to apply:** any new tool that succeeds with a `nextStep` string is auto-chained; write steps later in the chain still go through the normal confirm protocol. Regression pin lives in the planner-answer dedupe probe (asserts travel_search_flights runs).
