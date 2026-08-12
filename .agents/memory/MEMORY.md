@@ -149,4 +149,5 @@
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
 - [NEP agreement flow](nep-agreement-flow.md) — roster auto-add NEP-only; v3 template ships via idempotent BOOT seed (no credentials), prod live on next publish.
 - [Stale lib dist fails typecheck/review](stale-lib-dist-review.md) — gitignored lib/db + api-zod + api-client-react dist lag schema edits AND merged-in commits; `tsc -b --force` them after Drizzle edits and before markTaskComplete.
+- [Expo Liquid Glass gating](expo-liquid-glass.md) — isLiquidGlassAvailable() THROWS without the native module (Expo Go/old builds); try/catch fail-closed; cards use translucent wash, not per-card blur.
 - [Launch deck-graphics policy](launch-deck-graphics.md) — launch site ships from separate project (cognirise.ai); render quirks in launch-*.md topic files.

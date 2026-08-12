@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Animated,
   Easing,
@@ -146,8 +148,58 @@ export function FadeInView({
 }
 
 /**
+ * Task #999 — honour iOS "Reduce Transparency": glass surfaces degrade to
+ * their near-opaque fallback when the user asks the system to cut blur.
+ */
+let reduceTransparencyCache: boolean | null = null;
+function useReduceTransparency(): boolean {
+  // Until the system setting resolves, err on the opaque side (treat as
+  // reduced) so accessibility users never see a transparency flash. The
+  // resolved value is cached module-wide, so the conservative first frame
+  // only happens on the very first glass surface after app launch.
+  const [reduced, setReduced] = useState<boolean | null>(
+    Platform.OS === "ios" ? reduceTransparencyCache : false,
+  );
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    let alive = true;
+    const apply = (v: boolean) => {
+      reduceTransparencyCache = v;
+      if (alive) setReduced(v);
+    };
+    AccessibilityInfo.isReduceTransparencyEnabled()
+      .then(apply)
+      .catch(() => alive && setReduced(false));
+    const sub = AccessibilityInfo.addEventListener(
+      "reduceTransparencyChanged",
+      apply,
+    );
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+  return reduced ?? true;
+}
+
+// Feature-detected once: true only on iOS 26+ builds that ship the native
+// Liquid Glass module (false in Expo Go / web / older iOS — those keep the
+// BlurView path below). isLiquidGlassAvailable() requires the native module
+// and THROWS when the binary doesn't ship it (Expo Go, older installed
+// builds receiving this JS via update) — fail closed to the BlurView path.
+const liquidGlass = (() => {
+  if (Platform.OS !== "ios") return false;
+  try {
+    return isLiquidGlassAvailable();
+  } catch {
+    return false;
+  }
+})();
+
+/**
  * Glass surface: native blur with a solid translucent fallback (web /
  * platforms without blur). For floating/overlay layers only.
+ * Task #999: on iOS 26+ this renders Apple's Liquid Glass material.
  */
 export function Glass({
   children,
@@ -162,6 +214,7 @@ export function Glass({
 }) {
   const c = useColors();
   const scheme = c.background === "#0A1230" ? "dark" : "light";
+  const reduceTransparency = useReduceTransparency();
   const borderRadius = radius ?? 24;
   const frame: ViewStyle = {
     borderRadius,
@@ -186,12 +239,26 @@ export function Glass({
       </View>
     );
   }
-  if (Platform.OS === "android") {
-    // Blur is unreliable on Android — solid translucent fallback.
+  if (Platform.OS === "android" || reduceTransparency) {
+    // Blur is unreliable on Android; iOS "Reduce Transparency" users asked
+    // for it — solid translucent fallback in both cases.
     return (
       <View style={[frame, { backgroundColor: scheme === "dark" ? "rgba(13,20,52,0.94)" : "rgba(255,255,255,0.94)" }, style]}>
         {children}
       </View>
+    );
+  }
+  if (liquidGlass) {
+    // Task #999 — Apple's Liquid Glass material on iOS 26+. A light theme
+    // tint keeps parity with the BlurView branch's glass wash.
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        tintColor={scheme === "dark" ? "rgba(13,20,52,0.55)" : "rgba(255,255,255,0.45)"}
+        style={[frame, style]}
+      >
+        {children}
+      </GlassView>
     );
   }
   return (
@@ -306,16 +373,29 @@ export function Card({
   style?: ViewStyle;
 }) {
   const c = useColors();
+  const reduceTransparency = useReduceTransparency();
+  // Task #999 — content cards read as translucent glass over the backdrop
+  // artwork (web parity). A per-card native blur would be too costly in
+  // long scroll lists, so cards use a tuned translucent wash instead (web
+  // adds a real backdrop blur, which is cheap there). Android and
+  // Reduce-Transparency users keep the opaque card exactly as before.
+  const glassCard = Platform.OS !== "android" && !reduceTransparency;
   return (
     <View
       style={[
         {
-          backgroundColor: c.card,
+          backgroundColor: glassCard ? c.cardGlass : c.card,
           borderRadius: 18,
           borderWidth: 1,
           borderColor: c.borderSoft,
           padding: 16,
         },
+        glassCard && Platform.OS === "web"
+          ? ({
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+            } as unknown as ViewStyle)
+          : null,
         softShadow(c.shadow),
         style,
       ]}
