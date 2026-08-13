@@ -137,6 +137,15 @@ export interface PovOutline {
     heading: string;
     intent: string;
     factIds: string[];
+    /**
+     * Task #1051 — "evidence" sections carry the citation burden;
+     * "positioning" sections are client-facing framing (why-now, value map,
+     * roadmap, ambition, About Cognirise…) exempt from per-section citations.
+     * Absent on legacy outlines → the whole document is treated as evidence.
+     */
+    type?: "evidence" | "positioning";
+    /** Optional positioning archetype label (e.g. "why-now", "roadmap"). */
+    archetype?: string;
   }[];
 }
 
@@ -1222,10 +1231,12 @@ export async function runPovDraft(args: {
       const totalBudgetMs = Number(process.env.ATELIER_POV_TIMEOUT_MS ?? 480000);
       const t0 = Date.now();
       // Per-pass budgets sized against the total (sum 0.95, headroom for IO).
+      // Task #1051 — the richer 8–12-section documents shift budget toward
+      // the section writer; the critic is a lighter audit pass.
       const budget = {
-        sections: Math.round(totalBudgetMs * 0.35),
-        critic: Math.round(totalBudgetMs * 0.15),
-        revision: Math.round(totalBudgetMs * 0.25),
+        sections: Math.round(totalBudgetMs * 0.42),
+        critic: Math.round(totalBudgetMs * 0.13),
+        revision: Math.round(totalBudgetMs * 0.2),
         stylist: Math.round(totalBudgetMs * 0.2),
       };
       let costUsd = 0;

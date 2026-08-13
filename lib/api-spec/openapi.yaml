@@ -11395,6 +11395,11 @@ components:
         factIds:
           type: array
           items: { type: string }
+        # Task #1051 — evidence sections carry the citation burden;
+        # positioning sections are client-facing framing exempt from
+        # per-section citations. Absent on legacy outlines.
+        type: { type: string, enum: [evidence, positioning] }
+        archetype: { type: string }
 
     AtelierPov:
       type: object

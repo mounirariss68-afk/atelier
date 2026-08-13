@@ -43,16 +43,42 @@ const fixture = {
    * from the final HTML (final-output gate must fail even though the
    * first-pass sections were correctly cited).
    */
-  mode: "good" as "good" | "hallucinate" | "dropcitations" | "proseheading" | "dupheading" | "h3heading",
+  mode: "good" as "good" | "hallucinate" | "dropcitations" | "proseheading" | "dupheading" | "h3heading" | "posbadfact" | "poscited" | "posdropped" | "evheaddropped" | "headswap" | "posdraftcited",
+  /**
+   * Task #1051 — typed outlines carry section types (evidence/positioning).
+   * `typed: false` emulates a LEGACY outline (pre-#1051): no types, pure
+   * evidence document semantics.
+   */
+  typed: true,
 };
 
 function outlineOutput() {
+  if (!fixture.typed) {
+    return {
+      title: "AI Ops POV",
+      thesis: "A board-mandated AI push demands fast-cycle delivery.",
+      sections: [
+        { id: "s1", heading: "The Mandate", intent: "Frame the board mandate", factIds: [fixture.factId] },
+        { id: "s2", heading: "Our Approach", intent: "Differentiate on speed", factIds: [fixture.factId] },
+      ],
+    };
+  }
   return {
     title: "AI Ops POV",
     thesis: "A board-mandated AI push demands fast-cycle delivery.",
     sections: [
-      { id: "s1", heading: "The Mandate", intent: "Frame the board mandate", factIds: [fixture.factId] },
-      { id: "s2", heading: "Our Approach", intent: "Differentiate on speed", factIds: [fixture.factId] },
+      { id: "s1", heading: "The Mandate", intent: "Frame the board mandate", type: "evidence", factIds: [fixture.factId] },
+      { id: "s2", heading: "Our Approach", intent: "Differentiate on speed", type: "evidence", factIds: [fixture.factId] },
+      // Extra evidence sections so a stylist-dropped heading can still clear
+      // the 0.8 coverage floor — proving completeness fails independently.
+      ...(fixture.mode === "evheaddropped"
+        ? [
+            { id: "e3", heading: "Cost Pressure", intent: "Quantify cost pressure", type: "evidence", factIds: [fixture.factId] },
+            { id: "e4", heading: "Talent Gap", intent: "Evidence the talent gap", type: "evidence", factIds: [fixture.factId] },
+            { id: "e5", heading: "Regulatory Clock", intent: "Time the regulation", type: "evidence", factIds: [fixture.factId] },
+          ]
+        : []),
+      { id: "s3", heading: "Where the Value Is", intent: "Map the value pools", type: "positioning", archetype: "value-map", factIds: [] },
     ],
   };
 }
@@ -64,7 +90,28 @@ function sectionsOutput() {
   return {
     sections: [
       { id: "s1", heading: "The Mandate", body: `There is a clear board mandate. [#${cid}]<script>alert(1)</script>`, citationIds: [cid] },
-      { id: "s2", heading: "Our Approach", body: `We deliver fast-cycle AI pilots. [#${cid}]`, citationIds: [cid] },
+      // "headswap" keeps the approved id s2 but rewrites its heading — the
+      // gate must reject the id-to-heading substitution.
+      { id: "s2", heading: fixture.mode === "headswap" ? "A Different Story" : "Our Approach", body: `We deliver fast-cycle AI pilots. [#${cid}]`, citationIds: [cid] },
+      ...(fixture.mode === "evheaddropped"
+        ? [
+            { id: "e3", heading: "Cost Pressure", body: `Costs are rising. [#${cid}]`, citationIds: [cid] },
+            { id: "e4", heading: "Talent Gap", body: `Talent is scarce. [#${cid}]`, citationIds: [cid] },
+            { id: "e5", heading: "Regulatory Clock", body: `Regulation is coming. [#${cid}]`, citationIds: [cid] },
+          ]
+        : []),
+      ...(fixture.typed && fixture.mode !== "posdropped"
+        ? [{
+            id: "s3",
+            heading: "Where the Value Is",
+            // "posdraftcited" — Phase B cites the positioning section even
+            // though Phase D later drops the marker; the gate must still fail.
+            body: fixture.mode === "posdraftcited"
+              ? `We recommend claiming the operations value pool first. [#${fixture.factId}]`
+              : "We recommend claiming the operations value pool first.",
+            citationIds: fixture.mode === "posdraftcited" ? [fixture.factId] : [],
+          }]
+        : []),
     ],
   };
 }
@@ -78,11 +125,23 @@ const CRITIC_OUTPUT = {
 };
 
 function stylistOutput() {
+  // Task #1051 — positioning tail appended so the positioning heading always
+  // resolves; only the mode under test fails the gate.
+  const posTail =
+    fixture.typed && fixture.mode !== "posdropped"
+      ? `<h2>Where the Value Is</h2><p>We recommend claiming the operations value pool first.${
+          fixture.mode === "posbadfact"
+            ? ` <sup data-fact="f_ghost">7</sup>`
+            : fixture.mode === "poscited"
+              ? ` <sup data-fact="${fixture.factId}">1</sup>`
+              : ""
+        }</p>`
+      : "";
   if (fixture.mode === "dropcitations") {
     return {
       html:
         `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>There is a clear board mandate.</p>` +
-        `<h2>Our Approach</h2><p>We deliver fast-cycle AI pilots.</p>`,
+        `<h2>Our Approach</h2><p>We deliver fast-cycle AI pilots.</p>` + posTail,
       wordCount: 16,
     };
   }
@@ -93,7 +152,7 @@ function stylistOutput() {
     return {
       html:
         `<h1>AI Ops POV</h1><p>The Mandate is clear from the board <sup data-fact="${cid}">1</sup>.</p>` +
-        `<p>Our Approach centres on fast pilots <sup data-fact="${cid}">2</sup>.</p>`,
+        `<p>Our Approach centres on fast pilots <sup data-fact="${cid}">2</sup>.</p>` + posTail,
       wordCount: 22,
     };
   }
@@ -103,25 +162,49 @@ function stylistOutput() {
     return {
       html:
         `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>Cited <sup data-fact="${cid}">1</sup>.</p>` +
-        `<h3>Our Approach</h3><p>Cited <sup data-fact="${cid}">2</sup>.</p>`,
+        `<h3>Our Approach</h3><p>Cited <sup data-fact="${cid}">2</sup>.</p>` + posTail,
       wordCount: 18,
     };
   }
   if (fixture.mode === "dupheading") {
     // "The Mandate" appears as TWO h2 elements → ambiguous → that section is
-    // fail-closed unsupported; coverage 0.5 < floor → run fails.
+    // fail-closed unsupported; evidence coverage 0.5 < floor → run fails.
     return {
       html:
         `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>Cited <sup data-fact="${cid}">1</sup>.</p>` +
         `<h2>The Mandate</h2><p>Repeated heading.</p>` +
-        `<h2>Our Approach</h2><p>Cited <sup data-fact="${cid}">2</sup>.</p>`,
+        `<h2>Our Approach</h2><p>Cited <sup data-fact="${cid}">2</sup>.</p>` + posTail,
+      wordCount: 20,
+    };
+  }
+  if (fixture.mode === "evheaddropped") {
+    // Five evidence sections drafted; the stylist silently DROPS the h2 for
+    // e5. Coverage is 4/5 = 0.8 (still at the floor) — the run must fail on
+    // approved-outline completeness, not coverage.
+    return {
+      html:
+        `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>Cited <sup data-fact="${cid}">1</sup>.</p>` +
+        `<h2>Our Approach</h2><p>Cited <sup data-fact="${cid}">2</sup>.</p>` +
+        `<h2>Cost Pressure</h2><p>Cited <sup data-fact="${cid}">3</sup>.</p>` +
+        `<h2>Talent Gap</h2><p>Cited <sup data-fact="${cid}">4</sup>.</p>` +
+        posTail,
+      wordCount: 40,
+    };
+  }
+  if (fixture.mode === "headswap") {
+    return {
+      html:
+        `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>Cited <sup data-fact="${cid}">1</sup>.</p>` +
+        `<h2>A Different Story</h2><p>Cited <sup data-fact="${cid}">2</sup>.</p>` +
+        posTail,
       wordCount: 20,
     };
   }
   return {
     html:
       `<h1>AI Ops POV</h1><h2>The Mandate</h2><p>There is a clear board mandate. <sup data-fact="${cid}">1</sup></p>` +
-      `<h2>Our Approach</h2><p>We deliver fast-cycle AI pilots. <sup data-fact="${cid}">1</sup><sup data-fact="f_bogus">9</sup></p><img src=x onerror=alert(1)>`,
+      `<h2>Our Approach</h2><p>We deliver fast-cycle AI pilots. <sup data-fact="${cid}">1</sup><sup data-fact="f_bogus">9</sup></p><img src=x onerror=alert(1)>` +
+      posTail,
     wordCount: 18,
   };
 }
@@ -169,10 +252,12 @@ async function main() {
   // Multi-pass: each POV phase is a separate call distinguished by its
   // run-time directive marker. Streaming calls (deep-research synthesis) get
   // SSE; the rest get plain JSON messages.
+  let lastPhaseBBody = ""; // Task #1051 — captured to assert firm-profile grounding
   const stub = createServer((req, res) => {
     let body = "";
     req.on("data", (ch) => (body += ch));
     req.on("end", () => {
+      if (body.includes("Phase B (sections)")) lastPhaseBBody = body;
       const out = body.includes("Phase C (critic)")
         ? CRITIC_OUTPUT
         : body.includes("Phase D (stylist)")
@@ -253,6 +338,7 @@ async function main() {
     atelierOpportunities,
     atelierResearchFacts,
     atelierPovs,
+    atelierFirmProfile,
   } = D as any;
   const { eq } = await import("drizzle-orm");
   const appMod = await import("../../src/app.js");
@@ -287,6 +373,9 @@ async function main() {
   }
 
   try {
+    // Task #1051 — the boot seed ships a published firm profile; remove it so
+    // the first draft exercises the firm-profile-ABSENT degradation path.
+    await db.delete(atelierFirmProfile).where(eq(atelierFirmProfile.orgId, "aico"));
     await db.insert(atelierUsers).values([
       {
         id: partnerId, orgId: "aico", name: "Probe Partner", initials: "PP",
@@ -334,7 +423,11 @@ async function main() {
     const rStart = await call("POST", `/opportunities/${oppId}/povs`, { title: "AI Ops POV", audience: "CIO", objective: "Land fast delivery" });
     check("start: 201 outline created", rStart.status === 201 && rStart.body?.status === "outline", rStart.body);
     const povId = rStart.body?.id as string;
-    check("start: outline has sections", (rStart.body?.outline?.length ?? 0) === 2, rStart.body?.outline);
+    check("start: outline has sections", (rStart.body?.outline?.length ?? 0) === 3, rStart.body?.outline);
+    // Task #1051 — section types flow through the outline wire for review.
+    const outlineS3 = (rStart.body?.outline ?? []).find((s: any) => s.id === "s3");
+    check("start: positioning type + archetype on outline wire", outlineS3?.type === "positioning" && outlineS3?.archetype === "value-map", outlineS3);
+    check("start: evidence type on outline wire", (rStart.body?.outline ?? []).find((s: any) => s.id === "s1")?.type === "evidence", rStart.body?.outline);
     const outlineRunId = rStart.body?.runId as string;
 
     // 2. PATCH title/objective
@@ -415,6 +508,30 @@ async function main() {
     check("gate: valid data-fact citation kept", (v1Row?.body ?? "").includes(`data-fact="${factId}"`), v1Row?.body);
     check("gate: hallucinated data-fact stripped", !(v1Row?.body ?? "").includes("f_bogus"), v1Row?.body);
     check("gate: server-computed coverage persisted (1.0)", v1Row?.citationCoverage === 1, v1Row?.citationCoverage);
+    // Task #1051 — positioning section passes the gate with zero citations,
+    // and the missing firm profile is noted in the run output.
+    check("positioning: uncited positioning section survives the gate", (v1Row?.body ?? "").includes("Where the Value Is"), v1Row?.body);
+    check("firm-profile: absence noted in version notes", /firm profile unavailable/i.test(v1Row?.notes ?? ""), v1Row?.notes);
+    check("firm-profile: Phase B context flags missing profile", lastPhaseBBody.includes("No published firm profile is available"), null);
+
+    // Publish a firm profile BEFORE the revision — the v2 Phase B context
+    // must carry the real positioning source and the note must disappear.
+    await db.insert(atelierFirmProfile).values({
+      id: `fp_${runTag}`, orgId: "aico", version: 999_001, status: "published",
+      payload: {
+        firmName: "Cognirise",
+        tagline: "PROBE-TAGLINE-ADVISORY-EDGE",
+        missionStatement: "Make AI operational.",
+        voiceAttributes: ["direct", "concrete"],
+        principles: [{ name: "Evidence first", description: "No claim without proof." }],
+        boilerplateShort: "Cognirise is an AI advisory firm.",
+        boilerplateLong: "Cognirise is an AI advisory firm working across the Gulf.",
+        capabilitiesPitch: "Strategy-to-operations AI delivery.",
+        differentiators: ["Partner-led delivery"],
+        proofPoints: [{ label: "Deployments", metric: "40+" }],
+        contactBlock: "hello@cognirise.example",
+      },
+    } as any);
 
     // 5b. Replay draft → 409
     const rDraftReplay = await call("POST", `/povs/${povId}/draft`);
@@ -433,6 +550,11 @@ async function main() {
     const povNow = (rPovList.body ?? []).find((p: any) => p.id === povId);
     check("revise: currentVersionId advanced to v2", povNow?.currentVersionId === v2Id, povNow?.currentVersionId);
     check("revise: status reset to 'drafted'", povNow?.status === "drafted", povNow?.status);
+    // Task #1051 — firm profile present: grounding context carries it and
+    // the degradation note is gone.
+    check("firm-profile: Phase B context carries published profile", lastPhaseBBody.includes("PROBE-TAGLINE-ADVISORY-EDGE") && lastPhaseBBody.includes("Cognirise firm profile"), null);
+    const v2Row = (rVersions.body ?? []).find((v: any) => v.id === v2Id);
+    check("firm-profile: no degradation note once profile published", !/firm profile unavailable/i.test(v2Row?.notes ?? ""), v2Row?.notes);
 
     // 7. Revise requires feedback
     const rReviseBlank = await call("POST", `/povs/${povId}/revise`, { feedback: "   " });
@@ -524,6 +646,106 @@ async function main() {
     const d6 = await pollLaunch(pov6Id);
     check("h3-heading: launch FAILED when a section heading is demoted to h3", d6.status === "failed", d6);
     check("h3-heading: error names citation coverage", /citation|coverage|unsupported/i.test(d6.error ?? ""), d6.error);
+
+    // 10f. Task #1051 — a positioning section that smuggles a fact marker
+    // referencing an unknown id MUST fail closed (not merely be stripped).
+    fixture.mode = "posbadfact";
+    const rStart7 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Bad Positioning POV", audience: "CIO", objective: "Test positioning fact smuggling" });
+    check("pos-badfact: POV outline created", rStart7.status === 201, rStart7.body);
+    const pov7Id = rStart7.body?.id as string;
+    const rApprove7 = await call("POST", `/agent-runs/${rStart7.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    check("pos-badfact: outline approved", rApprove7.status === 200, rApprove7.body);
+    const rDraft7 = await call("POST", `/povs/${pov7Id}/draft`);
+    check("pos-badfact: draft 202 started", rDraft7.status === 202, rDraft7.body);
+    const d7 = await pollLaunch(pov7Id);
+    check("pos-badfact: launch FAILED on smuggled unknown fact id", d7.status === "failed", d7);
+    check("pos-badfact: error names the positioning problem", /positioning|citation|unknown fact/i.test(d7.error ?? ""), d7.error);
+    const rV7list = await call("GET", `/povs/${pov7Id}/versions`);
+    check("pos-badfact: no version persisted", (rV7list.body ?? []).length === 0, rV7list.body);
+
+    // 10g. Task #1051 — a positioning section carrying a VALID snapshot
+    // citation still fails: positioning must carry zero citation markers.
+    fixture.mode = "poscited";
+    const rStart9 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Cited Positioning POV", audience: "CIO", objective: "Test positioning valid-citation ban" });
+    check("pos-cited: POV outline created", rStart9.status === 201, rStart9.body);
+    const pov9Id = rStart9.body?.id as string;
+    await call("POST", `/agent-runs/${rStart9.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraft9 = await call("POST", `/povs/${pov9Id}/draft`);
+    check("pos-cited: draft 202 started", rDraft9.status === 202, rDraft9.body);
+    const d9 = await pollLaunch(pov9Id);
+    check("pos-cited: launch FAILED when positioning carries a valid citation", d9.status === "failed", d9);
+    check("pos-cited: error names the positioning citation ban", /positioning section must not carry citation/i.test(d9.error ?? ""), d9.error);
+
+    // 10h. Task #1051 — a draft that silently DROPS an approved positioning
+    // section fails closed (outline completeness).
+    fixture.mode = "posdropped";
+    const rStart10 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Dropped Positioning POV", audience: "CIO", objective: "Test dropped approved section" });
+    check("pos-dropped: POV outline created", rStart10.status === 201, rStart10.body);
+    const pov10Id = rStart10.body?.id as string;
+    await call("POST", `/agent-runs/${rStart10.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraft10 = await call("POST", `/povs/${pov10Id}/draft`);
+    check("pos-dropped: draft 202 started", rDraft10.status === 202, rDraft10.body);
+    const d10 = await pollLaunch(pov10Id);
+    check("pos-dropped: launch FAILED when an approved section is missing from the draft", d10.status === "failed", d10);
+    check("pos-dropped: error names the missing approved section", /missing from the draft/i.test(d10.error ?? ""), d10.error);
+
+    // 10i. Task #1051 — Phase B cites a positioning section but the stylist
+    // drops the marker from the final HTML: the draft-body ban still fails it.
+    fixture.mode = "posdraftcited";
+    const rStart13 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Draft-Cited Positioning POV", audience: "CIO", objective: "Test positioning draft-body citation ban" });
+    check("pos-draft-cited: POV outline created", rStart13.status === 201, rStart13.body);
+    const pov13Id = rStart13.body?.id as string;
+    await call("POST", `/agent-runs/${rStart13.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraft13 = await call("POST", `/povs/${pov13Id}/draft`);
+    check("pos-draft-cited: draft 202 started", rDraft13.status === 202, rDraft13.body);
+    const d13 = await pollLaunch(pov13Id);
+    check("pos-draft-cited: launch FAILED on draft-body citation in positioning", d13.status === "failed", d13);
+    check("pos-draft-cited: error names the positioning citation ban", /positioning section must not carry citation/i.test(d13.error ?? ""), d13.error);
+
+    // 10j. Task #1051 — the stylist drops one approved EVIDENCE heading while
+    // coverage still clears the 0.8 floor → completeness must fail the run.
+    fixture.mode = "evheaddropped";
+    const rStart11 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Dropped Evidence Heading POV", audience: "CIO", objective: "Test final-document completeness" });
+    check("ev-head-dropped: POV outline created", rStart11.status === 201, rStart11.body);
+    const pov11Id = rStart11.body?.id as string;
+    await call("POST", `/agent-runs/${rStart11.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraft11 = await call("POST", `/povs/${pov11Id}/draft`);
+    check("ev-head-dropped: draft 202 started", rDraft11.status === 202, rDraft11.body);
+    const d11 = await pollLaunch(pov11Id);
+    check("ev-head-dropped: launch FAILED despite coverage at the floor", d11.status === "failed", d11);
+    check("ev-head-dropped: error names the missing approved heading", /heading missing from the final document/i.test(d11.error ?? ""), d11.error);
+
+    // 10j. Task #1051 — a section keeps its approved id but substitutes a
+    // different heading → id-to-heading integrity must fail the run.
+    fixture.mode = "headswap";
+    const rStart12 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Head Swap POV", audience: "CIO", objective: "Test id-to-heading integrity" });
+    check("head-swap: POV outline created", rStart12.status === 201, rStart12.body);
+    const pov12Id = rStart12.body?.id as string;
+    await call("POST", `/agent-runs/${rStart12.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraft12 = await call("POST", `/povs/${pov12Id}/draft`);
+    check("head-swap: draft 202 started", rDraft12.status === 202, rDraft12.body);
+    const d12 = await pollLaunch(pov12Id);
+    check("head-swap: launch FAILED on substituted heading", d12.status === "failed", d12);
+    check("head-swap: error names the heading mismatch", /does not match the approved outline heading|heading missing from the final document/i.test(d12.error ?? ""), d12.error);
+
+    // 10k. Task #1051 — LEGACY untyped outline keeps pure-evidence behavior:
+    // full outline→approve→draft passes with no positioning semantics.
+    fixture.mode = "good";
+    fixture.typed = false;
+    const rStart8 = await call("POST", `/opportunities/${oppId}/povs`, { title: "Legacy Outline POV", audience: "CIO", objective: "Test legacy untyped outlines" });
+    check("legacy: POV outline created (untyped)", rStart8.status === 201, rStart8.body);
+    check("legacy: outline sections carry no type", (rStart8.body?.outline ?? []).every((s: any) => s.type == null), rStart8.body?.outline);
+    const pov8Id = rStart8.body?.id as string;
+    const rApprove8 = await call("POST", `/agent-runs/${rStart8.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    check("legacy: outline approved", rApprove8.status === 200, rApprove8.body);
+    const rDraft8 = await call("POST", `/povs/${pov8Id}/draft`);
+    check("legacy: draft 202 started", rDraft8.status === 202, rDraft8.body);
+    const d8 = await pollLaunch(pov8Id);
+    check("legacy: untyped outline drafts fine (pure evidence)", d8.status === "done", d8);
+    const rV8list = await call("GET", `/povs/${pov8Id}/versions`);
+    const v8Row = (rV8list.body ?? [])[0];
+    check("legacy: coverage 1.0 across all (evidence) sections", v8Row?.citationCoverage === 1, v8Row?.citationCoverage);
+    fixture.typed = true;
     fixture.mode = "good";
 
     // 11. POV deep-research pass (stub Perplexity + stream synthesis).

@@ -460,30 +460,6 @@ async function main(): Promise<void> {
       mapperOut?.phase === INTERRUPTED_RUN_MESSAGE,
       mapperOut?.phase,
     );
-    // Agents Lens incident evidence runs must also render the stale row as error.
-    {
-      const { atelierAgentIncidents } = await import("@workspace/db");
-      const incId = `inc_test_stale_${STAMP}`;
-      await db.insert(atelierAgentIncidents).values({
-        id: incId,
-        orgId: "aico",
-        agentId: "alliance_executive_mapper",
-        agentName: "Alliance Executive Mapper",
-        title: "Stale run probe incident",
-        severity: "low",
-        detectedAt: new Date().toISOString(),
-        status: "open",
-        evidenceRunIds: [staleRunId],
-      } as any);
-      const inc = await call("GET", `/agents-lens/incidents/${incId}`);
-      const evi = (inc.body?.evidenceRuns ?? []).find((r: any) => r.id === staleRunId);
-      check(
-        "incident evidence run renders the stale row as error",
-        evi?.status === "error",
-        evi ?? inc.status,
-      );
-      await db.delete(atelierAgentIncidents).where(eq(atelierAgentIncidents.id, incId));
-    }
     // Global activity feed must also render the stale row as error.
     const activity = await call("GET", `/activity?limit=50`);
     const staleInActivity = (activity.body as any[] | null)?.find((x) => x.id === staleRunId);

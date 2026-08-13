@@ -1903,14 +1903,16 @@ router.post("/povs/:povId/draft", async (req, res) => {
   void (async () => {
     try {
       // Task #1022 — labeled NON-CITABLE background context (fail-soft).
-      const backgroundContext = await buildPovBackgroundContext({
+      // Task #1051 — it now includes the published firm profile as the
+      // positioning source; absence degrades gracefully and is noted below.
+      const grounding = await buildPovBackgroundContext({
         povId,
         opportunityId: opp.id,
         orgId: persona.orgId,
         persona,
         audience: pov.audience ?? "",
         objective: pov.objective ?? "",
-      }).catch(() => "");
+      }).catch(() => ({ context: "", firmProfileIncluded: false }));
       const { runId, draft } = await runPovDraft({
         opportunityId: opp.id,
         opportunityName: opp.name,
@@ -1918,7 +1920,7 @@ router.post("/povs/:povId/draft", async (req, res) => {
         promotedFacts: promoted,
         triggeredByUserId: meId,
         actorLabel: "POV Author · Sections+Critic+Stylist",
-        backgroundContext: backgroundContext || undefined,
+        backgroundContext: grounding.context || undefined,
       });
       // Task #1022 — deterministic citation gate on the FINAL stylist HTML.
       // The server parses every citation marker / data-fact attribute itself,
@@ -1929,6 +1931,9 @@ router.post("/povs/:povId/draft", async (req, res) => {
         html: draft.html,
         sections: draft.sections ?? [],
         validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
+        // Task #1051 — section types come from the APPROVED outline, never
+        // the model-returned draft sections.
+        outlineTypes: outline.sections.map((s) => ({ id: s.id, type: s.type, heading: s.heading })),
       });
       if (!audit.passes) {
         await failBackgroundJob(jobId, describeCitationFailure(audit), {
@@ -1936,13 +1941,21 @@ router.post("/povs/:povId/draft", async (req, res) => {
         });
         return;
       }
+      const notes = [
+        draft.voiceFlags?.join(" · ") || null,
+        grounding.firmProfileIncluded
+          ? null
+          : "Firm profile unavailable — positioning sections use generic firm framing.",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
         povId,
         body: audit.sanitizedHtml,
         sections: audit.sanitizedSections,
         citations: promoted,
         citationCoverage: audit.coverage,
-        notes: draft.voiceFlags?.join(" · ") || null,
+        notes: notes || null,
         createdByUserId: meId,
       });
       await db
@@ -2253,14 +2266,14 @@ router.post("/povs/:povId/revise", async (req, res) => {
   const persona = { id: me.id, role: me.role, orgId: me.orgId };
   void (async () => {
     try {
-      const backgroundContext = await buildPovBackgroundContext({
+      const grounding = await buildPovBackgroundContext({
         povId,
         opportunityId: opp.id,
         orgId: persona.orgId,
         persona,
         audience: pov.audience ?? "",
         objective: pov.objective ?? "",
-      }).catch(() => "");
+      }).catch(() => ({ context: "", firmProfileIncluded: false }));
       const { runId, draft } = await runPovDraft({
         opportunityId: opp.id,
         opportunityName: opp.name,
@@ -2270,7 +2283,7 @@ router.post("/povs/:povId/revise", async (req, res) => {
         actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
         revisionFeedback: feedback,
         priorDraftHtml: base.body ?? "",
-        backgroundContext: backgroundContext || undefined,
+        backgroundContext: grounding.context || undefined,
       });
       // Task #1022 — deterministic citation gate on the final stylist HTML
       // (see the /draft route for the contract; same single threshold).
@@ -2278,6 +2291,7 @@ router.post("/povs/:povId/revise", async (req, res) => {
         html: draft.html,
         sections: draft.sections ?? [],
         validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
+        outlineTypes: outline.sections.map((s) => ({ id: s.id, type: s.type, heading: s.heading })),
       });
       if (!audit.passes) {
         await failBackgroundJob(jobId, describeCitationFailure(audit), {
@@ -2285,13 +2299,21 @@ router.post("/povs/:povId/revise", async (req, res) => {
         });
         return;
       }
+      const notes = [
+        draft.voiceFlags?.join(" · ") || null,
+        grounding.firmProfileIncluded
+          ? null
+          : "Firm profile unavailable — positioning sections use generic firm framing.",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
         povId,
         body: audit.sanitizedHtml,
         sections: audit.sanitizedSections,
         citations: promoted,
         citationCoverage: audit.coverage,
-        notes: draft.voiceFlags?.join(" · ") || null,
+        notes: notes || null,
         createdByUserId: meId,
       });
       // A new revision resets the POV to "drafted" so it must be re-approved.

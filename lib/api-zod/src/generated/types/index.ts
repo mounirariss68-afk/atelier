@@ -573,6 +573,7 @@ export * from "./atelierPersonInsuranceInput";
 export * from "./atelierPov";
 export * from "./atelierPovLaunch";
 export * from "./atelierPovOutlineSection";
+export * from "./atelierPovOutlineSectionType";
 export * from "./atelierPovStatus";
 export * from "./atelierPovVersion";
 export * from "./atelierPovVersionSectionsItem";

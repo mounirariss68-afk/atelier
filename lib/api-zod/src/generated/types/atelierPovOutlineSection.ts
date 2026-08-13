@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPovOutlineSectionType } from "./atelierPovOutlineSectionType";
 
 export interface AtelierPovOutlineSection {
   id: string;
   heading: string;
   intent: string;
   factIds: string[];
+  type?: AtelierPovOutlineSectionType;
+  archetype?: string;
 }

@@ -126,9 +126,28 @@ export interface PovSectionForAudit {
   citationIds?: string[];
 }
 
+/**
+ * Task #1051 — outline section types. "evidence" sections carry the citation
+ * burden (coverage floor applies to them); "positioning" sections are
+ * client-facing framing (why-now, roadmap, About-Cognirise…) that must NOT
+ * carry citations to unknown facts and must still resolve their heading in
+ * the final HTML. The approved outline is the source of truth for types —
+ * never the model-returned draft sections.
+ */
+export type PovSectionType = "evidence" | "positioning";
+
+export interface PovOutlineTypeRef {
+  id: string;
+  type?: string | null;
+  /** Heading from the approved outline — used for actionable missing-section errors. */
+  heading?: string | null;
+}
+
 export interface PovSectionAudit {
   id: string;
   heading: string;
+  /** Effective type used by the gate ("evidence" when the outline is untyped). */
+  type: PovSectionType | "unknown";
   validCitations: string[];
   invalidCitations: string[];
   supported: boolean;
@@ -145,6 +164,12 @@ export interface PovCitationAudit {
   /** Every fact id referenced anywhere that is NOT in the snapshot. */
   invalidFactIds: string[];
   unsupportedSections: Array<{ id: string; heading: string }>;
+  /**
+   * Task #1051 — fail-closed section-type problems: a typed outline with a
+   * missing/unknown type, or a positioning section whose heading is missing
+   * from the final HTML or which smuggles citations to unknown fact ids.
+   */
+  sectionTypeIssues: Array<{ id: string; heading: string; issue: string }>;
   passes: boolean;
 }
 
@@ -254,10 +279,23 @@ export function auditPovCitations(args: {
   sections: PovSectionForAudit[];
   validFactIds: string[];
   floor?: number;
+  /**
+   * Task #1051 — section types from the APPROVED outline, keyed by section
+   * id. When ANY outline entry carries a type, typed mode is on: every draft
+   * section must resolve to a valid outline type ("evidence"|"positioning")
+   * or the run fails closed. When no entry carries a type (legacy outlines),
+   * every section is treated as evidence — exactly the pre-#1051 behavior.
+   */
+  outlineTypes?: PovOutlineTypeRef[];
 }): PovCitationAudit {
   const valid = new Set(args.validFactIds.filter(Boolean));
   const floor = args.floor ?? POV_CITATION_COVERAGE_FLOOR;
   const invalidSeen = new Set<string>();
+  const typeById = new Map<string, string | null | undefined>(
+    (args.outlineTypes ?? []).map((o) => [o.id, o.type]),
+  );
+  const typedMode = (args.outlineTypes ?? []).some((o) => o.type != null && o.type !== "");
+  const sectionTypeIssues: Array<{ id: string; heading: string; issue: string }> = [];
 
   const htmlIds = extractCitedIds(args.html ?? "");
   for (const id of htmlIds) if (!valid.has(id)) invalidSeen.add(id);
@@ -279,12 +317,60 @@ export function auditPovCitations(args: {
     ]);
     for (const id of bodyCited) if (!valid.has(id)) invalidSeen.add(id);
     for (const id of invalidCitations) invalidSeen.add(id);
+
+    // Resolve the section's effective type from the approved outline.
+    let effType: PovSectionType | "unknown";
+    if (!typedMode) {
+      effType = "evidence";
+    } else {
+      const raw = typeById.get(s.id);
+      effType = raw === "evidence" || raw === "positioning" ? raw : "unknown";
+      if (effType === "unknown") {
+        sectionTypeIssues.push({
+          id: s.id,
+          heading: s.heading,
+          issue: typeById.has(s.id)
+            ? `missing or unknown section type "${String(raw ?? "")}"`
+            : "section not present in the approved outline",
+        });
+      }
+    }
+    if (effType === "positioning") {
+      // Positioning sections carry no citation burden, but they must still
+      // resolve their heading in the final document and must carry ZERO
+      // citation markers — even markers that resolve to the snapshot violate
+      // the evidence/positioning separation (client-specific claims belong
+      // in evidence sections).
+      if (segments[i] == null) {
+        sectionTypeIssues.push({ id: s.id, heading: s.heading, issue: "positioning section heading missing from final document" });
+      }
+      if (invalidCitations.length > 0) {
+        sectionTypeIssues.push({
+          id: s.id,
+          heading: s.heading,
+          issue: `positioning section cites unknown fact ids: ${invalidCitations.slice(0, 4).join(", ")}`,
+        });
+      } else if (validCitations.length > 0 || bodyCited.size > 0) {
+        // The ban covers the DRAFT body too — a stylist that quietly drops
+        // markers must not launder a positioning section that was written
+        // against citations.
+        sectionTypeIssues.push({
+          id: s.id,
+          heading: s.heading,
+          issue: "positioning section must not carry citation markers — move cited claims into an evidence section",
+        });
+      }
+    }
     sectionAudits.push({
       id: s.id,
       heading: s.heading,
+      type: effType,
       validCitations,
       invalidCitations,
-      supported: segments[i] != null && validCitations.length > 0,
+      supported:
+        effType === "positioning"
+          ? segments[i] != null && finalCited.size === 0
+          : segments[i] != null && validCitations.length > 0,
     });
     sanitizedSections.push({
       ...s,
@@ -293,8 +379,55 @@ export function auditPovCitations(args: {
     });
   });
 
-  const total = sectionAudits.length;
-  const coverage = total === 0 ? 0 : sectionAudits.filter((s) => s.supported).length / total;
+  // Outline completeness: in typed mode the approved outline is the document
+  // contract — every approved section must be drafted exactly once, its
+  // drafted heading must match the approved heading, and the FINAL document
+  // must carry exactly one <h2> for every approved section (evidence AND
+  // positioning). A stylist that silently drops or rewrites an approved
+  // section fails closed even when the coverage floor would still clear.
+  if (typedMode) {
+    const draftCounts = new Map<string, number>();
+    const draftHeadings = new Map<string, string>();
+    (args.sections ?? []).forEach((s) => {
+      draftCounts.set(s.id, (draftCounts.get(s.id) ?? 0) + 1);
+      draftHeadings.set(s.id, normalizeHeadingText(s.heading ?? ""));
+    });
+    const finalH2 = [...(args.html ?? "").matchAll(/<h2[^>]*>([\s\S]*?)<\/h2\s*>/gi)].map((m) =>
+      normalizeHeadingText(m[1] ?? ""),
+    );
+    for (const o of args.outlineTypes ?? []) {
+      const heading = o.heading ?? o.id;
+      const n = draftCounts.get(o.id) ?? 0;
+      if (n === 0) {
+        sectionTypeIssues.push({ id: o.id, heading, issue: "approved outline section missing from the draft" });
+      } else if (n > 1) {
+        sectionTypeIssues.push({ id: o.id, heading, issue: `approved outline section drafted ${n} times` });
+      }
+      const wantHeading = normalizeHeadingText(o.heading ?? "");
+      if (n > 0 && wantHeading && draftHeadings.get(o.id) !== wantHeading) {
+        sectionTypeIssues.push({
+          id: o.id,
+          heading,
+          issue: `drafted heading "${draftHeadings.get(o.id) ?? ""}" does not match the approved outline heading`,
+        });
+      }
+      if (wantHeading) {
+        const hits = finalH2.filter((t) => t === wantHeading).length;
+        if (hits === 0) {
+          sectionTypeIssues.push({ id: o.id, heading, issue: "approved section heading missing from the final document" });
+        } else if (hits > 1) {
+          sectionTypeIssues.push({ id: o.id, heading, issue: "approved section heading duplicated in the final document" });
+        }
+      }
+    }
+  }
+
+  // Coverage is computed over the EVIDENCE subset only ("unknown" types are
+  // counted as evidence so a mistyped section can never relax the floor).
+  const evidenceAudits = sectionAudits.filter((s) => s.type !== "positioning");
+  const evidenceTotal = evidenceAudits.length;
+  const coverage =
+    evidenceTotal === 0 ? 0 : evidenceAudits.filter((s) => s.supported).length / evidenceTotal;
   const unsupportedSections = sectionAudits
     .filter((s) => !s.supported)
     .map((s) => ({ id: s.id, heading: s.heading }));
@@ -306,15 +439,32 @@ export function auditPovCitations(args: {
     sections: sectionAudits,
     invalidFactIds: [...invalidSeen],
     unsupportedSections,
-    passes: total > 0 && coverage >= floor,
+    sectionTypeIssues,
+    // A POV is still an evidence-backed argument: at least one evidence
+    // section must exist, its subset must clear the floor, and every
+    // section-type problem fails closed.
+    passes: evidenceTotal > 0 && coverage >= floor && sectionTypeIssues.length === 0,
   };
 }
 
 /** Human-actionable failure message listing unsupported sections + bogus ids. */
 export function describeCitationFailure(audit: PovCitationAudit): string {
-  const parts: string[] = [
-    `Citation coverage ${Math.round(audit.coverage * 100)}% is below the ${Math.round(POV_CITATION_COVERAGE_FLOOR * 100)}% floor.`,
-  ];
+  const parts: string[] = [];
+  const evidenceCount = audit.sections.filter((s) => s.type !== "positioning").length;
+  if (evidenceCount === 0) {
+    parts.push("The document has no evidence sections — a POV needs at least one cited evidence section.");
+  } else if (audit.coverage < POV_CITATION_COVERAGE_FLOOR) {
+    parts.push(
+      `Citation coverage ${Math.round(audit.coverage * 100)}% is below the ${Math.round(POV_CITATION_COVERAGE_FLOOR * 100)}% floor (computed over evidence sections).`,
+    );
+  }
+  if (audit.sectionTypeIssues.length > 0) {
+    parts.push(
+      `Section-type problems: ${audit.sectionTypeIssues
+        .map((s) => `"${s.heading}" — ${s.issue}`)
+        .join("; ")}.`,
+    );
+  }
   if (audit.unsupportedSections.length > 0) {
     parts.push(
       `Sections without a valid citation: ${audit.unsupportedSections

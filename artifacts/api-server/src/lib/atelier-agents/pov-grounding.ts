@@ -16,6 +16,8 @@
 import { db, atelierAccounts, atelierOpportunities, atelierPovs, atelierPovVersions } from "@workspace/db";
 import { and, eq, isNull, desc, ne, inArray } from "drizzle-orm";
 import { buildAllianceCapabilityContext } from "./alliance-capability-context.js";
+import { loadPublishedFirmProfile } from "../atelier-contract-service.js";
+import type { FirmProfileLite } from "../atelier-proposal-html.js";
 import { searchDocumentChunks } from "../atelier-cli/attachments/retrieval.js";
 import { embedText } from "../atelier-cli/embeddings.js";
 
@@ -37,6 +39,58 @@ function stripHtml(s: string): string {
   return (s ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+export interface PovBackgroundContext {
+  context: string;
+  /**
+   * Task #1051 — whether the org's published firm profile made it into the
+   * context. When false, positioning sections must lean on generic firm
+   * framing, and the run output notes the degradation.
+   */
+  firmProfileIncluded: boolean;
+}
+
+/**
+ * Task #1051 — render the published firm profile as the positioning source
+ * for POV drafts: what Cognirise actually does, in the firm's own words.
+ */
+function renderFirmProfileBlock(p: FirmProfileLite): string {
+  const lines: string[] = [];
+  const push = (label: string, v: string | undefined | null) => {
+    const t = (v ?? "").trim();
+    if (t) lines.push(`${label}: ${t}`);
+  };
+  push("Firm", p.firmName);
+  push("Tagline", p.tagline);
+  push("Mission", p.missionStatement);
+  push("Capabilities pitch", p.capabilitiesPitch);
+  if (Array.isArray(p.differentiators) && p.differentiators.length > 0) {
+    lines.push(`Differentiators:\n${p.differentiators.map((d) => `- ${d}`).join("\n")}`);
+  }
+  if (Array.isArray(p.proofPoints) && p.proofPoints.length > 0) {
+    lines.push(
+      `Proof points:\n${p.proofPoints
+        .filter((pp) => pp && (pp.label || pp.metric))
+        .map((pp) => `- ${pp.label}: ${pp.metric}`)
+        .join("\n")}`,
+    );
+  }
+  if (Array.isArray(p.principles) && p.principles.length > 0) {
+    lines.push(
+      `Principles:\n${p.principles
+        .filter((pr) => pr && pr.name)
+        .map((pr) => `- ${pr.name}: ${pr.description ?? ""}`.trim())
+        .join("\n")}`,
+    );
+  }
+  if (Array.isArray(p.voiceAttributes) && p.voiceAttributes.length > 0) {
+    lines.push(`Voice attributes: ${p.voiceAttributes.join(", ")}`);
+  }
+  push("Boilerplate (short)", p.boilerplateShort);
+  push("Boilerplate (long)", p.boilerplateLong);
+  push("Contact block", p.contactBlock);
+  return lines.join("\n");
+}
+
 export async function buildPovBackgroundContext(args: {
   povId: string;
   opportunityId: string;
@@ -44,8 +98,31 @@ export async function buildPovBackgroundContext(args: {
   persona: { id: string; role: string; orgId: string };
   audience: string;
   objective: string;
-}): Promise<string> {
+}): Promise<PovBackgroundContext> {
   const parts: string[] = [];
+  let firmProfileIncluded = false;
+
+  // ── Cognirise firm profile (positioning source, Task #1051) ─────────────
+  try {
+    const profile = await loadPublishedFirmProfile(args.orgId);
+    const payload = (profile?.payload ?? null) as FirmProfileLite | null;
+    const block = payload ? renderFirmProfileBlock(payload).trim() : "";
+    if (block) {
+      firmProfileIncluded = true;
+      parts.push(
+        "### Cognirise firm profile (POSITIONING SOURCE — never client evidence)\n" +
+          "Ground positioning sections (approach, roadmap, About Cognirise, next step) in THIS material: " +
+          "real service capabilities, differentiators, proof points, voice. Do not cite it.\n" +
+          block.slice(0, 4000),
+      );
+    } else {
+      parts.push(
+        "### Cognirise firm profile\nNo published firm profile is available. Positioning sections must use generic, honest firm framing — do not invent capabilities, proof points or contact details.",
+      );
+    }
+  } catch (e) {
+    console.warn("[pov-grounding] firm profile skipped", e);
+  }
 
   // ── opportunity / account summary ──────────────────────────────────────
   try {
@@ -147,12 +224,14 @@ export async function buildPovBackgroundContext(args: {
     console.warn("[pov-grounding] exemplar retrieval skipped", e);
   }
 
-  if (parts.length === 0) return "";
-  return (
-    "## BACKGROUND CONTEXT — NOT CITABLE\n" +
-    "The material below is internal perspective/context only. It may inform tone, framing and implications, " +
-    "but it is NOT evidence: never cite it, never attach a fact id to a claim that only appears here. " +
-    "Claims requiring citation must come from the provided facts.\n\n" +
-    parts.join("\n\n")
-  );
+  if (parts.length === 0) return { context: "", firmProfileIncluded };
+  return {
+    context:
+      "## BACKGROUND CONTEXT — NOT CITABLE\n" +
+      "The material below is internal perspective/context only. It may inform tone, framing and implications, " +
+      "but it is NOT evidence: never cite it, never attach a fact id to a claim that only appears here. " +
+      "Claims requiring citation must come from the provided facts.\n\n" +
+      parts.join("\n\n"),
+    firmProfileIncluded,
+  };
 }

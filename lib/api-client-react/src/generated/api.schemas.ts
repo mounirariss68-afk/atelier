@@ -6179,11 +6179,21 @@ export interface AtelierStartPovInput {
   objective: string;
 }
 
+export type AtelierPovOutlineSectionType =
+  (typeof AtelierPovOutlineSectionType)[keyof typeof AtelierPovOutlineSectionType];
+
+export const AtelierPovOutlineSectionType = {
+  evidence: "evidence",
+  positioning: "positioning",
+} as const;
+
 export interface AtelierPovOutlineSection {
   id: string;
   heading: string;
   intent: string;
   factIds: string[];
+  type?: AtelierPovOutlineSectionType;
+  archetype?: string;
 }
 
 export interface AtelierUpdatePovInput {

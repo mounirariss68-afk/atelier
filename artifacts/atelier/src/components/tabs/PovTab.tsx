@@ -382,10 +382,26 @@ function ActivePov({
         <ol className="space-y-2 text-sm">
           {pov.outline.map((s: AtelierPovOutlineSection, i: number) => (
             <li key={s.id} className="border-l-2 border-border-soft pl-3">
-              <div className="text-text font-medium">{i + 1}. {s.heading}</div>
+              <div className="text-text font-medium flex items-center gap-2 flex-wrap">
+                <span>{i + 1}. {s.heading}</span>
+                {s.type && (
+                  <span
+                    className={`text-[9px] font-mono uppercase tracking-wider rounded px-1.5 py-0.5 border ${
+                      s.type === "positioning"
+                        ? "text-gold border-gold/40 bg-gold/10"
+                        : "text-text-mute border-border-soft bg-bg-deep/50"
+                    }`}
+                    data-testid={`badge-outline-type-${s.id}`}
+                  >
+                    {s.type === "positioning" ? (s.archetype ? `positioning · ${s.archetype}` : "positioning") : "evidence"}
+                  </span>
+                )}
+              </div>
               <div className="text-text-mute text-xs mt-0.5">{s.intent}</div>
               {s.factIds.length === 0 ? (
-                <div className="text-[10px] font-mono text-text-faint mt-1">cites: —</div>
+                <div className="text-[10px] font-mono text-text-faint mt-1">
+                  {s.type === "positioning" ? "positioning — no citations required" : "cites: —"}
+                </div>
               ) : (
                 <ul className="mt-1.5 space-y-1">
                   {s.factIds.map((fid) => {

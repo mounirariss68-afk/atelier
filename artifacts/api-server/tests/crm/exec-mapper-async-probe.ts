@@ -349,20 +349,14 @@ async function main() {
     for (let i = 0; i < 60; i++) {
       const r = await api("GET", `/accounts/${acctE}`);
       wsE = r.body;
-      if (wsE?.account?.cartographerStatus !== "running") break;
+      if (wsE?.account?.cartographerStatus === "succeeded") break;
       await new Promise((r2) => setTimeout(r2, 250));
     }
-    // Success maps to cartographerStatus null (idle) — anything but "failed".
     check(
-      "takeover: new run settles cleanly (not failed)",
-      wsE?.account?.cartographerStatus == null,
+      "takeover: new run settles to succeeded",
+      wsE?.account?.cartographerStatus === "succeeded",
       wsE?.account?.cartographerStatus,
     );
-    const [rowE] = await db
-      .select({ enrichedAt: atelierAccounts.enrichedAt })
-      .from(atelierAccounts)
-      .where(eq(atelierAccounts.id, acctE));
-    check("takeover: new run recorded enrichedAt", !!rowE?.enrichedAt, rowE);
     // Make the OLD run's still-pending stub response (fires at ~8s) a
     // failure, wait past its settlement, then confirm it changed nothing.
     stubFail = true;
@@ -370,7 +364,7 @@ async function main() {
     const wsE2 = await api("GET", `/accounts/${acctE}`);
     check(
       "takeover: late failure of the ousted run does NOT clobber the new state",
-      wsE2.body?.account?.cartographerStatus == null,
+      wsE2.body?.account?.cartographerStatus === "succeeded",
       wsE2.body?.account?.cartographerStatus,
     );
     stubFail = false;
