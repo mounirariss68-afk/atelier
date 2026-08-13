@@ -354,7 +354,7 @@ function letterStatusText(l: MyLetter): { label: string; pending: boolean } {
 // ============================================================
 // Task #1002 — personal tasks & reminders (self-scope /me/tasks).
 // Lightweight list: add, complete/reopen, delete. Chat-created
-// reminders ("remind me to call Dr. Hassan at 5pm") show here too.
+// reminders ("remind me to submit my timesheet on Friday") show here too.
 // ============================================================
 // Task #1010 — opt-in device push for due reminders. The toggle only
 // flips after the server registration/unregistration succeeds.
@@ -578,7 +578,7 @@ function MyTasksSection() {
       {list.isLoading ? <Skeleton height={40} /> : null}
       {!list.isLoading && open.length === 0 ? (
         <Text style={{ color: c.mutedForeground, fontSize: 13, textAlign: rtl.textAlign }}>
-          Nothing open. Add one above — or ask Riser to “remind me to call Dr. Hassan at 5pm”.
+          Nothing open. Add one above — or ask Riser to “remind me to submit my timesheet on Friday”.
         </Text>
       ) : null}
       {open.map((task) => {
@@ -1224,13 +1224,22 @@ export default function MeScreen() {
           isSharingAvailable: () => Sharing!.isAvailableAsync(),
           shareAsync: (uri) => Sharing!.shareAsync(uri),
         });
-        if (result.status === "missing_file") {
+        if (result.status === "missing_file" || result.status === "error") {
+          // Task #1043 — if the combined 2-side bundle fails, degrade to the
+          // front side with a specific message rather than a dead-end toast.
+          if (side === "all" && doc.hasFile) {
+            feedback.toast(t("me.bundleFallback"), "error");
+            if (result.status === "missing_file") void docs.refetch();
+            await openDocument(doc, "front");
+            return;
+          }
           hapticError();
-          feedback.toast(side === "back" ? t("me.idBackNotOnFile") : t("me.docNotOnFile"), "error");
-          void docs.refetch(); // clear stale hasFile/hasBackFile flags
-        } else if (result.status === "error") {
-          hapticError();
-          feedback.toast(t("me.downloadFailed"), "error");
+          if (result.status === "missing_file") {
+            feedback.toast(side === "back" ? t("me.idBackNotOnFile") : t("me.docNotOnFile"), "error");
+            void docs.refetch(); // clear stale hasFile/hasBackFile flags
+          } else {
+            feedback.toast(t("me.downloadFailed"), "error");
+          }
         } else if (result.status !== "opened_web" && result.status !== "skipped_no_file") {
           hapticSuccess();
         }
@@ -1718,14 +1727,23 @@ export default function MeScreen() {
                     >
                       {doc.title}
                     </Text>
-                    {typeof doc.daysToExpiry === "number" ? (
-                      <Chip
-                        label={doc.daysToExpiry < 0 ? t("me.expired") : t("me.expires", { n: doc.daysToExpiry })}
-                        color={doc.daysToExpiry < 30 ? c.destructive : c.mutedForeground}
-                      />
+                    {typeof doc.daysToExpiry === "number" || doc.hasBackFile ? (
+                      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {typeof doc.daysToExpiry === "number" ? (
+                          <Chip
+                            label={doc.daysToExpiry < 0 ? t("me.expired") : t("me.expires", { n: doc.daysToExpiry })}
+                            color={doc.daysToExpiry < 30 ? c.destructive : c.mutedForeground}
+                          />
+                        ) : null}
+                        {/* Task #1043 — 2-sided documents (Emirates ID) show a
+                            page-count pill so it's clear both sides open together. */}
+                        {doc.hasBackFile ? (
+                          <Chip label={t("me.twoPages")} color={c.mutedForeground} />
+                        ) : null}
+                      </View>
                     ) : null}
                   </View>
-                  {downloadingId === `${doc.id}:front` || replacingId === doc.id ? (
+                  {downloadingId?.startsWith(`${doc.id}:`) || replacingId === doc.id ? (
                     <ActivityIndicator size="small" color={c.primary} />
                   ) : doc.hasFile ? (
                     <Feather name={Platform.OS === "web" ? "external-link" : "download"} size={18} color={c.mutedForeground} />

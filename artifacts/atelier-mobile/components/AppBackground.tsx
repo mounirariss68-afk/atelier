@@ -41,18 +41,19 @@ export function AppBackground() {
       <LinearGradient
         colors={
           dark
-            ? // Task #1008 — the old 0.78/0.58 navy scrim over an
-              // already-dark crop hid the artwork entirely; keep it much
-              // lighter (the portrait crop now carries more structure too).
+            ? // Task #1043 — TestFlight showed the artwork still washed out
+              // on-device; the portrait crops were re-cut from the landscape
+              // originals (wave-dense regions) and the scrim eased again so
+              // the waves clearly read through while text stays legible.
               [
-                "rgba(7, 11, 34, 0.42)",
-                "rgba(10, 18, 48, 0.28)",
-                "rgba(7, 11, 34, 0.22)",
+                "rgba(7, 11, 34, 0.30)",
+                "rgba(10, 18, 48, 0.16)",
+                "rgba(7, 11, 34, 0.10)",
               ]
             : [
-                "rgba(246, 247, 251, 0.78)",
                 "rgba(246, 247, 251, 0.50)",
-                "rgba(236, 239, 247, 0.40)",
+                "rgba(246, 247, 251, 0.24)",
+                "rgba(236, 239, 247, 0.14)",
               ]
         }
         locations={[0, 0.55, 1]}

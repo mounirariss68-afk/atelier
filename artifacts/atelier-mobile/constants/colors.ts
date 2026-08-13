@@ -68,7 +68,9 @@ const colors = {
     input: "#D8DEEC",
 
     // Glass surfaces (translucent fallback / overlay wash)
-    glass: "rgba(255, 255, 255, 0.72)",
+    // Task #1043 — dropped from 0.72: at that opacity nothing blurred
+    // through and the tab bar read as a solid bar, not glass.
+    glass: "rgba(255, 255, 255, 0.45)",
     glassBorder: "rgba(10, 18, 48, 0.10)",
     scrim: "rgba(7, 11, 34, 0.45)",
     // Task #999: translucent card wash so content cards read as glass
@@ -132,7 +134,8 @@ const colors = {
     input: "#2A3566",
 
     // Glass surfaces (translucent fallback / overlay wash)
-    glass: "rgba(13, 20, 52, 0.72)",
+    // Task #1043 — dropped from 0.72 so content genuinely blurs through.
+    glass: "rgba(13, 20, 52, 0.42)",
     glassBorder: "rgba(255, 255, 255, 0.10)",
     scrim: "rgba(3, 6, 20, 0.60)",
     // Task #999: translucent card wash (see light note).

@@ -254,7 +254,7 @@ export function Glass({
     return (
       <GlassView
         glassEffectStyle="regular"
-        tintColor={scheme === "dark" ? "rgba(13,20,52,0.55)" : "rgba(255,255,255,0.45)"}
+        tintColor={scheme === "dark" ? "rgba(13,20,52,0.30)" : "rgba(255,255,255,0.25)"}
         style={[frame, style]}
       >
         {children}

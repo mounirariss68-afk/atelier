@@ -58,8 +58,15 @@ const queryClient = new QueryClient({
 });
 
 function ThemedStatusBar() {
+  // Task #1043 — main screens sit under the fixed dark-navy AppHeader (and
+  // login/change-password open with a navy hero), so the status bar
+  // (time/signal/battery) must be white there even in the light theme —
+  // theme-following dark icons were illegible on the navy. Headerless
+  // screens (e.g. not-found) keep theme-appropriate icons.
   const scheme = useThemeScheme();
-  return <StatusBar style={scheme === "dark" ? "light" : "dark"} translucent />;
+  const segments = useSegments();
+  const headerless = segments[0] === "+not-found";
+  return <StatusBar style={headerless && scheme === "light" ? "dark" : "light"} translucent />;
 }
 
 function ThemeGate({ children }: { children: React.ReactNode }) {
@@ -165,6 +172,13 @@ function Gate() {
           gap: 20,
         }}
       >
+        {/* Task #1043 — this headerless loading surface follows the theme
+            background, so override the global light status-bar icons while
+            it's mounted (most recently mounted StatusBar wins). */}
+        <StatusBar
+          style={colors.background === "#0A1230" ? "light" : "dark"}
+          translucent
+        />
         <LinearGradient
           colors={["#5B7CFF", "#8A5BD6", "#C45BB8", "#FF7B5A"]}
           locations={[0, 0.35, 0.65, 1]}
