@@ -23,6 +23,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { AppLockGate } from "@/components/AppLockGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FeedbackProvider } from "@/components/feedback";
 import { ShareIntentHandler } from "@/components/ShareIntentHandler";
@@ -236,8 +237,12 @@ export default function RootLayout() {
                 <KeyboardProvider>
                   <FeedbackProvider>
                     <AuthProvider>
-                      <ShareIntentHandler />
-                      <Gate />
+                      {/* Task #1044 — optional Face ID app lock overlays
+                          everything (including login) when enabled. */}
+                      <AppLockGate>
+                        <ShareIntentHandler />
+                        <Gate />
+                      </AppLockGate>
                     </AuthProvider>
                   </FeedbackProvider>
                 </KeyboardProvider>

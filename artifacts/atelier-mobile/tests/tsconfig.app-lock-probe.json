@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "expo-local-authentication": ["tests/mocks/expo-local-authentication.ts"],
+      "@react-native-async-storage/async-storage": ["tests/mocks/async-storage.ts"],
+      "react-native": ["tests/mocks/react-native.ts"],
+      "@/*": ["./*"]
+    }
+  }
+}

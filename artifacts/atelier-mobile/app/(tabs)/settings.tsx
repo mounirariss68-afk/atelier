@@ -27,6 +27,15 @@ import { AppBackground } from "@/components/AppBackground";
 import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
 import {
+  type AppLockCapability,
+  authenticateForAppLock,
+  getAppLockCapability,
+  loadAppLockEnabled,
+  setAppLockEnabled,
+  subscribeAppLockEnabled,
+} from "@/lib/appLock";
+import { lockToggleLabelKey } from "@/lib/appLockCore";
+import {
   ensureNotificationPermission,
   loadRemindersEnabled,
   remindersSupported,
@@ -196,6 +205,40 @@ export default function SettingsScreen() {
           // best effort
         }
       }
+    }
+  };
+
+  // Task #1044 — Face ID app lock.
+  const [lockCap, setLockCap] = useState<AppLockCapability | null>(null);
+  const [appLock, setAppLock] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getAppLockCapability().then((cap) => {
+      if (alive) setLockCap(cap);
+    });
+    loadAppLockEnabled().then((v) => {
+      if (alive) setAppLock(v);
+    });
+    const unsub = subscribeAppLockEnabled(setAppLock);
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, []);
+
+  const toggleAppLock = async (next: boolean) => {
+    hapticLight();
+    if (lockBusy) return;
+    setLockBusy(true);
+    try {
+      // Both directions require a successful authentication: a passerby
+      // can't enable a lock the owner can't pass, nor silently disable it.
+      const ok = await authenticateForAppLock(t("set.appLockPrompt"));
+      if (!ok) return;
+      await setAppLockEnabled(next);
+    } finally {
+      setLockBusy(false);
     }
   };
 
@@ -376,6 +419,60 @@ export default function SettingsScreen() {
             {t("set.displayCurrencyBody")}
           </Text>
         </Card>
+
+        {/* Task #1044 — Face ID / Touch ID app lock. Hidden entirely when
+            biometrics aren't available (web, no hardware, missing native
+            module); shown disabled with a hint when nothing is enrolled. */}
+        {lockCap?.supported ? (
+          <>
+            <SectionTitle>{t("set.security")}</SectionTitle>
+            <Card style={{ paddingVertical: 4 }}>
+              <View
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 10,
+                  paddingHorizontal: 4,
+                  gap: 12,
+                }}
+              >
+                <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 12, flex: 1 }}>
+                  <Feather name="shield" size={18} color={c.foreground} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: c.foreground,
+                        fontFamily: "Inter_500Medium",
+                        fontSize: 16,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t(lockToggleLabelKey(lockCap.kind))}
+                    </Text>
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 13,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {lockCap.enrolled ? t("set.appLockBody") : t("set.appLockNotEnrolled")}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={appLock}
+                  disabled={!lockCap.enrolled || lockBusy}
+                  onValueChange={toggleAppLock}
+                  trackColor={{ true: c.primary }}
+                  testID="app-lock-toggle"
+                />
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         <SectionTitle>{t("set.account")}</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>

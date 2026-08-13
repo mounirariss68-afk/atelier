@@ -66,6 +66,12 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Atelier uses Face ID to unlock the app when the optional app lock is turned on."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
