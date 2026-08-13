@@ -11,6 +11,7 @@
 // UI cache can be replaced in one shot (mirrors the account-plan pattern).
 // ============================================================
 import { and, desc, eq, isNull, inArray } from "drizzle-orm";
+import { effectiveAgentRunStatus } from "./atelier-agents/run-staleness.js";
 import {
   db,
   atelierActivities,
@@ -229,7 +230,10 @@ export async function buildAccountTimeline(args: {
     if (r.targetType === "engagement") return engIds.includes(r.targetId);
     return false;
   };
-  const runs = runRows.filter(runTargetOk);
+  // Task #1046 — stale "running" rows (dead process) render as error.
+  const runs = runRows
+    .filter(runTargetOk)
+    .map((r) => ({ ...r, status: effectiveAgentRunStatus(r) }));
 
   // Resolve names in batch: activity owners + creators, insight authors,
   // stage-move + meeting + agent-run actors, plus contact labels + agent names.

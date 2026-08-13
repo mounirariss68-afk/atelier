@@ -13,6 +13,7 @@
 
 import { db, atelierPartnerFirms, atelierAgentRuns } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { agentRunIsFresh } from "./run-staleness.js";
 import {
   runAllianceCartographer,
   buildAllianceCartographerProposals,
@@ -59,6 +60,9 @@ export async function runAllianceMapperAndQueue(
           eq(atelierAgentRuns.agentId, "alliance_executive_mapper"),
           eq(atelierAgentRuns.targetId, firm.id),
           eq(atelierAgentRuns.status, "running"),
+          // Task #1046 — a stale "running" row (dead process) must not
+          // block a relaunch forever.
+          agentRunIsFresh(),
           isNull(atelierAgentRuns.deletedAt),
         ),
       )
@@ -138,6 +142,7 @@ export async function runAllianceCartographerAndQueue(
           eq(atelierAgentRuns.agentId, "alliance_cartographer"),
           eq(atelierAgentRuns.targetId, firm.id),
           eq(atelierAgentRuns.status, "running"),
+          agentRunIsFresh(),
           isNull(atelierAgentRuns.deletedAt),
         ),
       )

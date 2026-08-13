@@ -16,6 +16,7 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, isNull, desc } from "drizzle-orm";
+import { agentRunIsFresh } from "../../lib/atelier-agents/run-staleness.js";
 import {
   db,
   atelierUsers,
@@ -985,6 +986,8 @@ router.get("/opportunities/:oppId/pricing/researcher", async (req, res) => {
           eq(atelierAgentRuns.agentId, "ag_pricing_researcher"),
           eq(atelierAgentRuns.targetType, "opportunity"),
           eq(atelierAgentRuns.targetId, oppId),
+          // Task #1046 — never read progress off a heartbeat-dead row.
+          agentRunIsFresh(),
         ),
       )
       .orderBy(desc(atelierAgentRuns.createdAt))

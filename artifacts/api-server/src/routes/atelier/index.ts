@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull, inArray, type SQL } from "drizzle-orm";
+import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import {
   db,
   atelierUsers,
@@ -929,6 +930,7 @@ router.get("/activity", rejectNonEmployeePersona, async (req, res) => {
       progressPct: atelierAgentRuns.progressPct,
       sourcesCount: atelierAgentRuns.sourcesCount,
       createdAt: atelierAgentRuns.createdAt,
+      updatedAt: atelierAgentRuns.updatedAt,
       agentName: atelierAgents.name,
     })
     .from(atelierAgentRuns)
@@ -941,7 +943,8 @@ router.get("/activity", rejectNonEmployeePersona, async (req, res) => {
     id: r.id,
     agentId: r.agentId,
     agentName: r.agentName ?? r.agentId,
-    status: (r.status as "running" | "blocked" | "complete" | "error") ?? "running",
+    // Task #1046 — stale "running" rows (dead process) render as error.
+    status: (effectiveAgentRunStatus(r) as "running" | "blocked" | "complete" | "error") ?? "running",
     confidence:
       (r.confidence as "green" | "amber" | "red" | null) ?? null,
     message: r.statusMessage ?? "",

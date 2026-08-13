@@ -17,6 +17,12 @@
 import { db, atelierAccounts, atelierAgentRuns, atelierAuditEvents, atelierContacts } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import {
+  agentRunIsFresh,
+  hasFreshRunningRun,
+  launchEntryIsStale,
+  INTERRUPTED_RUN_MESSAGE,
+} from "./run-staleness.js";
+import {
   runExecutiveMapper,
   buildExecutiveMapperProposals,
   type PendingProfileUpdate,
@@ -41,7 +47,11 @@ async function loadAccount(id: string) {
 // this server process (the API runs as a single process; auto-run + manual
 // double-click both land here). The DB status check below still covers runs
 // visible across restarts / other entry points.
-const executiveMapperInFlight = new Set<string>();
+// Slot map value is the ownership token of the CURRENT claimant (Task #1046):
+// a wedged promise that lost the slot to a relaunch can no longer mutate
+// shared state when it eventually settles.
+const executiveMapperInFlight = new Map<string, number>();
+let executiveMapperLaunchSeq = 0;
 
 // Task #868 — in-process launch registry owned by the CHAIN, not the route,
 // so EVERY entry point (manual route, auto-run after account creation,
@@ -59,10 +69,36 @@ export type ExecutiveMapperLaunch = {
 };
 const executiveMapperLaunches = new Map<string, ExecutiveMapperLaunch>();
 
-export function getExecutiveMapperLaunch(
+export async function getExecutiveMapperLaunch(
   accountId: string,
-): ExecutiveMapperLaunch | null {
-  return executiveMapperLaunches.get(accountId) ?? null;
+): Promise<ExecutiveMapperLaunch | null> {
+  const entry = executiveMapperLaunches.get(accountId) ?? null;
+  // Task #1046 — a "running" entry whose start time is past the staleness
+  // cutoff MAY be a wedged/dead run. Consult the durable heartbeat first: a
+  // long run that is still stamping progress is alive, not stale.
+  if (entry && entry.status === "running" && launchEntryIsStale(entry.startedAt)) {
+    if (await hasFreshRunningRun("executive_mapper", accountId)) return entry;
+    const failed: ExecutiveMapperLaunch = {
+      ...entry,
+      status: "failed",
+      error: INTERRUPTED_RUN_MESSAGE,
+    };
+    // Only overwrite if the entry is unchanged (a relaunch may own it now).
+    if (executiveMapperLaunches.get(accountId) === entry) {
+      executiveMapperLaunches.set(accountId, failed);
+    }
+    return failed;
+  }
+  return entry;
+}
+
+/** Test seam (probes only) — backdate a launch entry's startedAt. */
+export function __testBackdateExecutiveMapperLaunch(
+  accountId: string,
+  startedAt: number,
+): void {
+  const e = executiveMapperLaunches.get(accountId);
+  if (e) executiveMapperLaunches.set(accountId, { ...e, startedAt });
 }
 
 export async function runExecutiveMapperAndQueue(
@@ -84,9 +120,29 @@ export async function runExecutiveMapperAndQueue(
   // await) so a caller that fires-and-forgets and immediately serves a status
   // read never observes a stale "idle".
   if (executiveMapperInFlight.has(accountId)) {
-    throw new Error("executive-mapper-already-running");
+    // Task #1046 — a wedged promise must not keep the relaunch guard locked
+    // forever. "Wedged" = launch entry running past the staleness cutoff AND
+    // no fresh durable heartbeat (a >2h run still stamping progress is live).
+    const prior = executiveMapperLaunches.get(accountId);
+    // Looks live = running and not past the cutoff. A non-running entry here
+    // (e.g. a status read already normalized it to failed) or a stale one is
+    // only reclaimable if the durable heartbeat is dead too.
+    const priorLooksLive =
+      prior?.status === "running" && !launchEntryIsStale(prior.startedAt);
+    if (priorLooksLive) throw new Error("executive-mapper-already-running");
+    if (await hasFreshRunningRun("executive_mapper", accountId)) {
+      throw new Error("executive-mapper-already-running");
+    }
+    // Re-check after the await — another caller may have reclaimed the slot.
+    if (executiveMapperLaunches.get(accountId) !== prior) {
+      throw new Error("executive-mapper-already-running");
+    }
   }
-  executiveMapperInFlight.add(accountId);
+  // Ownership token: the old (wedged) promise may still settle later — its
+  // completion/cleanup writes are guarded on this token so they can never
+  // clobber the state of a newer launch.
+  const myToken = ++executiveMapperLaunchSeq;
+  executiveMapperInFlight.set(accountId, myToken);
   executiveMapperLaunches.set(accountId, {
     status: "running",
     error: null,
@@ -95,6 +151,7 @@ export async function runExecutiveMapperAndQueue(
     openQuestions: [],
     startedAt: Date.now(),
   });
+  const ownsSlot = () => executiveMapperInFlight.get(accountId) === myToken;
   try {
     const a = await loadAccount(accountId);
     if (!a) throw new Error("account-not-found");
@@ -106,6 +163,9 @@ export async function runExecutiveMapperAndQueue(
           eq(atelierAgentRuns.agentId, "executive_mapper"),
           eq(atelierAgentRuns.targetId, a.id),
           eq(atelierAgentRuns.status, "running"),
+          // Task #1046 — a stale "running" row (dead process) must not
+          // block a relaunch forever.
+          agentRunIsFresh(),
           isNull(atelierAgentRuns.deletedAt),
         ),
       )
@@ -116,18 +176,23 @@ export async function runExecutiveMapperAndQueue(
       triggeredByUserId,
       deps,
     );
-    executiveMapperLaunches.set(accountId, {
-      status: "succeeded",
-      error: null,
-      runId: result.runId,
-      proposedCount: result.proposedCount,
-      openQuestions: result.openQuestions,
-      startedAt: Date.now(),
-    });
+    if (ownsSlot()) {
+      executiveMapperLaunches.set(accountId, {
+        status: "succeeded",
+        error: null,
+        runId: result.runId,
+        proposedCount: result.proposedCount,
+        openQuestions: result.openQuestions,
+        startedAt: Date.now(),
+      });
+    }
     return result;
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
-    if (raw === "executive-mapper-already-running") {
+    if (!ownsSlot()) {
+      // A newer launch reclaimed the slot from this wedged run — never
+      // overwrite its state.
+    } else if (raw === "executive-mapper-already-running") {
       // A run visible in the DB (other process / pre-restart) is in flight —
       // drop OUR provisional entry rather than recording a bogus failure over
       // the real run's state.
@@ -147,7 +212,7 @@ export async function runExecutiveMapperAndQueue(
     }
     throw err;
   } finally {
-    executiveMapperInFlight.delete(accountId);
+    if (ownsSlot()) executiveMapperInFlight.delete(accountId);
   }
 }
 

@@ -20,6 +20,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -313,6 +314,7 @@ router.get("/billing/worklist", async (req, res) => {
       id: atelierAgentRuns.id,
       status: atelierAgentRuns.status,
       createdAt: atelierAgentRuns.createdAt,
+      updatedAt: atelierAgentRuns.updatedAt,
       output: atelierAgentRuns.output,
       targetLabel: atelierAgentRuns.targetLabel,
     })
@@ -331,7 +333,8 @@ router.get("/billing/worklist", async (req, res) => {
       ...u,
       engagementName: engById.get(u.engagementId) ?? u.engagementId,
     })),
-    recentRuns: runs,
+    // Task #1046 — stale "running" rows (dead process) render as error.
+    recentRuns: runs.map((r) => ({ ...r, status: effectiveAgentRunStatus(r) })),
   });
 });
 

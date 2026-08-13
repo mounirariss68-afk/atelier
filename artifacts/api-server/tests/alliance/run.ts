@@ -235,7 +235,7 @@ async function main(): Promise<void> {
   delete process.env.PDL_API_KEY;
 
   const D = await import("@workspace/db");
-  const { db, pool, atelierUsers, atelierPartnerFirms, atelierAgentRuns, atelierAuditEvents } =
+  const { db, pool, atelierUsers, atelierPartnerFirms, atelierAgentRuns, atelierAuditEvents, atelierBackgroundJobs } =
     D as any;
   const { eq, and, like, inArray } = await import("drizzle-orm");
   const appMod = await import("../../src/app.js");
@@ -411,6 +411,178 @@ async function main(): Promise<void> {
     // row only drives the status display after a server restart. The 409
     // above is the guard that matters.
     await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.id, fakeRunId));
+
+    // ---- 4b. stale "running" rows render as interrupted error (Task #1046) ----
+    group("stale running row \u2192 error on the status route + relaunch unblocked");
+    const { AGENT_RUN_STALE_MS, INTERRUPTED_RUN_MESSAGE } = await import(
+      "../../src/lib/atelier-agents/run-staleness.js"
+    );
+    // Pristine firm: no in-process/durable launch entries, so the DB row
+    // alone drives the status display — exactly the crashed-server case.
+    const staleFirmId = `pfrm_stale_${STAMP}`;
+    await db.insert(atelierPartnerFirms).values({
+      id: staleFirmId,
+      orgId: "aico",
+      name: `Stale Probe Partners ${STAMP}`,
+      partnershipStage: "candidate",
+      status: "active",
+      contacts: [],
+      createdByUserId: FP_ID,
+    });
+    const staleRunId = `agr_test_stale_${STAMP}`;
+    const deadAt = new Date(Date.now() - AGENT_RUN_STALE_MS - 60 * 60 * 1000);
+    await db.insert(atelierAgentRuns).values({
+      id: staleRunId,
+      orgId: "aico",
+      agentId: "alliance_executive_mapper",
+      status: "running",
+      statusMessage: "Working on it\u2026",
+      targetType: "partner_firm",
+      targetId: staleFirmId,
+      targetLabel: "probe",
+      triggeredByUserId: FP_ID,
+      // Recent createdAt keeps it at the top of activity feeds; the stale
+      // heartbeat (updatedAt) is what marks it dead.
+      createdAt: new Date(),
+      updatedAt: deadAt,
+    });
+    const staleStatus = await call("GET", `/partners/firms/${staleFirmId}/agents/status`);
+    const mapperOut = (staleStatus.body?.agents ?? {})["alliance_executive_mapper"] as
+      | { status?: string; phase?: string | null }
+      | undefined;
+    check(
+      "heartbeat-dead running row renders as error, not running",
+      mapperOut?.status === "error",
+      mapperOut,
+    );
+    check(
+      "interrupted message surfaces as the phase",
+      mapperOut?.phase === INTERRUPTED_RUN_MESSAGE,
+      mapperOut?.phase,
+    );
+    // Agents Lens incident evidence runs must also render the stale row as error.
+    {
+      const { atelierAgentIncidents } = await import("@workspace/db");
+      const incId = `inc_test_stale_${STAMP}`;
+      await db.insert(atelierAgentIncidents).values({
+        id: incId,
+        orgId: "aico",
+        agentId: "alliance_executive_mapper",
+        agentName: "Alliance Executive Mapper",
+        title: "Stale run probe incident",
+        severity: "low",
+        detectedAt: new Date().toISOString(),
+        status: "open",
+        evidenceRunIds: [staleRunId],
+      } as any);
+      const inc = await call("GET", `/agents-lens/incidents/${incId}`);
+      const evi = (inc.body?.evidenceRuns ?? []).find((r: any) => r.id === staleRunId);
+      check(
+        "incident evidence run renders the stale row as error",
+        evi?.status === "error",
+        evi ?? inc.status,
+      );
+      await db.delete(atelierAgentIncidents).where(eq(atelierAgentIncidents.id, incId));
+    }
+    // Global activity feed must also render the stale row as error.
+    const activity = await call("GET", `/activity?limit=50`);
+    const staleInActivity = (activity.body as any[] | null)?.find((x) => x.id === staleRunId);
+    check(
+      "GET /activity renders the stale row as error",
+      staleInActivity?.status === "error",
+      staleInActivity,
+    );
+    // Chat agent-runs listing: normalized status + running filter excludes it.
+    {
+      const { findByToolName } = await import("../../src/lib/atelier-cli/capability-catalog.js");
+      await import("../../src/lib/atelier-cli/cli-only-capabilities-reads.js");
+      const runsCap = findByToolName("agent_runs_status");
+      check("agent_runs_status capability registered", !!runsCap);
+      if (runsCap) {
+        const ctx = { persona: { id: FP_ID, name: "Alliance Probe FP", orgId: "aico", role: "founding_partner" } } as any;
+        const all = (await runsCap.run({ limit: 100 }, ctx)) as any;
+        const staleItem = (all?.data?.items ?? []).find((i: any) => i.id === staleRunId);
+        check("chat listing shows stale row as error", staleItem?.status === "error", staleItem);
+        const running = (await runsCap.run({ status: "running", limit: 100 }, ctx)) as any;
+        const staleAsRunning = (running?.data?.items ?? []).find((i: any) => i.id === staleRunId);
+        check("chat running filter excludes the stale row", !staleAsRunning, staleAsRunning);
+      }
+    }
+    // ---- 4c. >LAUNCH_STALE_MS but HEARTBEATING run stays running ----
+    group("old-but-heartbeating run stays running (heartbeat beats start time)");
+    const hbFirmId = `pfrm_hb_${STAMP}`;
+    await db.insert(atelierPartnerFirms).values({
+      id: hbFirmId,
+      orgId: "aico",
+      name: `Heartbeat Probe Partners ${STAMP}`,
+      partnershipStage: "candidate",
+      status: "active",
+      contacts: [],
+      createdByUserId: FP_ID,
+    });
+    const longAgo = new Date(Date.now() - 3 * 60 * 60 * 1000); // > both watchdogs
+    const hbJobId = `bgj_test_hb_${STAMP}`;
+    await db.insert(atelierBackgroundJobs).values({
+      id: hbJobId,
+      orgId: "aico",
+      startedByUserId: FP_ID,
+      kind: "alliance_cartographer",
+      lockKey: "alliance_cartographer",
+      targetType: "partner_firm",
+      targetId: hbFirmId,
+      label: "probe heartbeat job",
+      status: "running",
+      createdAt: longAgo,
+      updatedAt: longAgo,
+    } as typeof atelierBackgroundJobs.$inferInsert);
+    const hbRunId = `agr_test_hb_${STAMP}`;
+    await db.insert(atelierAgentRuns).values({
+      id: hbRunId,
+      orgId: "aico",
+      agentId: "alliance_cartographer",
+      status: "running",
+      statusMessage: "Still crunching…",
+      targetType: "partner_firm",
+      targetId: hbFirmId,
+      targetLabel: "probe",
+      triggeredByUserId: FP_ID,
+      createdAt: longAgo,
+      updatedAt: new Date(), // fresh heartbeat
+    });
+    const hbStatus = await call("GET", `/partners/firms/${hbFirmId}/agents/status`);
+    const hbCarto = (hbStatus.body?.agents ?? {})["alliance_cartographer"] as
+      | { status?: string }
+      | undefined;
+    check(
+      "status route keeps a heartbeating >30min run as running (not failed)",
+      hbCarto?.status === "running",
+      hbCarto,
+    );
+    const hbRelaunch = await call("POST", `/partners/firms/${hbFirmId}/agents/alliance-cartographer/run`, {});
+    check("heartbeating run still 409-blocks a duplicate launch", hbRelaunch.status === 409, hbRelaunch.status);
+    const [hbJobAfter] = await db
+      .select({ status: atelierBackgroundJobs.status })
+      .from(atelierBackgroundJobs)
+      .where(eq(atelierBackgroundJobs.id, hbJobId));
+    check("launch attempt did NOT reap the heartbeating job", hbJobAfter?.status === "running", hbJobAfter);
+    await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.id, hbRunId));
+    await db.delete(atelierBackgroundJobs).where(eq(atelierBackgroundJobs.id, hbJobId));
+    await db.delete(atelierPartnerFirms).where(eq(atelierPartnerFirms.id, hbFirmId));
+
+    const staleRelaunch = await call("POST", `/partners/firms/${staleFirmId}/agents/alliance-cartographer/run`, {});
+    check(
+      "stale row does not 409-block a fresh launch",
+      staleRelaunch.status === 202,
+      staleRelaunch.status,
+    );
+    // Let the stub-backed relaunch settle before cleanup so no run row leaks.
+    for (let i = 0; i < 60; i++) {
+      await sleep(500);
+      const s = await call("GET", `/partners/firms/${staleFirmId}/agents/status`);
+      if (s.body?.agents?.alliance_cartographer?.status !== "running") break;
+    }
+    await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.targetId, staleFirmId));
+    await db.delete(atelierPartnerFirms).where(eq(atelierPartnerFirms.id, staleFirmId));
 
     // ---- 5. chat alliance_partner_add ----
     group("chat alliance_partner_add \u2014 dedupe / clarification / confirm / commit");

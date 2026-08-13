@@ -31,6 +31,7 @@ import {
   atelierAgentRuns,
 } from "@workspace/db";
 import { listJobsForUser } from "../../lib/background-jobs.js";
+import { agentRunIsFresh } from "../../lib/atelier-agents/run-staleness.js";
 import { mirrorSelfNotificationPush } from "../../lib/expoPush.js";
 import {
   AtelierGetMyProfileResponse,
@@ -375,6 +376,9 @@ router.get("/me/background-jobs", async (req, res, next) => {
         and(
           eq(atelierAgentRuns.triggeredByUserId, me.id),
           eq(atelierAgentRuns.status, "running"),
+          // Task #1046 — a "running" row whose heartbeat stopped hours ago
+          // is a dead run (crashed process); never show it as working.
+          agentRunIsFresh(),
           isNull(atelierAgentRuns.deletedAt),
         ),
       )

@@ -60,6 +60,13 @@ import { mergeAccounts, mergeContacts } from "../../lib/atelier-merge.js";
 import { findPersonMatch, richerPersonName } from "../../lib/atelier-agents/person-name.js";
 import { resolveIndustryTaxonomy } from "../../lib/atelier-agents/industry-taxonomy.js";
 import {
+  agentRunIsFresh,
+  agentRunRowIsStale,
+  hasFreshRunningRun,
+  launchEntryIsStale,
+  INTERRUPTED_RUN_MESSAGE,
+} from "../../lib/atelier-agents/run-staleness.js";
+import {
   classifyCriticalRole,
   computeCriticalRoleCoverage,
 } from "../../lib/atelier-agents/critical-roles.js";
@@ -226,9 +233,64 @@ type AgentLaunchState = {
   proposedCount: number | null;
   openQuestions: string[];
   startedAt: number;
+  /** Ownership token (Task #1046) — see registerLaunch/settleLaunch. */
+  token?: number;
 };
 const agentLaunches = new Map<string, AgentLaunchState>();
 const launchKey = (agentId: string, accountId: string) => `${agentId}:${accountId}`;
+let agentLaunchSeq = 0;
+
+/**
+ * Task #1046 — token-owned launch registration. The returned token must be
+ * passed to settleLaunch by the async completion paths so a wedged old
+ * promise that lost its slot to a relaunch can never overwrite the newer
+ * launch's state when it eventually settles.
+ */
+function registerLaunch(key: string, state: Omit<AgentLaunchState, "token">): number {
+  const token = ++agentLaunchSeq;
+  agentLaunches.set(key, { ...state, token });
+  return token;
+}
+
+function settleLaunch(key: string, token: number, state: Omit<AgentLaunchState, "token">): void {
+  if (agentLaunches.get(key)?.token !== token) return;
+  agentLaunches.set(key, { ...state, token });
+}
+
+/** Test seam (probes only) — backdate a launch entry's startedAt. */
+export function __testBackdateAgentLaunch(
+  agentId: string,
+  accountId: string,
+  startedAt: number,
+): void {
+  const k = launchKey(agentId, accountId);
+  const e = agentLaunches.get(k);
+  if (e) agentLaunches.set(k, { ...e, startedAt });
+}
+
+/**
+ * Task #1046 — single read path for launch entries: a "running" entry whose
+ * start time is past the staleness cutoff MAY be a wedged/dead run. The
+ * durable heartbeat decides: a long run still stamping progress on its run
+ * row stays live; otherwise normalize to "failed" so status readers stop
+ * reporting a live run and relaunch guards unlock.
+ */
+async function getLaunch(agentId: string, accountId: string): Promise<AgentLaunchState | undefined> {
+  const key = launchKey(agentId, accountId);
+  const entry = agentLaunches.get(key);
+  if (!entry || entry.status !== "running" || !launchEntryIsStale(entry.startedAt)) {
+    return entry;
+  }
+  if (await hasFreshRunningRun(agentId, accountId)) return entry;
+  const failed: AgentLaunchState = {
+    ...entry,
+    status: "failed",
+    error: INTERRUPTED_RUN_MESSAGE,
+  };
+  // Only overwrite if unchanged — a relaunch may own the slot by now.
+  if (agentLaunches.get(key) === entry) agentLaunches.set(key, failed);
+  return failed;
+}
 
 /**
  * Task #722 — non-blocking Procurement Navigator auto-run on account
@@ -237,14 +299,14 @@ const launchKey = (agentId: string, accountId: string) => `${agentId}:${accountI
  * the error is recorded on the launch entry / run row, never thrown into
  * the create path. Results land as a reviewable draft (never auto-applied).
  */
-function autoRunProcurementNavigator(
+async function autoRunProcurementNavigator(
   accountId: string,
   userId: string,
   accountLabel: string,
-): void {
+): Promise<void> {
   const key = launchKey("ag_procurement_navigator", accountId);
-  if (agentLaunches.get(key)?.status === "running") return;
-  agentLaunches.set(key, {
+  if ((await getLaunch("ag_procurement_navigator", accountId))?.status === "running") return;
+  const token = registerLaunch(key, {
     status: "running",
     error: null,
     runId: null,
@@ -259,7 +321,7 @@ function autoRunProcurementNavigator(
         triggeredByUserId: userId,
         actorLabel: "Procurement Navigator (auto)",
       });
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "succeeded",
         error: null,
         runId: result.runId,
@@ -272,7 +334,7 @@ function autoRunProcurementNavigator(
       console.warn(
         `[atelier] auto-on-create procurement navigator failed for ${accountLabel}: ${message}`,
       );
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "failed",
         error: message,
         runId: null,
@@ -287,7 +349,7 @@ function autoRunProcurementNavigator(
 async function loadCartographerStatus(
   accountId: string,
 ): Promise<{ status: "running" | "failed" | null; phase: string | null }> {
-  const launch = agentLaunches.get(launchKey("account_cartographer", accountId));
+  const launch = await getLaunch("account_cartographer", accountId);
   if (launch?.status === "running") {
     // Background task may not have inserted its run row yet — fall through
     // to the DB only for a fresher phase message if one exists.
@@ -315,6 +377,8 @@ async function loadCartographerStatus(
     .select({
       status: atelierAgentRuns.status,
       statusMessage: atelierAgentRuns.statusMessage,
+      createdAt: atelierAgentRuns.createdAt,
+      updatedAt: atelierAgentRuns.updatedAt,
     })
     .from(atelierAgentRuns)
     .where(
@@ -327,6 +391,11 @@ async function loadCartographerStatus(
     .orderBy(desc(atelierAgentRuns.createdAt))
     .limit(1);
   if (!latest) return { status: null, phase: null };
+  // Task #1046 — a "running" row whose heartbeat stopped is a dead run
+  // (crashed process); report it failed instead of spinning forever.
+  if (agentRunRowIsStale(latest)) {
+    return { status: "failed", phase: INTERRUPTED_RUN_MESSAGE };
+  }
   if (latest.status === "running") {
     // Surface the latest live phase (e.g. "Synthesising the brief… (42s)")
     // so the account page shows a meaningful, updating label rather than a
@@ -356,12 +425,14 @@ async function loadExecutiveMapperStatus(accountId: string): Promise<{
   proposedCount: number | null;
   openQuestions: string[];
 }> {
-  const launch = getExecutiveMapperLaunch(accountId);
-  const [latest] = await db
+  const launch = await getExecutiveMapperLaunch(accountId);
+  const [latestRaw] = await db
     .select({
       id: atelierAgentRuns.id,
       status: atelierAgentRuns.status,
       statusMessage: atelierAgentRuns.statusMessage,
+      createdAt: atelierAgentRuns.createdAt,
+      updatedAt: atelierAgentRuns.updatedAt,
     })
     .from(atelierAgentRuns)
     .where(
@@ -373,6 +444,12 @@ async function loadExecutiveMapperStatus(accountId: string): Promise<{
     )
     .orderBy(desc(atelierAgentRuns.createdAt))
     .limit(1);
+  // Task #1046 — treat a heartbeat-dead "running" row as errored so the
+  // header chip can't show a live run forever after a crash.
+  const latest =
+    latestRaw && agentRunRowIsStale(latestRaw)
+      ? { ...latestRaw, status: "error", statusMessage: INTERRUPTED_RUN_MESSAGE }
+      : latestRaw;
   // In-process "running" wins even if the run row already reads complete —
   // the governed-queue write happens after the row completes, and succeeded
   // is only reported once the proposals are actually queued.
@@ -917,7 +994,7 @@ router.post("/accounts", async (req, res) => {
       );
     });
     // Task #722 — procurement research auto-runs on every new account.
-    autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
+    void autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
     const fresh = (await loadAccount(inserted.id)) ?? inserted;
     const access = await accessibleEngagementIds(me);
     const summary = await summariseAccount(fresh, access, me);
@@ -927,7 +1004,7 @@ router.post("/accounts", async (req, res) => {
 
   // Task #722 — procurement research auto-runs on every new account
   // (non-blocking; degrades gracefully — the create never fails on it).
-  autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
+  void autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
 
   // Fire-and-forget Cartographer auto-run. We do not await so the HTTP
   // response stays snappy; the Profile tab polls for completion. Only taken
@@ -2004,12 +2081,12 @@ router.post("/accounts/:accountId/agents/strategy-developer/run", async (req, re
   const guard = await guardStrategyDeveloper(req, res);
   if (!guard) return;
   const key = launchKey(STRATEGY_DEV_AGENT, guard.account.id);
-  const existing = agentLaunches.get(key);
+  const existing = await getLaunch(STRATEGY_DEV_AGENT, guard.account.id);
   if (existing?.status === "running") {
     res.status(409).json({ error: "already-running" });
     return;
   }
-  agentLaunches.set(key, {
+  const token = registerLaunch(key, {
     status: "running",
     error: null,
     runId: null,
@@ -2023,7 +2100,7 @@ router.post("/accounts/:accountId/agents/strategy-developer/run", async (req, re
         accountId: guard.account.id,
         triggeredByUserId: guard.me.id,
       });
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "succeeded",
         error: null,
         runId: result.runId,
@@ -2032,7 +2109,7 @@ router.post("/accounts/:accountId/agents/strategy-developer/run", async (req, re
         startedAt: Date.now(),
       });
     } catch (err) {
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "failed",
         error: err instanceof Error ? err.message : String(err),
         runId: null,
@@ -2086,8 +2163,7 @@ async function loadLatestStrategyDraft(accountId: string) {
 router.get("/accounts/:accountId/agents/strategy-developer/status", async (req, res) => {
   const guard = await guardStrategyDeveloper(req, res);
   if (!guard) return;
-  const key = launchKey(STRATEGY_DEV_AGENT, guard.account.id);
-  const launch = agentLaunches.get(key);
+  const launch = await getLaunch(STRATEGY_DEV_AGENT, guard.account.id);
   if (launch?.status === "running") {
     const [row] = await db
       .select({ statusMessage: atelierAgentRuns.statusMessage, progressPct: atelierAgentRuns.progressPct })
@@ -2316,12 +2392,12 @@ router.post("/accounts/:accountId/agents/procurement-navigator/run", async (req,
   const guard = await guardProcurementNavigator(req, res);
   if (!guard) return;
   const key = launchKey(PROCUREMENT_AGENT, guard.account.id);
-  const existing = agentLaunches.get(key);
+  const existing = await getLaunch(PROCUREMENT_AGENT, guard.account.id);
   if (existing?.status === "running") {
     res.status(409).json({ error: "already-running" });
     return;
   }
-  agentLaunches.set(key, {
+  const token = registerLaunch(key, {
     status: "running",
     error: null,
     runId: null,
@@ -2335,7 +2411,7 @@ router.post("/accounts/:accountId/agents/procurement-navigator/run", async (req,
         accountId: guard.account.id,
         triggeredByUserId: guard.me.id,
       });
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "succeeded",
         error: null,
         runId: result.runId,
@@ -2344,7 +2420,7 @@ router.post("/accounts/:accountId/agents/procurement-navigator/run", async (req,
         startedAt: Date.now(),
       });
     } catch (err) {
-      agentLaunches.set(key, {
+      settleLaunch(key, token, {
         status: "failed",
         error: err instanceof Error ? err.message : String(err),
         runId: null,
@@ -2361,8 +2437,7 @@ router.post("/accounts/:accountId/agents/procurement-navigator/run", async (req,
 router.get("/accounts/:accountId/agents/procurement-navigator/status", async (req, res) => {
   const guard = await guardAccountAgent(req, res);
   if (!guard) return;
-  const key = launchKey(PROCUREMENT_AGENT, guard.account.id);
-  const launch = agentLaunches.get(key);
+  const launch = await getLaunch(PROCUREMENT_AGENT, guard.account.id);
   if (launch?.status === "running") {
     const [row] = await db
       .select({
@@ -4617,7 +4692,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   // the current workspace immediately. The account page already polls the
   // workspace while cartographerStatus === "running".
   const cartLaunchKey = launchKey("account_cartographer", a.id);
-  agentLaunches.set(cartLaunchKey, {
+  const cartToken = registerLaunch(cartLaunchKey, {
     status: "running",
     error: null,
     runId: null,
@@ -4691,7 +4766,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
         });
       });
 
-      agentLaunches.set(cartLaunchKey, {
+      settleLaunch(cartLaunchKey, cartToken, {
         status: "succeeded",
         error: null,
         runId,
@@ -4706,7 +4781,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
       chainExecutiveMapperAfterCartographer(a.id, triggeredByUserId, a.brandName ?? a.name);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      agentLaunches.set(cartLaunchKey, {
+      settleLaunch(cartLaunchKey, cartToken, {
         status: "failed",
         error: message,
         runId: null,
@@ -4759,7 +4834,7 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
       message: "An executive mapping sweep is already running for this account.",
     });
   };
-  if (getExecutiveMapperLaunch(a.id)?.status === "running") {
+  if ((await getExecutiveMapperLaunch(a.id))?.status === "running") {
     alreadyRunning();
     return;
   }
@@ -4771,6 +4846,9 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
         eq(atelierAgentRuns.agentId, "executive_mapper"),
         eq(atelierAgentRuns.targetId, a.id),
         eq(atelierAgentRuns.status, "running"),
+        // Task #1046 — a stale "running" row (dead process) must not
+        // block a relaunch forever.
+        agentRunIsFresh(),
         isNull(atelierAgentRuns.deletedAt),
       ),
     )

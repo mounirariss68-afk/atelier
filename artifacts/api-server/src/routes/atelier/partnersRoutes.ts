@@ -61,6 +61,12 @@ import {
   ALLIANCE_FIT_DIMENSIONS,
   computeFitTotals,
 } from "../../lib/atelier-agents/alliance-cartographer.js";
+import {
+  agentRunIsFresh,
+  agentRunRowIsStale,
+  hasFreshRunningRun,
+  INTERRUPTED_RUN_MESSAGE,
+} from "../../lib/atelier-agents/run-staleness.js";
 
 const router: IRouter = Router();
 
@@ -1877,6 +1883,11 @@ async function readLaunch(agentId: string, firmId: string, orgId?: string | null
   const job = await getLatestJob([agentId], firmId, orgId ?? undefined);
   if (!job) return null;
   if (job.status === "running" && Date.now() - job.createdAt.getTime() > LAUNCH_STALE_MS) {
+    // Task #1046 — old start time alone is not death: a long run that is
+    // still stamping progress on its durable run row is alive.
+    if (await hasFreshRunningRun(agentId, firmId)) {
+      return { status: "running", error: null, runId: null, proposedCount: null, summary: null };
+    }
     return { status: "failed", error: "The run timed out — please retry.", runId: null, proposedCount: null, summary: null };
   }
   if (job.status === "running") {
@@ -1904,6 +1915,9 @@ async function alreadyRunningInDb(agentId: string, firmId: string): Promise<bool
         eq(atelierAgentRuns.agentId, agentId),
         eq(atelierAgentRuns.targetId, firmId),
         eq(atelierAgentRuns.status, "running"),
+        // Task #1046 — a stale "running" row (dead process) must not
+        // block a relaunch forever.
+        agentRunIsFresh(),
         isNull(atelierAgentRuns.deletedAt),
       ),
     )
@@ -1923,7 +1937,11 @@ async function launchAllianceAgent(args: {
     args.agentId === "alliance_cartographer" ? "Partner evaluation" : "Partner people sweep";
   // A stale "running" row (dead promise) would block the relaunch via the
   // running-unique index — fail it first (same 30-min watchdog as reads).
-  await reapStaleRunningJob([args.agentId], args.firmId, args.orgId, LAUNCH_STALE_MS);
+  // Task #1046 — but never reap a run whose durable heartbeat is still
+  // fresh: a >30min run stamping progress is alive, not stuck.
+  if (!(await hasFreshRunningRun(args.agentId, args.firmId))) {
+    await reapStaleRunningJob([args.agentId], args.firmId, args.orgId, LAUNCH_STALE_MS);
+  }
   const jobId = await startBackgroundJob({
     orgId: args.orgId,
     userId: args.userId,
@@ -2049,12 +2067,13 @@ router.get("/partners/firms/:id/agents/status", async (req, res, next) => {
     const out: Record<string, unknown> = {};
     for (const agentId of agents) {
       const launch = await readLaunch(agentId, firm.id, me.orgId);
-      const [latest] = await db
+      const [latestRaw] = await db
         .select({
           id: atelierAgentRuns.id,
           status: atelierAgentRuns.status,
           statusMessage: atelierAgentRuns.statusMessage,
           createdAt: atelierAgentRuns.createdAt,
+          updatedAt: atelierAgentRuns.updatedAt,
         })
         .from(atelierAgentRuns)
         .where(
@@ -2066,6 +2085,12 @@ router.get("/partners/firms/:id/agents/status", async (req, res, next) => {
         )
         .orderBy(desc(atelierAgentRuns.createdAt))
         .limit(1);
+      // Task #1046 — a heartbeat-dead "running" row (crashed process) must
+      // render as an interrupted error, never as a live run.
+      const latest =
+        latestRaw && agentRunRowIsStale(latestRaw)
+          ? { ...latestRaw, status: "error", statusMessage: INTERRUPTED_RUN_MESSAGE }
+          : latestRaw;
       if (launch?.status === "running") {
         out[agentId] = {
           status: "running",

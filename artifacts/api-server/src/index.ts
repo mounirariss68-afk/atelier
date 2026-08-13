@@ -71,6 +71,16 @@ app.listen(port, (err) => {
     })().catch((err) => {
       logger.error({ err }, "Background-job boot sweep failed");
     });
+    // Task #1046 — agent runs (atelier_agent_runs) are plain in-process
+    // promises too: rows left "running" by a dead process showed in the
+    // Background Work bell forever and blocked relaunch guards.
+    await (async () => {
+      const { sweepInterruptedAgentRuns } = await import("./lib/atelier-agents/run-staleness");
+      const n = await sweepInterruptedAgentRuns(PROCESS_BOOT_TIME);
+      if (n > 0) logger.info({ swept: n }, "Marked orphaned agent runs as interrupted");
+    })().catch((err) => {
+      logger.error({ err }, "Agent-run boot sweep failed");
+    });
     await ensureAtelierAuthSeed().catch((err) => {
       logger.error(
         { err },

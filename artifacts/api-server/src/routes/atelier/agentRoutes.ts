@@ -11,6 +11,7 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull, inArray, ilike, sql } from "drizzle-orm";
+import { agentRunIsFresh, effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import {
   db,
   atelierOpportunities,
@@ -1786,6 +1787,8 @@ router.get("/povs/:povId/draft-status", async (req, res) => {
           eq(atelierAgentRuns.agentId, "ag_pov_draft"),
           eq(atelierAgentRuns.targetId, pov.opportunityId),
           eq(atelierAgentRuns.status, "running"),
+          // Task #1046 — never read progress off a heartbeat-dead row.
+          agentRunIsFresh(),
         ),
       )
       .orderBy(desc(atelierAgentRuns.createdAt))
@@ -2590,7 +2593,8 @@ router.get("/agent-runs/:runId", async (req, res) => {
   res.json({
     id: r.id,
     agentId: r.agentId,
-    status: r.status as "running" | "blocked" | "complete" | "error",
+    // Task #1046 — stale "running" rows (dead process) render as error.
+    status: effectiveAgentRunStatus(r) as "running" | "blocked" | "complete" | "error",
     statusMessage: r.statusMessage,
     progressPct: r.progressPct,
     confidence: r.confidence,
@@ -2706,7 +2710,7 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
   res.json({
     id: r2.id,
     agentId: r2.agentId,
-    status: r2.status as "running" | "blocked" | "complete" | "error",
+    status: effectiveAgentRunStatus(r2) as "running" | "blocked" | "complete" | "error",
     statusMessage: r2.statusMessage,
     progressPct: r2.progressPct,
     confidence: r2.confidence,

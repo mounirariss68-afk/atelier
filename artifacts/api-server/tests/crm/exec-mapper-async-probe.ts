@@ -316,6 +316,67 @@ async function main() {
       wsD?.account?.cartographerPhase,
     );
     stubFail = false;
+
+    // ---- 7. Task #1046 — stale Cartographer takeover + late settlement ----
+    // A wedged (>2h silent) refresh must be reclaimable, and when the ousted
+    // old promise finally settles (here: fails), it must NOT clobber the new
+    // launch's state.
+    const acctE = `acct_${runTag}_e`;
+    await db.insert(atelierAccounts).values({
+      id: acctE,
+      orgId: "aico",
+      name: `Async Probe Co ${acctE}`,
+      country: "AE",
+      sector: "Consulting",
+      tier: "C",
+      partnerOwnerId: userId,
+    } as any);
+    const { __testBackdateAgentLaunch } = await import(
+      "../../src/routes/atelier/accountRoutes.js"
+    );
+    stubDelayMs = 8000; // old run hangs at the stub for 8s
+    const oldRefresh = await api("POST", `/accounts/${acctE}/cartographer/refresh`, {});
+    check("takeover: old refresh starts (200 running)", oldRefresh.status === 200, oldRefresh.status);
+    // Simulate a wedged run: launch entry AND run-row heartbeat both >2h old.
+    __testBackdateAgentLaunch("account_cartographer", acctE, Date.now() - 3 * 60 * 60 * 1000);
+    await db.execute(
+      sql`update atelier_agent_runs set updated_at = now() - interval '3 hours', created_at = now() - interval '3 hours' where target_id = ${acctE}`,
+    );
+    stubDelayMs = 0; // the NEW run settles fast
+    const takeover = await api("POST", `/accounts/${acctE}/cartographer/refresh`, {});
+    check("takeover: wedged launch is reclaimed (200, not 409)", takeover.status === 200, takeover.status);
+    let wsE: any = null;
+    for (let i = 0; i < 60; i++) {
+      const r = await api("GET", `/accounts/${acctE}`);
+      wsE = r.body;
+      if (wsE?.account?.cartographerStatus !== "running") break;
+      await new Promise((r2) => setTimeout(r2, 250));
+    }
+    // Success maps to cartographerStatus null (idle) — anything but "failed".
+    check(
+      "takeover: new run settles cleanly (not failed)",
+      wsE?.account?.cartographerStatus == null,
+      wsE?.account?.cartographerStatus,
+    );
+    const [rowE] = await db
+      .select({ enrichedAt: atelierAccounts.enrichedAt })
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, acctE));
+    check("takeover: new run recorded enrichedAt", !!rowE?.enrichedAt, rowE);
+    // Make the OLD run's still-pending stub response (fires at ~8s) a
+    // failure, wait past its settlement, then confirm it changed nothing.
+    stubFail = true;
+    await new Promise((r) => setTimeout(r, 9000));
+    const wsE2 = await api("GET", `/accounts/${acctE}`);
+    check(
+      "takeover: late failure of the ousted run does NOT clobber the new state",
+      wsE2.body?.account?.cartographerStatus == null,
+      wsE2.body?.account?.cartographerStatus,
+    );
+    stubFail = false;
+    await db.execute(sql`delete from atelier_agent_runs where target_id = ${acctE}`).catch(() => undefined);
+    await db.execute(sql`delete from atelier_audit_events where entity_id = ${acctE}`).catch(() => undefined);
+    await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctE));
   } finally {
     try {
       // Give fire-and-forget chains a beat to finish before deleting rows.

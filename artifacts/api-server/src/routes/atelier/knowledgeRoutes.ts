@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq, and, desc, isNull } from "drizzle-orm";
+import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import {
   db,
   atelierUsers,
@@ -651,6 +652,7 @@ router.get("/agents/:agentId/runs", async (req, res) => {
       costUsd: atelierAgentRuns.costUsd,
       durationMs: atelierAgentRuns.durationMs,
       createdAt: atelierAgentRuns.createdAt,
+      updatedAt: atelierAgentRuns.updatedAt,
       agentName: atelierAgents.name,
     })
     .from(atelierAgentRuns)
@@ -669,7 +671,8 @@ router.get("/agents/:agentId/runs", async (req, res) => {
         id: r.id,
         agentId: r.agentId,
         agentName: r.agentName ?? r.agentId,
-        status: (r.status as "running" | "blocked" | "complete" | "error") ?? "running",
+        // Task #1046 — stale "running" rows (dead process) render as error.
+        status: (effectiveAgentRunStatus(r) as "running" | "blocked" | "complete" | "error") ?? "running",
         confidence: (r.confidence as "green" | "amber" | "red" | null) ?? null,
         message: r.statusMessage ?? "",
         targetType: r.targetType,

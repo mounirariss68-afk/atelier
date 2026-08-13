@@ -20,6 +20,7 @@
  */
 
 import { and, eq, gte, isNull, desc, inArray, lte, ilike, or } from "drizzle-orm";
+import { agentRunIsFresh, effectiveAgentRunStatus } from "../atelier-agents/run-staleness.js";
 import {
   db,
   atelierAccounts,
@@ -1403,7 +1404,11 @@ defineCapability({
       gte(atelierAgentRuns.createdAt, daysAgo(sinceDays)),
       isNull(atelierAgentRuns.deletedAt),
     ];
-    if (status) where.push(eq(atelierAgentRuns.status, status));
+    if (status) {
+      where.push(eq(atelierAgentRuns.status, status));
+      // Task #1046 — asking for "running" must not surface heartbeat-dead rows.
+      if (status === "running") where.push(agentRunIsFresh());
+    }
     if (agentId) where.push(eq(atelierAgentRuns.agentId, agentId));
     const rows = await db
       .select({
@@ -1415,6 +1420,7 @@ defineCapability({
         targetType: atelierAgentRuns.targetType,
         targetLabel: atelierAgentRuns.targetLabel,
         createdAt: atelierAgentRuns.createdAt,
+        updatedAt: atelierAgentRuns.updatedAt,
       })
       .from(atelierAgentRuns)
       .where(and(...where))
@@ -1426,7 +1432,8 @@ defineCapability({
         items: rows.map((r) => ({
           id: r.id,
           label: `${r.agentId} · ${r.targetLabel ?? r.targetType ?? "—"}`,
-          status: r.status,
+          // Task #1046 — stale "running" rows (dead process) render as error.
+          status: effectiveAgentRunStatus(r),
           confidence: r.confidence,
           message: r.statusMessage,
           startedAt: r.createdAt.toISOString(),
@@ -1938,6 +1945,7 @@ defineCapability({
           status: atelierAgentRuns.status,
           targetLabel: atelierAgentRuns.targetLabel,
           createdAt: atelierAgentRuns.createdAt,
+          updatedAt: atelierAgentRuns.updatedAt,
         })
         .from(atelierAgentRuns)
         .where(
@@ -1974,7 +1982,8 @@ defineCapability({
         ts: r.createdAt.toISOString(),
         actor: r.agentId,
         actorType: "agent" as const,
-        action: `agent.${r.status}`,
+        // Heartbeat-dead "running" rows render as error, never live.
+        action: `agent.${effectiveAgentRunStatus(r)}`,
         summary: r.targetLabel ?? null,
       })),
       ...audits.map((a) => ({

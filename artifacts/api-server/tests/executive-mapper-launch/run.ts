@@ -16,7 +16,9 @@ import { eq } from "drizzle-orm";
 import {
   runExecutiveMapperAndQueue,
   getExecutiveMapperLaunch,
+  __testBackdateExecutiveMapperLaunch,
 } from "../../src/lib/atelier-agents/executive-mapper-chain.js";
+import { atelierAgentRuns } from "@workspace/db";
 import type { runExecutiveMapper } from "../../src/lib/atelier-agents/runner.js";
 
 type RunImpl = typeof runExecutiveMapper;
@@ -59,7 +61,7 @@ async function main(): Promise<void> {
   } as typeof atelierAccounts.$inferInsert);
 
   try {
-    check(getExecutiveMapperLaunch(ACCT_ID) === null, "no launch entry before any run");
+    check((await getExecutiveMapperLaunch(ACCT_ID)) === null, "no launch entry before any run");
 
     // --- success lifecycle: pre-row "running" -> exactly one "succeeded" ---
     const slowOk: RunImpl = (async () => {
@@ -72,7 +74,7 @@ async function main(): Promise<void> {
     // fire-and-forget launch (the 202 response / fresh workspace poll) must
     // already see "running" — this is the pre-run-row window.
     check(
-      getExecutiveMapperLaunch(ACCT_ID)?.status === "running",
+      (await getExecutiveMapperLaunch(ACCT_ID))?.status === "running",
       "launch reads 'running' synchronously, before any run row exists",
     );
 
@@ -84,12 +86,12 @@ async function main(): Promise<void> {
     );
     check(overlapErr === "executive-mapper-already-running", "overlapping start rejects as already-running");
     check(
-      getExecutiveMapperLaunch(ACCT_ID)?.status === "running",
+      (await getExecutiveMapperLaunch(ACCT_ID))?.status === "running",
       "rejected overlap leaves the in-flight 'running' entry intact",
     );
 
     const result = await p1;
-    const settled = getExecutiveMapperLaunch(ACCT_ID);
+    const settled = await getExecutiveMapperLaunch(ACCT_ID);
     check(settled?.status === "succeeded", "launch settles to 'succeeded' after the pipeline finishes");
     check(settled?.proposedCount === result.proposedCount, "settled entry carries the proposed count");
     check(settled?.runId === result.runId, "settled entry carries the run id");
@@ -104,20 +106,87 @@ async function main(): Promise<void> {
       (e: unknown) => { failErr = e instanceof Error ? e.message : String(e); },
     );
     check(
-      getExecutiveMapperLaunch(ACCT_ID)?.status === "running",
+      (await getExecutiveMapperLaunch(ACCT_ID))?.status === "running",
       "a NEW run after a settled one re-registers 'running'",
     );
     await p2;
-    const failed = getExecutiveMapperLaunch(ACCT_ID);
+    const failed = await getExecutiveMapperLaunch(ACCT_ID);
     check(failErr === "probe-boom", "failing pipeline rethrows to the caller");
     check(failed?.status === "failed" && failed.error === "probe-boom", "launch settles to 'failed' with the error message");
 
     // A failed run must not wedge the in-flight claim: a retry starts cleanly.
     const p3 = runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: slowOk });
-    check(getExecutiveMapperLaunch(ACCT_ID)?.status === "running", "retry after failure claims the slot again");
+    check((await getExecutiveMapperLaunch(ACCT_ID))?.status === "running", "retry after failure claims the slot again");
     await p3;
-    check(getExecutiveMapperLaunch(ACCT_ID)?.status === "succeeded", "retry settles to 'succeeded'");
+    check((await getExecutiveMapperLaunch(ACCT_ID))?.status === "succeeded", "retry settles to 'succeeded'");
+
+    // --- Task #1046: >2h-but-HEARTBEATING run stays live ---
+    // A launch whose startedAt is past the cutoff but whose durable run row
+    // is still stamping progress must NOT be declared dead or reclaimed.
+    let release1: () => void = () => {};
+    const hang1: RunImpl = ((): unknown =>
+      new Promise((resolve) => {
+        release1 = () => resolve({ runId: `run_hb_${tag}`, output: emptyOutput });
+      })) as unknown as RunImpl;
+    const pHb = runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: hang1 });
+    __testBackdateExecutiveMapperLaunch(ACCT_ID, Date.now() - 3 * 60 * 60 * 1000);
+    const HB_RUN_ID = `agr_hb_${tag}`;
+    await db.insert(atelierAgentRuns).values({
+      id: HB_RUN_ID,
+      orgId: (await db.select({ orgId: atelierAccounts.orgId }).from(atelierAccounts).where(eq(atelierAccounts.id, ACCT_ID)))[0]!.orgId,
+      agentId: "executive_mapper",
+      targetType: "account",
+      targetId: ACCT_ID,
+      status: "running",
+      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      updatedAt: new Date(), // fresh heartbeat
+    } as typeof atelierAgentRuns.$inferInsert);
+    check(
+      (await getExecutiveMapperLaunch(ACCT_ID))?.status === "running",
+      "old-but-heartbeating launch still reads 'running' (heartbeat wins over start time)",
+    );
+    let hbOverlapErr = "";
+    await runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: slowOk }).catch(
+      (e: unknown) => { hbOverlapErr = e instanceof Error ? e.message : String(e); },
+    );
+    check(
+      hbOverlapErr === "executive-mapper-already-running",
+      "old-but-heartbeating run is NOT reclaimed by a relaunch",
+    );
+    await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.id, HB_RUN_ID));
+    release1();
+    await pHb;
+    check((await getExecutiveMapperLaunch(ACCT_ID))?.status === "succeeded", "heartbeating run settles normally once released");
+
+    // --- Task #1046: stale takeover + old-promise settlement is inert ---
+    let releaseOld: (err: Error) => void = () => {};
+    const hangOld: RunImpl = ((): unknown =>
+      new Promise((_resolve, reject) => {
+        releaseOld = (err: Error) => reject(err);
+      })) as unknown as RunImpl;
+    const pOld = runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: hangOld }).catch(() => {});
+    __testBackdateExecutiveMapperLaunch(ACCT_ID, Date.now() - 3 * 60 * 60 * 1000);
+    // No fresh run row exists (stub runImpl writes none) → the wedged slot is
+    // reclaimable, even after a status read normalized the entry to failed.
+    const normalized = await getExecutiveMapperLaunch(ACCT_ID);
+    check(normalized?.status === "failed", "silent >2h launch with no heartbeat normalizes to 'failed'");
+    const takeover = await runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: slowOk });
+    const afterTakeover = await getExecutiveMapperLaunch(ACCT_ID);
+    check(afterTakeover?.status === "succeeded", "relaunch reclaims the wedged slot and succeeds");
+    check(afterTakeover?.runId === takeover.runId, "state is owned by the NEW launch");
+    // Old promise finally settles — must not clobber the new launch's state.
+    releaseOld(new Error("old-wedged-run-finally-died"));
+    await pOld;
+    const afterOldSettles = await getExecutiveMapperLaunch(ACCT_ID);
+    check(
+      afterOldSettles?.status === "succeeded" && afterOldSettles.runId === takeover.runId,
+      "late settlement of the ousted promise does NOT overwrite the new launch",
+    );
+    // And the slot is not wedged by the ousted promise's cleanup: a fresh run starts cleanly.
+    await runExecutiveMapperAndQueue(ACCT_ID, null, { runImpl: slowOk });
+    check((await getExecutiveMapperLaunch(ACCT_ID))?.status === "succeeded", "slot stays healthy after the ousted promise settles");
   } finally {
+    await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.targetId, ACCT_ID));
     await db.delete(atelierAuditEvents).where(eq(atelierAuditEvents.entityId, ACCT_ID));
     await db.delete(atelierAccounts).where(eq(atelierAccounts.id, ACCT_ID));
   }

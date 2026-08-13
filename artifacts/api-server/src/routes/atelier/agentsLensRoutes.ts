@@ -22,6 +22,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   db,
@@ -237,7 +238,8 @@ router.get("/agents-lens/incidents/:id", async (req, res) => {
     evidenceRuns: evidenceRuns.map((r) => ({
       id: r.id,
       agentId: r.agentId,
-      status: r.status,
+      // Task #1046 — a crash-orphaned "running" row renders as error.
+      status: effectiveAgentRunStatus(r),
       statusMessage: r.statusMessage,
       confidence: r.confidence,
       targetType: r.targetType,
