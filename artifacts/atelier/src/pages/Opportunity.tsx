@@ -52,7 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sales-stages";
-import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "lucide-react";
+import { Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "lucide-react";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { OpportunityAgreements } from "@/components/esign/OpportunityAgreements";
 
@@ -220,21 +220,12 @@ export default function Opportunity() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-6">
-        {/* Primary creative-work toolbar — anchored next to the tabs.
-            Gold accent reserved for the Draft POV primary action. */}
+        {/* Single action row — real actions only. All navigation (POV Studio,
+            Proposal, Meetings, Research, …) lives exclusively in the tab bar
+            below; each tab carries its own primary CTA. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2" data-testid="row-opportunity-actions">
-            <PillButton variant="primary" onClick={() => setActiveTab("pov")}>
-              <span className="inline-flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Draft POV</span>
-            </PillButton>
-            <PillButton variant="ghost" onClick={() => setActiveTab("proposal")}>
-              <span className="inline-flex items-center gap-1.5"><FilePlus2 className="w-3.5 h-3.5" /> Build proposal</span>
-            </PillButton>
-            <PillButton variant="ghost" onClick={() => setActiveTab("meetings")}>
-              <span className="inline-flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Capture meeting</span>
-            </PillButton>
-            <PrototypeButton oppId={opp.id} oppName={opp.name} />
-            <PillButton variant="ghost" onClick={() => setMoveOpen(true)}>
+            <PillButton variant="primary" onClick={() => setMoveOpen(true)} data-testid="button-move-stage">
               <span className="inline-flex items-center gap-1.5">
                 <ArrowRight className="w-3.5 h-3.5" /> Move stage
               </span>
@@ -250,20 +241,15 @@ export default function Opportunity() {
                 </span>
               </PillButton>
             )}
+            <PrototypeButton oppId={opp.id} oppName={opp.name} />
           </div>
-          {/* Secondary references row — research + lifecycle controls. */}
+          {/* Quiet lifecycle controls — secondary to the pill actions. */}
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setActiveTab("research")}
-              className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
-            >
-              <Telescope className="w-3.5 h-3.5" /> Research account
-            </button>
             <button
               type="button"
               onClick={() => setEditOpen(true)}
               className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
+              data-testid="button-edit-opportunity"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
@@ -271,6 +257,7 @@ export default function Opportunity() {
               type="button"
               onClick={() => setArchiveOpen(true)}
               className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-danger transition-colors"
+              data-testid="button-archive-opportunity"
             >
               <Archive className="w-3.5 h-3.5" /> Archive
             </button>
