@@ -104,9 +104,9 @@ function invalidBody(res: Response, err: z.ZodError): void {
   });
 }
 
-// =============================================================
+// -------------------------------------------------------------------
 // PARTNER FIRMS — unified registry CRUD
-// =============================================================
+// -------------------------------------------------------------------
 
 const FIRM_TIERS = ["strategic", "preferred", "transactional"] as const;
 const FIRM_STATUSES = [
@@ -673,9 +673,9 @@ router.post("/partners/firms/:id/archive", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // FIT-SCORECARD — manual dimension adjustment (Task #530)
-// =============================================================
+// -------------------------------------------------------------------
 //
 // Lets an authorized editor override individual framework-dimension scores
 // on an existing Cartographer-produced scorecard. The server recomputes
@@ -838,9 +838,9 @@ router.get("/partners/firms/:id/fit-scorecard/history", async (req, res, next) =
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // TARGET PARTNERS — Identify pipeline CRUD + promote
-// =============================================================
+// -------------------------------------------------------------------
 
 const TARGET_STATUSES = [
   "researching",
@@ -1071,9 +1071,9 @@ router.post("/partners/targets/:id/promote", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // JOINT PIPELINE — CRM-linked co-sell CRUD
-// =============================================================
+// -------------------------------------------------------------------
 
 const jointBaseSchema = z.object({
   opportunityId: z.string().min(1),
@@ -1320,9 +1320,9 @@ router.post("/partners/joint-pipeline/:id/archive", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // CERTIFICATIONS — registry-linked CRUD
-// =============================================================
+// -------------------------------------------------------------------
 
 const certBaseSchema = z.object({
   partnerFirmId: z.string().min(1),
@@ -1516,9 +1516,9 @@ router.post("/partners/certifications/:id/archive", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // CONFLICTS — registry-linked CRUD (open/resolve lifecycle)
-// =============================================================
+// -------------------------------------------------------------------
 
 const conflictBaseSchema = z.object({
   partnerFirmId: z.string().min(1),
@@ -1685,9 +1685,9 @@ router.post("/partners/conflicts/:id/archive", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // GOVERN — real e-sign agreements with partner-firm counterparties
-// =============================================================
+// -------------------------------------------------------------------
 // Read-only projection of the contract system filtered to partner_firm
 // counterparties. NDA status in Qualify and framework agreements in
 // Govern both derive from this — never a hand-toggled field.
@@ -1786,9 +1786,9 @@ router.get("/partners/agreements", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // CO-DELIVER — real resource assignments + RCTI cost lines
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: Task #513 REST surface; chat parity tracked in docs/PARTNERS_BACKLOG.md
 router.get("/partners/co-deliver", async (req, res, next) => {
   try {
@@ -1857,9 +1857,9 @@ router.get("/partners/co-deliver", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // ALLIANCE EVALUATION AGENTS (Task #526) — async start-then-poll
-// =============================================================
+// -------------------------------------------------------------------
 // Long LLM runs must NOT hold the HTTP request open (the proxy 502s held
 // requests at ~60s). Record an in-process launch entry, run in the
 // background, return 202 immediately; the client polls the status route.

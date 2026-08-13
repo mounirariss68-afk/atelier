@@ -212,9 +212,9 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
 
 const router: IRouter = Router();
 
-// =============================================================
+// -------------------------------------------------------------------
 // Live duplicate-opportunity hint (Task #37)
-// =============================================================
+// -------------------------------------------------------------------
 // Fuzzy duplicate check used by the create dialog to warn WHILE TYPING,
 // before the user submits. Purely advisory — the exact-match 409 on create
 // below stays the hard gate. Scoped to open (non-archived) opportunities on
@@ -258,9 +258,9 @@ router.get("/opportunities/check-duplicates", async (req, res) => {
   res.json({ candidates });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Create opportunity (auto-runs Pursuit Scout)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -544,9 +544,9 @@ router.post("/opportunities", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Edit opportunity core details (Task #540)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.patch("/opportunities/:oppId", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -703,9 +703,9 @@ router.patch("/opportunities/:oppId", async (req, res) => {
   res.json(await buildOppWire(updated));
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Archive (soft-delete) opportunity (Task #540)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/archive", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -761,9 +761,9 @@ router.post("/opportunities/:oppId/archive", async (req, res) => {
   res.json({ ok: true, id: opp.id });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Score + persist structured qualification rubric (Task #540)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/qualification-rubric", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -836,9 +836,9 @@ router.post("/opportunities/:oppId/qualification-rubric", async (req, res) => {
 // Task #8 — persistBriefAndFacts moved to lib/atelier-agents/scout-persist.ts
 // so the chat opportunity_create capability shares the exact same logic.
 
-// =============================================================
+// -------------------------------------------------------------------
 // PATCH stage  (5C gate enforced for `pursue`)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.patch("/opportunities/:oppId/stage", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -875,9 +875,9 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
   res.json(await buildOppWire(result.opportunity));
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // 5C Qualifier  (GET + POST)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/qualifier", async (req, res) => {
   const opp = await loadOpp(req.params.oppId);
@@ -977,9 +977,9 @@ router.post("/opportunities/:oppId/qualifier", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Pursuit Scout — get brief / re-run
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/brief", async (req, res) => {
   const [row] = await db
@@ -1104,9 +1104,9 @@ router.post("/opportunities/:oppId/scout", async (req, res) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Research facts
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/research", async (req, res) => {
   const rows = await db
@@ -1450,9 +1450,9 @@ router.post("/opportunities/:oppId/research/:factId/reverify", async (req, res) 
   });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // POVs
-// =============================================================
+// -------------------------------------------------------------------
 function povWire(p: typeof atelierPovs.$inferSelect) {
   return {
     id: p.id,
@@ -2323,9 +2323,9 @@ router.post("/povs/:povId/revise", async (req, res) => {
   res.status(202).json({ started: true });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Meetings
-// =============================================================
+// -------------------------------------------------------------------
 function meetingWire(m: typeof atelierMeetings.$inferSelect, runId: string | null) {
   return {
     id: m.id,
@@ -2514,9 +2514,9 @@ router.post("/opportunities/:oppId/meetings", async (req, res) => {
   res.status(201).json(meetingWire(meeting, runId));
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Engagement-side meetings (post-contract)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/meetings", async (req, res) => {
   const rows = await db
@@ -2580,9 +2580,9 @@ router.post("/engagements/:engId/meetings", async (req, res) => {
   res.status(201).json(meetingWire(meeting, runId));
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Agent runs
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/agent-runs/:runId", async (req, res) => {
   const [r] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
@@ -2727,9 +2727,9 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // v2 — Sales-stage transitions (rationale + evidence + probability)
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2848,9 +2848,9 @@ router.get("/opportunities/:oppId/stage-history", async (req, res) => {
   );
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // v2 — Pipeline Forecaster (deterministic roll-up)
-// =============================================================
+// -------------------------------------------------------------------
 async function computeForecast() {
   const rows = await db
     .select()
@@ -2944,7 +2944,7 @@ router.post("/agents/pricing-strategist/run", async (req, res) => {
   );
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // v5 (Task #355) — generic agent dispatcher.
 //
 // Registered LAST so the more specific bespoke routes above
@@ -2960,7 +2960,7 @@ router.post("/agents/pricing-strategist/run", async (req, res) => {
 // wants `accountName`). The mode-specific run wrapper enforces the
 // shape it needs and runAgent will validate the final input against the
 // registry schema with a warn-on-drift policy.
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/agents/:agentId/run", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -3032,9 +3032,9 @@ router.post("/agents/:agentId/run", async (req, res) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Opportunity brief — PDF download
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: binary PDF export; no CLI tool shape
 router.get("/opportunities/:oppId/brief.pdf", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -3109,9 +3109,9 @@ router.get("/opportunities/:oppId/brief.pdf", async (req, res) => {
   void age; // referenced to satisfy lint (age computed but used only for data route)
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Opportunity POV (current version) — PDF download
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: binary PDF export; no CLI tool shape
 router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
   const me = ensurePersona(req, res);

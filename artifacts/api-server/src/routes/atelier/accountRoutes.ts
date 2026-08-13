@@ -1861,7 +1861,7 @@ router.get("/accounts/:accountId/account-360", async (req, res) => {
   });
 });
 
-// ===================================================================
+// -------------------------------------------------------------------
 // Account insights + account team (Task #569)
 // -------------------------------------------------------------------
 // INSIGHTS: a human, attributed, timestamped feed distinct from AI
@@ -1870,7 +1870,7 @@ router.get("/accounts/:accountId/account-360", async (req, res) => {
 // members; managing the team is gated to partner-tier + senior_manager
 // (the same CREATE_ROLES that own account strategy). Every mutation is
 // written to the audit trail.
-// ===================================================================
+// -------------------------------------------------------------------
 
 const INSIGHT_CATEGORY_LABEL: Record<string, string> = {
   relationship: "Relationship",
@@ -1945,14 +1945,14 @@ router.post("/accounts/:accountId/insights", async (req, res) => {
   res.json(ws);
 });
 
-// ============================================================
+// -------------------------------------------------------------------
 // Account-management AI agents (account-scoped, propose-then-approve).
 // Each endpoint runs an agent over live account context and returns the
 // proposal synchronously. Output is never auto-applied: Next-Best-Action
 // recommendations become tasks only when a human accepts (via the
 // existing POST /activities route), and Relationship-Health assessments
 // are governed via the /dismiss endpoint below. All gated by canSeeAccount.
-// ============================================================
+// -------------------------------------------------------------------
 
 async function guardAccountAgent(req: Request, res: Response) {
   const me = ensurePersona(req, res);
@@ -3022,7 +3022,7 @@ router.delete("/accounts/:accountId/team/:memberId", async (req, res) => {
   res.json(ws);
 });
 
-// ===================================================================
+// -------------------------------------------------------------------
 // Account planning & execution layer (Task #571)
 // -------------------------------------------------------------------
 // Action plan, account risk register, and goal progress. Reads are
@@ -3031,7 +3031,7 @@ router.delete("/accounts/:accountId/team/:memberId", async (req, res) => {
 // manager (CREATE_ROLES), the account's partner owner, or a member of
 // the account team whose role is account_manager / delivery_lead /
 // partner. Every mutation is audited and returns the fresh workspace.
-// ===================================================================
+// -------------------------------------------------------------------
 const PLAN_TEAM_ROLES = new Set(["account_manager", "delivery_lead", "partner"]);
 
 async function canManageAccountPlan(
@@ -3576,7 +3576,7 @@ router.put("/accounts/:accountId/goals/:objectiveId", async (req, res) => {
   res.json(await buildWorkspace(account.id, access, me));
 });
 
-// ===================================================================
+// -------------------------------------------------------------------
 // Activities & Tasks (Task #631)
 // -------------------------------------------------------------------
 // A first-class, polymorphic activity/task layer plus a unified, merged
@@ -3586,7 +3586,7 @@ router.put("/accounts/:accountId/goals/:objectiveId", async (req, res) => {
 // or deleting a row requires being the row's owner (assignee) or creator, or
 // holding account-plan management authority. Every mutation is audited and
 // returns the refreshed timeline payload.
-// ===================================================================
+// -------------------------------------------------------------------
 const ACTIVITY_TYPES = new Set(["task", "call", "email", "meeting"]);
 
 async function timelinePayload(
@@ -6652,9 +6652,9 @@ router.delete("/credentials/:credentialId", async (req, res) => {
   res.status(204).send();
 });
 
-// =============================================================
+// -------------------------------------------------------------------
 // Account research brief — PDF download
-// =============================================================
+// -------------------------------------------------------------------
 // @cli-skip: binary PDF export; no CLI tool shape
 router.get("/accounts/:accountId/research-brief.pdf", async (req, res) => {
   const me = ensurePersona(req, res);

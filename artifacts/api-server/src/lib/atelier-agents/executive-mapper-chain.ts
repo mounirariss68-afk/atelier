@@ -16,6 +16,7 @@
 
 import { db, atelierAccounts, atelierAgentRuns, atelierAuditEvents, atelierContacts } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { agentRunIsFresh } from "./run-staleness.js";
 import {
   agentRunIsFresh,
   hasFreshRunningRun,

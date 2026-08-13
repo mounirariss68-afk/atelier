@@ -105,33 +105,66 @@ export function BackgroundWorkBell() {
   }, [data, toast, qc]);
 
   const badgeCount = running.length + unread.length;
+  // Task #1048 — human breakdown of the count, used for the tooltip /
+  // aria-label and the popover header ("2 running · 13 unread").
+  const countBreakdown = [
+    running.length > 0 ? `${running.length} running` : null,
+    unread.length > 0 ? `${unread.length} unread` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // Cap the rendered digits so the reserved badge slot has a bounded width.
+  const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
+        {/* Task #1048 — the badge used to hang off the bell's top-right
+            corner with negative absolute offsets, so 2–3 digit counts
+            spilled onto the neighbouring header controls. It now renders
+            inline, inside a permanently reserved fixed-width slot next to
+            the icon: nothing can overlap, and the slot exists whether or
+            not a count is showing so neighbours never shift. */}
         <button
-          className="relative text-text-mute hover:text-text transition-colors"
+          className="flex items-center gap-1 text-text-mute hover:text-text transition-colors"
           data-testid="button-background-work-bell"
-          aria-label="Background work and notifications"
+          aria-label={
+            countBreakdown
+              ? `Background work and notifications — ${countBreakdown}`
+              : "Background work and notifications"
+          }
+          title={countBreakdown || undefined}
         >
           {running.length > 0 ? (
-            <Loader2 className="w-4 h-4 animate-spin text-gold" />
+            <Loader2 className="w-4 h-4 animate-spin text-gold shrink-0" />
           ) : (
-            <Bell className="w-4 h-4" />
+            <Bell className="w-4 h-4 shrink-0" />
           )}
-          {badgeCount > 0 && (
-            <span
-              className="absolute -top-1.5 -right-2 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
-              data-testid="badge-background-work-count"
-            >
-              {badgeCount}
-            </span>
-          )}
+          <span
+            className={cn(
+              "inline-flex w-[30px] h-4 items-center justify-center rounded-full text-[10px] font-mono font-semibold",
+              badgeCount > 0
+                ? "bg-gold/20 text-gold border border-gold/40"
+                : "invisible",
+            )}
+            aria-hidden={badgeCount === 0}
+            data-testid="badge-background-work-count"
+          >
+            {badgeCount > 0 ? badgeText : "0"}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0 bg-bg-elevate border-border text-text">
         <div className="px-3 py-2 border-b border-card-border text-xs font-mono uppercase tracking-wider text-text-faint">
           Background work
+          {countBreakdown && (
+            <span
+              className="ml-2 normal-case tracking-normal text-text-mute"
+              data-testid="text-background-work-breakdown"
+            >
+              {countBreakdown}
+            </span>
+          )}
         </div>
         <div className="max-h-96 overflow-y-auto">
           {running.length === 0 && finished.length === 0 && unread.length === 0 && (
