@@ -16,6 +16,7 @@ export type {
   AtelierDownloadDocumentParams,
   AtelierDownloadMyDocumentParams,
   AtelierSubmitMyExpenseBody,
+  AtelierRespondToTaskBody,
   AtelierReplaceBankSignatoriesBody,
   AtelierReplaceExpenseGlMappingsBody,
   AtelierSetEngagementExpenseMarkupBody,

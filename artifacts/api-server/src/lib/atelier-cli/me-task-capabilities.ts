@@ -37,7 +37,10 @@ import {
   createPersonalTask,
   updatePersonalTask,
   personalTaskWire,
+  assignPersonalTask,
 } from "../../routes/atelier/meTasksRoutes.js";
+import { scopedPersonMatches, loadMe } from "./people-read-capabilities.js";
+import { isRestrictedPersona } from "../../routes/atelier/personaRoles.js";
 import type { ToolContext, ToolResult } from "./index.js";
 
 type TaskRow = Awaited<ReturnType<typeof listPersonalTasks>>[number];
@@ -550,6 +553,194 @@ defineSelfWriteCapability({
         href: TASKS_HREF,
         navigateTo: { path: TASKS_HREF, when: "on_commit" as const },
         note: `Rescheduled to ${dueLabel(newDue, tz)}.`,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// tasks.assign — Task #1011: hand a task to a colleague.
+//
+// Deliberately NOT a me.* capability: the SELF_ONLY_CHAT_ROLES clamp
+// keeps it away from employee/contractor chat, and the runtime gate
+// below (restricted-persona denial + roster-scope person matching)
+// mirrors the REST route exactly. The task row is owned by the ASSIGNEE
+// and lands as "pending" until they accept or decline from Me → Tasks.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "tasks.assign",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "roster",
+  toolName: "assign_task",
+  description:
+    'Hand a personal task to a colleague in the caller\'s roster scope ("ask Sara to send the deck by Friday"). The assignee gets a notification and can accept or decline; the assigner can track status on Me → Tasks. NOT for the caller\'s own list (use create_my_task) and NOT a meeting.',
+  slashAliases: { en: ["/assign-task", "/delegate"], fr: ["/deleguer-tache"] },
+  representativePrompts: {
+    en: ["Ask Sara to send the deck tomorrow", "Assign the expense follow-up to Riser"],
+    ar: ["اطلب من سارة إرسال العرض غدا"],
+    fr: ["Demande à Sara d'envoyer le deck demain"],
+  },
+  surfaceOn: ["home", "roster", "global"],
+  resultCard: "entity_card",
+  promoteAsSuggestion: false,
+  examplePhrases: {
+    en: ["Ask Sara to send the deck tomorrow"],
+    ar: ["كلف زميلا بمهمة"],
+    fr: ["Délègue une tâche à un collègue"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      person: { type: "string", description: "Name of the colleague to hand the task to." },
+      personId: { type: "string", description: "Roster person id (from a disambiguation pick)." },
+      title: { type: "string", description: "What they should do." },
+      notes: { type: "string", description: "Optional extra detail." },
+      dueDate: {
+        type: "string",
+        description: 'Due date: ISO YYYY-MM-DD, "today", or "tomorrow". Omit for an undated task.',
+      },
+      dueTime: { type: "string", description: 'Due time like "17:00" or "5pm".' },
+      tz: { type: "string", description: "IANA timezone the times were spoken in." },
+      confirm: { type: "boolean" },
+    },
+    required: ["title"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  irreversible: false,
+  async run(input, ctx): Promise<ToolResult> {
+    if (isRestrictedPersona(ctx.persona.role)) {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: "Handing tasks to colleagues is not available to your role.",
+      };
+    }
+    const me = await loadMe(ctx);
+    if (!me) return { ok: false, errorCode: "forbidden", errorMessage: "No active persona." };
+    const title = typeof input.title === "string" ? input.title.trim() : "";
+    if (!title) {
+      return { ok: false, errorCode: "missing_title", errorMessage: "What should the task say?" };
+    }
+    const resolvedDue = resolveDueInstant(input, ctx as ToolContext);
+    if ("error" in resolvedDue) {
+      return { ok: false, errorCode: "invalid_due", errorMessage: resolvedDue.error };
+    }
+    const { dueAt, tz } = resolvedDue;
+
+    // Resolve the assignee within the caller's roster scope ONLY.
+    const personId = typeof input.personId === "string" ? input.personId.trim() : "";
+    const personQ = typeof input.person === "string" ? input.person.trim() : "";
+    let targetPersonId = personId;
+    let targetName = "";
+    if (!targetPersonId) {
+      if (!personQ) {
+        return {
+          ok: false,
+          errorCode: "missing_person",
+          errorMessage: "Who should I hand this task to?",
+        };
+      }
+      const matches = await scopedPersonMatches(me, personQ);
+      if (matches.length === 0) {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `I couldn't find "${personQ}" among the people you can delegate to.`,
+        };
+      }
+      if (matches.length > 1) {
+        const options = matches.slice(0, 6).map((p) => ({
+          id: p.id,
+          label: p.fullName ?? p.preferredName ?? p.id,
+          secondary: p.title ?? p.workerType ?? "",
+        }));
+        return {
+          ok: true,
+          data: {
+            prompt: `Several people match "${personQ}" — who do you mean?`,
+            options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "roster_person", options },
+        };
+      }
+      targetPersonId = matches[0]!.id;
+      targetName = matches[0]!.fullName ?? personQ;
+    }
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            title,
+            assignee: targetName || targetPersonId,
+            due: dueLabel(dueAt, tz),
+          },
+        },
+        confirmation: {
+          summary: `Hand "${title}" to ${targetName || "this colleague"} — ${dueLabel(dueAt, tz)}? They'll be asked to accept or decline.`,
+          diff: {
+            create: {
+              table: "atelier_personal_tasks",
+              values: {
+                title,
+                assigneePersonId: targetPersonId,
+                dueAt: dueAt ? dueAt.toISOString() : null,
+                assignmentStatus: "pending",
+              },
+            },
+          },
+          pending: {
+            tool: "assign_task",
+            input: { ...input, personId: targetPersonId, person: targetName || personQ, tz, confirm: true },
+          },
+        },
+      };
+    }
+
+    const result = await assignPersonalTask({
+      assigner: me,
+      personId: targetPersonId,
+      title,
+      notes: typeof input.notes === "string" ? input.notes : null,
+      dueAt,
+    });
+    if (!result.ok) {
+      if (result.error === "out_of_scope") {
+        return {
+          ok: false,
+          errorCode: "forbidden",
+          errorMessage: "That person is outside the people you can delegate to.",
+        };
+      }
+      if (result.error === "self_assign") {
+        return {
+          ok: false,
+          errorCode: "invalid_target",
+          errorMessage: "That's you — use your own list for that (\"remind me to…\").",
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "no_login",
+        errorMessage: "That person has no portal login yet, so they can't receive tasks.",
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        id: result.task.id,
+        label: result.task.title,
+        assignee: result.assigneeName,
+        assignmentStatus: "pending",
+        due: dueAt ? fmtInTz(dueAt, tz) : null,
+        href: TASKS_HREF,
+        navigateTo: { path: TASKS_HREF, when: "on_commit" as const },
+        note: `Handed to ${result.assigneeName} — they've been notified and can accept or decline. Track it under Me → Tasks.`,
       },
     };
   },

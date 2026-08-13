@@ -148,6 +148,15 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
     mobile: "Me tab → My tasks",
   }),
 
+  // ---- task delegation (Task #1011) -----------------------------------
+  "post /me/tasks/assign": cap("tasks.assign"),
+  "post /me/tasks/:id/respond": excluded({
+    reason: "accept/decline is a one-tap decision on the notification/list card; a chat write adds confirm friction without value",
+    userLabel: "accept or decline a task a colleague handed you",
+    web: "Me → Tasks (Accept / Decline on the pending task)",
+    mobile: null,
+  }),
+
   // ---- display preferences (Task #827) --------------------------------
   "patch /me/preferences": excluded({
     reason: "trivial per-user UI preference (display currency); a chat write adds risk without conversational value",

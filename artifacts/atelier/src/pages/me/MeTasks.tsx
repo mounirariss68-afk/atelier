@@ -14,7 +14,11 @@ import {
   useAtelierCreateMyTask,
   useAtelierUpdateMyTask,
   useAtelierDeleteMyTask,
+  useAtelierAssignTask,
+  useAtelierRespondToTask,
+  useAtelierListAssignedTasks,
   getAtelierListMyTasksQueryKey,
+  getAtelierListAssignedTasksQueryKey,
   type AtelierPersonalTask,
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
@@ -26,6 +30,7 @@ import {
   Trash2,
   Pencil,
   BellRing,
+  Send,
 } from "lucide-react";
 
 function fmtDue(iso: string | null | undefined): string | null {
@@ -55,11 +60,15 @@ function isoToLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+type RosterPickPerson = { id: string; fullName?: string | null; status?: string | null };
+
 export default function MeTasks() {
   const qc = useQueryClient();
   const { data, isLoading, isError } = useAtelierListMyTasks();
-  const invalidate = () =>
+  const invalidate = () => {
     qc.invalidateQueries({ queryKey: getAtelierListMyTasksQueryKey() });
+    qc.invalidateQueries({ queryKey: getAtelierListAssignedTasksQueryKey() });
+  };
   const createMut = useAtelierCreateMyTask({
     mutation: { onSuccess: invalidate },
   });
@@ -69,6 +78,55 @@ export default function MeTasks() {
   const deleteMut = useAtelierDeleteMyTask({
     mutation: { onSuccess: invalidate },
   });
+  const respondMut = useAtelierRespondToTask({
+    mutation: { onSuccess: invalidate },
+  });
+  const assignMut = useAtelierAssignTask({
+    mutation: { onSuccess: invalidate },
+  });
+  const assigned = useAtelierListAssignedTasks();
+
+  // Task #1011 — delegation picker. The roster people list is already
+  // viewer-scoped server-side (full viewers see everyone, managers see
+  // their reports, everyone else nobody), so an empty/forbidden result
+  // simply hides the "Hand to a colleague" card.
+  const [people, setPeople] = React.useState<RosterPickPerson[]>([]);
+  React.useEffect(() => {
+    fetch("/api/atelier/roster/people", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const list: RosterPickPerson[] = (d.people ?? []).filter(
+          (p: RosterPickPerson) => p.status !== "inactive",
+        );
+        setPeople(list);
+      })
+      .catch(() => {});
+  }, []);
+  const [assignPersonId, setAssignPersonId] = React.useState("");
+  const [assignTitle, setAssignTitle] = React.useState("");
+  const [assignDue, setAssignDue] = React.useState("");
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+  const handOver = () => {
+    const trimmed = assignTitle.trim();
+    if (!trimmed || !assignPersonId) return;
+    setAssignError(null);
+    assignMut.mutate(
+      { data: { personId: assignPersonId, title: trimmed, dueAt: localToIso(assignDue) } },
+      {
+        onSuccess: () => {
+          setAssignTitle("");
+          setAssignDue("");
+          setAssignPersonId("");
+        },
+        onError: (e: unknown) =>
+          setAssignError(
+            (e as { body?: { detail?: string } })?.body?.detail ??
+              "Couldn't hand the task over — try again.",
+          ),
+      },
+    );
+  };
 
   const [title, setTitle] = React.useState("");
   const [due, setDue] = React.useState("");
@@ -216,6 +274,12 @@ export default function MeTasks() {
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text truncate">{t.title}</p>
+                    {t.assignedByName && (
+                      <p className="text-[11px] font-mono text-gold/80" data-testid={`text-me-task-assigner-${t.id}`}>
+                        from {t.assignedByName}
+                        {t.assignmentStatus === "pending" ? " · awaiting your reply" : ""}
+                      </p>
+                    )}
                     {t.dueAt && (
                       <p
                         className={`text-[11px] font-mono ${t.overdue ? "text-danger" : "text-text-faint"}`}
@@ -226,6 +290,28 @@ export default function MeTasks() {
                       </p>
                     )}
                   </div>
+                  {t.assignmentStatus === "pending" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          respondMut.mutate({ id: t.id, data: { response: "accepted" } })
+                        }
+                        className="text-[11px] font-mono rounded border border-gold/60 px-2 py-0.5 text-gold hover:bg-gold/10 shrink-0"
+                        data-testid={`button-me-task-accept-${t.id}`}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() =>
+                          respondMut.mutate({ id: t.id, data: { response: "declined" } })
+                        }
+                        className="text-[11px] font-mono rounded border border-border-soft px-2 py-0.5 text-text-faint hover:text-danger hover:border-danger/50 shrink-0"
+                        data-testid={`button-me-task-decline-${t.id}`}
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => snooze(t, "hour")}
                     className="text-[11px] font-mono text-text-faint hover:text-gold shrink-0"
@@ -268,6 +354,97 @@ export default function MeTasks() {
           ))}
         </div>
       </Card>
+
+      {people.length > 0 && (
+        <Card className="p-5 space-y-3" data-testid="card-me-tasks-assign">
+          <h3 className="text-sm font-semibold text-text flex items-center gap-2">
+            <Send className="w-4 h-4 text-gold/80" /> Hand a task to a colleague
+          </h3>
+          <p className="text-xs text-text-faint">
+            They'll get a notification and can accept or decline. You can track
+            it below.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={assignPersonId}
+              onChange={(e) => setAssignPersonId(e.target.value)}
+              className="rounded border border-border-soft bg-transparent px-2 py-1.5 text-sm text-text"
+              data-testid="select-me-task-assignee"
+            >
+              <option value="">Who?</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.fullName ?? p.id}
+                </option>
+              ))}
+            </select>
+            <input
+              value={assignTitle}
+              onChange={(e) => setAssignTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handOver()}
+              placeholder="What should they do?"
+              className="flex-1 min-w-[180px] rounded border border-border-soft bg-transparent px-3 py-1.5 text-sm text-text placeholder:text-text-faint"
+              data-testid="input-me-task-assign-title"
+            />
+            <input
+              type="datetime-local"
+              value={assignDue}
+              onChange={(e) => setAssignDue(e.target.value)}
+              className="rounded border border-border-soft bg-transparent px-2 py-1.5 text-sm text-text"
+              data-testid="input-me-task-assign-due"
+            />
+            <button
+              onClick={handOver}
+              disabled={!assignTitle.trim() || !assignPersonId || assignMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded bg-gold/90 px-3 py-1.5 text-sm font-medium text-navy disabled:opacity-50"
+              data-testid="button-me-task-assign"
+            >
+              <Send className="w-4 h-4" /> Hand over
+            </button>
+          </div>
+          {assignError && (
+            <p className="text-xs text-danger" data-testid="text-me-task-assign-error">
+              {assignError}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {(assigned.data?.tasks?.length ?? 0) > 0 && (
+        <Card className="p-5 space-y-1" data-testid="card-me-tasks-delegated">
+          <p className="text-xs font-mono uppercase tracking-wider text-text-faint">
+            Handed to colleagues
+          </p>
+          <div className="divide-y divide-border-soft">
+            {assigned.data!.tasks.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-2.5 py-2"
+                data-testid={`row-me-task-delegated-${t.id}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm truncate ${t.status === "done" ? "text-text-faint line-through" : "text-text"}`}>
+                    {t.title}
+                  </p>
+                  <p className="text-[11px] font-mono text-text-faint">
+                    to {t.assigneeName}
+                    {t.dueAt ? ` · due ${fmtDue(t.dueAt)}` : ""}
+                  </p>
+                </div>
+                <MonoChip data-testid={`chip-me-task-delegated-status-${t.id}`}>
+                  {t.status === "done"
+                    ? "done"
+                    : t.assignmentStatus === "pending"
+                      ? "awaiting reply"
+                      : t.assignmentStatus === "declined"
+                        ? "declined"
+                        : "accepted"}
+                </MonoChip>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {done.length > 0 && (
         <Card className="p-5 space-y-1" data-testid="card-me-tasks-done">

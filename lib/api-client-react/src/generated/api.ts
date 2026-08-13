@@ -170,6 +170,7 @@ import type {
   AtelierLeaverReassignInput,
   AtelierLibraryDocumentDetail,
   AtelierListAccountsParams,
+  AtelierListAssignedTasks200,
   AtelierListAuditParams,
   AtelierListCertificationsParams,
   AtelierListCheckInsParams,
@@ -236,6 +237,7 @@ import type {
   AtelierPersona,
   AtelierPersonaSwitchInput,
   AtelierPersonalTask,
+  AtelierPersonalTaskAssign,
   AtelierPersonalTaskCreate,
   AtelierPersonalTaskPatch,
   AtelierPov,
@@ -281,6 +283,7 @@ import type {
   AtelierReplaceMyDocumentScan200,
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
+  AtelierRespondToTaskBody,
   AtelierReverifyFactResult,
   AtelierReviewReleaseInput,
   AtelierRevisePovInput,
@@ -7693,6 +7696,259 @@ export const useAtelierCreateMyTask = <
   TContext
 > => {
   return useMutation(getAtelierCreateMyTaskMutationOptions(options));
+};
+
+/**
+ * @summary Hand a task to an in-scope colleague (Task
+ */
+export const getAtelierAssignTaskUrl = () => {
+  return `/api/atelier/me/tasks/assign`;
+};
+
+export const atelierAssignTask = async (
+  atelierPersonalTaskAssign: AtelierPersonalTaskAssign,
+  options?: RequestInit,
+): Promise<AtelierPersonalTask> => {
+  return customFetch<AtelierPersonalTask>(getAtelierAssignTaskUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPersonalTaskAssign),
+  });
+};
+
+export const getAtelierAssignTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAssignTask>>,
+    TError,
+    { data: BodyType<AtelierPersonalTaskAssign> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAssignTask>>,
+  TError,
+  { data: BodyType<AtelierPersonalTaskAssign> },
+  TContext
+> => {
+  const mutationKey = ["atelierAssignTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAssignTask>>,
+    { data: BodyType<AtelierPersonalTaskAssign> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierAssignTask(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAssignTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAssignTask>>
+>;
+export type AtelierAssignTaskMutationBody = BodyType<AtelierPersonalTaskAssign>;
+export type AtelierAssignTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hand a task to an in-scope colleague (Task
+ */
+export const useAtelierAssignTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAssignTask>>,
+    TError,
+    { data: BodyType<AtelierPersonalTaskAssign> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAssignTask>>,
+  TError,
+  { data: BodyType<AtelierPersonalTaskAssign> },
+  TContext
+> => {
+  return useMutation(getAtelierAssignTaskMutationOptions(options));
+};
+
+/**
+ * @summary Tasks the caller handed to colleagues, with accept/decline status
+ */
+export const getAtelierListAssignedTasksUrl = () => {
+  return `/api/atelier/me/tasks/assigned`;
+};
+
+export const atelierListAssignedTasks = async (
+  options?: RequestInit,
+): Promise<AtelierListAssignedTasks200> => {
+  return customFetch<AtelierListAssignedTasks200>(
+    getAtelierListAssignedTasksUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListAssignedTasksQueryKey = () => {
+  return [`/api/atelier/me/tasks/assigned`] as const;
+};
+
+export const getAtelierListAssignedTasksQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListAssignedTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListAssignedTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListAssignedTasksQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListAssignedTasks>>
+  > = ({ signal }) => atelierListAssignedTasks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListAssignedTasks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListAssignedTasksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListAssignedTasks>>
+>;
+export type AtelierListAssignedTasksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Tasks the caller handed to colleagues, with accept/decline status
+ */
+
+export function useAtelierListAssignedTasks<
+  TData = Awaited<ReturnType<typeof atelierListAssignedTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListAssignedTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListAssignedTasksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept or decline a task a colleague handed over
+ */
+export const getAtelierRespondToTaskUrl = (id: string) => {
+  return `/api/atelier/me/tasks/${id}/respond`;
+};
+
+export const atelierRespondToTask = async (
+  id: string,
+  atelierRespondToTaskBody: AtelierRespondToTaskBody,
+  options?: RequestInit,
+): Promise<AtelierPersonalTask> => {
+  return customFetch<AtelierPersonalTask>(getAtelierRespondToTaskUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierRespondToTaskBody),
+  });
+};
+
+export const getAtelierRespondToTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRespondToTask>>,
+    TError,
+    { id: string; data: BodyType<AtelierRespondToTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRespondToTask>>,
+  TError,
+  { id: string; data: BodyType<AtelierRespondToTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierRespondToTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRespondToTask>>,
+    { id: string; data: BodyType<AtelierRespondToTaskBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierRespondToTask(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRespondToTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRespondToTask>>
+>;
+export type AtelierRespondToTaskMutationBody =
+  BodyType<AtelierRespondToTaskBody>;
+export type AtelierRespondToTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Accept or decline a task a colleague handed over
+ */
+export const useAtelierRespondToTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRespondToTask>>,
+    TError,
+    { id: string; data: BodyType<AtelierRespondToTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRespondToTask>>,
+  TError,
+  { id: string; data: BodyType<AtelierRespondToTaskBody> },
+  TContext
+> => {
+  return useMutation(getAtelierRespondToTaskMutationOptions(options));
 };
 
 /**

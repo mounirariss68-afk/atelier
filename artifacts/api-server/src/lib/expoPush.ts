@@ -49,7 +49,7 @@ export const PUSH_CATEGORIES = [
 export type PushCategory = (typeof PUSH_CATEGORIES)[number];
 
 export function pushCategoryForKind(kind: string): PushCategory {
-  if (kind === "personal_task_due") return "tasks";
+  if (kind === "personal_task_due" || kind.startsWith("personal_task_")) return "tasks";
   if (kind.startsWith("expense_") || kind === "engagement_expense_budget") return "expenses";
   if (kind.startsWith("timesheet_")) return "timesheets";
   if (

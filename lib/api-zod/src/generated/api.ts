@@ -5485,6 +5485,15 @@ export const AtelierListMyTasksResponse = zod.object({
       overdue: zod.boolean(),
       completedAt: zod.string().nullish(),
       createdAt: zod.string(),
+      assignmentStatus: zod
+        .union([
+          zod.literal("pending"),
+          zod.literal("accepted"),
+          zod.literal("declined"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      assignedByName: zod.string().nullish(),
     }),
   ),
 });
@@ -5500,6 +5509,90 @@ export const AtelierCreateMyTaskBody = zod.object({
   title: zod.string().min(1).max(atelierCreateMyTaskBodyTitleMax),
   notes: zod.string().max(atelierCreateMyTaskBodyNotesMax).nullish(),
   dueAt: zod.string().nullish().describe("UTC ISO instant"),
+});
+
+/**
+ * @summary Hand a task to an in-scope colleague (Task
+ */
+
+export const atelierAssignTaskBodyTitleMax = 300;
+
+export const atelierAssignTaskBodyNotesMax = 2000;
+
+export const AtelierAssignTaskBody = zod.object({
+  personId: zod
+    .string()
+    .min(1)
+    .describe(
+      "Roster person id of the assignee (must be in the caller's roster scope)",
+    ),
+  title: zod.string().min(1).max(atelierAssignTaskBodyTitleMax),
+  notes: zod.string().max(atelierAssignTaskBodyNotesMax).nullish(),
+  dueAt: zod.string().nullish().describe("UTC ISO instant"),
+});
+
+/**
+ * @summary Tasks the caller handed to colleagues, with accept/decline status
+ */
+export const AtelierListAssignedTasksResponse = zod.object({
+  tasks: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        title: zod.string(),
+        notes: zod.string().nullish(),
+        dueAt: zod.string().nullish(),
+        status: zod.enum(["open", "done"]),
+        overdue: zod.boolean(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        assignmentStatus: zod
+          .union([
+            zod.literal("pending"),
+            zod.literal("accepted"),
+            zod.literal("declined"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        assignedByName: zod.string().nullish(),
+      })
+      .and(
+        zod.object({
+          assigneeName: zod.string(),
+        }),
+      ),
+  ),
+});
+
+/**
+ * @summary Accept or decline a task a colleague handed over
+ */
+export const AtelierRespondToTaskParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierRespondToTaskBody = zod.object({
+  response: zod.enum(["accepted", "declined"]),
+});
+
+export const AtelierRespondToTaskResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  notes: zod.string().nullish(),
+  dueAt: zod.string().nullish(),
+  status: zod.enum(["open", "done"]),
+  overdue: zod.boolean(),
+  completedAt: zod.string().nullish(),
+  createdAt: zod.string(),
+  assignmentStatus: zod
+    .union([
+      zod.literal("pending"),
+      zod.literal("accepted"),
+      zod.literal("declined"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  assignedByName: zod.string().nullish(),
 });
 
 /**
@@ -5529,6 +5622,15 @@ export const AtelierUpdateMyTaskResponse = zod.object({
   overdue: zod.boolean(),
   completedAt: zod.string().nullish(),
   createdAt: zod.string(),
+  assignmentStatus: zod
+    .union([
+      zod.literal("pending"),
+      zod.literal("accepted"),
+      zod.literal("declined"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  assignedByName: zod.string().nullish(),
 });
 
 /**

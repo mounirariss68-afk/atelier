@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPersonalTaskAssignmentStatus } from "./atelierPersonalTaskAssignmentStatus";
 import type { AtelierPersonalTaskStatus } from "./atelierPersonalTaskStatus";
 
 export interface AtelierPersonalTask {
@@ -19,4 +20,8 @@ export interface AtelierPersonalTask {
   /** @nullable */
   completedAt?: string | null;
   createdAt: string;
+  /** @nullable */
+  assignmentStatus?: AtelierPersonalTaskAssignmentStatus;
+  /** @nullable */
+  assignedByName?: string | null;
 }

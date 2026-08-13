@@ -210,7 +210,9 @@ async function main() {
 
   // --- stub Perplexity server (deep-research retrieval), search_results with
   // date + snippet so richer citation metadata flows through ---
+  let pplxHits = 0;
   const pplxStub = createServer((req, res) => {
+    pplxHits++;
     let body = "";
     req.on("data", (ch) => (body += ch));
     req.on("end", () => {
@@ -621,6 +623,33 @@ async function main() {
     const rHygList3 = await call("GET", `/opportunities/${oppId}/research`);
     const deadRow = (rHygList3.body ?? []).find((f: any) => f.id === hygDeadId);
     check("reverify: sourceDead flag surfaces in list projection", deadRow?.flags?.sourceDead === true, deadRow?.flags);
+
+    // Object-level authorization: a persona who cannot see the account must
+    // get a non-oracular 404 from merge AND reverify, with no fact mutation
+    // and NO external retrieval spend.
+    const outsiderId = `u_${runTag}_emp`;
+    await db.insert(atelierUsers).values({
+      id: outsiderId, orgId: "aico", email: `${outsiderId}@test.local`, name: "Probe Outsider",
+      initials: "PO", role: "consultant", roleLabel: "Consultant", title: "Probe",
+    } as any);
+    const callAs = async (uid: string, method: string, path: string) => {
+      const res = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { "content-type": "application/json", cookie: `atelier_persona=${uid}` },
+      });
+      let b: any = null;
+      try { b = await res.json(); } catch {}
+      return { status: res.status, body: b };
+    };
+    const hitsBefore = pplxHits;
+    const rOutMerge = await callAs(outsiderId, "POST", `/opportunities/${oppId}/research/${hygStaleId}/merge`);
+    check("authz: out-of-scope merge → 404 (non-oracular)", rOutMerge.status === 404 && rOutMerge.body?.error === "opportunity-not-found", rOutMerge);
+    const rOutRev = await callAs(outsiderId, "POST", `/opportunities/${oppId}/research/${hygStaleId}/reverify`);
+    check("authz: out-of-scope reverify → 404 (non-oracular)", rOutRev.status === 404 && rOutRev.body?.error === "opportunity-not-found", rOutRev);
+    check("authz: no external retrieval on denied reverify", pplxHits === hitsBefore, pplxHits - hitsBefore);
+    const [staleStill] = await db.select().from(atelierResearchFacts).where(eq(atelierResearchFacts.id, hygStaleId));
+    check("authz: denied merge mutated nothing (fact still live)", staleStill != null && staleStill.deletedAt == null, staleStill?.deletedAt);
+    await db.delete(atelierUsers).where(eq(atelierUsers.id, outsiderId));
 
     // Snapshot immutability: the first POV's approval-time snapshot contains
     // factId + dupFactId. Merging dupFactId (archive) must NOT mutate the

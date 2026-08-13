@@ -1810,6 +1810,13 @@ export const atelierPersonalTasks = pgTable(
     dueAt: timestamp("due_at"),
     status: text("status").notNull().default("open"), // open | done
     completedAt: timestamp("completed_at"),
+    // Task #1011 — delegation. When another user handed this task over:
+    // assignedById = the assigner's atelier_users.id (NULL for self-created)
+    // assignmentStatus = pending | accepted | declined (NULL for self-created).
+    // Declined tasks stay for the assigner's status view but drop out of the
+    // assignee's list / roll-up / reminder tick.
+    assignedById: text("assigned_by_id"),
+    assignmentStatus: text("assignment_status"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     deletedAt: timestamp("deleted_at"),
@@ -1817,6 +1824,7 @@ export const atelierPersonalTasks = pgTable(
   (t) => [
     index("idx_atelier_ptask_user").on(t.userId),
     index("idx_atelier_ptask_org").on(t.orgId),
+    index("idx_atelier_ptask_assigner").on(t.assignedById),
   ],
 );
 

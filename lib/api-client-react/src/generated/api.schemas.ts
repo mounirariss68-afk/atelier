@@ -3961,6 +3961,19 @@ export const AtelierPersonalTaskStatus = {
   done: "done",
 } as const;
 
+/**
+ * @nullable
+ */
+export type AtelierPersonalTaskAssignmentStatus =
+  | (typeof AtelierPersonalTaskAssignmentStatus)[keyof typeof AtelierPersonalTaskAssignmentStatus]
+  | null;
+
+export const AtelierPersonalTaskAssignmentStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  declined: "declined",
+} as const;
+
 export interface AtelierPersonalTask {
   id: string;
   title: string;
@@ -3973,7 +3986,38 @@ export interface AtelierPersonalTask {
   /** @nullable */
   completedAt?: string | null;
   createdAt: string;
+  /** @nullable */
+  assignmentStatus?: AtelierPersonalTaskAssignmentStatus;
+  /** @nullable */
+  assignedByName?: string | null;
 }
+
+export interface AtelierPersonalTaskAssign {
+  /**
+   * Roster person id of the assignee (must be in the caller's roster scope)
+   * @minLength 1
+   */
+  personId: string;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title: string;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+  /**
+   * UTC ISO instant
+   * @nullable
+   */
+  dueAt?: string | null;
+}
+
+export type AtelierAssignedTask = AtelierPersonalTask & {
+  assigneeName: string;
+};
 
 export interface AtelierPersonalTaskCreate {
   /**
@@ -9433,6 +9477,22 @@ export type AtelierUpdateMyEmergencyContact200 = {
 
 export type AtelierListMyTasks200 = {
   tasks: AtelierPersonalTask[];
+};
+
+export type AtelierListAssignedTasks200 = {
+  tasks: AtelierAssignedTask[];
+};
+
+export type AtelierRespondToTaskBodyResponse =
+  (typeof AtelierRespondToTaskBodyResponse)[keyof typeof AtelierRespondToTaskBodyResponse];
+
+export const AtelierRespondToTaskBodyResponse = {
+  accepted: "accepted",
+  declined: "declined",
+} as const;
+
+export type AtelierRespondToTaskBody = {
+  response: AtelierRespondToTaskBodyResponse;
 };
 
 export type AtelierListPerformanceReviewsParams = {

@@ -12,16 +12,25 @@
  * (me-task-capabilities.ts) share the exact same validation + guards.
  */
 import { Router } from "express";
-import { and, desc, eq, isNull, like } from "drizzle-orm";
-import { db, atelierPersonalTasks, atelierSelfNotifications } from "@workspace/db";
+import { and, desc, eq, inArray, isNull, like, ne, or, type SQL } from "drizzle-orm";
+import {
+  db,
+  atelierPersonalTasks,
+  atelierSelfNotifications,
+  atelierEmployees,
+  atelierUsers,
+} from "@workspace/db";
 import {
   AtelierListMyTasksResponse,
   AtelierCreateMyTaskBody,
   AtelierUpdateMyTaskBody,
   AtelierUpdateMyTaskResponse,
   AtelierDeleteMyTaskResponse,
+  AtelierAssignTaskBody,
+  AtelierListAssignedTasksResponse,
 } from "@workspace/api-zod";
-import type { atelierUsers } from "@workspace/db";
+import { canViewPersonViaRosterScope } from "./rosterRoutes.js";
+import { mirrorSelfNotificationPush } from "../../lib/expoPush.js";
 
 const router: Router = Router();
 export default router;
@@ -42,7 +51,7 @@ function ensurePersona(req: any, res: any): UserRow | null {
   return me;
 }
 
-export function personalTaskWire(t: TaskRow) {
+export function personalTaskWire(t: TaskRow, assignedByName?: string | null) {
   return {
     id: t.id,
     title: t.title,
@@ -52,7 +61,23 @@ export function personalTaskWire(t: TaskRow) {
     overdue: t.status === "open" && !!t.dueAt && t.dueAt.getTime() < Date.now(),
     completedAt: t.completedAt ? t.completedAt.toISOString() : null,
     createdAt: t.createdAt.toISOString(),
+    // Task #1011 — delegation metadata (null for self-created tasks).
+    assignmentStatus: (t.assignmentStatus as "pending" | "accepted" | "declined" | null) ?? null,
+    assignedByName: assignedByName ?? null,
   };
+}
+
+/**
+ * Task #1011 — a declined handed-over task disappears from the assignee's
+ * surfaces (list, roll-up, reminders) but stays visible to the ASSIGNER
+ * via /me/tasks/assigned. Shared predicate so every assignee-facing query
+ * agrees.
+ */
+export function notDeclinedAssignment(): SQL {
+  return or(
+    isNull(atelierPersonalTasks.assignmentStatus),
+    ne(atelierPersonalTasks.assignmentStatus, "declined"),
+  )!;
 }
 
 /** Own tasks, open first (due-soonest), then done (newest). */
@@ -65,6 +90,7 @@ export async function listPersonalTasks(orgId: string, userId: string): Promise<
         eq(atelierPersonalTasks.orgId, orgId),
         eq(atelierPersonalTasks.userId, userId),
         isNull(atelierPersonalTasks.deletedAt),
+        notDeclinedAssignment(),
       ),
     )
     .orderBy(desc(atelierPersonalTasks.createdAt));
@@ -198,7 +224,12 @@ router.get("/me/tasks", async (req, res, next) => {
     const me = ensurePersona(req, res);
     if (!me) return;
     const rows = await listPersonalTasks(me.orgId, me.id);
-    res.json(AtelierListMyTasksResponse.parse({ tasks: rows.map(personalTaskWire) }));
+    const names = await assignerNames(me.orgId, rows);
+    res.json(
+      AtelierListMyTasksResponse.parse({
+        tasks: rows.map((t) => personalTaskWire(t, t.assignedById ? names.get(t.assignedById) ?? "a colleague" : null)),
+      }),
+    );
   } catch (err) {
     next(err);
   }
@@ -295,6 +326,290 @@ router.delete("/me/tasks/:id", async (req, res, next) => {
     }
     await dismissTaskReminders(me.orgId, me.id, row.id);
     res.json(AtelierDeleteMyTaskResponse.parse({ ok: true }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================================
+// Task #1011 — hand a task to a colleague (with accept / decline).
+//
+// Assignment respects roster visibility: the caller may only delegate to
+// a roster person their scope covers (full viewers: fp/hr/finance;
+// everyone else: their transitive reports). The task row is owned by the
+// ASSIGNEE (userId) so lists / roll-up / reminders work unchanged; the
+// assigner keeps a status view via GET /me/tasks/assigned. Declined
+// tasks vanish from the assignee's surfaces but stay visible (with
+// status) to the assigner.
+// =====================================================================
+
+/** Batch-resolve assigner display names for wire building. */
+export async function assignerNames(orgId: string, rows: TaskRow[]): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(rows.map((t) => t.assignedById).filter((v): v is string => !!v)));
+  if (ids.length === 0) return new Map();
+  const users = await db
+    .select({ id: atelierUsers.id, name: atelierUsers.name })
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.orgId, orgId), inArray(atelierUsers.id, ids)));
+  return new Map(users.map((u) => [u.id, u.name] as const));
+}
+
+/**
+ * Resolve a roster person id → their portal login (atelier_users.id).
+ * Employees link via employees.user_id; contractors and other roster
+ * people fall back to an org-scoped email match. Null = no login.
+ */
+export async function resolveAssigneeUserId(
+  orgId: string,
+  personId: string,
+): Promise<{ userId: string; name: string } | null> {
+  const [emp] = await db
+    .select({ userId: atelierEmployees.userId, name: atelierEmployees.fullName, email: atelierEmployees.email })
+    .from(atelierEmployees)
+    .where(
+      and(
+        eq(atelierEmployees.id, personId),
+        eq(atelierEmployees.orgId, orgId),
+        isNull(atelierEmployees.deletedAt),
+      ),
+    );
+  if (!emp) return null;
+  if (emp.userId) {
+    const [u] = await db
+      .select({ id: atelierUsers.id, name: atelierUsers.name })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, emp.userId), eq(atelierUsers.orgId, orgId)));
+    if (u) return { userId: u.id, name: emp.name ?? u.name };
+  }
+  if (emp.email) {
+    const [u] = await db
+      .select({ id: atelierUsers.id, name: atelierUsers.name })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.email, emp.email.toLowerCase()), eq(atelierUsers.orgId, orgId)));
+    if (u) return { userId: u.id, name: emp.name ?? u.name };
+  }
+  return null;
+}
+
+/**
+ * In-app card (+ device push mirror) for delegation lifecycle events.
+ * Deterministic id → idempotent across replays; same shape the reminder
+ * tick uses so mobile deep-links behave identically.
+ */
+async function notifyDelegation(args: {
+  orgId: string;
+  userId: string;
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+}): Promise<void> {
+  const inserted = await db
+    .insert(atelierSelfNotifications)
+    .values({
+      id: args.id,
+      orgId: args.orgId,
+      userId: args.userId,
+      kind: args.kind,
+      title: args.title,
+      body: args.body,
+      href: "/me/tasks",
+    })
+    .onConflictDoNothing({ target: atelierSelfNotifications.id })
+    .returning({ id: atelierSelfNotifications.id });
+  if (!inserted.length) return;
+  // Best-effort device push through the shared preference-aware mirror —
+  // users who opted out of task alerts get the in-app card only.
+  await mirrorSelfNotificationPush({
+    id: args.id,
+    userId: args.userId,
+    kind: args.kind,
+    title: args.title,
+    body: args.body,
+    href: "/me/tasks",
+  });
+}
+
+/** Shared with the chat capability (tasks.assign) — same guards, one path. */
+export async function assignPersonalTask(args: {
+  assigner: UserRow;
+  personId: string;
+  title: string;
+  notes?: string | null;
+  dueAt?: Date | null;
+}): Promise<
+  | { ok: true; task: TaskRow; assigneeName: string }
+  | { ok: false; error: "out_of_scope" | "no_login" | "self_assign" }
+> {
+  const allowed = await canViewPersonViaRosterScope(args.assigner, args.personId);
+  if (!allowed) return { ok: false, error: "out_of_scope" };
+  const assignee = await resolveAssigneeUserId(args.assigner.orgId, args.personId);
+  if (!assignee) return { ok: false, error: "no_login" };
+  if (assignee.userId === args.assigner.id) return { ok: false, error: "self_assign" };
+  const id = rid("ptask");
+  const [task] = await db
+    .insert(atelierPersonalTasks)
+    .values({
+      id,
+      orgId: args.assigner.orgId,
+      userId: assignee.userId,
+      title: args.title.trim().slice(0, 300),
+      notes: args.notes ? args.notes.slice(0, 2000) : null,
+      dueAt: args.dueAt ?? null,
+      status: "open",
+      assignedById: args.assigner.id,
+      assignmentStatus: "pending",
+    })
+    .returning();
+  await notifyDelegation({
+    orgId: args.assigner.orgId,
+    userId: assignee.userId,
+    id: `selfnotif_ptaskassign_${id}`,
+    kind: "personal_task_assigned",
+    title: `${args.assigner.name} assigned you a task`,
+    body: task!.title,
+  });
+  return { ok: true, task: task!, assigneeName: assignee.name };
+}
+
+/** Accept or decline a pending handed-over task (assignee only). */
+export async function respondToAssignedTask(args: {
+  orgId: string;
+  userId: string;
+  taskId: string;
+  response: "accepted" | "declined";
+}): Promise<TaskRow | null> {
+  const [row] = await db
+    .update(atelierPersonalTasks)
+    .set({ assignmentStatus: args.response, updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierPersonalTasks.id, args.taskId),
+        eq(atelierPersonalTasks.orgId, args.orgId),
+        eq(atelierPersonalTasks.userId, args.userId),
+        eq(atelierPersonalTasks.assignmentStatus, "pending"),
+        isNull(atelierPersonalTasks.deletedAt),
+      ),
+    )
+    .returning();
+  if (!row) return null;
+  if (args.response === "declined") {
+    await dismissTaskReminders(args.orgId, args.userId, row.id);
+  }
+  if (row.assignedById) {
+    const [assignee] = await db
+      .select({ name: atelierUsers.name })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, args.userId), eq(atelierUsers.orgId, args.orgId)));
+    await notifyDelegation({
+      orgId: args.orgId,
+      userId: row.assignedById,
+      id: `selfnotif_ptaskresp_${row.id}_${args.response}`,
+      kind: `personal_task_${args.response}`,
+      title:
+        args.response === "accepted"
+          ? `${assignee?.name ?? "Your colleague"} accepted your task`
+          : `${assignee?.name ?? "Your colleague"} declined your task`,
+      body: row.title,
+    });
+  }
+  return row;
+}
+
+// @cli-skip: chat parity via tasks.assign (me-chat-parity.ts)
+router.post("/me/tasks/assign", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const parsed = AtelierAssignTaskBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", detail: parsed.error.issues[0]?.message });
+      return;
+    }
+    const due = parseDueAt(parsed.data.dueAt);
+    if (due && "error" in due) {
+      res.status(400).json({ error: "invalid-body", detail: due.error });
+      return;
+    }
+    const result = await assignPersonalTask({
+      assigner: me,
+      personId: parsed.data.personId,
+      title: parsed.data.title,
+      notes: parsed.data.notes ?? null,
+      dueAt: due,
+    });
+    if (!result.ok) {
+      if (result.error === "out_of_scope") {
+        res.status(403).json({ error: "forbidden", detail: "That person is outside your roster scope." });
+      } else if (result.error === "self_assign") {
+        res.status(400).json({ error: "invalid-body", detail: "Use POST /me/tasks for your own list." });
+      } else {
+        res.status(400).json({ error: "no-login", detail: "That person has no portal login to receive tasks." });
+      }
+      return;
+    }
+    res.status(201).json(AtelierUpdateMyTaskResponse.parse(personalTaskWire(result.task, me.name)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: assignee accept/decline is a one-tap UI action (parity-excluded, me-chat-parity.ts)
+router.post("/me/tasks/:id/respond", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const response = req.body?.response;
+    if (response !== "accepted" && response !== "declined") {
+      res.status(400).json({ error: "invalid-body", detail: 'response must be "accepted" or "declined"' });
+      return;
+    }
+    const row = await respondToAssignedTask({
+      orgId: me.orgId,
+      userId: me.id,
+      taskId: req.params.id,
+      response,
+    });
+    if (!row) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const names = await assignerNames(me.orgId, [row]);
+    res.json(
+      AtelierUpdateMyTaskResponse.parse(
+        personalTaskWire(row, row.assignedById ? names.get(row.assignedById) ?? "a colleague" : null),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: assigner status view, read-only (delegation status shown by tasks.assign result card)
+router.get("/me/tasks/assigned", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const rows = await db
+      .select({ task: atelierPersonalTasks, assigneeName: atelierUsers.name })
+      .from(atelierPersonalTasks)
+      .leftJoin(atelierUsers, eq(atelierUsers.id, atelierPersonalTasks.userId))
+      .where(
+        and(
+          eq(atelierPersonalTasks.orgId, me.orgId),
+          eq(atelierPersonalTasks.assignedById, me.id),
+          isNull(atelierPersonalTasks.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPersonalTasks.createdAt));
+    res.json(
+      AtelierListAssignedTasksResponse.parse({
+        tasks: rows.slice(0, 100).map(({ task: t, assigneeName }) => ({
+          ...personalTaskWire(t),
+          assigneeName: assigneeName ?? "a colleague",
+        })),
+      }),
+    );
   } catch (err) {
     next(err);
   }

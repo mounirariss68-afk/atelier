@@ -187,7 +187,7 @@ export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Prom
 import { atelierPersonalTasks, atelierSelfNotifications, atelierPushTokens, atelierUsers } from "@workspace/db";
 import { lte, isNotNull } from "drizzle-orm";
 import { sendExpoPushMessages, resolvePushCategoryPrefs } from "../expoPush.js";
-
+import { notDeclinedAssignment } from "../../routes/atelier/meTasksRoutes.js";
 export async function runPersonalTaskReminderTick(): Promise<{ inserted: number; pushed: number }> {
   const now = new Date();
   const due = await db
@@ -199,6 +199,8 @@ export async function runPersonalTaskReminderTick(): Promise<{ inserted: number;
         isNotNull(atelierPersonalTasks.dueAt),
         lte(atelierPersonalTasks.dueAt, now),
         isNull(atelierPersonalTasks.deletedAt),
+        // Task #1011 — declined handed-over tasks never nag the assignee.
+        notDeclinedAssignment(),
       ),
     );
   if (!due.length) return { inserted: 0, pushed: 0 };

@@ -1244,6 +1244,19 @@ router.post("/opportunities/:oppId/research/:factId/accept-risk", async (req, re
 router.post("/opportunities/:oppId/research/:factId/merge", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Object-level authorization: the caller must be able to see the account
+  // owning this opportunity. 404 (not 403) to avoid an IDOR oracle — same
+  // pattern as the opportunity PDF/brief routes below.
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, opp.accountId))) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
   const rows = await db
     .select()
     .from(atelierResearchFacts)
@@ -1329,6 +1342,19 @@ router.post("/opportunities/:oppId/research/:factId/merge", async (req, res) => 
 router.post("/opportunities/:oppId/research/:factId/reverify", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Object-level authorization BEFORE any fact read or external retrieval —
+  // 404 (not 403) to avoid an IDOR oracle; guessed ids must never trigger
+  // Perplexity spend on someone else's opportunity.
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, opp.accountId))) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
   const [fact] = await db
     .select()
     .from(atelierResearchFacts)

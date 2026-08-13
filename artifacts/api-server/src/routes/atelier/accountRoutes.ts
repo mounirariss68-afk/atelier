@@ -38,6 +38,7 @@ import {
   atelierRaidItems,
   atelierPersonalTasks,
 } from "@workspace/db";
+import { notDeclinedAssignment } from "./meTasksRoutes.js";
 import {
   resolveStructuredNameInput,
   PersonNameValidationError,
@@ -4026,6 +4027,8 @@ router.get("/my-open-tasks", async (req, res) => {
           eq(atelierPersonalTasks.userId, me.id),
           eq(atelierPersonalTasks.status, "open"),
           isNull(atelierPersonalTasks.deletedAt),
+          // Task #1011 — declined handed-over tasks drop out of the roll-up.
+          notDeclinedAssignment(),
         ),
       )
       .orderBy(desc(atelierPersonalTasks.createdAt)),

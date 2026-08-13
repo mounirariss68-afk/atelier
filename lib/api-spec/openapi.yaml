@@ -1836,6 +1836,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierPersonalTask"
+  /atelier/me/tasks/assign:
+    post:
+      operationId: atelierAssignTask
+      tags: [atelier]
+      summary: Hand a task to an in-scope colleague (Task #1011)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPersonalTaskAssign"
+      responses:
+        "201":
+          description: Created task (owned by the assignee, pending acceptance)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersonalTask"
+  /atelier/me/tasks/assigned:
+    get:
+      operationId: atelierListAssignedTasks
+      tags: [atelier]
+      summary: Tasks the caller handed to colleagues, with accept/decline status
+      responses:
+        "200":
+          description: Tasks assigned BY the caller, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierAssignedTask" }
+  /atelier/me/tasks/{id}/respond:
+    post:
+      operationId: atelierRespondToTask
+      tags: [atelier]
+      summary: Accept or decline a task a colleague handed over
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              additionalProperties: false
+              properties:
+                response: { type: string, enum: [accepted, declined] }
+      responses:
+        "200":
+          description: The task with its updated assignment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersonalTask"
   /atelier/me/tasks/{id}:
     patch:
       operationId: atelierUpdateMyTask
@@ -9644,6 +9706,27 @@ components:
         overdue: { type: boolean }
         completedAt: { type: ["string", "null"] }
         createdAt: { type: string }
+        # Task #1011 — delegation metadata (null for self-created tasks).
+        assignmentStatus:
+          type: ["string", "null"]
+          enum: [pending, accepted, declined, null]
+        assignedByName: { type: ["string", "null"] }
+    AtelierPersonalTaskAssign:
+      type: object
+      required: [personId, title]
+      additionalProperties: false
+      properties:
+        personId: { type: string, minLength: 1, description: "Roster person id of the assignee (must be in the caller's roster scope)" }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+        dueAt: { type: ["string", "null"], description: "UTC ISO instant" }
+    AtelierAssignedTask:
+      allOf:
+        - $ref: "#/components/schemas/AtelierPersonalTask"
+        - type: object
+          required: [assigneeName]
+          properties:
+            assigneeName: { type: string }
     AtelierPersonalTaskCreate:
       type: object
       required: [title]

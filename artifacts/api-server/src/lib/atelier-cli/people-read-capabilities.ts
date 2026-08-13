@@ -133,7 +133,7 @@ type MeRow = typeof atelierUsers.$inferSelect;
 
 /** Load the full atelier_users row for the calling persona (the roster
  *  scope helpers need email + role, not just the persona shape). */
-async function loadMe(ctx: ToolContext): Promise<MeRow | null> {
+export async function loadMe(ctx: ToolContext): Promise<MeRow | null> {
   const [me] = await db
     .select()
     .from(atelierUsers)
@@ -258,7 +258,7 @@ function isToolResult(v: unknown): v is ToolResult {
  * roster scope first, or it leaks names/titles of people outside the
  * caller's perimeter. Returns only active people the caller may see.
  */
-async function scopedPersonMatches(me: MeRow, q: string): Promise<PersonWire[]> {
+export async function scopedPersonMatches(me: MeRow, q: string): Promise<PersonWire[]> {
   const scope = await resolveRosterScope(me);
   let matches = (
     await listPersons({ workerType: "all", q, includeComp: false })
