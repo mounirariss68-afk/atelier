@@ -2723,13 +2723,43 @@ export function mergeClarificationAnswer(
   return { ...base, [head]: mergeClarificationAnswer(childObj, rest, value) };
 }
 
-// Task #570 — mid-flow corrections. While a scheduling clarification is
-// pending (e.g. asked for the TOPIC), the user may instead correct a
-// DIFFERENT field: "actually make it 9am", "move it to Friday",
-// "make it in person". Detect the correction, route the value to the
-// field it belongs to, and DON'T pollute the asked field with it.
-// Pure + exported for probes. Restricted to the scheduling tools whose
-// schemas share these field names.
+/**
+ * Task #1117 — continuation companion to the Task #1093 model-loop
+ * guard. Clarification/disambiguation continuations call `tool.run`
+ * DIRECTLY (they bypass the model dispatch loop and its
+ * unforgeable-confirm strip), and their merged input combines the
+ * server-stored partial with client-supplied answer values merged at
+ * top level. A malicious/buggy client payload (or a future resolver
+ * change) could therefore smuggle `confirm:true`/`commitToken` into a
+ * two-phase write and commit without an approval card. Strip both keys
+ * from the merged continuation input for twoPhaseConfirm write tools —
+ * the tool re-runs its phase-1 preview and commits ONLY via the
+ * /confirm endpoint's verified replay. Single-phase catalog writes
+ * (twoPhaseConfirm:false) are left alone, mirroring #1093.
+ */
+export function stripContinuationApproval(args: {
+  toolName: string;
+  isWrite: boolean;
+  merged: Record<string, unknown>;
+  turnId?: string;
+}): Record<string, unknown> {
+  const { toolName, isWrite, merged } = args;
+  if (!isWrite) return merged;
+  if (merged.confirm === undefined && merged.commitToken === undefined) return merged;
+  const cat = findByToolName(toolName);
+  if (cat && cat.twoPhaseConfirm !== true) return merged;
+  const stripped: Record<string, unknown> = { ...merged };
+  delete stripped.confirm;
+  delete stripped.commitToken;
+  console.log(
+    `[cli-telemetry] ${JSON.stringify({
+      evt: "continuation_confirm_stripped",
+      turnId: args.turnId ?? null,
+      tool: toolName,
+    })}`,
+  );
+  return stripped;
+}
 export const CLARIFICATION_REROUTE_TOOLS = new Set([
   "schedule_internal_meeting",
   "schedule_client_meeting",
@@ -4345,10 +4375,17 @@ export async function runTurn(
           // normal orchestration (and its honest refusal paths) handle it.
           getSessionDraft(session.id).pendingDisambiguation = null;
         } else {
-          const mergedInput: Record<string, unknown> = {
-            ...(pd.partial ?? {}),
-            [pd.field]: pick.id,
-          };
+          // Task #1117 — a client-influenced merge must never smuggle a
+          // hidden approval past the two-phase confirm protocol.
+          const mergedInput: Record<string, unknown> = stripContinuationApproval({
+            toolName: pd.tool,
+            isWrite: tool.isWrite === true,
+            merged: {
+              ...(pd.partial ?? {}),
+              [pd.field]: pick.id,
+            },
+            turnId,
+          });
           const ctx0: ToolContext = {
             persona,
             turnId,
@@ -4718,6 +4755,15 @@ export async function runTurn(
             mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
           }
         }
+        // Task #1117 — client-supplied clarification answers (multi-field
+        // values, resolver/LLM outputs, raw merges) must never smuggle a
+        // hidden approval past the two-phase confirm protocol.
+        mergedInput = stripContinuationApproval({
+          toolName: pc.tool,
+          isWrite: tool.isWrite === true,
+          merged: mergedInput,
+          turnId,
+        });
         const ctx0: ToolContext = {
           persona,
           turnId,
