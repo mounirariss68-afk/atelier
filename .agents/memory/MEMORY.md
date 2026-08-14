@@ -148,7 +148,7 @@
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
-- [Chat commit-token defense](chat-commit-token.md) — twoPhaseConfirm is model-trusted; sensitive chat writes HMAC-stamp pending.input so a fabricated confirm:true only re-previews.
+- [Chat commit-token defense](chat-commit-token.md) — twoPhaseConfirm is model-trusted; forged confirm:true only re-previews; async background hand-off REMOVED — writes commit only via /confirm gates.
 - [Entity allocation engine](atelier-entity-allocation.md) — benefit-principle propose/decide helpers are the only allocation path; scratch-DB leftover entities break country rules in probes.
 - [Finance autopilot policy & inbox](atelier-finance-autopilot.md) — evaluateAutoPost is the SOLE authorization to skip human review; never-auto matrix; shared inbox loader; scheduler lockKeys.
 - [Payables nav & action panel](atelier-payables-nav.md) — landing + tab strip share one grouped structure; "Needs your action" reuses the unified inbox, never a parallel aggregation.
