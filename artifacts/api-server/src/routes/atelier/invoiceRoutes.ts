@@ -57,6 +57,7 @@ import {
 import { sendEmail } from "../../lib/email.js";
 import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import { invoiceAccountResolves } from "../../lib/invoiceAccountGuard.js";
 
 const router: IRouter = Router();
 
@@ -156,6 +157,7 @@ async function loadFull(orgId: string, invoiceId: string) {
       eq(atelierInvoice.id, invoiceId),
       eq(atelierInvoice.orgId, orgId),
       isNull(atelierInvoice.deletedAt),
+      invoiceAccountResolves(),
     ));
   if (!inv) return null;
   const lines = await db
@@ -188,7 +190,7 @@ router.get("/wallet/invoices", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const status = String(req.query.status ?? "all");
-  const where = [isNull(atelierInvoice.deletedAt), eq(atelierInvoice.orgId, me.orgId)];
+  const where = [isNull(atelierInvoice.deletedAt), eq(atelierInvoice.orgId, me.orgId), invoiceAccountResolves()];
   if (status !== "all") where.push(eq(atelierInvoice.status, status));
   const rows = await db
     .select()

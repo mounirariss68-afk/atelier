@@ -32,6 +32,7 @@ import {
   atelierPeriodCloseLock,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
+import { invoiceAccountResolves } from "../invoiceAccountGuard.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -387,6 +388,9 @@ async function executeBookkeeper(
     eq(atelierInvoice.orgId, orgId),
     inArray(atelierInvoice.status, ["issued", "paid"]),
     isNull(atelierInvoice.deletedAt),
+    // Task #1079 — skip invoices whose parent account no longer exists
+    // (orphaned test rows must never reach the Bookkeeper source scan).
+    invoiceAccountResolves(),
   ))).filter((i) => !i.voidedAt && tsInPeriod(i.issuedAt, from, to));
   for (const inv of invoices) {
     sourcesScanned++;

@@ -23,6 +23,7 @@ import {
   atelierCollectionsDraft,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
+import { invoiceAccountResolves } from "../invoiceAccountGuard.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -138,6 +139,8 @@ async function executeCollections(
       eq(atelierInvoice.orgId, orgId),
       eq(atelierInvoice.status, "issued"),
       isNull(atelierInvoice.deletedAt),
+      // Task #1079 — orphaned invoices (missing parent account) never chase.
+      invoiceAccountResolves(),
     ))).filter((i) =>
       !i.voidedAt &&
       round2(i.total - i.amountPaid) > 0.011 &&

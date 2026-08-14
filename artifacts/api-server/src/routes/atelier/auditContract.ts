@@ -108,6 +108,9 @@ export const V3_AUDIT_ACTIONS = {
   INVOICE_ISSUED: "wallet.invoice.issued",
   INVOICE_VOIDED: "wallet.invoice.voided",
   INVOICE_PAYMENT_RECORDED: "wallet.invoice.payment_recorded",
+  // Task #1079 — one-off system purge of orphaned test invoices whose
+  // parent account no longer existed (written directly via SQL cleanup).
+  INVOICE_ORPHAN_PURGED: "wallet.invoice.orphan_purged",
   EINVOICE_SUBMITTED: "einvoice.submitted",
   EINVOICE_CLEARED: "einvoice.cleared",
   EINVOICE_REJECTED: "einvoice.rejected",

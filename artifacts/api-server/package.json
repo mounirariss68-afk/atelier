@@ -98,6 +98,7 @@
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
     "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
     "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts",
+    "test:orphan-invoices": "tsx ./tests/crm/orphan-invoice-probe.ts",
     "test:app-navigation": "tsx tests/app-navigation/run.ts",
     "test:nep-flow": "tsx ./tests/crm/nep-flow-probe.ts",
     "test:push-prefs": "tsx ./tests/push-notif-prefs/run.ts"

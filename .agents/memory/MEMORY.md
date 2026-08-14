@@ -159,3 +159,4 @@
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Expo-module mock probes](expo-module-mock-probes.md) — tsx probes map expo/RN to tests/mocks/ via probe tsconfig; push has remote|local modes — check remotePushUnavailableReason() before any token call.
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
+- [One-off DB cleanups](oneoff-db-cleanups.md) — purge = committed idempotent script + explicit per-table delete/unlink policy + system audit row + rerun-safe fixture-scoped probe.
