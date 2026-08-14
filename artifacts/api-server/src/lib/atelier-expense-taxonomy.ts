@@ -87,7 +87,7 @@ export const DEFAULT_TAXONOMY: TaxonomyNode[] = [
     children: [
       { code: "software_subscriptions", label: "Software Subscriptions", legacyKeys: ["software"] },
       { code: "it_equipment", label: "IT Equipment" },
-      { code: "telecom_connectivity", label: "Telecom & Connectivity" },
+      { code: "telecom_connectivity", label: "Telecom & Connectivity", policyKey: "telecom" },
       { code: "cloud_internal", label: "Cloud (Internal)" },
     ],
   },
@@ -187,6 +187,22 @@ export async function ensureExpenseTaxonomy(): Promise<void> {
   }
   if (inserts.length > 0) {
     await db.insert(atelierExpenseCategories).values(inserts).onConflictDoNothing();
+  }
+  // Backfill: existing rows inserted before a default node gained a
+  // policyKey keep NULL forever (installer is insert-only). Fill in the
+  // default ONLY where the row's policyKey is still NULL — a finance
+  // edit that set one is never overwritten.
+  const defaultPolicyKeys = new Map<string, string>();
+  for (const cat of DEFAULT_TAXONOMY) {
+    for (const sub of cat.children ?? []) {
+      if (sub.policyKey) defaultPolicyKeys.set(sub.code, sub.policyKey);
+    }
+  }
+  for (const [code, policyKey] of defaultPolicyKeys) {
+    await db
+      .update(atelierExpenseCategories)
+      .set({ policyKey })
+      .where(and(eq(atelierExpenseCategories.code, code), isNull(atelierExpenseCategories.policyKey)));
   }
 }
 

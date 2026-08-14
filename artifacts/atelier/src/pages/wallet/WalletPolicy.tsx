@@ -18,6 +18,7 @@ interface Rule {
 
 export default function WalletPolicy() {
   const [rules, setRules] = React.useState<Rule[]>([]);
+  const [principles, setPrinciples] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [editing, setEditing] = React.useState<string | null>(null);
 
@@ -25,6 +26,7 @@ export default function WalletPolicy() {
     const r = await fetch("/api/atelier/wallet/policy", { credentials: "include" });
     const j = await r.json();
     setRules(j.rules ?? []);
+    setPrinciples(typeof j.principles === "string" ? j.principles : null);
   }, []);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -72,10 +74,16 @@ export default function WalletPolicy() {
       </PageHero>
       <WalletTabs group="main" />
       <div className="px-6 py-4 max-w-6xl mx-auto space-y-3">
+        {principles && (
+          <Card className="p-4" data-testid="policy-principles">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-text-mute mb-1">The spirit of the policy</p>
+            <p className="text-sm text-text-mute">{principles}</p>
+          </Card>
+        )}
         <div className="flex justify-between items-center">
           <p className="text-sm text-text-mute">{rules.length} rules · most-specific (role + country) wins.</p>
           <button onClick={seedDefaults} disabled={busy} className="px-3 py-1 rounded text-xs font-mono bg-gold text-bg disabled:opacity-50" data-testid="button-seed-defaults">
-            {busy ? "Working…" : "Re-seed defaults"}
+            {busy ? "Working…" : "Restore missing defaults"}
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3">
@@ -114,7 +122,7 @@ export default function WalletPolicy() {
             </Card>
           ))}
           {rules.length === 0 && (
-            <Card className="p-6 text-center text-text-mute">No rules yet. Click "Re-seed defaults".</Card>
+            <Card className="p-6 text-center text-text-mute">No active rules. The default policy installs automatically on first use — if none appear, click "Restore missing defaults".</Card>
           )}
         </div>
       </div>

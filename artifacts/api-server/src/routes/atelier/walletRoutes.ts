@@ -54,7 +54,7 @@ import {
 } from "../../lib/background-jobs.js";
 import { resolveCategoryPair, policyKeyFor } from "../../lib/atelier-expense-taxonomy.js";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
-import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
+import { evaluateExpense, defaultPoliciesForOrg, ensureDefaultExpensePolicies, POLICY_PRINCIPLES } from "../../lib/atelier-expense-policy.js";
 import { assertAuditAction } from "./auditContract.js";
 // Task #53 — Me-home notification cards on expense status changes.
 import { emitSelfNotification } from "./meRoutes";
@@ -816,6 +816,7 @@ async function runAuditOnExpense(
 
   // Apply Auditor proposal as defaults; user can edit before submit.
   const policy = await evaluateExpense({
+    orgId: expense.orgId,
     category: proposal.category,
     usdAmount: expense.usdAmount,
     amount: expense.amount,
@@ -1119,6 +1120,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
       .toLowerCase()
       .match(/\b(first|business|premium_economy|economy)\b/);
   const finalPolicy = await evaluateExpense({
+    orgId: postPatch.orgId,
     category: postPatch.category,
     usdAmount: postPatch.usdAmount,
     amount: postPatch.amount,
@@ -1772,12 +1774,16 @@ router.get("/wallet/policy", async (req, res) => {
     res.status(403).json({ error: "forbidden", message: "Wallet policy is admin-only." });
     return;
   }
+  // First-read auto-seed: an org that has never created a rule gets the
+  // default lean policy installed here (idempotent; never touches orgs
+  // that edited or retired rules).
+  await ensureDefaultExpensePolicies(me.orgId);
   const rows = await db
     .select()
     .from(atelierExpensePolicies)
-    .where(isNull(atelierExpensePolicies.deletedAt))
+    .where(and(eq(atelierExpensePolicies.orgId, me.orgId), isNull(atelierExpensePolicies.deletedAt)))
     .orderBy(atelierExpensePolicies.category);
-  res.json({ rules: rows });
+  res.json({ rules: rows, principles: POLICY_PRINCIPLES });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -1788,16 +1794,21 @@ router.post("/wallet/policy/seed-defaults", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  await db.insert(atelierExpensePolicies).values(DEFAULT_POLICIES).onConflictDoNothing();
+  const values = defaultPoliciesForOrg(me.orgId);
+  const inserted = await db
+    .insert(atelierExpensePolicies)
+    .values(values)
+    .onConflictDoNothing()
+    .returning({ id: atelierExpensePolicies.id });
   await audit({
     entityType: "wallet_policy",
     entityId: "all",
     actor: me,
     action: "wallet.policy.seed_defaults",
-    payload: { count: DEFAULT_POLICIES.length },
-    summary: `Seeded ${DEFAULT_POLICIES.length} default expense policies.`,
+    payload: { count: inserted.length },
+    summary: `Restored ${inserted.length} missing default expense policies.`,
   });
-  res.json({ ok: true, count: DEFAULT_POLICIES.length });
+  res.json({ ok: true, count: inserted.length });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -1816,6 +1827,7 @@ router.post("/wallet/policy", async (req, res) => {
   const id = rid("pol");
   await db.insert(atelierExpensePolicies).values({
     id,
+    orgId: me.orgId,
     category: b.category,
     appliesToRole: b.appliesToRole ?? null,
     appliesToCountry: b.appliesToCountry ?? null,
@@ -1859,7 +1871,7 @@ router.patch("/wallet/policy/:id", async (req, res) => {
       active: b.active,
       updatedAt: new Date(),
     })
-    .where(eq(atelierExpensePolicies.id, req.params.id));
+    .where(and(eq(atelierExpensePolicies.id, req.params.id), eq(atelierExpensePolicies.orgId, me.orgId)));
   await audit({
     entityType: "wallet_policy",
     entityId: req.params.id,
@@ -1882,7 +1894,7 @@ router.delete("/wallet/policy/:id", async (req, res) => {
   await db
     .update(atelierExpensePolicies)
     .set({ deletedAt: new Date(), active: false })
-    .where(eq(atelierExpensePolicies.id, req.params.id));
+    .where(and(eq(atelierExpensePolicies.id, req.params.id), eq(atelierExpensePolicies.orgId, me.orgId)));
   await audit({
     entityType: "wallet_policy",
     entityId: req.params.id,

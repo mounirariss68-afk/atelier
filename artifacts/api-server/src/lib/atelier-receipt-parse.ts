@@ -713,6 +713,7 @@ export async function parseReceiptForExpense(args: {
   const fx = await convertToUsd(amount, currency, expenseDate);
   const usdAmount = +fx.usdAmount.toFixed(2);
   const policy = await evaluateExpense({
+    orgId: me.orgId,
     category: proposal.category,
     usdAmount,
     amount,

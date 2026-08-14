@@ -829,6 +829,7 @@ defineSelfWriteCapability({
 
     // Deterministic policy evaluation — identical inputs to the REST route.
     const policy = await evaluateExpense({
+      orgId: row.orgId,
       category: row.category,
       usdAmount: row.usdAmount,
       amount: row.amount,

@@ -2473,6 +2473,7 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
     // claims here are simple reimbursables; the wallet's Expense Auditor
     // remains available on the finance side).
     const policy = await evaluateExpense({
+      orgId: row.orgId,
       category: row.category,
       usdAmount: row.usdAmount,
       amount: row.amount,

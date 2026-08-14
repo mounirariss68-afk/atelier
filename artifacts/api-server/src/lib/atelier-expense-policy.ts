@@ -8,8 +8,9 @@
  * always installs defaults so this only matters in dev.
  */
 
-import { db, atelierExpensePolicies } from "@workspace/db";
+import { db, atelierExpensePolicies, atelierAuditEvents } from "@workspace/db";
 import { and, eq, isNull, or } from "drizzle-orm";
+import { rid } from "./atelier-contracts.js";
 
 export interface PolicyFinding {
   ruleId: string;
@@ -25,6 +26,7 @@ export interface PolicyOutcome {
 }
 
 interface ExpenseDraft {
+  orgId: string;
   category: string;
   usdAmount: number;
   amount: number;
@@ -41,12 +43,13 @@ const FLIGHT_CLASS_RANK: Record<string, number> = {
   first: 4,
 };
 
-export async function loadActivePolicies(category: string) {
+export async function loadActivePolicies(orgId: string, category: string) {
   return db
     .select()
     .from(atelierExpensePolicies)
     .where(
       and(
+        eq(atelierExpensePolicies.orgId, orgId),
         eq(atelierExpensePolicies.category, category),
         eq(atelierExpensePolicies.active, true),
         isNull(atelierExpensePolicies.deletedAt),
@@ -60,7 +63,8 @@ export async function evaluateExpense(
   const findings: PolicyFinding[] = [];
   let approvalRequired = false;
 
-  const rules = await loadActivePolicies(draft.category);
+  await ensureDefaultExpensePolicies(draft.orgId);
+  const rules = await loadActivePolicies(draft.orgId, draft.category);
   // Score specificity so we apply the most specific cap.
   type Rule = (typeof rules)[number];
   function specificity(r: Rule): number {
@@ -141,8 +145,13 @@ export async function evaluateExpense(
 }
 
 /**
- * Default policy seed (PRD §4.4). Idempotent on (category, role, country).
- * Re-callable from the seed script and from the wallet ops endpoint.
+ * Default policy seed — lean startup-mode expense policy for a small
+ * professional-services firm (UAE/GCC base). Researched against
+ * best-practice caps for sub-20-person consulting firms (2026):
+ * trust-based, receipted, few rules, generous-but-capped, hard blocks
+ * only where there is real compliance risk (anti-bribery gifts, runaway
+ * travel spend). Idempotent on fixed ids; re-callable from the wallet
+ * ops endpoint and the first-read auto-seed.
  */
 export const DEFAULT_POLICIES: Array<{
   id: string;
@@ -161,76 +170,164 @@ export const DEFAULT_POLICIES: Array<{
     category: "flight",
     appliesToRole: null,
     appliesToCountry: null,
-    capAmountUsd: 1500,
+    capAmountUsd: 1200,
     capUnit: "per_trip",
     hardBlockAmountUsd: 5000,
-    approvalThresholdUsd: 1500,
+    approvalThresholdUsd: 1200,
     flightClassMax: "economy",
-    rationale: "Economy by default; partners may upgrade with rationale.",
+    rationale:
+      "Economy with sensible routing. $1,200 covers most GCC + international round trips booked ahead; over that just needs a partner OK, not a ban.",
   },
   {
     id: "pol_flight_partner",
     category: "flight",
     appliesToRole: "partner",
     appliesToCountry: null,
-    capAmountUsd: 3500,
+    capAmountUsd: 2800,
     capUnit: "per_trip",
     hardBlockAmountUsd: 8000,
-    approvalThresholdUsd: 3500,
+    approvalThresholdUsd: 2800,
     flightClassMax: "business",
-    rationale: "Partners may fly business on flights >4h.",
+    rationale:
+      "Partners may fly business on long-haul (>4h) when client-facing the same day — use judgment; the firm's cash is your cash.",
   },
   {
     id: "pol_hotel_default",
     category: "hotel",
     appliesToRole: null,
     appliesToCountry: null,
-    capAmountUsd: 350,
+    capAmountUsd: 220,
     capUnit: "per_day",
-    hardBlockAmountUsd: 1500,
-    approvalThresholdUsd: 600,
-    rationale: "$350/night cap GCC standard.",
+    hardBlockAmountUsd: 1200,
+    approvalThresholdUsd: 400,
+    rationale:
+      "$220/night books a solid 4-star in Dubai, Riyadh or Doha. Peak-event weeks (GITEX, LEAP) can run higher — flag it and it will be approved.",
   },
   {
     id: "pol_meal_default",
     category: "meal",
     appliesToRole: null,
     appliesToCountry: null,
-    capAmountUsd: 75,
+    capAmountUsd: 70,
     capUnit: "per_day",
     hardBlockAmountUsd: 400,
-    approvalThresholdUsd: 200,
-    rationale: "Per-person meal cap; client meals exempt with attendees logged.",
-  },
-  {
-    id: "pol_gift_default",
-    category: "gift",
-    appliesToRole: null,
-    appliesToCountry: null,
-    capAmountUsd: 150,
-    capUnit: "per_item",
-    hardBlockAmountUsd: 500,
     approvalThresholdUsd: 150,
-    rationale: "Gifts above $500 are blocked — anti-bribery policy.",
-  },
-  {
-    id: "pol_software_default",
-    category: "software",
-    appliesToRole: null,
-    appliesToCountry: null,
-    capAmountUsd: 100,
-    capUnit: "per_month",
-    approvalThresholdUsd: 100,
-    rationale: "Software subscriptions over $100/mo need partner approval.",
+    rationale:
+      "$70/day eats well on the road. Client meals with attendees logged are expected to run over — that's business development, not a violation.",
   },
   {
     id: "pol_taxi_default",
     category: "taxi",
     appliesToRole: null,
     appliesToCountry: null,
-    capAmountUsd: 100,
+    capAmountUsd: 30,
     capUnit: "per_trip",
+    hardBlockAmountUsd: 200,
+    rationale:
+      "Standard ride-hailing (Careem/Uber), not luxury tiers. Airport transfers fit in $30 in most GCC cities; longer runs just need a note.",
+  },
+  {
+    id: "pol_gift_default",
+    category: "gift",
+    appliesToRole: null,
+    appliesToCountry: null,
+    capAmountUsd: 100,
+    capUnit: "per_item",
     hardBlockAmountUsd: 300,
-    rationale: "Use ride-share where possible.",
+    approvalThresholdUsd: 100,
+    rationale:
+      "Hard compliance line: client gifts over $300 are blocked outright (UAE anti-bribery norms). Under $100 is fine; between, a partner signs off. Never cash or vouchers.",
+  },
+  {
+    id: "pol_software_default",
+    category: "software",
+    appliesToRole: null,
+    appliesToCountry: null,
+    capAmountUsd: 50,
+    capUnit: "per_month",
+    approvalThresholdUsd: 50,
+    rationale:
+      "Self-serve tools under $50/mo — just buy what makes you faster. Over that, a partner checks we're not duplicating a seat we already pay for.",
+  },
+  {
+    id: "pol_telecom_default",
+    category: "telecom",
+    appliesToRole: null,
+    appliesToCountry: null,
+    capAmountUsd: 60,
+    capUnit: "per_month",
+    approvalThresholdUsd: 100,
+    rationale:
+      "Mobile + data plans up to $60/mo reimbursed without questions; roaming bundles for travel weeks may push over — note the trip.",
   },
 ];
+
+/**
+ * Plain-language spirit of the policy — shown on the Policy page and
+ * kept next to the rules so copy and caps evolve together.
+ */
+export const POLICY_PRINCIPLES =
+  "Reasonable, receipted, client-first. Spend the firm's money like your own: book economy and mid-range, keep receipts, and log client attendees on meals. Going over a cap isn't a violation — add a note and it routes for a quick partner OK. The only hard stops are compliance ones, like large client gifts.";
+
+/**
+ * Default rules materialized for one org: per-org row ids (so two orgs
+ * never collide on the primary key) with the org stamped explicitly.
+ * "aico" keeps the legacy un-suffixed ids so re-seeding an org that was
+ * seeded by the original seed endpoint stays conflict-idempotent.
+ */
+export function defaultPoliciesForOrg(orgId: string) {
+  return DEFAULT_POLICIES.map((p) => ({
+    ...p,
+    id: orgId === "aico" ? p.id : `${p.id}__${orgId}`,
+    orgId,
+  }));
+}
+
+// Per-org memo of "this org has rules" — rows are only ever soft-deleted,
+// so once any row (live or retired) exists the org can never be
+// "never seeded" again and we can skip the existence probe.
+const orgsWithPolicyRows = new Set<string>();
+
+/**
+ * First-read auto-seed: if NO policy row has ever existed for this org
+ * (including retired ones), install the defaults with an audit entry.
+ * Never touches an org that has edited or retired rules — any existing
+ * row, live or soft-deleted, disables seeding entirely. Concurrency:
+ * fixed per-org ids + onConflictDoNothing().returning() inside one
+ * transaction mean overlapping first reads race harmlessly — only the
+ * call whose insert actually landed rows writes the audit entry.
+ */
+export async function ensureDefaultExpensePolicies(orgId: string): Promise<void> {
+  if (orgsWithPolicyRows.has(orgId)) return;
+  const [existing] = await db
+    .select({ id: atelierExpensePolicies.id })
+    .from(atelierExpensePolicies)
+    .where(eq(atelierExpensePolicies.orgId, orgId))
+    .limit(1);
+  if (existing) {
+    orgsWithPolicyRows.add(orgId);
+    return;
+  }
+  const values = defaultPoliciesForOrg(orgId);
+  await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(atelierExpensePolicies)
+      .values(values)
+      .onConflictDoNothing()
+      .returning({ id: atelierExpensePolicies.id });
+    if (inserted.length === 0) return; // a concurrent call seeded first
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId,
+      entityType: "wallet_policy",
+      entityId: "all",
+      actorType: "system",
+      actorId: "system",
+      actorLabel: "System",
+      action: "wallet.policy.auto_seed",
+      payload: { count: inserted.length, orgId },
+      payloadSummary: `Auto-seeded ${inserted.length} default expense policy rules on first read.`,
+    });
+  });
+  orgsWithPolicyRows.add(orgId);
+}
