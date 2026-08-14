@@ -76,6 +76,7 @@
     "test:critical-roles": "tsx ./tests/critical-roles/run.ts",
     "test:exec-mapper-critical": "tsx ./tests/crm/exec-mapper-critical-roles-probe.ts",
     "test:gov-titles": "tsx ./tests/crm/gov-titles-probe.ts",
+    "test:entity-bank-accounts": "tsx ./tests/crm/entity-bank-accounts-probe.ts",
     "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts",
     "test:ownership-industry": "tsx ./tests/crm/ownership-industry-probe.ts",
     "test:finance-entity-lifecycle": "tsx ./tests/crm/finance-entity-lifecycle-probe.ts",

@@ -21,7 +21,9 @@ import {
   atelierLegalEntities,
   atelierDocuments,
   atelierAuditEvents,
+  atelierBankAccount,
 } from "@workspace/db";
+import { isNull } from "drizzle-orm";
 import { isFoundingPartner, isPartner } from "./personaRoles";
 import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
 import { extractAttachment } from "../../lib/atelier-cli/attachments/extractors.js";
@@ -596,8 +598,40 @@ router.get("/finance/entities/:id", async (req, res) => {
     const inferred = inferDocKindFromTitle(d.title, v?.fileName ?? null);
     if (inferred) kindBackfill.set(d.id, inferred);
   }
+  // Task #1065 — the entity's bank accounts ride along on the detail
+  // response. IBANs/holder names are firm banking credentials, so they are
+  // limited to finance leadership (founding partner / partner / finance);
+  // everyone else gets an empty list rather than IBANs.
+  const canSeeBank =
+    isFoundingPartner(me.role) || isPartner(me.role) || me.role === "finance";
+  const bankAccounts = canSeeBank
+    ? await db
+        .select()
+        .from(atelierBankAccount)
+        .where(
+          and(
+            eq(atelierBankAccount.orgId, me.orgId),
+            eq(atelierBankAccount.legalEntityId, row.id),
+            isNull(atelierBankAccount.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierBankAccount.createdAt))
+    : [];
   res.json({
     entity: entityShape(row),
+    bankAccounts: bankAccounts.map((a) => ({
+      id: a.id,
+      bankName: a.bankName,
+      accountLabel: a.accountLabel,
+      accountNumberLast4: a.accountNumberLast4,
+      currency: a.currency,
+      iban: a.iban,
+      swift: a.swift,
+      accountHolderName: a.accountHolderName,
+      purpose: a.purpose,
+      isActive: a.isActive,
+      createdAt: a.createdAt,
+    })),
     documents: docs.map((d) => {
       const v = d.currentVersionId ? versionById.get(d.currentVersionId) : null;
       return {
@@ -933,6 +967,175 @@ router.post("/finance/entities/extract", async (req, res) => {
       summary: `Ran AI entity extraction on document "${doc.title}"`,
     });
     res.json({ documentId, proposal });
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    res.status(aborted ? 504 : 502).json({
+      error: aborted ? "extraction-timeout" : "extraction-failed",
+      message: err instanceof Error ? err.message : "AI extraction error",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Task #1065 — bank-letter extraction: vault document → proposed bank-account
+// fields (review-and-apply; nothing is saved without an explicit POST to the
+// wallet bank routes).
+// ---------------------------------------------------------------------------
+
+const BANK_LETTER_SYSTEM = `You are a treasury analyst digitizing official bank letters and account-confirmation documents (UAE and international banks: IBAN letters, account-opening confirmations, bank reference letters). Documents may be bilingual Arabic/English; prefer English strings for Latin fields.
+
+Extract ONLY facts present in the document text. Never invent numbers or names. Omit (use null) anything the document does not state.
+
+Return a single JSON object with this exact shape (all keys present):
+{
+  "confidenceNote": string,
+  "fields": {
+    "bankName": string|null,
+    "branch": string|null,
+    "accountHolderName": string|null (the account holder / customer legal name),
+    "iban": string|null (full IBAN, no spaces),
+    "accountNumber": string|null (the plain account number, digits as printed),
+    "swift": string|null (SWIFT/BIC code),
+    "currency": string|null (ISO 4217 3-letter code, e.g. AED),
+    "issuedOn": string|null (letter date, YYYY-MM-DD)
+  }
+}`;
+
+// @cli-skip: partner-gated LLM extraction; covered by manual verification
+router.post("/finance/entities/:id/bank-letter-extract", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  // Bank accounts are a finance-leadership surface (like the wallet bank
+  // writes): finance can run parsing too, unlike registry edits.
+  if (!(isFoundingPartner(me.role) || isPartner(me.role) || me.role === "finance")) {
+    res.status(403).json({
+      error: "forbidden",
+      message: "Only partners or finance can parse bank letters.",
+    });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.id, req.params.id), eq(atelierLegalEntities.orgId, me.orgId)));
+  if (!row) { res.status(404).json({ error: "entity-not-found" }); return; }
+
+  const documentId = typeof req.body?.documentId === "string" ? req.body.documentId : "";
+  if (!documentId) { res.status(400).json({ error: "document-id-required" }); return; }
+
+  const [doc] = await db
+    .select()
+    .from(atelierDocuments)
+    .where(and(eq(atelierDocuments.id, documentId), eq(atelierDocuments.orgId, me.orgId)));
+  if (!doc || doc.status !== "active") { res.status(404).json({ error: "document-not-found" }); return; }
+  // The letter must actually be linked to THIS entity — extraction against
+  // an unrelated vault document is rejected.
+  if (doc.entityId !== row.id) {
+    res.status(409).json({
+      error: "document-entity-mismatch",
+      message: "That document is not linked to this legal entity.",
+    });
+    return;
+  }
+  if (!doc.currentVersionId) { res.status(422).json({ error: "document-has-no-version" }); return; }
+
+  const { atelierDocumentVersions } = await import("@workspace/db");
+  const [version] = await db
+    .select()
+    .from(atelierDocumentVersions)
+    .where(eq(atelierDocumentVersions.id, doc.currentVersionId));
+  if (!version) { res.status(422).json({ error: "document-version-missing" }); return; }
+
+  const bytes = await loadDocBytes(version.blobRef);
+  if (!bytes) {
+    res.status(422).json({
+      error: "document-bytes-missing",
+      message: "The stored file could not be loaded from object storage.",
+    });
+    return;
+  }
+  let text = "";
+  try {
+    const extracted = await extractAttachment({
+      fileName: version.fileName,
+      mime: version.mime,
+      bytes,
+    });
+    text = extracted.normalizedText.trim();
+  } catch (err) {
+    res.status(422).json({
+      error: "text-extraction-failed",
+      message: err instanceof Error ? err.message : "extraction error",
+    });
+    return;
+  }
+  if (text.length < 40) {
+    res.status(422).json({
+      error: "document-unreadable",
+      message:
+        "No usable text could be extracted from this document (scanned image without embedded text?). Extraction requires embedded text.",
+    });
+    return;
+  }
+
+  try {
+    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 90_000);
+    const resp = await anthropic.messages
+      .create(
+        {
+          model: "claude-sonnet-4-5",
+          max_tokens: 2048,
+          system: `${BANK_LETTER_SYSTEM}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
+          messages: [
+            {
+              role: "user",
+              content: `Document file name: ${version.fileName}\nVault title: ${doc.title}\nLegal entity: ${row.legalNameEn ?? row.id}\n\nExtracted document text:\n<<<\n${text.slice(0, 60_000)}\n>>>`,
+            },
+          ],
+        },
+        { signal: ac.signal },
+      )
+      .finally(() => clearTimeout(timer));
+    const block = resp.content[0];
+    const raw = block && block.type === "text" ? block.text.trim() : "";
+    const json = extractFirstJsonObject(
+      raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, ""),
+    );
+    if (!json) {
+      res.status(502).json({
+        error: "extraction-non-json",
+        message: "The AI returned no structured result.",
+        snippet: raw.slice(0, 200),
+      });
+      return;
+    }
+    const proposal = JSON.parse(json) as Record<string, unknown>;
+    const fields = (proposal.fields ?? {}) as Record<string, unknown>;
+    const hasContent = Object.values(fields).some((v) => v != null && v !== "");
+    if (!hasContent) {
+      res.status(422).json({
+        error: "extraction-empty",
+        message:
+          "The AI could not find bank-account details in this document. Enter the account manually.",
+      });
+      return;
+    }
+    // Normalize what we can server-side so the client prefills clean values.
+    if (typeof fields.iban === "string") fields.iban = fields.iban.replace(/\s+/g, "").toUpperCase();
+    if (typeof fields.swift === "string") fields.swift = fields.swift.replace(/\s+/g, "").toUpperCase();
+    if (typeof fields.currency === "string") fields.currency = fields.currency.trim().toUpperCase().slice(0, 3);
+    await auditEntity({
+      entityId: row.id,
+      actor: me,
+      action: "legal_entity.bank_letter_extract",
+      payload: { documentId },
+      summary: `Ran AI bank-letter extraction on document "${doc.title}"`,
+    });
+    res.json({ documentId, proposal: { ...proposal, fields } });
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
     res.status(aborted ? 504 : 502).json({

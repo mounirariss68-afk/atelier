@@ -48,6 +48,9 @@ export const atelierBankAccount = pgTable(
     // Task #383 — entity-register bank account definition extensions.
     iban: text("iban"),
     purpose: text("purpose"), // operating | payroll | tax | savings | client_money | other
+    // Task #1065 — entity bank-account details captured from bank letters.
+    swift: text("swift"),
+    accountHolderName: text("account_holder_name"),
     debitCards: jsonb("debit_cards").notNull().default([]).$type<
       Array<{ id: string; holderName: string; last4: string; label: string | null; active: boolean }>
     >(),

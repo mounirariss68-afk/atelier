@@ -1,3 +1,4 @@
+- [Bank-credential exposure rule](atelier-entity-bank-accounts.md) — IBAN/SWIFT/holder only for fp/partner/finance on ANY surface; others get empty/redacted rows even where the host surface reads looser.
 - [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps for the 7-equals marker as a substring; decorative `// ====` comment rules trip it — convert to dashes.
 - [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip onnxruntime CUDA bins for 8GiB image cap.
 - [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.

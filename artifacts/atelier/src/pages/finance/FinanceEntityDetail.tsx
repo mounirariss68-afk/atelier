@@ -21,7 +21,17 @@ import {
   useLegalEntityDetail,
   type LegalEntityRow,
   type LegalEntityLinkedDoc,
+  type EntityBankAccount,
 } from "@/lib/v5-hooks";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   jsonReq,
   countryLabel,
@@ -34,7 +44,7 @@ import {
   ExtractDialog,
   type EntityDraft,
 } from "./FinanceEntities";
-import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical, Copy, Check } from "lucide-react";
+import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical, Copy, Check, Landmark, Plus, UploadCloud, Loader2 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Copy-to-clipboard affordances — every identifying number on this page
@@ -281,12 +291,16 @@ export default function FinanceEntityDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
-  const { entity: e, documents, isLoading, isError } = useLegalEntityDetail(id);
+  const { entity: e, documents, bankAccounts, isLoading, isError } = useLegalEntityDetail(id);
   // Used only to refresh the grid cache after edits from this page.
   useLegalEntities(true);
 
   const archived = e?.status === "archived";
   const canWrite = (me?.role === "founding_partner" || me?.role === "partner") && !archived;
+  // Bank accounts follow the finance-leadership rule (finance can manage
+  // accounts even though registry edits stay partner-only).
+  const canManageBank =
+    (me?.role === "founding_partner" || me?.role === "partner" || me?.role === "finance") && !archived;
   const [formOpen, setFormOpen] = React.useState(false);
   const [extractOpen, setExtractOpen] = React.useState(false);
   const [applied, setApplied] = React.useState<{
@@ -710,6 +724,14 @@ export default function FinanceEntityDetail() {
           );
         })()}
 
+        {/* Task #1065 — bank accounts linked to this legal entity. */}
+        <BankAccountsSection
+          entity={e}
+          accounts={bankAccounts}
+          canWrite={!!canManageBank}
+          onChanged={refresh}
+        />
+
         {e.notes && <p className="text-xs text-text-faint italic">{e.notes}</p>}
       </div>
 
@@ -731,5 +753,367 @@ export default function FinanceEntityDetail() {
         }}
       />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Task #1065 — Bank accounts: list + add/edit dialog with bank-letter
+// dropzone. The letter is uploaded to the vault (linked to this entity),
+// parsed by AI, and only PREFILLS the form — nothing saves without review.
+// ---------------------------------------------------------------------------
+
+const API_BASE = "/api/atelier";
+
+const PURPOSE_LABEL: Record<string, string> = {
+  operating: "Operating",
+  payroll: "Payroll",
+  tax: "Tax",
+  savings: "Savings",
+  client_money: "Client money",
+  other: "Other",
+};
+
+interface BankDraft {
+  bankName: string;
+  accountLabel: string;
+  accountHolderName: string;
+  iban: string;
+  accountNumber: string;
+  swift: string;
+  currency: string;
+  purpose: string;
+}
+
+const EMPTY_BANK_DRAFT: BankDraft = {
+  bankName: "",
+  accountLabel: "",
+  accountHolderName: "",
+  iban: "",
+  accountNumber: "",
+  swift: "",
+  currency: "AED",
+  purpose: "operating",
+};
+
+function BankAccountsSection(props: {
+  entity: LegalEntityRow;
+  accounts: EntityBankAccount[];
+  canWrite: boolean;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<EntityBankAccount | null>(null);
+  const accounts = props.accounts;
+
+  async function setActive(a: EntityBankAccount, isActive: boolean) {
+    try {
+      await jsonReq("PATCH", `/wallet/bank/accounts/${a.id}`, { isActive });
+      toast({ title: isActive ? "Account reactivated" : "Account deactivated" });
+      props.onChanged();
+    } catch (err) {
+      toast({ title: "Update failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
+  }
+
+  if (accounts.length === 0 && !props.canWrite) return null;
+
+  return (
+    <section data-testid="entity-bank-accounts">
+      <div className="flex items-center gap-3">
+        <SectionLabel>Bank accounts</SectionLabel>
+        {props.canWrite && (
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="button-add-bank-account"
+            onClick={() => { setEditing(null); setDialogOpen(true); }}
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add bank account
+          </Button>
+        )}
+      </div>
+      {accounts.length === 0 ? (
+        <p className="text-xs text-text-faint mt-3">
+          No bank accounts recorded for this entity yet. Add one manually or drop in a bank letter to read the details automatically.
+        </p>
+      ) : (
+        <div className="mt-4 grid md:grid-cols-2 gap-3">
+          {accounts.map((a) => (
+            <div key={a.id} className={`card-flat p-4 space-y-2 ${a.isActive ? "" : "opacity-60"}`} data-testid={`bank-account-${a.id}`}>
+              <div className="flex items-start gap-2">
+                <Landmark className="w-4 h-4 text-gold mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-text">{a.bankName}</div>
+                  <div className="text-[11px] text-text-faint">{a.accountLabel}</div>
+                </div>
+                {a.purpose && <MonoChip>{PURPOSE_LABEL[a.purpose] ?? a.purpose}</MonoChip>}
+                {!a.isActive && <MonoChip tone="amber">Inactive</MonoChip>}
+              </div>
+              <div className="space-y-1.5">
+                {a.accountHolderName && <CopyInfoRow label="Account holder" value={a.accountHolderName} />}
+                <CopyInfoRow label="IBAN" value={a.iban} />
+                <CopyInfoRow label="Account" value={a.accountNumberLast4 ? `•••• ${a.accountNumberLast4}` : null} copyValue={a.accountNumberLast4 ?? undefined} />
+                <CopyInfoRow label="SWIFT / BIC" value={a.swift} />
+                <InfoRow label="Currency" value={a.currency} />
+              </div>
+              {props.canWrite && (
+                <div className="flex gap-2 pt-1 border-t border-border-soft">
+                  <Button size="sm" variant="ghost" data-testid={`button-edit-bank-${a.id}`} onClick={() => { setEditing(a); setDialogOpen(true); }}>
+                    <Pencil className="w-3 h-3 mr-1" /> Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" data-testid={`button-toggle-bank-${a.id}`} onClick={() => void setActive(a, !a.isActive)}>
+                    {a.isActive ? "Deactivate" : "Reactivate"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <BankAccountDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        entity={props.entity}
+        editing={editing}
+        onSaved={props.onChanged}
+      />
+    </section>
+  );
+}
+
+function BankAccountDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  entity: LegalEntityRow;
+  editing: EntityBankAccount | null;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [draft, setDraft] = React.useState<BankDraft>(EMPTY_BANK_DRAFT);
+  const [busy, setBusy] = React.useState(false);
+  const [parsing, setParsing] = React.useState(false);
+  const [parseNote, setParseNote] = React.useState<string | null>(null);
+  const [parseError, setParseError] = React.useState<string | null>(null);
+  const [dragOver, setDragOver] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!props.open) return;
+    setParseNote(null);
+    setParseError(null);
+    if (props.editing) {
+      setDraft({
+        bankName: props.editing.bankName,
+        accountLabel: props.editing.accountLabel,
+        accountHolderName: props.editing.accountHolderName ?? "",
+        iban: props.editing.iban ?? "",
+        accountNumber: "",
+        swift: props.editing.swift ?? "",
+        currency: props.editing.currency,
+        purpose: props.editing.purpose ?? "operating",
+      });
+    } else {
+      setDraft(EMPTY_BANK_DRAFT);
+    }
+  }, [props.open, props.editing]);
+
+  const set = (k: keyof BankDraft) => (ev: React.ChangeEvent<HTMLInputElement>) =>
+    setDraft((d) => ({ ...d, [k]: ev.target.value }));
+
+  async function parseLetter(file: File) {
+    setParsing(true);
+    setParseError(null);
+    setParseNote(null);
+    try {
+      // 1. Upload the letter to the vault, linked to this entity.
+      const fd = new FormData();
+      fd.set("title", `Bank letter — ${file.name.replace(/\.[^.]+$/, "")}`);
+      fd.set("category", "corporate_legal");
+      fd.set("entityId", props.entity.id);
+      fd.set("file", file);
+      const up = await fetch(`${API_BASE}/documents`, { method: "POST", credentials: "include", body: fd });
+      const upBody = (await up.json().catch(() => ({}))) as { document?: { id?: string }; id?: string; error?: string; message?: string };
+      if (!up.ok) throw new Error(upBody.message ?? upBody.error ?? `upload failed (${up.status})`);
+      const documentId = upBody.document?.id ?? upBody.id;
+      if (!documentId) throw new Error("upload did not return a document id");
+      // 2. Ask the AI to read it. This only prefills the form below.
+      const resp = await jsonReq<{ proposal?: { confidenceNote?: string; fields?: Record<string, unknown> } }>(
+        "POST",
+        `/finance/entities/${props.entity.id}/bank-letter-extract`,
+        { documentId },
+      );
+      const f = resp.proposal?.fields ?? {};
+      const s = (v: unknown) => (typeof v === "string" ? v : "");
+      setDraft((d) => ({
+        ...d,
+        bankName: s(f.bankName) || d.bankName,
+        accountHolderName: s(f.accountHolderName) || d.accountHolderName,
+        iban: s(f.iban) || d.iban,
+        accountNumber: s(f.accountNumber) || d.accountNumber,
+        swift: s(f.swift) || d.swift,
+        currency: s(f.currency) || d.currency,
+        accountLabel: d.accountLabel || (s(f.bankName) ? `${s(f.bankName)} account` : d.accountLabel),
+      }));
+      setParseNote(
+        resp.proposal?.confidenceNote?.trim() ||
+          "Details read from the letter — please double-check them against the document before saving.",
+      );
+      toast({ title: "Bank letter read", description: "Check the prefilled details, then save." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "The letter could not be read.";
+      setParseError(
+        /unreadable|no usable text/i.test(msg)
+          ? "We couldn't read text from this file (it may be a photo/scan). The letter was saved to the vault — please type the details in below."
+          : `The letter could not be read automatically (${msg}). Please type the details in below.`,
+      );
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function save() {
+    if (!draft.bankName.trim()) { toast({ title: "Bank name is required", variant: "destructive" }); return; }
+    const isEdit = !!props.editing;
+    const acctDigits = draft.accountNumber.replace(/\D/g, "");
+    if (!isEdit && !acctDigits && !draft.iban.trim()) {
+      toast({ title: "Enter an IBAN or an account number", variant: "destructive" });
+      return;
+    }
+    const ibanNorm = draft.iban.replace(/\s+/g, "").toUpperCase();
+    if (ibanNorm && !/^[A-Z0-9]{8,34}$/.test(ibanNorm)) {
+      toast({ title: "That IBAN doesn't look right", description: "Use only letters and digits, 8–34 characters (e.g. AE07 0331 2345 6789 0123 456).", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        bankName: draft.bankName.trim(),
+        accountLabel: draft.accountLabel.trim() || `${draft.bankName.trim()} account`,
+        iban: ibanNorm || null,
+        swift: draft.swift.trim() || null,
+        accountHolderName: draft.accountHolderName.trim() || null,
+        currency: draft.currency.trim().toUpperCase() || "AED",
+        purpose: draft.purpose,
+      };
+      if (acctDigits) payload.accountNumberLast4 = acctDigits.slice(-4);
+      if (props.editing) {
+        await jsonReq("PATCH", `/wallet/bank/accounts/${props.editing.id}`, payload);
+        toast({ title: "Bank account updated" });
+      } else {
+        payload.legalEntityId = props.entity.id;
+        payload.accountNumberLast4 = acctDigits ? acctDigits.slice(-4) : ibanNorm.slice(-4);
+        await jsonReq("POST", `/wallet/bank/accounts`, payload);
+        toast({ title: "Bank account added" });
+      }
+      props.onSaved();
+      props.onClose();
+    } catch (err) {
+      toast({ title: "Save failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={props.open} onOpenChange={(o) => { if (!o) props.onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{props.editing ? "Edit bank account" : "Add bank account"}</DialogTitle>
+          <DialogDescription>
+            {props.editing
+              ? `Update the ${props.editing.bankName} account details.`
+              : `Link a bank account to ${props.entity.shortName ?? props.entity.legalNameEn}.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!props.editing && (
+          <div
+            data-testid="bank-letter-dropzone"
+            className={`rounded border border-dashed px-4 py-5 text-center text-xs cursor-pointer transition-colors ${dragOver ? "border-gold bg-bg-deep" : "border-border-soft text-text-faint hover:border-gold/60"}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(ev) => { ev.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(ev) => {
+              ev.preventDefault();
+              setDragOver(false);
+              const file = ev.dataTransfer.files?.[0];
+              if (file && !parsing) void parseLetter(file);
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              data-testid="input-bank-letter-file"
+              onChange={(ev) => {
+                const file = ev.target.files?.[0];
+                ev.target.value = "";
+                if (file && !parsing) void parseLetter(file);
+              }}
+            />
+            {parsing ? (
+              <span className="inline-flex items-center gap-2 text-text"><Loader2 className="w-4 h-4 animate-spin" /> Reading the bank letter…</span>
+            ) : (
+              <span className="inline-flex items-center gap-2"><UploadCloud className="w-4 h-4" /> Drop a bank letter here (or click) to fill in the details automatically</span>
+            )}
+          </div>
+        )}
+        {parseNote && <p className="text-[11px] text-gold" data-testid="text-parse-note">{parseNote}</p>}
+        {parseError && <p className="text-[11px] text-destructive" data-testid="text-parse-error">{parseError}</p>}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label className="text-xs">Bank name</Label>
+            <Input value={draft.bankName} onChange={set("bankName")} placeholder="Emirates NBD" data-testid="input-bank-name" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Account holder</Label>
+            <Input value={draft.accountHolderName} onChange={set("accountHolderName")} placeholder={props.entity.legalNameEn ?? ""} data-testid="input-bank-holder" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">IBAN</Label>
+            <Input value={draft.iban} onChange={set("iban")} placeholder="AE07 0331 2345 6789 0123 456" data-testid="input-bank-iban" />
+          </div>
+          <div>
+            <Label className="text-xs">Account number{props.editing ? " (leave blank to keep)" : ""}</Label>
+            <Input value={draft.accountNumber} onChange={set("accountNumber")} placeholder="1015…" data-testid="input-bank-account-number" />
+          </div>
+          <div>
+            <Label className="text-xs">SWIFT / BIC</Label>
+            <Input value={draft.swift} onChange={set("swift")} placeholder="EBILAEAD" data-testid="input-bank-swift" />
+          </div>
+          <div>
+            <Label className="text-xs">Currency</Label>
+            <Input value={draft.currency} onChange={set("currency")} maxLength={3} data-testid="input-bank-currency" />
+          </div>
+          <div>
+            <Label className="text-xs">Purpose</Label>
+            <select
+              className="w-full h-9 rounded border border-border-soft bg-transparent px-2 text-sm"
+              value={draft.purpose}
+              onChange={(ev) => setDraft((d) => ({ ...d, purpose: ev.target.value }))}
+              data-testid="select-bank-purpose"
+            >
+              {Object.entries(PURPOSE_LABEL).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Label</Label>
+            <Input value={draft.accountLabel} onChange={set("accountLabel")} placeholder="Operating account" data-testid="input-bank-label" />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={props.onClose} data-testid="button-bank-cancel">Cancel</Button>
+          <Button onClick={() => void save()} disabled={busy || parsing} data-testid="button-bank-save">
+            {busy ? "Saving…" : props.editing ? "Save changes" : "Add account"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

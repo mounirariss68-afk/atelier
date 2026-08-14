@@ -168,16 +168,37 @@ export function useLegalEntities(includeArchived = false): {
   return { entities: q.data?.items ?? [], isLoading: q.isLoading };
 }
 
+// Task #1065 — bank accounts linked to a legal entity (subset of the wallet
+// bank-account row that the entity-detail endpoint returns).
+export interface EntityBankAccount {
+  id: string;
+  bankName: string;
+  accountLabel: string;
+  accountNumberLast4: string;
+  currency: string;
+  iban: string | null;
+  swift: string | null;
+  accountHolderName: string | null;
+  purpose: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export function useLegalEntityDetail(id: string | null): {
   entity: LegalEntityRow | null;
   documents: LegalEntityLinkedDoc[];
+  bankAccounts: EntityBankAccount[];
   isLoading: boolean;
   isError: boolean;
 } {
-  const q = useQuery<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[] }>({
+  const q = useQuery<{
+    entity: LegalEntityRow;
+    documents: LegalEntityLinkedDoc[];
+    bankAccounts?: EntityBankAccount[];
+  }>({
     queryKey: ["atelier-v5", "legal-entity", id],
     queryFn: () =>
-      get<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[] }>(
+      get<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[]; bankAccounts?: EntityBankAccount[] }>(
         `/finance/entities/${id}`,
       ),
     enabled: !!id,
@@ -188,6 +209,7 @@ export function useLegalEntityDetail(id: string | null): {
   return {
     entity: q.data?.entity ?? null,
     documents: q.data?.documents ?? [],
+    bankAccounts: q.data?.bankAccounts ?? [],
     isLoading: q.isLoading,
     isError: q.isError || !id,
   };

@@ -53,6 +53,16 @@ function isPartnerTier(me: typeof atelierUsers.$inferSelect): boolean {
 function isFinanceLeadership(me: typeof atelierUsers.$inferSelect): boolean {
   return isPartnerTier(me) || me.role === "finance";
 }
+// Task #1065 — a bank account may only be linked to a legal entity that
+// exists in the caller's org.
+async function entityExistsInOrg(orgId: string, legalEntityId: string): Promise<boolean> {
+  const { atelierLegalEntities } = await import("@workspace/db");
+  const [row] = await db
+    .select({ id: atelierLegalEntities.id })
+    .from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.id, legalEntityId), eq(atelierLegalEntities.orgId, orgId)));
+  return !!row;
+}
 async function audit(args: {
   entityType: string; entityId: string; actor: typeof atelierUsers.$inferSelect;
   action: string; payload: Record<string, unknown>; summary: string;
@@ -71,7 +81,13 @@ router.get("/accounts", async (req, res) => {
   const me = ensure(req, res); if (!me) return;
   const rows = await db.select().from(atelierBankAccount)
     .where(and(eq(atelierBankAccount.orgId, me.orgId), isNull(atelierBankAccount.deletedAt)));
-  return res.json({ ok: true, data: rows });
+  // Task #1065 — IBAN/SWIFT/holder are banking credentials: full rows only
+  // for finance leadership; everyone else gets a redacted shape (labels +
+  // last4 keep the recon/cash UIs working).
+  const data = isFinanceLeadership(me)
+    ? rows
+    : rows.map((r) => ({ ...r, iban: null, swift: null, accountHolderName: null }));
+  return res.json({ ok: true, data });
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
@@ -79,27 +95,49 @@ router.post("/accounts", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
   if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-  const b = req.body as { bankName?: string; accountLabel?: string; accountNumberLast4?: string; currency?: string; openingBalance?: number; legalEntityId?: string; iban?: string; purpose?: string; debitCards?: unknown };
+  const b = req.body as { bankName?: string; accountLabel?: string; accountNumberLast4?: string; currency?: string; openingBalance?: number; legalEntityId?: string; iban?: string; purpose?: string; debitCards?: unknown; swift?: string; accountHolderName?: string };
   if (!b.bankName || !b.accountLabel || !b.accountNumberLast4) return res.status(400).json({ error: "invalid_input" });
   // Task #383 — entity-register extensions.
   const purposeCheck = normalizePurpose(b.purpose);
   if (purposeCheck.error) return res.status(400).json({ error: "invalid_purpose" });
   const cardsCheck = normalizeDebitCards(b.debitCards);
   if (cardsCheck.error) return res.status(400).json({ error: "invalid_debit_cards" });
+  // Task #1065 — IBAN is normalized AND format-checked (same charset rule as
+  // the pay/partner flows: 8-34 alphanumeric after whitespace strip).
+  const ibanCheck = normalizeIban(b.iban);
+  if (ibanCheck.error) return res.status(400).json({ error: "invalid_iban" });
+  if (b.legalEntityId && !(await entityExistsInOrg(me.orgId, b.legalEntityId)))
+    return res.status(404).json({ error: "entity-not-found" });
   const id = rid("bank");
   await db.insert(atelierBankAccount).values({
     id, orgId: me.orgId, legalEntityId: b.legalEntityId ?? null,
     bankName: b.bankName, accountLabel: b.accountLabel, accountNumberLast4: b.accountNumberLast4,
     currency: b.currency ?? "USD", openingBalance: b.openingBalance ?? 0,
-    iban: typeof b.iban === "string" ? b.iban.replace(/\s+/g, "").toUpperCase().slice(0, 40) : null,
+    iban: ibanCheck.value,
     purpose: purposeCheck.value,
     debitCards: cardsCheck.value ?? [],
+    swift: normalizeSwift(b.swift),
+    accountHolderName: typeof b.accountHolderName === "string" && b.accountHolderName.trim() ? b.accountHolderName.trim().slice(0, 200) : null,
     createdByUserId: me.id,
   });
   await audit({ entityType: "bank_account", entityId: id, actor: me, action: "bank_account.create",
     payload: { bankName: b.bankName, label: b.accountLabel }, summary: `Created bank account ${b.accountLabel}` });
   return res.json({ ok: true, data: { id } });
 });
+
+// Task #1065 — shared IBAN/SWIFT normalization for entity bank accounts.
+function normalizeIban(v: unknown): { value: string | null; error?: boolean } {
+  if (v === undefined || v === null || v === "") return { value: null };
+  if (typeof v !== "string") return { value: null, error: true };
+  const norm = v.replace(/\s+/g, "").toUpperCase();
+  if (!/^[A-Z0-9]{8,34}$/.test(norm)) return { value: null, error: true };
+  return { value: norm };
+}
+function normalizeSwift(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const norm = v.replace(/\s+/g, "").toUpperCase();
+  return /^[A-Z0-9]{8,11}$/.test(norm) ? norm : null;
+}
 
 // ─────────────────── Task #383 — account definition update ───────────────────
 const ACCOUNT_PURPOSES = new Set(["operating", "payroll", "tax", "savings", "client_money", "other"]);
@@ -138,12 +176,24 @@ router.patch("/accounts/:id", async (req, res) => {
   const [row] = await db.select().from(atelierBankAccount)
     .where(and(eq(atelierBankAccount.id, req.params.id), eq(atelierBankAccount.orgId, me.orgId), isNull(atelierBankAccount.deletedAt)));
   if (!row) return res.status(404).json({ error: "bank-account-not-found" });
-  const b = req.body as { bankName?: string; accountLabel?: string; legalEntityId?: string | null; iban?: string | null; purpose?: string | null; debitCards?: unknown; isActive?: boolean };
+  const b = req.body as { bankName?: string; accountLabel?: string; legalEntityId?: string | null; iban?: string | null; purpose?: string | null; debitCards?: unknown; isActive?: boolean; swift?: string | null; accountHolderName?: string | null; accountNumberLast4?: string; currency?: string };
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (typeof b.bankName === "string" && b.bankName) patch.bankName = b.bankName.slice(0, 200);
   if (typeof b.accountLabel === "string" && b.accountLabel) patch.accountLabel = b.accountLabel.slice(0, 200);
-  if (b.legalEntityId !== undefined) patch.legalEntityId = b.legalEntityId || null;
-  if (b.iban !== undefined) patch.iban = typeof b.iban === "string" && b.iban ? b.iban.replace(/\s+/g, "").toUpperCase().slice(0, 40) : null;
+  if (b.legalEntityId !== undefined) {
+    if (b.legalEntityId && !(await entityExistsInOrg(me.orgId, b.legalEntityId)))
+      return res.status(404).json({ error: "entity-not-found" });
+    patch.legalEntityId = b.legalEntityId || null;
+  }
+  if (b.iban !== undefined) {
+    const i = normalizeIban(b.iban);
+    if (i.error) return res.status(400).json({ error: "invalid_iban" });
+    patch.iban = i.value;
+  }
+  if (b.swift !== undefined) patch.swift = normalizeSwift(b.swift);
+  if (b.accountHolderName !== undefined) patch.accountHolderName = typeof b.accountHolderName === "string" && b.accountHolderName.trim() ? b.accountHolderName.trim().slice(0, 200) : null;
+  if (typeof b.accountNumberLast4 === "string" && b.accountNumberLast4) patch.accountNumberLast4 = b.accountNumberLast4.slice(0, 20);
+  if (typeof b.currency === "string" && /^[A-Za-z]{3}$/.test(b.currency)) patch.currency = b.currency.toUpperCase();
   if (b.purpose !== undefined) {
     const p = normalizePurpose(b.purpose);
     if (p.error) return res.status(400).json({ error: "invalid_purpose" });
