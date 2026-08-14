@@ -68,7 +68,6 @@ interface SubmitArgs {
 
 interface UseCliOptions {
   locale: CliLocale;
-  onAsync?: (jobId: string, turnId: string) => void;
   /**
    * Task #495 — invoked when a frame for the active turn carries a
    * `navigateTo` hint that hasn't yet been applied. The hook calls
@@ -127,7 +126,7 @@ export interface UseCliReturn {
 }
 
 export function useCli(opts: UseCliOptions): UseCliReturn {
-  const { locale, onAsync, onNavigate } = opts;
+  const { locale, onNavigate } = opts;
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<CliTurn[]>([]);
   const [current, setCurrent] = useState<CliTurn | null>(null);
@@ -279,10 +278,11 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
           }
           if (!isActive()) return;
           commit(live);
-          if (frame.type === "async_dispatched" && onAsync) {
-            const d = frame.data as { jobId?: string; turnId?: string };
-            onAsync(d.jobId ?? "", d.turnId ?? "");
-          }
+          // Task #1119 — the live `async_dispatched` frame callback is
+          // gone: Task #1116 removed the background runner, so the
+          // server never emits that frame anymore. Historical
+          // async_dispatched turns still render via the reducer's
+          // final-status mapping and rowToHistoricalTurn.
         },
       });
       switch (outcome.kind) {
@@ -333,7 +333,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         }
       }
     },
-    [onAsync, onNavigate],
+    [onNavigate],
   );
 
   const submit = useCallback(

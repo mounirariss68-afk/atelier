@@ -130,6 +130,9 @@ export const V3_AUDIT_ACTIONS = {
   CLI_SESSION_RENAMED: "cli.session.renamed",
   // Task #490 — user-initiated soft-delete of a chat session.
   CLI_SESSION_DELETED: "cli.session.deleted",
+  // Task #1119 — one-off system sweep marking orphaned async_plan job
+  // rows (queued/running with no runner after Task #1116) as error.
+  CLI_ASYNC_JOBS_RETIRED: "cli.async_jobs.retired",
 
   // EA delegation — Task #386 (partner ↔ Executive Assistant grants +
   // delegated pending items; every row carries dual attribution:

@@ -386,6 +386,9 @@ router.get("/cli/admin/metrics", async (req, res) => {
       partialCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'partial')::int`,
       successCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'success')::int`,
       readOnlyNoOpCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'read_only_no_op')::int`,
+      // Historical-only: Task #1116 removed the async runner, so no new
+      // turn can reach 'async_dispatched'. Kept so pre-#1116 rows still
+      // count correctly in the admin metrics card (Task #1119).
       asyncDispatchedCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'async_dispatched')::int`,
       // Behavioral rates — confirmation = had pending_write resolved;
       // disambiguation = a needs_disambiguation frame appeared.
