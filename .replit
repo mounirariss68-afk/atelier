@@ -24,6 +24,10 @@ args = "chat-reliability"
 task = "workflow.run"
 args = "pov-revision"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "vat201"
+
 [[workflows.workflow]]
 name = "chat-reliability"
 author = "agent"
@@ -42,6 +46,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test:pov-revision"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "vat201"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run test:vat201"
 
 [workflows.workflow.metadata]
 isValidation = true

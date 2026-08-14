@@ -89,6 +89,23 @@ async function main() {
     usdNet: 103.52, usdVat: 5.18, usdGross: 108.7, merchant: "SAP", summary: "Software Berlin",
   });
 
+  // Non-USD, non-AED ENTRY currency: journal recorded in GBP (VAT posted in
+  // GBP on 1400), register also GBP — exercises the GBP → USD → AED chain.
+  const e4 = `${P}_j4`;
+  await db.insert(atelierGlJournalEntry).values({
+    id: e4, orgId: ORG, legalEntityId: ENT, periodLabel: "2026-07", entryDate: "2026-07-24", kind: "posting",
+    sourceKind: "expense", sourceRef: `${P}_exp3`, memo: "Consulting London", currency: "GBP", totalDebit: 84, totalCredit: 84,
+  } as typeof atelierGlJournalEntry.$inferInsert);
+  await db.insert(atelierGlJournalLine).values({
+    id: `${P}_l4`, orgId: ORG, journalEntryId: e4, accountId: accIn, accountCode: "1400", accountName: "VAT receivable (input)", debit: 4, credit: 0,
+  } as typeof atelierGlJournalLine.$inferInsert);
+  await db.insert(atelierVatRegister).values({
+    id: `${P}_reg3`, orgId: ORG, expenseId: `${P}_exp3`, expenseDate: "2026-07-24",
+    country: "UAE", countryCode: "AE", treatment: "uae_5", rate: 5,
+    netAmount: 80, vatAmount: 4, grossAmount: 84, currency: "GBP",
+    usdNet: 101.27, usdVat: 5.06, usdGross: 106.33, merchant: "Deloitte UK", summary: "Consulting London",
+  });
+
   // Ambiguous cases that must be EXCLUDED from the boxes and block export:
   // a domestic 0% invoice and a manual output-VAT journal with no source doc.
   await db.insert(atelierInvoice).values({
@@ -162,7 +179,7 @@ async function main() {
   console.log("TieBack:", JSON.stringify(rep.glTieBack));
   const bx = (b: string) => rep.boxes.find((x) => x.box === b)!;
 
-  if (gl.outputVat !== 540 || Math.abs(gl.inputVat - (6.81 + 5.18)) > 0.01) fail("GL collector figures wrong");
+  if (gl.outputVat !== 540 || Math.abs(gl.inputVat - (6.81 + 5.18 + 4)) > 0.01) fail("GL collector figures wrong");
   // Ambiguous transactions are excluded from the boxes and reported as blocking.
   if (rep.unclassified.length !== 2) fail(`expected 2 unclassified lines, got ${JSON.stringify(rep.unclassified)}`);
   if (!rep.unclassified.some((l) => l.ref === "INV-P-003" && /ambiguous/.test(l.note ?? ""))) fail("domestic 0% invoice not flagged ambiguous");
@@ -174,7 +191,8 @@ async function main() {
   if (bx("4").lines.length !== 1 || Math.abs(bx("4").netAed - 2000 * 3.6725) > 40) fail(`box 4 wrong: ${JSON.stringify(bx("4"))}`);
   // Input: USD 6.81 + USD 5.18 VAT → AED, enriched from the register.
   const b9 = bx("9");
-  if (b9.lines.length !== 2 || Math.abs(b9.vatAed - (6.81 + 5.18) * 3.6725) > 1.2) fail(`box 9 wrong: ${JSON.stringify(b9)}`);
+  const expectedInputAed = (6.81 + 5.18) * 3.6725 + (4 / 0.79) * 3.6725;
+  if (b9.lines.length !== 3 || Math.abs(b9.vatAed - expectedInputAed) > 1.5) fail(`box 9 wrong: ${JSON.stringify(b9)}`);
   const careem = b9.lines.find((l) => l.description.includes("Careem"));
   if (!careem) fail("box 9 line not enriched from VAT register");
   // EUR-net expense: net labeled EUR with EUR→AED chain, VAT labeled USD with USD→AED chain.
@@ -184,6 +202,14 @@ async function main() {
   if (sap.vatCurrency !== "USD" || !sap.vatFxChain.includes("USD → AED")) fail(`USD VAT mislabeled: ${JSON.stringify(sap)}`);
   // EUR 95.24 → USD ≈ 103.52 → AED ≈ 380.2 (fallbacks 0.92, 3.6725)
   if (Math.abs(sap.netAed - (95.24 / 0.92) * 3.6725) > 8) fail(`EUR net AED conversion off: ${sap.netAed}`);
+  // GBP ENTRY currency: both VAT and net recorded in GBP → GBP → USD → AED chain.
+  const gbp = b9.lines.find((l) => l.description.includes("Deloitte"));
+  if (!gbp) fail("GBP entry-currency expense line missing");
+  if (gbp.vatCurrency !== "GBP" || !gbp.vatFxChain.includes("GBP → AED")) fail(`GBP VAT mislabeled: ${JSON.stringify(gbp)}`);
+  if (gbp.netCurrency !== "GBP" || !gbp.netFxChain.includes("GBP → AED")) fail(`GBP net mislabeled: ${JSON.stringify(gbp)}`);
+  // GBP 4 VAT → USD ≈ 5.06 → AED ≈ 18.6; GBP 80 net → AED ≈ 371.9 (fallbacks 0.79, 3.6725)
+  if (Math.abs(gbp.vatAed - (4 / 0.79) * 3.6725) > 0.5) fail(`GBP VAT AED conversion off: ${gbp.vatAed}`);
+  if (Math.abs(gbp.netAed - (80 / 0.79) * 3.6725) > 8) fail(`GBP net AED conversion off: ${gbp.netAed}`);
   // ── Task #1114 — classified reverse-charge / import / exempt boxes ──
   const b3 = bx("3"), b5 = bx("5"), b6 = bx("6"), b7 = bx("7"), b10 = bx("10");
   if (b3.lines.length !== 1 || b3.netAed !== 1000 || b3.vatAed !== 50) fail(`box 3 wrong: ${JSON.stringify(b3)}`);
