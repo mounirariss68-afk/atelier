@@ -34,7 +34,80 @@ import {
   ExtractDialog,
   type EntityDraft,
 } from "./FinanceEntities";
-import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical } from "lucide-react";
+import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical, Copy, Check } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Copy-to-clipboard affordances — every identifying number on this page
+// gets a small copy icon (founder request, 2026-08-14).
+// ---------------------------------------------------------------------------
+
+/** Clipboard write with feature detection and a legacy fallback; never throws. */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function CopyValueButton(props: { value: string; label: string; className?: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <button
+      type="button"
+      className={`p-1 rounded text-text-faint hover:text-text hover:bg-bg-deep focus-visible:outline focus-visible:outline-1 focus-visible:outline-gold transition-colors shrink-0 ${props.className ?? ""}`}
+      title={`Copy ${props.label}`}
+      aria-label={`Copy ${props.label}`}
+      data-testid={`button-copy-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+      onClick={() => {
+        void writeClipboard(props.value).then((ok) => {
+          if (ok) {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+            toast({ title: "Copied", description: props.value });
+          } else {
+            toast({ title: "Copy failed", description: "Your browser blocked clipboard access — copy manually.", variant: "destructive" });
+          }
+        });
+      }}
+    >
+      {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
+
+/** InfoRow variant whose value carries a copy button. */
+function CopyInfoRow(props: { label: string; value: string | null | undefined; copyValue?: string }) {
+  if (!props.value) return null;
+  return (
+    <InfoRow
+      label={props.label}
+      value={
+        <span className="inline-flex items-center gap-1 justify-end">
+          <span className="break-words min-w-0">{props.value}</span>
+          <CopyValueButton value={props.copyValue ?? props.value} label={props.label} />
+        </span>
+      }
+    />
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Document classification — three legal-function tiers + unclassified
@@ -107,6 +180,8 @@ export function DocCard(props: {
   onKindChange: (kind: string | null) => void;
   /** ISO expiry date for compliance docs (colored chip); null = no chip. */
   expiresOn?: string | null;
+  /** License/registration number shown on the card with a copy icon. */
+  regNumber?: string | null;
   muted?: boolean;
 }) {
   const d = props.doc;
@@ -152,7 +227,16 @@ export function DocCard(props: {
           </a>
         </div>
       </div>
-      
+
+      {props.regNumber && (
+        <div className="flex items-center gap-1 -mt-1">
+          <span className="text-xs font-mono text-text-mute" data-testid={`text-doc-number-${d.id}`}>
+            № {props.regNumber}
+          </span>
+          <CopyValueButton value={props.regNumber} label={`${d.docKind ?? "document"} number`} />
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 mt-auto pt-1">
         <div className="flex items-center gap-2 min-w-0">
           {props.expiresOn && (
@@ -271,6 +355,29 @@ export default function FinanceEntityDetail() {
   }
 
   const hasTradeLicense = e.registrations.some((r) => r.type === "trade_license");
+
+  // Registration ↔ document join: each card shows the number of ONE
+  // registration of its type (moa_contract is the registration-side name
+  // for the MoA document). The join consumes registrations one-to-one in
+  // stable order, so repeated types (e.g. two initial approvals) never
+  // share a number; every registration left unmatched — any type — renders
+  // in the residual "Other registration numbers" list below the documents,
+  // so nothing is dropped. This replaces the old standalone
+  // "Registrations & licenses" section, which duplicated the cards.
+  const REG_TYPE_FOR_KIND: Record<string, string> = { memorandum_of_association: "moa_contract" };
+  const regNumberByDocId = new Map<string, string>();
+  const consumedRegIds = new Set<string>();
+  for (const d of [...documents].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (!d.docKind) continue;
+    const type = REG_TYPE_FOR_KIND[d.docKind] ?? d.docKind;
+    const reg = e.registrations.find((r) => r.type === type && r.number && !consumedRegIds.has(r.id));
+    if (reg?.number) {
+      consumedRegIds.add(reg.id);
+      regNumberByDocId.set(d.id, reg.number);
+    }
+  }
+  const looseRegs = e.registrations.filter((r) => !consumedRegIds.has(r.id));
+  const regNumFor = (d: LegalEntityLinkedDoc) => regNumberByDocId.get(d.id) ?? null;
   const tiers: Record<Tier, LegalEntityLinkedDoc[]> = {
     constitutional: [], compliance: [], history: [], unclassified: [],
   };
@@ -357,6 +464,7 @@ export default function FinanceEntityDetail() {
                         key={d.id}
                         doc={d}
                         expiresOn={docExpiry(d)}
+                        regNumber={regNumFor(d)}
                         canWrite={!!canWrite}
                         onKindChange={(k) => void setDocKind(d.id, k)}
                       />
@@ -388,7 +496,7 @@ export default function FinanceEntityDetail() {
                   </div>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tiers.constitutional.map((d) => (
-                      <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
+                      <DocCard key={d.id} doc={d} regNumber={regNumFor(d)} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
                     ))}
                   </div>
                 </div>
@@ -411,7 +519,7 @@ export default function FinanceEntityDetail() {
                   </summary>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tiers.history.map((d) => (
-                      <DocCard key={d.id} doc={d} muted canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
+                      <DocCard key={d.id} doc={d} muted regNumber={regNumFor(d)} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
                     ))}
                   </div>
                 </details>
@@ -420,23 +528,35 @@ export default function FinanceEntityDetail() {
           )}
         </section>
 
-        {/* Registrations */}
-        {e.registrations.length > 0 && (
-          <section>
-            <SectionLabel>Registrations & licenses</SectionLabel>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-              {e.registrations.map((r) => (
-                <div key={r.id} className="card-flat p-3.5 flex flex-col justify-center" data-testid={`reg-${r.id}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-text">{r.label}</span>
+        {/* The old "Registrations & licenses" section duplicated the document
+            cards; matched registration numbers now live ON the cards (with
+            copy buttons). Every registration WITHOUT its own document —
+            regardless of type or whether any documents are linked — renders
+            here, so no number is ever dropped. */}
+        {looseRegs.length > 0 && (
+          <section data-testid="entity-loose-registrations">
+            <SectionLabel>Other registration numbers</SectionLabel>
+            <div className="mt-3 card-flat py-1">
+              <ul className="divide-y divide-border-soft">
+                {looseRegs.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid={`reg-${r.id}`}>
+                    <span className="text-sm text-text">{r.label}</span>
+                    {r.number && (
+                      <>
+                        <span className="text-xs font-mono text-text-mute">№ {r.number}</span>
+                        <CopyValueButton value={r.number} label={`${r.label} number`} />
+                      </>
+                    )}
                     {r.expiresOn && <MonoChip tone={expiryTone(r.expiresOn)}>{expiryText(r.expiresOn)}</MonoChip>}
-                  </div>
-                  <div className="text-xs text-text-mute font-mono mt-2">{r.number}</div>
-                  <div className="text-[11px] text-text-faint mt-1">
-                    {r.issuer ?? ""}{r.issuedOn ? ` · issued ${r.issuedOn}` : ""}{r.expiresOn ? ` · expires ${r.expiresOn}` : ""}
-                  </div>
-                </div>
-              ))}
+                    <span className="text-[11px] text-text-faint ml-auto">
+                      {r.issuer ?? ""}{r.issuedOn ? ` · issued ${r.issuedOn}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-text-faint px-4 py-1.5">
+                Registrations without their own uploaded document — link the certificate from the Document Library to turn these into cards.
+              </p>
             </div>
           </section>
         )}
@@ -471,19 +591,19 @@ export default function FinanceEntityDetail() {
               <div className="mt-4 card-flat p-4 space-y-2">
                 {e.premises && (
                   <>
-                    <InfoRow label="Address" value={e.premises.addressLine} />
-                    <InfoRow label="Unit" value={e.premises.unit} />
-                    <InfoRow label="Building" value={e.premises.building} />
-                    <InfoRow label="Area" value={e.premises.area} />
-                    <InfoRow label="Plot" value={e.premises.plotNumber} />
-                    <InfoRow label="Makani" value={e.premises.makaniNo} />
+                    <CopyInfoRow label="Address" value={e.premises.addressLine} />
+                    <CopyInfoRow label="Unit" value={e.premises.unit} />
+                    <CopyInfoRow label="Building" value={e.premises.building} />
+                    <CopyInfoRow label="Area" value={e.premises.area} />
+                    <CopyInfoRow label="Plot" value={e.premises.plotNumber} />
+                    <CopyInfoRow label="Makani" value={e.premises.makaniNo} />
                     <InfoRow label="Size" value={e.premises.sizeSqm ? `${e.premises.sizeSqm} sqm` : null} />
                   </>
                 )}
                 {e.lease && (
                   <>
-                    <InfoRow label="Ejari contract" value={e.lease.contractNo} />
-                    <InfoRow label="Lessor" value={e.lease.lessorName} />
+                    <CopyInfoRow label="Ejari contract" value={e.lease.contractNo} />
+                    <CopyInfoRow label="Lessor" value={e.lease.lessorName} />
                     <InfoRow
                       label="Lease term"
                       value={e.lease.startDate || e.lease.endDate ? (
@@ -497,28 +617,98 @@ export default function FinanceEntityDetail() {
                     <InfoRow label="Deposit" value={fmtAed(e.lease.securityDepositAed)} />
                   </>
                 )}
+                {e.premises && (() => {
+                  // Compose from every structured component; addressLine is
+                  // included only when it adds something the components
+                  // don't already cover (it usually restates unit/building/
+                  // area, which would duplicate).
+                  const parts = [
+                    e.premises.unit && `Office ${e.premises.unit}`,
+                    e.premises.building,
+                    e.premises.area,
+                  ].filter(Boolean) as string[];
+                  const line = e.premises.addressLine?.trim();
+                  const componentsCovered =
+                    line && parts.every((p) => line.toLowerCase().includes(String(p).replace(/^Office /, "").toLowerCase()));
+                  const fullAddress = [
+                    componentsCovered ? line : [line, ...parts].filter(Boolean).join(", "),
+                    e.premises.city,
+                    countryLabel(e.country),
+                  ]
+                    .filter(Boolean)
+                    .join(", ");
+                  if (!fullAddress) return null;
+                  return (
+                    <div className="pt-2 border-t border-border-soft">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="button-copy-full-address"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(fullAddress).then(() =>
+                            toast({ title: "Full address copied", description: fullAddress }),
+                          );
+                        }}
+                      >
+                        <Copy className="w-3.5 h-3.5 mr-1" /> Copy full address
+                      </Button>
+                    </div>
+                  );
+                })()}
               </div>
             </section>
           )}
         </div>
 
-        {/* Activities */}
-        {e.activities.length > 0 && (
-          <section>
-            <SectionLabel>Licensed activities</SectionLabel>
-            <div className="card-flat mt-4 py-2">
-              <ul className="divide-y divide-border-soft">
-                {e.activities.map((a) => (
-                  <li key={`${a.code}-${a.nameEn}`} className="text-sm px-4 py-2 flex items-baseline gap-3">
-                    <span className="font-mono text-xs text-gold whitespace-nowrap w-16">{a.code}</span>
-                    <span className="text-text flex-1">{a.nameEn}</span>
-                    {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
+        {/* Activities — defensively de-duplicated by English name (extracts
+            occasionally store the same activity once with and once without
+            its code; keep one row, preferring the coded variant). Each row
+            and the whole list are copyable. */}
+        {e.activities.length > 0 && (() => {
+          const byName = new Map<string, (typeof e.activities)[number]>();
+          for (const a of e.activities) {
+            const key = (a.nameEn ?? "").trim().toLowerCase();
+            const prev = byName.get(key);
+            if (!prev || (!prev.code && a.code)) byName.set(key, { ...prev, ...a, code: a.code || prev?.code || "" });
+          }
+          const acts = [...byName.values()];
+          const actText = (a: (typeof acts)[number]) => [a.code, a.nameEn].filter(Boolean).join(" — ");
+          return (
+            <section>
+              <div className="flex items-center gap-3">
+                <SectionLabel>Licensed activities</SectionLabel>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="button-copy-all-activities"
+                  onClick={() => {
+                    void writeClipboard(acts.map(actText).join("\n")).then((ok) =>
+                      toast(
+                        ok
+                          ? { title: "Activities copied", description: `${acts.length} licensed activities` }
+                          : { title: "Copy failed", description: "Your browser blocked clipboard access — copy manually.", variant: "destructive" },
+                      ),
+                    );
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy all
+                </Button>
+              </div>
+              <div className="card-flat mt-4 py-2">
+                <ul className="divide-y divide-border-soft">
+                  {acts.map((a) => (
+                    <li key={`${a.code}-${a.nameEn}`} className="text-sm px-4 py-2 flex items-baseline gap-3" data-testid={`activity-${a.code || a.nameEn}`}>
+                      <span className="font-mono text-xs text-gold whitespace-nowrap w-16">{a.code}</span>
+                      <span className="text-text flex-1">{a.nameEn}</span>
+                      {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
+                      <CopyValueButton value={actText(a)} label={`activity ${a.nameEn}`} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          );
+        })()}
 
         {e.notes && <p className="text-xs text-text-faint italic">{e.notes}</p>}
       </div>
