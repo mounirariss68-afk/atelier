@@ -1220,7 +1220,182 @@ router.get("/finance/payables/supplier-invoices/firms", async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-// @cli-skip: Task #1070 multipart upload; not CLI-exposable
+/**
+ * Task #1090 — shared supplier-invoice creation core. The exact same
+ * validation / firm-link / advisory-lock dedupe / insert / audit path
+ * runs whether the invoice arrives via the UI multipart upload below
+ * or via the Riser chat ingest capability, so chat commits land in the
+ * identical payables review states as UI uploads.
+ *
+ * Returns an HTTP-shaped `{ status, body }` outcome the route streams
+ * verbatim; chat callers translate the same statuses (409 duplicate is
+ * reported as "already filed", never as an error).
+ */
+export async function createSupplierInvoiceCore(args: {
+  me: Me;
+  fileBuffer: Buffer;
+  fileName: string;
+  supplierName: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  periodLabel?: string | null;
+  invoiceDate?: string | null;
+  notes?: string | null;
+  partnerFirmId?: string | null;
+  /** Audit provenance: "ui_upload" (default) or "chat". */
+  via?: "ui_upload" | "chat";
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  if (!args.fileBuffer || args.fileBuffer.length === 0) {
+    return { status: 400, body: { error: "file-required" } };
+  }
+  if (!looksLikePdf(args.fileBuffer)) {
+    return { status: 400, body: { error: "pdf-required", message: "Invoice must be a PDF." } };
+  }
+  const supplierName = bodyStr(args.supplierName, 200);
+  if (!supplierName) return { status: 400, body: { error: "supplier-name-required" } };
+  const amount = Number(args.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
+    return { status: 400, body: { error: "invalid-amount" } };
+  }
+  const currency = bodyStr(args.currency, 3).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) return { status: 400, body: { error: "invalid-currency" } };
+  const reference = bodyStr(args.reference, 100);
+  if (!reference) return { status: 400, body: { error: "reference-required" } };
+  const periodLabel = bodyStr(args.periodLabel ?? "", 60) || null;
+  const invoiceDate = bodyStr(args.invoiceDate ?? "", 10) || null;
+  const notes = bodyStr(args.notes ?? "", 2000) || null;
+  // Optional link to a registered partner firm (org-scoped).
+  const wantFirmId = bodyStr(args.partnerFirmId ?? "", 100);
+  let firm: { id: string; name: string } | null = null;
+  if (wantFirmId) {
+    const [f] = await db.select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
+      .from(atelierPartnerFirms)
+      .where(and(
+        eq(atelierPartnerFirms.id, wantFirmId),
+        eq(atelierPartnerFirms.orgId, me.orgId),
+        isNull(atelierPartnerFirms.deletedAt),
+      ));
+    if (!f) return { status: 404, body: { error: "partner-firm-not-found" } };
+    firm = f;
+  }
+
+  const now = new Date();
+  // Hash BEFORE storing anything — the blob is only persisted once
+  // dedupe has passed (no orphan blobs on 409).
+  const sha256 = createHash("sha256").update(args.fileBuffer).digest("hex");
+  const fx = await convertToUsd(amount, currency, now);
+  const id = rid("spi");
+
+  // Duplicate detection: same file bytes (sha256) or same
+  // supplier+reference among live (non-rejected) AP rows of any
+  // source — flagged as 409 with the existing row so a second
+  // payable is never created silently. The check + insert run in
+  // one transaction behind a per-org advisory lock, so two
+  // concurrent uploads of the same invoice serialize instead of
+  // both observing "no duplicate" and double-inserting. Rejected
+  // rows deliberately don't block re-upload.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`atelier_supplier_invoice_upload:${me.orgId}`}))`,
+    );
+    const [dupe] = await tx.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      inArray(atelierPartnerFirmInvoices.source, ["partner_submitted", "internal_upload"]),
+      ne(atelierPartnerFirmInvoices.status, "rejected"),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+      or(
+        eq(atelierPartnerFirmInvoices.sha256, sha256),
+        and(
+          sql`lower(${atelierPartnerFirmInvoices.partnerFirmName}) = lower(${firm?.name ?? supplierName})`,
+          sql`lower(${atelierPartnerFirmInvoices.reference}) = lower(${reference})`,
+        ),
+      ),
+    )).limit(1);
+    if (dupe) return { dupe } as const;
+    const { blobRef } = await storeContractBytes(args.fileBuffer);
+    await tx.insert(atelierPartnerFirmInvoices).values({
+      id,
+      orgId: me.orgId,
+      // Unlinked suppliers store "" — the column is NOT NULL and ""
+      // is the sentinel for "not a registered partner firm".
+      partnerFirmId: firm?.id ?? "",
+      partnerFirmName: firm?.name ?? supplierName,
+      engagementId: null,
+      weekIso: periodLabel ?? invoiceDate ?? now.toISOString().slice(0, 10),
+      hours: 0,
+      costAmount: amount,
+      costCurrency: currency,
+      fxRate: fx.rate,
+      usdAmount: +fx.usdAmount.toFixed(2),
+      status: "submitted",
+      source: "internal_upload",
+      reference,
+      periodLabel,
+      invoiceDate,
+      submittedByUserId: me.id,
+      submittedAt: now,
+      fileName: args.fileName.slice(0, 300),
+      mime: "application/pdf",
+      sizeBytes: args.fileBuffer.length,
+      sha256,
+      blobRef,
+      notes,
+    });
+    return { dupe: null } as const;
+  });
+  if (outcome.dupe) {
+    const dupe = outcome.dupe;
+    return {
+      status: 409,
+      body: {
+        error: "duplicate-invoice",
+        matchedBy: dupe.sha256 === sha256 ? "file" : "reference",
+        existing: supplierInvoiceWire(dupe),
+        message: dupe.sha256 === sha256
+          ? `This exact PDF was already uploaded (${dupe.reference ?? dupe.id}, status ${dupe.status}).`
+          : `An invoice with reference ${reference} from ${dupe.partnerFirmName} already exists (status ${dupe.status}).`,
+      },
+    };
+  }
+  await audit({
+    entityType: "partner_firm_invoice", entityId: id, actor: me,
+    action: "finance.supplier_invoice.upload",
+    payload: {
+      supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null,
+      reference, amount, currency, periodLabel, sha256, via: args.via ?? "ui_upload",
+    },
+    summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)}).`,
+  });
+  const [row] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
+  return { status: 201, body: { ok: true, item: supplierInvoiceWire(row) } };
+}
+
+/** Task #1090 — chat firm-linking parity: org-scoped case-insensitive
+ * exact name match against the partner-firm registry (no fuzzy guessing —
+ * an unmatched supplier stays unlinked, same as leaving the UI selector
+ * blank). */
+export async function findPartnerFirmByName(
+  orgId: string,
+  name: string,
+): Promise<{ id: string; name: string; hasBankDetails: boolean } | null> {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+  const firms = await db.select({
+    id: atelierPartnerFirms.id,
+    name: atelierPartnerFirms.name,
+    bankIban: atelierPartnerFirms.bankIban,
+  })
+    .from(atelierPartnerFirms)
+    .where(and(eq(atelierPartnerFirms.orgId, orgId), isNull(atelierPartnerFirms.deletedAt)));
+  const hit = firms.find((f) => f.name.trim().toLowerCase() === wanted);
+  return hit
+    ? { id: hit.id, name: hit.name, hasBankDetails: Boolean((hit.bankIban ?? "").trim()) }
+    : null;
+}
+
+// @cli-skip: Task #1070 multipart upload; chat parity via ingest_supplier_invoice capability (Task #1090)
 router.post("/finance/payables/supplier-invoices", (req, res, next) => {
   // Gate BEFORE multipart parsing: unauthorized callers must never cause
   // the request body to be buffered into memory.
@@ -1232,123 +1407,21 @@ router.post("/finance/payables/supplier-invoices", (req, res, next) => {
       if (!me) return;
       const file = req.file;
       if (!file || file.size === 0) { res.status(400).json({ error: "file-required" }); return; }
-      if (!looksLikePdf(file.buffer)) {
-        res.status(400).json({ error: "pdf-required", message: "Invoice must be a PDF." });
-        return;
-      }
-      const supplierName = bodyStr(req.body?.supplierName, 200);
-      if (!supplierName) { res.status(400).json({ error: "supplier-name-required" }); return; }
-      const amount = Number(req.body?.amount);
-      if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
-        res.status(400).json({ error: "invalid-amount" });
-        return;
-      }
-      const currency = bodyStr(req.body?.currency, 3).toUpperCase();
-      if (!/^[A-Z]{3}$/.test(currency)) { res.status(400).json({ error: "invalid-currency" }); return; }
-      const reference = bodyStr(req.body?.reference, 100);
-      if (!reference) { res.status(400).json({ error: "reference-required" }); return; }
-      const periodLabel = bodyStr(req.body?.periodLabel, 60) || null;
-      const invoiceDate = bodyStr(req.body?.invoiceDate, 10) || null;
-      const notes = bodyStr(req.body?.notes, 2000) || null;
-      // Optional link to a registered partner firm (org-scoped).
-      const wantFirmId = bodyStr(req.body?.partnerFirmId, 100);
-      let firm: { id: string; name: string } | null = null;
-      if (wantFirmId) {
-        const [f] = await db.select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
-          .from(atelierPartnerFirms)
-          .where(and(
-            eq(atelierPartnerFirms.id, wantFirmId),
-            eq(atelierPartnerFirms.orgId, me.orgId),
-            isNull(atelierPartnerFirms.deletedAt),
-          ));
-        if (!f) { res.status(404).json({ error: "partner-firm-not-found" }); return; }
-        firm = f;
-      }
-
-      const now = new Date();
-      // Hash BEFORE storing anything — the blob is only persisted once
-      // dedupe has passed (no orphan blobs on 409).
-      const sha256 = createHash("sha256").update(file.buffer).digest("hex");
-      const fx = await convertToUsd(amount, currency, now);
-      const id = rid("spi");
-
-      // Duplicate detection: same file bytes (sha256) or same
-      // supplier+reference among live (non-rejected) AP rows of any
-      // source — flagged as 409 with the existing row so a second
-      // payable is never created silently. The check + insert run in
-      // one transaction behind a per-org advisory lock, so two
-      // concurrent uploads of the same invoice serialize instead of
-      // both observing "no duplicate" and double-inserting. Rejected
-      // rows deliberately don't block re-upload.
-      const outcome = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`atelier_supplier_invoice_upload:${me.orgId}`}))`,
-        );
-        const [dupe] = await tx.select().from(atelierPartnerFirmInvoices).where(and(
-          eq(atelierPartnerFirmInvoices.orgId, me.orgId),
-          inArray(atelierPartnerFirmInvoices.source, ["partner_submitted", "internal_upload"]),
-          ne(atelierPartnerFirmInvoices.status, "rejected"),
-          isNull(atelierPartnerFirmInvoices.deletedAt),
-          or(
-            eq(atelierPartnerFirmInvoices.sha256, sha256),
-            and(
-              sql`lower(${atelierPartnerFirmInvoices.partnerFirmName}) = lower(${firm?.name ?? supplierName})`,
-              sql`lower(${atelierPartnerFirmInvoices.reference}) = lower(${reference})`,
-            ),
-          ),
-        )).limit(1);
-        if (dupe) return { dupe } as const;
-        const { blobRef } = await storeContractBytes(file.buffer);
-        await tx.insert(atelierPartnerFirmInvoices).values({
-          id,
-          orgId: me.orgId,
-          // Unlinked suppliers store "" — the column is NOT NULL and ""
-          // is the sentinel for "not a registered partner firm".
-          partnerFirmId: firm?.id ?? "",
-          partnerFirmName: firm?.name ?? supplierName,
-          engagementId: null,
-          weekIso: periodLabel ?? invoiceDate ?? now.toISOString().slice(0, 10),
-          hours: 0,
-          costAmount: amount,
-          costCurrency: currency,
-          fxRate: fx.rate,
-          usdAmount: +fx.usdAmount.toFixed(2),
-          status: "submitted",
-          source: "internal_upload",
-          reference,
-          periodLabel,
-          invoiceDate,
-          submittedByUserId: me.id,
-          submittedAt: now,
-          fileName: file.originalname.slice(0, 300),
-          mime: "application/pdf",
-          sizeBytes: file.size,
-          sha256,
-          blobRef,
-          notes,
-        });
-        return { dupe: null } as const;
+      const out = await createSupplierInvoiceCore({
+        me,
+        fileBuffer: file.buffer,
+        fileName: file.originalname,
+        supplierName: typeof req.body?.supplierName === "string" ? req.body.supplierName : "",
+        amount: Number(req.body?.amount),
+        currency: typeof req.body?.currency === "string" ? req.body.currency : "",
+        reference: typeof req.body?.reference === "string" ? req.body.reference : "",
+        periodLabel: typeof req.body?.periodLabel === "string" ? req.body.periodLabel : null,
+        invoiceDate: typeof req.body?.invoiceDate === "string" ? req.body.invoiceDate : null,
+        notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+        partnerFirmId: typeof req.body?.partnerFirmId === "string" ? req.body.partnerFirmId : null,
+        via: "ui_upload",
       });
-      if (outcome.dupe) {
-        const dupe = outcome.dupe;
-        res.status(409).json({
-          error: "duplicate-invoice",
-          matchedBy: dupe.sha256 === sha256 ? "file" : "reference",
-          existing: supplierInvoiceWire(dupe),
-          message: dupe.sha256 === sha256
-            ? `This exact PDF was already uploaded (${dupe.reference ?? dupe.id}, status ${dupe.status}).`
-            : `An invoice with reference ${reference} from ${dupe.partnerFirmName} already exists (status ${dupe.status}).`,
-        });
-        return;
-      }
-      await audit({
-        entityType: "partner_firm_invoice", entityId: id, actor: me,
-        action: "finance.supplier_invoice.upload",
-        payload: { supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null, reference, amount, currency, periodLabel, sha256 },
-        summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)}).`,
-      });
-      const [row] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
-      res.status(201).json({ ok: true, item: supplierInvoiceWire(row) });
+      res.status(out.status).json(out.body);
     } catch (err) { next(err); }
   });
 });

@@ -28,6 +28,7 @@ import { isFoundingPartner, isPartner } from "./personaRoles";
 import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
 import { extractAttachment } from "../../lib/atelier-cli/attachments/extractors.js";
 import { extractFirstJsonObject } from "../../lib/atelier-agents/runner.js";
+import { extractBankLetterFields } from "../../lib/atelier-finance-docs.js";
 // Task #655 — auto-attach statutory payroll filings on entity create.
 import { ensureStatutoryFilings } from "../../lib/atelier-payroll/payrollRun.js";
 
@@ -982,24 +983,9 @@ router.post("/finance/entities/extract", async (req, res) => {
 // wallet bank routes).
 // ---------------------------------------------------------------------------
 
-const BANK_LETTER_SYSTEM = `You are a treasury analyst digitizing official bank letters and account-confirmation documents (UAE and international banks: IBAN letters, account-opening confirmations, bank reference letters). Documents may be bilingual Arabic/English; prefer English strings for Latin fields.
-
-Extract ONLY facts present in the document text. Never invent numbers or names. Omit (use null) anything the document does not state.
-
-Return a single JSON object with this exact shape (all keys present):
-{
-  "confidenceNote": string,
-  "fields": {
-    "bankName": string|null,
-    "branch": string|null,
-    "accountHolderName": string|null (the account holder / customer legal name),
-    "iban": string|null (full IBAN, no spaces),
-    "accountNumber": string|null (the plain account number, digits as printed),
-    "swift": string|null (SWIFT/BIC code),
-    "currency": string|null (ISO 4217 3-letter code, e.g. AED),
-    "issuedOn": string|null (letter date, YYYY-MM-DD)
-  }
-}`;
+// Task #1090 — the system prompt + model call moved to the shared
+// `atelier-finance-docs` helper so the Riser chat pipeline digitizes
+// bank letters through the exact same extraction (no forked parsing).
 
 // @cli-skip: partner-gated LLM extraction; covered by manual verification
 router.post("/finance/entities/:id/bank-letter-extract", async (req, res) => {
@@ -1080,69 +1066,33 @@ router.post("/finance/entities/:id/bank-letter-extract", async (req, res) => {
     return;
   }
 
-  try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 90_000);
-    const resp = await anthropic.messages
-      .create(
-        {
-          model: "claude-sonnet-4-5",
-          max_tokens: 2048,
-          system: `${BANK_LETTER_SYSTEM}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
-          messages: [
-            {
-              role: "user",
-              content: `Document file name: ${version.fileName}\nVault title: ${doc.title}\nLegal entity: ${row.legalNameEn ?? row.id}\n\nExtracted document text:\n<<<\n${text.slice(0, 60_000)}\n>>>`,
-            },
-          ],
-        },
-        { signal: ac.signal },
-      )
-      .finally(() => clearTimeout(timer));
-    const block = resp.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "";
-    const json = extractFirstJsonObject(
-      raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, ""),
-    );
-    if (!json) {
-      res.status(502).json({
-        error: "extraction-non-json",
-        message: "The AI returned no structured result.",
-        snippet: raw.slice(0, 200),
-      });
-      return;
-    }
-    const proposal = JSON.parse(json) as Record<string, unknown>;
-    const fields = (proposal.fields ?? {}) as Record<string, unknown>;
-    const hasContent = Object.values(fields).some((v) => v != null && v !== "");
-    if (!hasContent) {
-      res.status(422).json({
-        error: "extraction-empty",
-        message:
-          "The AI could not find bank-account details in this document. Enter the account manually.",
-      });
-      return;
-    }
-    // Normalize what we can server-side so the client prefills clean values.
-    if (typeof fields.iban === "string") fields.iban = fields.iban.replace(/\s+/g, "").toUpperCase();
-    if (typeof fields.swift === "string") fields.swift = fields.swift.replace(/\s+/g, "").toUpperCase();
-    if (typeof fields.currency === "string") fields.currency = fields.currency.trim().toUpperCase().slice(0, 3);
-    await auditEntity({
-      entityId: row.id,
-      actor: me,
-      action: "legal_entity.bank_letter_extract",
-      payload: { documentId },
-      summary: `Ran AI bank-letter extraction on document "${doc.title}"`,
+  const out = await extractBankLetterFields({
+    text,
+    contextLabel: `Document file name: ${version.fileName}\nVault title: ${doc.title}\nLegal entity: ${row.legalNameEn ?? row.id}`,
+  });
+  if (!out.ok) {
+    const status =
+      out.errorCode === "extraction-empty" ? 422
+      : out.errorCode === "extraction-timeout" ? 504
+      : 502;
+    res.status(status).json({
+      error: out.errorCode,
+      message: out.errorMessage,
+      ...(out.snippet ? { snippet: out.snippet } : {}),
     });
-    res.json({ documentId, proposal: { ...proposal, fields } });
-  } catch (err) {
-    const aborted = err instanceof Error && err.name === "AbortError";
-    res.status(aborted ? 504 : 502).json({
-      error: aborted ? "extraction-timeout" : "extraction-failed",
-      message: err instanceof Error ? err.message : "AI extraction error",
-    });
+    return;
   }
+  await auditEntity({
+    entityId: row.id,
+    actor: me,
+    action: "legal_entity.bank_letter_extract",
+    payload: { documentId },
+    summary: `Ran AI bank-letter extraction on document "${doc.title}"`,
+  });
+  res.json({
+    documentId,
+    proposal: { confidenceNote: out.confidenceNote, fields: out.fields },
+  });
 });
 
 export default router;

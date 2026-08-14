@@ -95,24 +95,35 @@ router.get("/accounts", async (req, res) => {
   return res.json({ ok: true, data });
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/accounts", async (req, res) => {
-  if (denyAll(req, res)) return;
-  const me = ensure(req, res); if (!me) return;
-  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-  const b = req.body as { bankName?: string; accountLabel?: string; accountNumberLast4?: string; currency?: string; openingBalance?: number; legalEntityId?: string; iban?: string; purpose?: string; debitCards?: unknown; swift?: string; accountHolderName?: string };
-  if (!b.bankName || !b.accountLabel || !b.accountNumberLast4) return res.status(400).json({ error: "invalid_input" });
+/**
+ * Task #1090 — shared bank-account creation core. Same validation /
+ * normalization / audit whether the account is keyed in via the wallet
+ * UI form or committed from the Riser bank-letter chat pipeline.
+ * Caller owns the finance-leadership gate.
+ */
+export async function createBankAccountCore(args: {
+  me: typeof atelierUsers.$inferSelect;
+  bankName?: string; accountLabel?: string; accountNumberLast4?: string;
+  currency?: string; openingBalance?: number; legalEntityId?: string;
+  iban?: string; purpose?: string; debitCards?: unknown; swift?: string;
+  accountHolderName?: string;
+  /** Audit provenance: "ui" (default) or "chat". */
+  via?: "ui" | "chat";
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  const b = args;
+  if (!b.bankName || !b.accountLabel || !b.accountNumberLast4) return { status: 400, body: { error: "invalid_input" } };
   // Task #383 — entity-register extensions.
   const purposeCheck = normalizePurpose(b.purpose);
-  if (purposeCheck.error) return res.status(400).json({ error: "invalid_purpose" });
+  if (purposeCheck.error) return { status: 400, body: { error: "invalid_purpose" } };
   const cardsCheck = normalizeDebitCards(b.debitCards);
-  if (cardsCheck.error) return res.status(400).json({ error: "invalid_debit_cards" });
+  if (cardsCheck.error) return { status: 400, body: { error: "invalid_debit_cards" } };
   // Task #1065 — IBAN is normalized AND format-checked (same charset rule as
   // the pay/partner flows: 8-34 alphanumeric after whitespace strip).
   const ibanCheck = normalizeIban(b.iban);
-  if (ibanCheck.error) return res.status(400).json({ error: "invalid_iban" });
+  if (ibanCheck.error) return { status: 400, body: { error: "invalid_iban" } };
   if (b.legalEntityId && !(await entityExistsInOrg(me.orgId, b.legalEntityId)))
-    return res.status(404).json({ error: "entity-not-found" });
+    return { status: 404, body: { error: "entity-not-found" } };
   const id = rid("bank");
   await db.insert(atelierBankAccount).values({
     id, orgId: me.orgId, legalEntityId: b.legalEntityId ?? null,
@@ -126,8 +137,33 @@ router.post("/accounts", async (req, res) => {
     createdByUserId: me.id,
   });
   await audit({ entityType: "bank_account", entityId: id, actor: me, action: "bank_account.create",
-    payload: { bankName: b.bankName, label: b.accountLabel }, summary: `Created bank account ${b.accountLabel}` });
-  return res.json({ ok: true, data: { id } });
+    payload: { bankName: b.bankName, label: b.accountLabel, via: args.via ?? "ui" },
+    summary: `Created bank account ${b.accountLabel}` });
+  return { status: 200, body: { ok: true, data: { id } } };
+}
+
+// @cli-skip: UI-workflow write; chat parity via save_bank_letter_account capability (Task #1090)
+router.post("/accounts", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const out = await createBankAccountCore({
+    me,
+    bankName: typeof b.bankName === "string" ? b.bankName : undefined,
+    accountLabel: typeof b.accountLabel === "string" ? b.accountLabel : undefined,
+    accountNumberLast4: typeof b.accountNumberLast4 === "string" ? b.accountNumberLast4 : undefined,
+    currency: typeof b.currency === "string" ? b.currency : undefined,
+    openingBalance: typeof b.openingBalance === "number" ? b.openingBalance : undefined,
+    legalEntityId: typeof b.legalEntityId === "string" ? b.legalEntityId : undefined,
+    iban: typeof b.iban === "string" ? b.iban : undefined,
+    purpose: typeof b.purpose === "string" ? b.purpose : undefined,
+    debitCards: b.debitCards,
+    swift: typeof b.swift === "string" ? b.swift : undefined,
+    accountHolderName: typeof b.accountHolderName === "string" ? b.accountHolderName : undefined,
+    via: "ui",
+  });
+  return res.status(out.status).json(out.body);
 });
 
 // Task #1065 — shared IBAN/SWIFT normalization for entity bank accounts.
@@ -224,7 +260,7 @@ router.patch("/accounts/:id", async (req, res) => {
  * and the multipart `/import-file` upload. Idempotent per
  * (org, account, sha256(raw)) via the unique index + pre-check.
  */
-async function importStatementCore(args: {
+export async function importStatementCore(args: {
   me: typeof atelierUsers.$inferSelect;
   bankAccountId: string;
   source: "csv" | "xero";
@@ -301,7 +337,7 @@ async function importStatementCore(args: {
 }
 
 /** Detect the export flavour from the header line (Xero exports name a Payee column). */
-function detectStatementSource(raw: string): "csv" | "xero" {
+export function detectStatementSource(raw: string): "csv" | "xero" {
   const header = raw.split(/\r?\n/, 1)[0]?.toLowerCase() ?? "";
   return header.includes("payee") ? "xero" : "csv";
 }
@@ -311,7 +347,7 @@ function detectStatementSource(raw: string): "csv" | "xero" {
  * is audit evidence, so storage success is a hard precondition of EVERY
  * import path; throws on any failure (callers return a retryable 503).
  */
-async function storeStatementObject(
+export async function storeStatementObject(
   buffer: Buffer, originalName: string, mimetype: string,
 ): Promise<{ fileUrl: string; removeObject: () => Promise<void> }> {
   if (process.env.NODE_ENV === "test" && process.env.TEST_FORCE_STATEMENT_STORAGE_FAIL === "1")

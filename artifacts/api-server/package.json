@@ -23,6 +23,7 @@
     "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",
     "test:client-meeting": "tsx ./tests/crm/client-meeting-probe.ts",
     "test:chat-doc-download": "tsx ./tests/crm/chat-doc-download-probe.ts",
+    "test:finance-docs": "tsx ./tests/crm/chat-finance-docs-probe.ts",
     "test:document-chat-miss": "tsx ./tests/crm/document-chat-miss-probe.ts",
     "test:travel-companion": "tsx ./tests/travel/travel-companion-probe.ts",
     "test:expense-chat-lookup": "tsx ./tests/crm/expense-chat-lookup-probe.ts",

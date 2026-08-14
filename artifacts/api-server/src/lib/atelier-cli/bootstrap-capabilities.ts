@@ -117,6 +117,11 @@ import "./app-navigation-capabilities.js";
 // Task #873 — alliance-partner portal reads (the ONLY surface the
 // external `alliance_partner` role ever sees; catalog gate enforces).
 import "./partner-portal-capabilities.js";
+// Task #1090 — Riser finance-document pipelines (classify → supplier
+// invoice / bank statement / bank letter). Commits run through the same
+// route cores as the Finance UI; the `bank` module keeps them stripped
+// from restricted personas and board observers at the catalog gate.
+import "./finance-doc-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
