@@ -94,6 +94,23 @@ interface Suggestion {
   rationale?: string;
 }
 
+// Task #1107 — read-only policy summary (principles + caller-applicable caps)
+// from GET /me/expense-policy, shown before submitting a claim.
+interface PolicyCap {
+  category: string;
+  appliesToCountry: string | null;
+  capAmountUsd: number | null;
+  capUnit: string | null;
+  hardBlockAmountUsd: number | null;
+  approvalThresholdUsd: number | null;
+  flightClassMax: string | null;
+  rationale: string | null;
+}
+interface PolicySummary {
+  principles: string;
+  caps: PolicyCap[];
+}
+
 const FUNDING_LABELS: Record<string, string> = {
   personal_claim: "Personal (reimburse me)",
   partner_paid: "Partner paid",
@@ -377,6 +394,9 @@ export default function MeExpenses() {
   const [amberFor, setAmberFor] = React.useState<{ id: string; findings: string[] } | null>(null);
   const [rationale, setRationale] = React.useState("");
   const [taxonomy, setTaxonomy] = React.useState<Taxonomy | null>(null);
+  // Task #1107 — read-only policy summary shown before submitting.
+  const [policy, setPolicy] = React.useState<PolicySummary | null>(null);
+  const [policyOpen, setPolicyOpen] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
   const [suggestBusy, setSuggestBusy] = React.useState(false);
   const [suggestError, setSuggestError] = React.useState<string | null>(null);
@@ -430,6 +450,13 @@ export default function MeExpenses() {
       .then((j) => {
         setAccounts(j.accounts ?? []);
         setEngagements(j.engagements ?? []);
+      })
+      .catch(() => undefined);
+    // Task #1107 — policy principles + the caps that apply to the caller.
+    void fetch(`${API}/expense-policy`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && typeof j.principles === "string" && Array.isArray(j.caps)) setPolicy(j);
       })
       .catch(() => undefined);
     void fetch("/api/atelier/wallet/expense-taxonomy", { credentials: "include" })
@@ -911,6 +938,61 @@ export default function MeExpenses() {
               Cancel
             </PillButton>
           </div>
+        </Card>
+      )}
+
+      {/* Task #1107 — read-only policy summary before submitting a claim. */}
+      {showForm && policy && (
+        <Card className="p-4 space-y-2" data-testid="me-expense-policy">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+                The spirit of the policy
+              </p>
+              <p className="mt-1 text-sm text-text-mute" data-testid="me-policy-principles">
+                {policy.principles}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPolicyOpen((v) => !v)}
+              className="shrink-0 rounded-full border border-border px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-text-mute hover:border-gold hover:text-gold min-h-[32px]"
+              data-testid="me-policy-toggle"
+            >
+              {policyOpen ? "Hide caps" : "Your caps"}
+            </button>
+          </div>
+          {policyOpen && (
+            <div className="space-y-2 border-t border-border-soft pt-2" data-testid="me-policy-caps">
+              {policy.caps.map((c) => (
+                <div key={`${c.category}|${c.appliesToCountry ?? ""}`} className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <MonoChip>{c.category}</MonoChip>
+                    {c.appliesToCountry && <MonoChip>country: {c.appliesToCountry}</MonoChip>}
+                    <span className="text-xs font-mono text-text-mute">
+                      {c.capAmountUsd != null
+                        ? `up to $${c.capAmountUsd}${c.capUnit ? ` ${c.capUnit.replace(/_/g, " ")}` : ""}`
+                        : "no cap"}
+                      {c.approvalThresholdUsd != null
+                        ? ` · partner OK over $${c.approvalThresholdUsd}`
+                        : ""}
+                      {c.hardBlockAmountUsd != null ? ` · blocked over $${c.hardBlockAmountUsd}` : ""}
+                      {c.flightClassMax ? ` · ${c.flightClassMax.replace(/_/g, " ")} class max` : ""}
+                    </span>
+                  </div>
+                  {c.rationale && (
+                    <p className="pl-1 text-xs italic text-text-faint">{c.rationale}</p>
+                  )}
+                </div>
+              ))}
+              {policy.caps.length === 0 && (
+                <p className="text-xs text-text-mute">No caps configured — use good judgment and keep receipts.</p>
+              )}
+              <p className="text-[10px] text-text-faint">
+                Read-only summary — going over a cap just routes your claim for a quick partner OK.
+              </p>
+            </div>
+          )}
         </Card>
       )}
 

@@ -85,7 +85,12 @@ import { proposeExpenseAllocation } from "../../lib/atelier-entity-allocation.js
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
 import { convertToUsd, convertUsdTo, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
 import { PUSH_CATEGORIES, resolvePushCategoryPrefs } from "../../lib/expoPush.js";
-import { evaluateExpense } from "../../lib/atelier-expense-policy.js";
+import {
+  evaluateExpense,
+  ensureDefaultExpensePolicies,
+  POLICY_PRINCIPLES,
+} from "../../lib/atelier-expense-policy.js";
+import { atelierExpensePolicies } from "@workspace/db";
 // Task #383 — taxonomy + attribution + funding + merchant-memory learning.
 import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
 import {
@@ -2184,6 +2189,79 @@ router.get("/me/expenses", async (req, res, next) => {
       }),
     );
     res.json({ expenses, displayCurrency });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Task #1107 — read-only policy summary for the submission flow. Returns
+ * the plain-language principles plus the caps that would actually apply
+ * to the CALLER (role-scoped variants for other roles — e.g. partner
+ * flight rules — are filtered out; a role variant for the caller's own
+ * role shadows the global rule per axis, mirroring evaluateExpense's
+ * most-specific-wins collapse). Strictly read-only: editing stays on the
+ * wallet Policy page.
+ */
+// @cli-skip: self-scope policy summary read; trivial UI plumbing (Task #1107)
+router.get("/me/expense-policy", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    await ensureDefaultExpensePolicies(me.orgId);
+    const rows = await db
+      .select()
+      .from(atelierExpensePolicies)
+      .where(
+        and(
+          eq(atelierExpensePolicies.orgId, me.orgId),
+          eq(atelierExpensePolicies.active, true),
+          isNull(atelierExpensePolicies.deletedAt),
+        ),
+      );
+    // Only rules that can ever apply to the caller: unscoped, or scoped to
+    // the caller's own role. (Country-scoped rules are shown with their
+    // country tag — which one applies depends on the trip.)
+    const relevant = rows.filter(
+      (r) => !r.appliesToRole || r.appliesToRole === me.role,
+    );
+    // Collapse per category+country: within a group the caller-role-scoped
+    // rule wins each axis over the global one (same axis semantics as
+    // evaluateExpense), so employees never see partner caps and a caller
+    // with a role variant sees THEIR numbers, not both.
+    const groups = new Map<string, typeof relevant>();
+    for (const r of relevant) {
+      const key = `${r.category}|${r.appliesToCountry ?? ""}`;
+      const g = groups.get(key);
+      if (g) g.push(r);
+      else groups.set(key, [r]);
+    }
+    const caps = [...groups.values()].map((g) => {
+      const ordered = [...g].sort(
+        (a, b) => (b.appliesToRole ? 1 : 0) - (a.appliesToRole ? 1 : 0),
+      );
+      const pick = <K extends keyof (typeof ordered)[number]>(k: K) =>
+        ordered.find((r) => r[k] != null)?.[k] ?? null;
+      const capRule = ordered.find((r) => r.capAmountUsd != null) ?? ordered[0];
+      return {
+        category: ordered[0].category,
+        appliesToCountry: ordered[0].appliesToCountry ?? null,
+        capAmountUsd: capRule?.capAmountUsd ?? null,
+        capUnit: capRule?.capUnit ?? null,
+        hardBlockAmountUsd: pick("hardBlockAmountUsd") as number | null,
+        approvalThresholdUsd: pick("approvalThresholdUsd") as number | null,
+        flightClassMax: pick("flightClassMax") as string | null,
+        rationale: (ordered.find((r) => r.rationale)?.rationale ?? null) as
+          | string
+          | null,
+      };
+    });
+    caps.sort(
+      (a, b) =>
+        a.category.localeCompare(b.category) ||
+        (a.appliesToCountry ?? "").localeCompare(b.appliesToCountry ?? ""),
+    );
+    res.json({ principles: POLICY_PRINCIPLES, caps });
   } catch (err) {
     next(err);
   }
