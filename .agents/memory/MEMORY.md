@@ -151,6 +151,7 @@
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Expo-module mock probes](expo-module-mock-probes.md) — tsx probes map expo/RN to tests/mocks/ via probe tsconfig; push has remote|local modes — check remotePushUnavailableReason() before any token call.
+- [Guarded PDF statement parse](pdf-bank-statement-parse.md) — date-anchored deterministic rows; multi-amount rows flagged never guessed; commit via canonical CSV through the shared import core.
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
 - [Chat commit-token defense](chat-commit-token.md) — twoPhaseConfirm is model-trusted; sensitive chat writes HMAC-stamp pending.input so a fabricated confirm:true only re-previews.
 - [Entity allocation engine](atelier-entity-allocation.md) — benefit-principle propose/decide helpers are the only allocation path; scratch-DB leftover entities break country rules in probes.

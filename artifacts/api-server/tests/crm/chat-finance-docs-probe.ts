@@ -14,8 +14,12 @@
  *      parse → clarification, no confirmation.
  *   3. import_bank_statement: single account auto-picks → confirm →
  *      rows imported + navigateTo recon; repeat confirm →
- *      alreadyImported; PDF attachment → unsupported_format; a second
- *      account makes phase 1 return a bank-account clarification.
+ *      alreadyImported; a second account makes phase 1 return a
+ *      bank-account clarification. Task #1094: a well-formed PDF
+ *      statement extracts rows with per-row confidence, previews them
+ *      in the confirmation, imports through the SAME core (dedupe on
+ *      repeat), while a garbage/non-statement PDF is refused with the
+ *      CSV-export guidance.
  *   4. save_bank_letter_account: two entities → entity clarification;
  *      with entity → extraction proposal confirmation → confirm creates
  *      the bank-account row (iban/swift/holder + entity link).
@@ -113,7 +117,7 @@ async function main() {
   process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY = "stub-key";
 
   // ---- dynamic imports AFTER env is pinned ----
-  const { db, atelierUsers, atelierBankAccount, atelierLegalEntities, atelierPartnerFirmInvoices } =
+  const { db, atelierUsers, atelierBankAccount, atelierBankTransaction, atelierLegalEntities, atelierPartnerFirmInvoices } =
     await import("@workspace/db");
   const { and, eq } = await import("drizzle-orm");
   await import("../../src/lib/atelier-cli/bootstrap-capabilities.js");
@@ -336,14 +340,88 @@ async function main() {
     );
     check("statement: forged confirm without valid token → preview, no import", !!forged.confirmation && forged.data?.rowsImported == null, forged);
 
-    // PDF statements rejected with the CSV-export guidance.
+    // Task #1094 — garbage PDF (an invoice, not a statement) still gets the
+    // CSV-export guidance: its single date row has multiple amounts
+    // (subtotal/VAT/total), so extraction confidence is low → refuse.
     const pdfStmtAtt = await ingest(`stmt-${TAG}.pdf`, "application/pdf", invoicePdf);
     const pPdf: any = await importStmt.run({ attachmentId: pdfStmtAtt }, mkCtx() as any);
     check(
-      "statement: PDF → unsupported_format with CSV guidance",
-      pPdf.ok === false && pPdf.errorCode === "unsupported_format" && /csv/i.test(pPdf.errorMessage ?? ""),
+      "statement: non-statement PDF → low-confidence refusal with CSV guidance",
+      pPdf.ok === false && pPdf.errorCode === "pdf_low_confidence" && /csv/i.test(pPdf.errorMessage ?? ""),
       pPdf,
     );
+
+    // Task #1094 — well-formed PDF statement: rows extracted, previewed,
+    // imported through the shared core, deduped on repeat.
+    const stmtPdf = await makePdf([
+      "Emirates NBD — Account Statement",
+      "Account: Operating AED  ****3456",
+      `2026-08-02 Acme Client incoming wire ref ${TAG}-PDF-1 +15,250.00 CR`,
+      "2026-08-04 DEWA utility bill payment -2,310.75",
+      `2026-08-06 Du Telecom monthly plan ref ${TAG}-PDF-2 -795.00 DR`,
+      "2026-08-07 Office rent payment 8,000.00", // unsigned outflow wording
+      "2026-08-08 Misc entry 123.45", // no sign, no direction wording → flagged
+    ]);
+    const goodPdfAtt = await ingest(`statement-${TAG}.pdf`, "application/pdf", stmtPdf);
+    const q1: any = await importStmt.run(
+      { attachmentId: goodPdfAtt, statementDate: "2026-08-11", bankAccountId: acctId },
+      mkCtx() as any,
+    );
+    check("statement PDF: phase 1 returns confirmation with parsed-row preview",
+      !!q1.confirmation && q1.data?.preview?.source === "pdf" &&
+        q1.data?.preview?.pdf?.rowsExtracted === 4 &&
+        Array.isArray(q1.data?.preview?.pdf?.rows) && q1.data.preview.pdf.rows.length === 4,
+      q1.data?.preview,
+    );
+    const rows = (q1.data?.preview?.pdf?.rows ?? []) as any[];
+    const wire = rows.find((r) => /acme/i.test(r.counterparty ?? ""));
+    const dewa = rows.find((r) => /dewa/i.test(r.counterparty ?? ""));
+    const du = rows.find((r) => /du telecom/i.test(r.counterparty ?? ""));
+    const rent = rows.find((r) => /rent/i.test(r.counterparty ?? ""));
+    check(
+      "statement PDF: explicit +CR / - / DR signs land correctly",
+      wire?.amount === 15250 && wire?.confidence >= 0.7 &&
+        dewa?.amount === -2310.75 && du?.amount === -795,
+      rows,
+    );
+    check(
+      "statement PDF: unsigned amount with outflow wording imports NEGATIVE with kind=payment",
+      rent?.amount === -8000 && rent?.confidence >= 0.7 && rent?.kind === "payment",
+      rent,
+    );
+    const pdfFlagged = (q1.data?.preview?.pdf?.flagged ?? []) as any[];
+    check(
+      "statement PDF: unsigned amount without direction wording is flagged, never guessed",
+      q1.data?.preview?.pdf?.flaggedRows === 1 &&
+        pdfFlagged.some((f) => /misc entry/i.test(f.snippet ?? "") && /direction unclear/i.test(f.reason ?? "")) &&
+        !rows.some((r) => Math.abs(r.amount) === 123.45),
+      pdfFlagged,
+    );
+    check(
+      "statement PDF: summary mentions extracted + skipped rows for human review",
+      /PDF/.test(q1.confirmation?.summary ?? "") && /4 extracted/.test(q1.confirmation?.summary ?? "") &&
+        /flagged and SKIPPED/.test(q1.confirmation?.summary ?? ""),
+      q1.confirmation?.summary,
+    );
+    const q2: any = await importStmt.run(q1.confirmation.pending.input, mkCtx() as any);
+    check("statement PDF: confirm imports only the 4 confident rows via the shared core",
+      q2.ok === true && q2.data?.rowsImported === 4 &&
+        q2.data?.navigateTo?.path === "/wallet/cash/recon",
+      q2,
+    );
+    const pdfTxns = await db.select().from(atelierBankTransaction).where(and(
+      eq(atelierBankTransaction.orgId, ORG),
+      eq(atelierBankTransaction.statementImportId, q2.data?.importId ?? ""),
+    ));
+    const rentTxn = pdfTxns.find((t: any) => Number(t.amount) === -8000);
+    check(
+      "statement PDF: stored unsigned-outflow transaction persists kind=payment",
+      pdfTxns.length === 4 && rentTxn?.kind === "payment",
+      pdfTxns.map((t: any) => ({ amount: t.amount, kind: t.kind })),
+    );
+    const q3: any = await importStmt.run(q1.confirmation.pending.input, mkCtx() as any);
+    check("statement PDF: repeat confirm → alreadyImported (same dedupe as CSV)",
+      q3.ok === true && q3.data?.alreadyImported === true, q3);
 
     // Unknown account id must be rejected, never silently re-picked.
     const pBad: any = await importStmt.run(

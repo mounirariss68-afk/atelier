@@ -13,9 +13,11 @@
  *   ingest_supplier_invoice       — attached PDF → AI-prefill → preview
  *                                   card → SAME payables core as the UI
  *                                   upload (dedupe/lock/review states)
- *   import_bank_statement         — attached CSV/Xero export → shared
- *                                   importStatementCore + auto-match →
- *                                   recap + link to recon
+ *   import_bank_statement         — attached CSV/Xero export (or, Task
+ *                                   #1094, a PDF via guarded row
+ *                                   extraction with per-row confidence)
+ *                                   → shared importStatementCore +
+ *                                   auto-match → recap + link to recon
  *   save_bank_letter_account      — attached bank letter → shared
  *                                   extraction → entity disambiguation →
  *                                   proposal → bank-account create core
@@ -51,6 +53,11 @@ import {
   importStatementCore,
   storeStatementObject,
 } from "../../routes/atelier/bankRoutes.js";
+import {
+  parsePdfStatementText,
+  pdfRowsToCanonicalCsv,
+  PDF_STATEMENT_CONFIDENCE_FLOOR,
+} from "../bank-parsers/pdf-statement.js";
 
 /** Org finance documents are a finance-leadership surface (Task #1090
  * scope: role clamps unchanged — self-only roles keep receipt-only). */
@@ -512,7 +519,7 @@ defineCapability({
 });
 
 // =====================================================================
-// import_bank_statement — chat CSV/Xero export → import + auto-match.
+// import_bank_statement — chat CSV/Xero/PDF export → import + auto-match.
 // =====================================================================
 defineCapability({
   id: "bank.import_bank_statement",
@@ -520,7 +527,7 @@ defineCapability({
   module: "bank",
   toolName: "import_bank_statement",
   description:
-    "Import an attached bank-statement CSV (or Xero export) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDFs are not supported (ask for a CSV export). Reconciliation sign-off stays with founders.",
+    "Import an attached bank statement (CSV, Xero export, or PDF) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDF statements go through guarded table extraction with per-row confidence: the parsed rows are always previewed before import, and a low-confidence PDF is refused with CSV-export guidance instead of guessed. Reconciliation sign-off stays with founders.",
   slashAliases: { en: ["/import-statement", "/bank-statement"] },
   inputSchema: {
     type: "object",
@@ -553,20 +560,33 @@ defineCapability({
     if (!bytes || bytes.length === 0) {
       return { ok: false, errorCode: "file_missing", errorMessage: "The attachment bytes could not be loaded." };
     }
-    if (
+    // Task #1094 — PDF statements are accepted through GUARDED extraction:
+    // date-anchored row segmentation with per-row confidence; rows with
+    // ambiguous amounts or unclear direction are flagged (never guessed); a
+    // low overall confidence refuses with the CSV-export fallback. The
+    // extraction gate runs BEFORE the bank-account clarification so an
+    // unparseable PDF gets the CSV guidance immediately instead of a
+    // pointless account question.
+    const isPdf =
       looksLikePdf(bytes) ||
       loaded.attachment.mime === "application/pdf" ||
-      /\.pdf$/i.test(loaded.attachment.fileName)
-    ) {
-      return {
-        ok: false,
-        errorCode: "unsupported_format",
-        errorMessage: "PDF statements are not supported — export a CSV from your bank and attach that instead.",
-      };
-    }
-    const raw = bytes.toString("utf8");
-    if (!raw.trim()) {
-      return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
+      /\.pdf$/i.test(loaded.attachment.fileName);
+    const pdfText = isPdf ? (loaded.extracted?.normalizedText ?? "").trim() : "";
+    let raw = "";
+    if (isPdf) {
+      const gate = parsePdfStatementText(pdfText);
+      if (gate.rows.length === 0 || gate.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+        return {
+          ok: false,
+          errorCode: "pdf_low_confidence",
+          errorMessage: `I couldn't confidently extract transaction rows from this PDF${gate.flagged.length > 0 ? ` (${gate.flagged.length} candidate row(s) were too ambiguous to trust — I never guess amounts)` : ""} — export a CSV from your bank and attach that instead.`,
+        };
+      }
+    } else {
+      raw = bytes.toString("utf8");
+      if (!raw.trim()) {
+        return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
+      }
     }
 
     const accounts = await db
@@ -616,15 +636,72 @@ defineCapability({
       typeof input.statementDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.statementDate)
         ? input.statementDate
         : new Date().toISOString().slice(0, 10);
-    const source = detectStatementSource(raw);
+    // PDF path: re-parse with the account's currency as default (the parser
+    // is deterministic, so phase 1 and phase 2 see identical rows and the
+    // canonical-CSV dedupe hash is stable), then serialise the importable
+    // rows into the canonical CSV the SHARED importStatementCore consumes —
+    // identical dedupe and audit behavior to a CSV upload.
+    let pdfMeta: {
+      rowsExtracted: number;
+      flaggedRows: number;
+      confidence: number;
+      rows: Array<Record<string, unknown>>;
+      flagged: Array<Record<string, unknown>>;
+    } | null = null;
+    let source: "csv" | "xero";
+    if (isPdf) {
+      const parsed = parsePdfStatementText(pdfText, acct.currency);
+      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+        // Currency default cannot raise confidence, but keep the guard.
+        return {
+          ok: false,
+          errorCode: "pdf_low_confidence",
+          errorMessage:
+            "I couldn't confidently extract transaction rows from this PDF — export a CSV from your bank and attach that instead.",
+        };
+      }
+      raw = pdfRowsToCanonicalCsv(parsed.rows);
+      source = "csv";
+      pdfMeta = {
+        rowsExtracted: parsed.rows.length,
+        flaggedRows: parsed.flagged.length,
+        confidence: parsed.confidence,
+        rows: parsed.rows.slice(0, 25).map((r) => ({
+          postedDate: r.postedDate,
+          amount: r.amount,
+          currency: r.currency,
+          counterparty: r.counterpartyNameRaw,
+          reference: r.referenceRaw,
+          kind: r.kind,
+          confidence: r.confidence,
+        })),
+        flagged: parsed.flagged.slice(0, 10).map((f) => ({
+          snippet: f.snippet,
+          reason: f.reason,
+        })),
+      };
+    } else {
+      source = detectStatementSource(raw);
+    }
     const lineCount = raw.split(/\r?\n/).filter((l) => l.trim()).length;
 
     if (!isVerifiedCommit("import_bank_statement", input)) {
+      const summary = pdfMeta
+        ? `Import ${loaded.attachment.fileName} (PDF — ${pdfMeta.rowsExtracted} extracted transaction row(s) shown in the preview${pdfMeta.flaggedRows > 0 ? `; ${pdfMeta.flaggedRows} low-confidence row(s) flagged and SKIPPED, not guessed` : ""}) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Review the parsed rows before confirming — reconciliation sign-off stays with you.`
+        : `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`;
       return {
         ok: true,
-        data: { preview: { bankAccountId, statementDate, source, lineCount } },
+        data: {
+          preview: {
+            bankAccountId,
+            statementDate,
+            source: isPdf ? "pdf" : source,
+            lineCount,
+            ...(pdfMeta ? { pdf: pdfMeta } : {}),
+          },
+        },
         confirmation: {
-          summary: `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`,
+          summary,
           diff: {
             create: {
               table: "atelier_bank_statement_import",
@@ -655,8 +732,8 @@ defineCapability({
     try {
       stored = await storeStatementObject(
         bytes,
-        loaded.attachment.fileName || "statement.csv",
-        loaded.attachment.mime || "text/csv",
+        loaded.attachment.fileName || (isPdf ? "statement.pdf" : "statement.csv"),
+        loaded.attachment.mime || (isPdf ? "application/pdf" : "text/csv"),
       );
     } catch (err) {
       return {
@@ -688,7 +765,7 @@ defineCapability({
           rowsImported: data.rowsImported ?? 0,
           parseErrors: data.errors ?? [],
           matcher: matcher ?? null,
-          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}. Review and reconcile when ready.`,
+          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}.${pdfMeta && pdfMeta.flaggedRows > 0 ? ` ${pdfMeta.flaggedRows} low-confidence PDF row(s) were skipped, not guessed — add them manually or import a CSV export.` : ""} Review and reconcile when ready.`,
           navigateTo,
         },
       };
