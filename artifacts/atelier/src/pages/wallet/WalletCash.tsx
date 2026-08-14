@@ -58,6 +58,97 @@ const stateTone: Record<string, "green" | "gold" | "red" | "default"> = {
   proposed: "gold", unmatched: "default", parked: "red", matched: "green", journaled: "green",
 };
 
+interface BankAccount {
+  id: string;
+  bankName: string;
+  accountLabel: string;
+  accountNumberLast4: string;
+  currency: string;
+}
+
+/** Task #1071 — statement file upload (CSV / Xero export) against a bank account. */
+function StatementUploadCard({ onImported }: { onImported: (msg: string) => void }) {
+  const [accounts, setAccounts] = React.useState<BankAccount[]>([]);
+  const [accountId, setAccountId] = React.useState("");
+  const [statementDate, setStatementDate] = React.useState("");
+  const [source, setSource] = React.useState("auto");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    void (async () => {
+      const r = await fetch("/api/atelier/wallet/bank/accounts", { credentials: "include" });
+      const j = await r.json().catch(() => null);
+      const rows: BankAccount[] = j?.data ?? [];
+      setAccounts(rows);
+      if (rows.length > 0) setAccountId((prev) => prev || rows[0].id);
+    })();
+  }, []);
+
+  const upload = async () => {
+    if (!file || !accountId || !statementDate) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("bankAccountId", accountId);
+      form.append("statementDate", statementDate);
+      if (source !== "auto") form.append("source", source);
+      const r = await fetch("/api/atelier/wallet/bank/import-file", {
+        method: "POST", credentials: "include", body: form,
+      });
+      const j = await r.json().catch(() => null);
+      if (r.status === 409) {
+        setErr("This statement file was already imported — no rows were duplicated.");
+      } else if (!r.ok) {
+        setErr(`Import failed: ${j?.message ?? j?.error ?? r.status}`);
+      } else {
+        const d = j?.data;
+        const parseErrs = Array.isArray(d?.errors) && d.errors.length > 0 ? ` (${d.errors.length} rows skipped)` : "";
+        onImported(`Statement imported — ${d?.rowsImported ?? 0} rows${parseErrs}. Auto-matcher ${d?.matcher?.status === "ok" ? "ran" : "reported issues"}.`);
+        setFile(null);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Card className="p-3 space-y-2" data-testid="statement-upload">
+      <div className="font-mono text-xs text-text-faint uppercase">Import bank statement</div>
+      <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+        <select className="bg-bg border border-border-soft rounded px-2 py-1 text-text"
+          value={accountId} onChange={(e) => setAccountId(e.target.value)} data-testid="select-statement-account">
+          {accounts.length === 0 && <option value="">No bank accounts</option>}
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.bankName} · {a.accountLabel} ····{a.accountNumberLast4}</option>
+          ))}
+        </select>
+        <input type="date" className="bg-bg border border-border-soft rounded px-2 py-1 text-text"
+          value={statementDate} onChange={(e) => setStatementDate(e.target.value)} data-testid="input-statement-date" />
+        <select className="bg-bg border border-border-soft rounded px-2 py-1 text-text"
+          value={source} onChange={(e) => setSource(e.target.value)} data-testid="select-statement-source">
+          <option value="auto">Auto-detect format</option>
+          <option value="csv">Generic CSV</option>
+          <option value="xero">Xero export</option>
+        </select>
+        <input ref={fileRef} type="file" accept=".csv,.txt,text/csv" className="text-text-mute"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)} data-testid="input-statement-file" />
+        <PillButton variant="primary" disabled={busy || !file || !accountId || !statementDate}
+          data-testid="btn-statement-upload" onClick={() => void upload()}>
+          {busy ? "Importing…" : "Upload & reconcile"}
+        </PillButton>
+      </div>
+      <div className="text-[11px] text-text-faint">
+        CSV columns: date, amount, counterparty, reference. Xero bank-statement exports are detected automatically. Re-uploading the same file never duplicates rows.
+      </div>
+      {err && <div className="text-xs font-mono text-danger" data-testid="statement-upload-error">{err}</div>}
+    </Card>
+  );
+}
+
 export default function WalletCash() {
   const [txns, setTxns] = React.useState<TriageTxn[]>([]);
   const [receipts, setReceipts] = React.useState<CashReceipt[]>([]);
@@ -177,6 +268,8 @@ export default function WalletCash() {
         {note && (
           <div className="text-xs font-mono text-gold" data-testid="cash-action-note">{note}</div>
         )}
+
+        <StatementUploadCard onImported={(msg) => { setNote(msg); void load(); }} />
 
         <Card className="overflow-hidden">
           <div className="px-3 pt-3 font-mono text-xs text-text-faint uppercase" data-testid="triage-head">

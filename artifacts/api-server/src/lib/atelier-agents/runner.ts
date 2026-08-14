@@ -8360,6 +8360,8 @@ export interface CashApplicationMatcherOutput {
     appliedAmount: number;
     confidence: number;
     rationale: string;
+    /** Task #1071 — the invoice's open amount at match time (mismatch flagging). */
+    invoiceOutstanding?: number;
   }>;
   rationaleSummary: string;
 }
@@ -8400,6 +8402,9 @@ function ruleBasedCashMatch(input: CashApplicationMatcherInput): CashApplication
       candidates.push({
         invoiceId: inv.id, invoiceNumber: inv.invoiceNumber,
         appliedAmount: Math.min(outstanding, r.totalAmount), confidence, rationale,
+        // Task #1071 — carried so exception derivation can flag bank
+        // amounts that differ from what the invoice actually has open.
+        invoiceOutstanding: outstanding,
       });
     }
   }

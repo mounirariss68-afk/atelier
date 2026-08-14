@@ -13,8 +13,9 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import multer from "multer";
 import { and, eq, isNull, desc, inArray, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   db,
   atelierUsers,
@@ -26,7 +27,11 @@ import {
   atelierPeriodCloseLock,
 } from "@workspace/db";
 import { parseBankStatement } from "../../lib/bank-parsers/index.js";
-import { autoMatchImport } from "../../lib/atelier-cash-ops.js";
+import {
+  autoMatchImport,
+  deriveStatementExceptions,
+  summarizeReconTxns,
+} from "../../lib/atelier-cash-ops.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 
 const router: IRouter = Router();
@@ -213,42 +218,68 @@ router.patch("/accounts/:id", async (req, res) => {
 });
 
 // ─────────────────────── statement import ───────────────────────
-// @cli-skip: file-upload statement import; no CLI tool shape
-router.post("/import", async (req, res) => {
-  if (denyAll(req, res)) return;
-  const me = ensure(req, res); if (!me) return;
-  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-  const b = req.body as { bankAccountId?: string; source?: "csv" | "xero"; raw?: string; statementDate?: string; notes?: string; fileUrl?: string };
-  if (!b.bankAccountId || !b.raw || !b.statementDate) return res.status(400).json({ error: "invalid_input" });
+
+/**
+ * Task #1071 — shared import core used by both the JSON `/import` route
+ * and the multipart `/import-file` upload. Idempotent per
+ * (org, account, sha256(raw)) via the unique index + pre-check.
+ */
+async function importStatementCore(args: {
+  me: typeof atelierUsers.$inferSelect;
+  bankAccountId: string;
+  source: "csv" | "xero";
+  raw: string;
+  statementDate: string;
+  notes?: string | null;
+  fileUrl?: string | null;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
   const [acct] = await db.select().from(atelierBankAccount)
-    .where(and(eq(atelierBankAccount.id, b.bankAccountId), eq(atelierBankAccount.orgId, me.orgId)));
-  if (!acct) return res.status(404).json({ error: "not_found" });
-  const fileHash = createHash("sha256").update(b.raw).digest("hex").slice(0, 16);
+    .where(and(eq(atelierBankAccount.id, args.bankAccountId), eq(atelierBankAccount.orgId, me.orgId)));
+  if (!acct) return { status: 404, body: { error: "not_found" } };
+  const fileHash = createHash("sha256").update(args.raw).digest("hex").slice(0, 16);
   const dup = await db.select({ id: atelierBankStatementImport.id }).from(atelierBankStatementImport)
     .where(and(eq(atelierBankStatementImport.orgId, me.orgId),
-      eq(atelierBankStatementImport.bankAccountId, b.bankAccountId),
+      eq(atelierBankStatementImport.bankAccountId, args.bankAccountId),
       eq(atelierBankStatementImport.fileHash, fileHash)));
   if (dup.length > 0) {
-    return res.status(409).json({ error: "duplicate", message: "Statement file already imported.", importId: dup[0].id });
+    return { status: 409, body: { error: "duplicate", message: "Statement file already imported.", importId: dup[0].id } };
   }
-  const parsed = parseBankStatement(b.source ?? "csv", b.raw, acct.currency);
+  const parsed = parseBankStatement(args.source, args.raw, acct.currency);
+  if (parsed.rows.length === 0 && parsed.errors.length > 0) {
+    return { status: 400, body: { error: "parse_failed", message: "No rows could be parsed from the statement.", errors: parsed.errors } };
+  }
   const importId = rid("bnkimp");
-  await db.insert(atelierBankStatementImport).values({
-    id: importId, orgId: me.orgId, bankAccountId: b.bankAccountId, statementDate: b.statementDate,
-    source: b.source ?? "csv", fileUrl: b.fileUrl ?? null, fileHash, rowsCount: parsed.rows.length,
-    importedBy: me.id, notes: b.notes ?? null, createdByUserId: me.id,
-  });
-  if (parsed.rows.length > 0) {
-    await db.insert(atelierBankTransaction).values(parsed.rows.map((r) => ({
-      id: rid("bnktxn"), orgId: me.orgId, bankAccountId: b.bankAccountId!, statementImportId: importId,
-      postedDate: r.postedDate, amount: r.amount, currency: r.currency,
-      counterpartyNameRaw: r.counterpartyNameRaw, referenceRaw: r.referenceRaw,
-      kind: r.kind, matchedState: "unmatched", createdByUserId: me.id,
-    })));
+  try {
+    // Import row + transactions land atomically; the unique index
+    // (orgId, bankAccountId, fileHash) makes concurrent duplicate
+    // uploads lose here even if both passed the pre-check.
+    await db.transaction(async (tx) => {
+      await tx.insert(atelierBankStatementImport).values({
+        id: importId, orgId: me.orgId, bankAccountId: args.bankAccountId, statementDate: args.statementDate,
+        source: args.source, fileUrl: args.fileUrl ?? null, fileHash, rowsCount: parsed.rows.length,
+        importedBy: me.id, notes: args.notes ?? null, createdByUserId: me.id,
+      });
+      if (parsed.rows.length > 0) {
+        await tx.insert(atelierBankTransaction).values(parsed.rows.map((r) => ({
+          id: rid("bnktxn"), orgId: me.orgId, bankAccountId: args.bankAccountId, statementImportId: importId,
+          postedDate: r.postedDate, amount: r.amount, currency: r.currency,
+          counterpartyNameRaw: r.counterpartyNameRaw, referenceRaw: r.referenceRaw,
+          kind: r.kind, matchedState: "unmatched", createdByUserId: me.id,
+        })));
+      }
+    });
+  } catch (err) {
+    const code = (err as { code?: string })?.code
+      ?? ((err as { cause?: { code?: string } })?.cause?.code);
+    if (code === "23505") {
+      return { status: 409, body: { error: "duplicate", message: "Statement file already imported." } };
+    }
+    throw err;
   }
   await audit({ entityType: "bank_statement_import", entityId: importId, actor: me,
     action: "bank_import.create",
-    payload: { bankAccountId: b.bankAccountId, rowsCount: parsed.rows.length, errors: parsed.errors.length },
+    payload: { bankAccountId: args.bankAccountId, rowsCount: parsed.rows.length, errors: parsed.errors.length },
     summary: `Imported ${parsed.rows.length} bank rows (${parsed.errors.length} errors)` });
   // Task #431 — Cash Application Matcher auto-runs after every import:
   // inflows get cash-receipt rows + invoice proposals, outflows get
@@ -266,7 +297,120 @@ router.post("/import", async (req, res) => {
       matcher = { status: "failed", message: err instanceof Error ? err.message : String(err) };
     }
   }
-  return res.json({ ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors, matcher } });
+  return { status: 200, body: { ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors, matcher } } };
+}
+
+/** Detect the export flavour from the header line (Xero exports name a Payee column). */
+function detectStatementSource(raw: string): "csv" | "xero" {
+  const header = raw.split(/\r?\n/, 1)[0]?.toLowerCase() ?? "";
+  return header.includes("payee") ? "xero" : "csv";
+}
+
+/**
+ * Task #1071 — durably store the original statement bytes. The source file
+ * is audit evidence, so storage success is a hard precondition of EVERY
+ * import path; throws on any failure (callers return a retryable 503).
+ */
+async function storeStatementObject(
+  buffer: Buffer, originalName: string, mimetype: string,
+): Promise<{ fileUrl: string; removeObject: () => Promise<void> }> {
+  if (process.env.NODE_ENV === "test" && process.env.TEST_FORCE_STATEMENT_STORAGE_FAIL === "1")
+    throw new Error("forced storage failure (test)");
+  const { ObjectStorageService, objectStorageClient } = await import("../../lib/objectStorage.js");
+  const svc = new ObjectStorageService();
+  // Collision-resistant per-upload key: concurrent same-named uploads get
+  // distinct objects, so a losing request's cleanup can never delete the
+  // winner's audit evidence.
+  const key = `${svc.getPrivateObjectDir()}/bank-statements/${randomUUID()}_${originalName.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+  const slash = key.startsWith("/") ? key.slice(1) : key;
+  const bucketName = slash.split("/")[0];
+  const objectName = slash.split("/").slice(1).join("/");
+  const obj = objectStorageClient.bucket(bucketName).file(objectName);
+  await obj.save(buffer, { contentType: mimetype });
+  return { fileUrl: key, removeObject: async () => { await obj.delete().catch(() => {}); } };
+}
+
+// @cli-skip: file-upload statement import; no CLI tool shape
+router.post("/import", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = req.body as { bankAccountId?: string; source?: "csv" | "xero"; raw?: string; statementDate?: string; notes?: string };
+  if (!b.bankAccountId || !b.raw || !b.statementDate) return res.status(400).json({ error: "invalid_input" });
+  // Same durable-storage precondition as the multipart route: the raw
+  // statement text is persisted as the audit-evidence original.
+  let stored: Awaited<ReturnType<typeof storeStatementObject>>;
+  try {
+    stored = await storeStatementObject(Buffer.from(b.raw, "utf8"), `statement-${b.statementDate}.csv`, "text/csv");
+  } catch (err) {
+    return res.status(503).json({
+      error: "storage_unavailable",
+      message: "Could not store the statement file — nothing was imported. Please retry.",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+  const out = await importStatementCore({
+    me, bankAccountId: b.bankAccountId, source: b.source ?? "csv", raw: b.raw,
+    statementDate: b.statementDate, notes: b.notes ?? null, fileUrl: stored.fileUrl,
+  });
+  if (out.status !== 200) await stored.removeObject();
+  return res.status(out.status).json(out.body);
+});
+
+// Task #1071 — multipart statement-file upload (CSV / Xero export).
+const statementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1, fileSize: 4 * 1024 * 1024 },
+});
+// @cli-skip: file-upload statement import; no CLI tool shape
+router.post("/import-file", (req, res) => {
+  statementUpload.single("file")(req, res, async (err: unknown) => {
+    if (err) return res.status(400).json({ error: "upload_failed", message: err instanceof Error ? err.message : String(err) });
+    if (denyAll(req, res)) return;
+    const me = ensure(req, res); if (!me) return;
+    if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+    const b = req.body as { bankAccountId?: string; statementDate?: string; source?: string; notes?: string };
+    const file = req.file;
+    if (!file || !b.bankAccountId || !b.statementDate)
+      return res.status(400).json({ error: "invalid_input", message: "file, bankAccountId and statementDate are required." });
+    const name = (file.originalname ?? "").toLowerCase();
+    if (name.endsWith(".pdf") || file.mimetype === "application/pdf")
+      return res.status(400).json({ error: "unsupported_format", message: "PDF statements are not supported — export a CSV from your bank." });
+    const raw = file.buffer.toString("utf8");
+    if (!raw.trim()) return res.status(400).json({ error: "invalid_input", message: "Uploaded file is empty." });
+    const source: "csv" | "xero" =
+      b.source === "csv" || b.source === "xero" ? b.source : detectStatementSource(raw);
+    // Idempotency pre-check BEFORE touching storage, so a duplicate upload
+    // never leaves an orphaned object behind.
+    const preHash = createHash("sha256").update(raw).digest("hex").slice(0, 16);
+    const preDup = await db.select({ id: atelierBankStatementImport.id }).from(atelierBankStatementImport)
+      .where(and(eq(atelierBankStatementImport.orgId, me.orgId),
+        eq(atelierBankStatementImport.bankAccountId, b.bankAccountId),
+        eq(atelierBankStatementImport.fileHash, preHash)));
+    if (preDup.length > 0)
+      return res.status(409).json({ error: "duplicate", message: "Statement file already imported.", importId: preDup[0].id });
+    // Durable storage of the original statement is a precondition for a
+    // successful import — the source file is audit evidence. Any storage
+    // failure aborts with a retryable 503 before any rows are written.
+    let stored: Awaited<ReturnType<typeof storeStatementObject>>;
+    try {
+      stored = await storeStatementObject(file.buffer, file.originalname ?? "statement.csv", file.mimetype || "text/csv");
+    } catch (err) {
+      return res.status(503).json({
+        error: "storage_unavailable",
+        message: "Could not store the statement file — nothing was imported. Please retry.",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+    const out = await importStatementCore({
+      me, bankAccountId: b.bankAccountId, source, raw,
+      statementDate: b.statementDate, notes: b.notes ?? null, fileUrl: stored.fileUrl,
+    });
+    // If the import was rejected after upload (e.g. lost the dedupe race or
+    // parse failure), don't leave an orphaned object in storage.
+    if (out.status !== 200) await stored.removeObject();
+    return res.status(out.status).json(out.body);
+  });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -293,7 +437,56 @@ router.get("/recon", async (req, res) => {
   if (acctId) where.push(eq(atelierBankReconPeriod.bankAccountId, acctId));
   const rows = await db.select().from(atelierBankReconPeriod).where(and(...where))
     .orderBy(desc(atelierBankReconPeriod.periodEnd)).limit(60);
-  return res.json({ ok: true, data: { rows } });
+  // Task #1071 — enrich each period with matched/unmatched totals and the
+  // count of outstanding exceptions (derived at read time, never persisted).
+  const acctIds = [...new Set(rows.map((r) => r.bankAccountId))];
+  const txns = acctIds.length > 0
+    ? await db.select().from(atelierBankTransaction).where(and(
+        eq(atelierBankTransaction.orgId, me.orgId),
+        inArray(atelierBankTransaction.bankAccountId, acctIds),
+        isNull(atelierBankTransaction.deletedAt),
+      ))
+    : [];
+  const enriched = rows.map((r) => ({
+    ...r,
+    reconSummary: summarizeReconTxns(txns.filter((t) =>
+      t.bankAccountId === r.bankAccountId && t.postedDate >= r.periodStart && t.postedDate <= r.periodEnd)),
+  }));
+  return res.json({ ok: true, data: { rows: enriched } });
+});
+
+/** Load a period's (org-scoped) txns for exceptions/finalise checks. */
+async function loadPeriodTxns(orgId: string, period: typeof atelierBankReconPeriod.$inferSelect) {
+  return db.select().from(atelierBankTransaction).where(and(
+    eq(atelierBankTransaction.orgId, orgId),
+    eq(atelierBankTransaction.bankAccountId, period.bankAccountId),
+    isNull(atelierBankTransaction.deletedAt),
+    sql`${atelierBankTransaction.postedDate} >= ${period.periodStart}`,
+    sql`${atelierBankTransaction.postedDate} <= ${period.periodEnd}`,
+  ));
+}
+
+// Task #1071 — actionable exceptions for one reconciliation period.
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/recon/:id/exceptions", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  const [period] = await db.select().from(atelierBankReconPeriod)
+    .where(and(eq(atelierBankReconPeriod.id, req.params.id), eq(atelierBankReconPeriod.orgId, me.orgId), isNull(atelierBankReconPeriod.deletedAt)));
+  if (!period) return res.status(404).json({ error: "not_found" });
+  const txns = await loadPeriodTxns(me.orgId, period);
+  const exceptions = deriveStatementExceptions(txns).map((e) => ({
+    txnId: e.txn.id,
+    postedDate: e.txn.postedDate,
+    amount: e.txn.amount,
+    currency: e.txn.currency,
+    counterpartyNameRaw: e.txn.counterpartyNameRaw,
+    referenceRaw: e.txn.referenceRaw,
+    matchedState: e.txn.matchedState,
+    reasons: e.reasons,
+    detail: e.detail,
+  }));
+  return res.json({ ok: true, data: { periodId: period.id, summary: summarizeReconTxns(txns), exceptions } });
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
@@ -335,13 +528,24 @@ router.post("/recon/:id/finalise", async (req, res) => {
   const me = ensure(req, res); if (!me) return;
   if (!isPartnerTier(me)) return res.status(403).json({ error: "forbidden", message: "partner-tier only" });
   const reconId = req.params.id;
-  const b = req.body as { rationale?: string; varianceAccepted?: boolean };
+  const b = req.body as { rationale?: string; varianceAccepted?: boolean; exceptionsAcknowledged?: boolean };
   const [period] = await db.select().from(atelierBankReconPeriod)
     .where(and(eq(atelierBankReconPeriod.id, reconId), eq(atelierBankReconPeriod.orgId, me.orgId)));
   if (!period) return res.status(404).json({ error: "not_found" });
   if (period.status === "finalised") return res.status(409).json({ error: "already_finalised" });
   if (Math.abs(period.variance) > 0.01 && !b.varianceAccepted) {
     return res.status(409).json({ error: "variance_present", variance: period.variance, message: "Set varianceAccepted=true to finalise with variance." });
+  }
+  // Task #1071 — outstanding exceptions block finalisation unless
+  // explicitly acknowledged by the partner.
+  const periodTxns = await loadPeriodTxns(me.orgId, period);
+  const openExceptions = deriveStatementExceptions(periodTxns);
+  if (openExceptions.length > 0 && !b.exceptionsAcknowledged) {
+    return res.status(409).json({
+      error: "exceptions_present",
+      count: openExceptions.length,
+      message: "Resolve outstanding exceptions or set exceptionsAcknowledged=true to finalise anyway.",
+    });
   }
   await db.update(atelierBankReconPeriod).set({
     status: "finalised", finalisedAt: new Date(), finalisedByUserId: me.id, approvedByUserId: me.id,
@@ -358,7 +562,10 @@ router.post("/recon/:id/finalise", async (req, res) => {
   }
   await audit({ entityType: "bank_recon_period", entityId: reconId, actor: me,
     action: "bank_recon.finalise",
-    payload: { variance: period.variance, varianceAccepted: !!b.varianceAccepted },
+    payload: {
+      variance: period.variance, varianceAccepted: !!b.varianceAccepted,
+      openExceptions: openExceptions.length, exceptionsAcknowledged: !!b.exceptionsAcknowledged,
+    },
     summary: `Finalised recon ${period.periodLabel}` });
   return res.json({ ok: true, data: { id: reconId, status: "finalised" } });
 });

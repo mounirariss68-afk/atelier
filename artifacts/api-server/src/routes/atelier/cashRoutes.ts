@@ -520,6 +520,37 @@ router.post("/triage/:id/journal", async (req, res) => {
   return res.status(201).json({ ok: true, data: { journalEntryId: entryId } });
 });
 
+// ─────────────────────── classify (Task #1071 exception resolution) ───────────────────────
+// Resolve a bank row that has no invoice/source counterpart by marking it
+// as a bank fee, internal transfer or other non-matchable item.
+const CLASSIFICATIONS = new Set(["bank_fee", "internal_transfer", "other"]);
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/classify", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = req.body as { classification?: string; note?: string };
+  if (!b.classification || !CLASSIFICATIONS.has(b.classification))
+    return res.status(400).json({ error: "invalid_input", message: "classification (bank_fee|internal_transfer|other) required" });
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  const note = typeof b.note === "string" && b.note.trim() ? b.note.trim().slice(0, 500) : null;
+  await db.update(atelierBankTransaction).set({
+    matchedState: "matched", matchedRefKind: "other", matchedRefId: null,
+    kind: b.classification === "bank_fee" ? "fee" : txn.kind,
+    notes: `classified:${b.classification}${note ? ` — ${note}` : ""}`,
+    parkedReason: null, parkedByUserId: null, updatedAt: new Date(),
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "cash_triage.classify",
+    payload: { classification: b.classification, note, amount: txn.amount },
+    summary: `Classified bank txn ${txn.currency} ${txn.amount} as ${b.classification.replace("_", " ")}` });
+  return res.json({ ok: true, data: { classification: b.classification } });
+});
+
 // ─────────────────────── park ───────────────────────
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/triage/:id/park", async (req, res) => {

@@ -141,6 +141,123 @@ export interface AutoMatchSummary {
   errors: string[];
 }
 
+// ════════════════ Task #1071 — statement exceptions derivation ════════════════
+
+export type StatementExceptionReason =
+  | "no_match"           // no invoice/source candidate at all
+  | "amount_mismatch"    // proposed match differs from the bank amount
+  | "duplicate"          // another txn with same account/date/amount/counterparty
+  | "flagged"            // explicitly parked with a reason
+  | "unreviewed_proposal"; // candidates exist but nobody confirmed yet
+
+export interface StatementExceptionRow {
+  txn: typeof atelierBankTransaction.$inferSelect;
+  reasons: StatementExceptionReason[];
+  /** Human-readable detail per reason (parked reason, mismatch delta, …). */
+  detail: string | null;
+}
+
+export interface ReconTxnSummary {
+  txnCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  matchedTotal: number;
+  unmatchedTotal: number;
+  openExceptions: number;
+}
+
+const RESOLVED_STATES = new Set(["matched", "journaled"]);
+
+function dupKey(t: typeof atelierBankTransaction.$inferSelect): string {
+  return [
+    t.bankAccountId,
+    t.postedDate,
+    t.amount.toFixed(2),
+    (t.counterpartyNameRaw ?? "").toLowerCase().replace(/\s+/g, " ").trim(),
+  ].join("|");
+}
+
+/**
+ * Derive actionable exceptions from a set of bank transactions
+ * (deterministic, read-time — nothing is persisted). A txn is an
+ * exception while it is not matched/journaled; the reasons explain why.
+ * Duplicate detection compares account+date+amount+counterparty across
+ * the provided rows and flags every row after the first.
+ */
+export function deriveStatementExceptions(
+  txns: Array<typeof atelierBankTransaction.$inferSelect>,
+): StatementExceptionRow[] {
+  const seen = new Map<string, string>(); // dupKey -> first txn id
+  const sorted = [...txns].sort((a, b) =>
+    (a.createdAt?.getTime?.() ?? 0) - (b.createdAt?.getTime?.() ?? 0) || a.id.localeCompare(b.id));
+  const dupIds = new Set<string>();
+  for (const t of sorted) {
+    if (t.deletedAt) continue;
+    const k = dupKey(t);
+    if (seen.has(k)) dupIds.add(t.id);
+    else seen.set(k, t.id);
+  }
+  const out: StatementExceptionRow[] = [];
+  for (const t of sorted) {
+    if (t.deletedAt || RESOLVED_STATES.has(t.matchedState)) continue;
+    const reasons: StatementExceptionReason[] = [];
+    const details: string[] = [];
+    if (t.matchedState === "parked") {
+      reasons.push("flagged");
+      if (t.parkedReason) details.push(`Parked: ${t.parkedReason}`);
+    }
+    const p = t.matchProposal as {
+      type?: string;
+      candidates?: Array<{ appliedAmount?: number; amount?: number; invoiceOutstanding?: number }>;
+    } | null;
+    const candidates = p?.candidates ?? [];
+    if (candidates.length === 0) {
+      reasons.push("no_match");
+      details.push(t.amount > 0 ? "No open invoice candidate" : "No payment-source candidate");
+    } else if (t.matchedState === "proposed") {
+      const top = candidates[0];
+      const candAmt = typeof top.appliedAmount === "number" ? top.appliedAmount
+        : typeof top.amount === "number" ? top.amount : null;
+      const outstanding = typeof top.invoiceOutstanding === "number" ? top.invoiceOutstanding : null;
+      if (candAmt !== null && Math.abs(Math.abs(t.amount) - candAmt) > 0.01) {
+        reasons.push("amount_mismatch");
+        details.push(`Bank ${Math.abs(t.amount).toFixed(2)} vs candidate ${candAmt.toFixed(2)}`);
+      } else if (outstanding !== null && Math.abs(Math.abs(t.amount) - outstanding) > 0.01) {
+        reasons.push("amount_mismatch");
+        details.push(`Bank ${Math.abs(t.amount).toFixed(2)} vs invoice outstanding ${outstanding.toFixed(2)}`);
+      } else {
+        reasons.push("unreviewed_proposal");
+        details.push("Match proposed — awaiting confirmation");
+      }
+    }
+    if (dupIds.has(t.id)) {
+      reasons.push("duplicate");
+      details.push("Same account/date/amount/counterparty as another row");
+    }
+    if (reasons.length === 0) reasons.push("no_match");
+    out.push({ txn: t, reasons, detail: details.join(" · ") || null });
+  }
+  return out;
+}
+
+/** Matched vs unmatched roll-up for a reconciliation period's txns. */
+export function summarizeReconTxns(
+  txns: Array<typeof atelierBankTransaction.$inferSelect>,
+): ReconTxnSummary {
+  const live = txns.filter((t) => !t.deletedAt);
+  const matched = live.filter((t) => RESOLVED_STATES.has(t.matchedState));
+  const unmatched = live.filter((t) => !RESOLVED_STATES.has(t.matchedState));
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    txnCount: live.length,
+    matchedCount: matched.length,
+    unmatchedCount: unmatched.length,
+    matchedTotal: r2(matched.reduce((s, t) => s + Math.abs(t.amount), 0)),
+    unmatchedTotal: r2(unmatched.reduce((s, t) => s + Math.abs(t.amount), 0)),
+    openExceptions: deriveStatementExceptions(live).length,
+  };
+}
+
 /** Auto-run the matcher across every unmatched txn of one statement import. */
 export async function autoMatchImport(args: {
   orgId: string;
