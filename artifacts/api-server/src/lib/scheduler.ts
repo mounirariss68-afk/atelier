@@ -291,13 +291,25 @@ export function startScheduler(): void {
       BILLING_ORCHESTRATOR_CRON,
       async () => {
         try {
-          const { runBillingOrchestrator } = await import("./atelier-agents/billing-orchestrator.js");
-          const out = await runBillingOrchestrator({
+          // Task #1099 — claim the SAME durable lock the manual route and
+          // the milestone-event path use, so runs can never overlap.
+          const { launchBillingOrchestratorRun, BILLING_ORCH_SYSTEM_ACTOR } =
+            await import("./atelier-agents/billingOrchestratorJobs.js");
+          const out = await launchBillingOrchestratorRun({
             orgId: "aico",
+            kind: "billing_orchestrator_auto",
+            userId: BILLING_ORCH_SYSTEM_ACTOR,
+            label: "Billing Orchestrator — daily scan",
             input: { source: "cron" },
             triggeredByUserId: null,
+            actorLabel: "Billing Orchestrator (cron)",
+            wait: true,
           });
-          logger.info(out.output, "Billing Orchestrator scheduled run finished");
+          if (!out.started) {
+            logger.info({ reason: out.reason }, "Billing Orchestrator scheduled run skipped");
+            return;
+          }
+          logger.info({ jobId: out.jobId }, "Billing Orchestrator scheduled run finished");
         } catch (err) {
           logger.error({ err }, "Billing Orchestrator scheduled run encountered an error");
         }

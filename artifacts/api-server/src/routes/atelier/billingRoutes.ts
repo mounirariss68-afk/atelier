@@ -36,7 +36,11 @@ import {
 import { assertAuditAction } from "./auditContract.js";
 import { issueInvoiceCore } from "./invoiceRoutes.js";
 import { computeUpcomingTriggers } from "../../lib/atelier-billing-engine.js";
-import { runBillingOrchestrator } from "../../lib/atelier-agents/billing-orchestrator.js";
+import {
+  launchBillingOrchestratorRun,
+  getLatestBillingOrchestratorJob,
+  billingOrchJobMode,
+} from "../../lib/atelier-agents/billingOrchestratorJobs.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 
 const router: IRouter = Router();
@@ -340,22 +344,55 @@ router.get("/billing/worklist", async (req, res) => {
 
 // ------------------------------------------------------------------ run now
 
+// Task #1099 — async: claim the shared orchestrator lock, start the run in
+// the background and return immediately; the page polls /billing/run/status.
 // @cli-skip: finance billing surface; worklist UI is the supported path
 router.post("/billing/run", async (req, res) => {
   const me = denyNonFinance(req, res);
   if (!me) return;
   const engagementId =
     typeof req.body?.engagementId === "string" && req.body.engagementId ? req.body.engagementId : undefined;
-  try {
-    const out = await runBillingOrchestrator({
-      orgId: me.orgId,
-      input: { engagementId, source: "manual" },
-      triggeredByUserId: me.id,
+  const out = await launchBillingOrchestratorRun({
+    orgId: me.orgId,
+    kind: "billing_orchestrator_manual",
+    userId: me.id,
+    label: engagementId ? `Billing run — engagement ${engagementId}` : "Billing run — all engagements",
+    input: { engagementId, source: "manual" },
+    triggeredByUserId: me.id,
+    wait: false,
+  });
+  if (!out.started) {
+    res.status(409).json({
+      error: "run_in_progress",
+      message: "A billing orchestrator run is already in progress — refresh in a moment.",
     });
-    res.json({ runId: out.runId, output: out.output });
-  } catch (err) {
-    res.status(500).json({ error: "run_failed", message: err instanceof Error ? err.message : String(err) });
+    return;
   }
+  res.status(202).json({ jobId: out.jobId, status: "running" });
+});
+
+// Task #1099 — latest orchestrator run (any entry point), like
+// GET /gl/bookkeeper/status. The Run button polls this until terminal.
+// @cli-skip: finance billing surface; worklist UI is the supported path
+router.get("/billing/run/status", async (req, res) => {
+  const me = denyNonFinance(req, res);
+  if (!me) return;
+  const job = await getLatestBillingOrchestratorJob(me.orgId);
+  if (!job) { res.json({ lastRun: null }); return; }
+  const result = (job.result ?? null) as Record<string, unknown> | null;
+  res.json({
+    lastRun: {
+      jobId: job.id,
+      mode: billingOrchJobMode(job.kind),
+      status: job.status, // running | done | failed
+      startedAt: job.createdAt,
+      finishedAt: job.finishedAt,
+      error: job.error ?? null,
+      triggersCreated: typeof result?.triggersCreated === "number" ? result.triggersCreated : null,
+      invoicesDrafted: typeof result?.invoicesDrafted === "number" ? result.invoicesDrafted : null,
+      rationaleSummary: typeof result?.rationaleSummary === "string" ? result.rationaleSummary : null,
+    },
+  });
 });
 
 // ------------------------------------------------------------------ trigger actions

@@ -460,12 +460,19 @@ router.post("/revrec/milestones/:id/mark-invoiceable", async (req, res) => {
         .from(atelierRevenueMilestone)
         .where(eq(atelierRevenueMilestone.id, req.params.id));
       if (ms) {
-        void import("../../lib/atelier-agents/billing-orchestrator.js")
-          .then(({ runBillingOrchestrator }) =>
-            runBillingOrchestrator({
+        // Task #1099 — through the durable job registry: shares the same
+        // lock as cron + manual runs, so overlapping runs are impossible.
+        // A skipped launch is fine — the daily cron picks the milestone up.
+        void import("../../lib/atelier-agents/billingOrchestratorJobs.js")
+          .then(({ launchBillingOrchestratorRun, BILLING_ORCH_SYSTEM_ACTOR }) =>
+            launchBillingOrchestratorRun({
               orgId: ms.orgId,
+              kind: "billing_orchestrator_event",
+              userId: req.atelierPersona?.id ?? BILLING_ORCH_SYSTEM_ACTOR,
+              label: `Billing run — engagement ${ms.engagementId}`,
               input: { engagementId: ms.engagementId, source: "milestone_event" },
               triggeredByUserId: req.atelierPersona?.id ?? null,
+              wait: false,
             }),
           )
           .catch((err) => {
