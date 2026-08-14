@@ -62,7 +62,7 @@ import {
 
 const router: IRouter = Router();
 
-type Me = typeof atelierUsers.$inferSelect;
+export type Me = typeof atelierUsers.$inferSelect;
 
 function ensureFinanceLeadership(req: Request, res: Response): Me | null {
   const me = req.atelierPersona ?? null;
@@ -418,19 +418,29 @@ router.post("/payroll/runs", async (req, res) => {
   return res.status(201).json({ ok: true, data: { id, ...snapshot } });
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/payroll/runs/:id/approve", async (req, res) => {
-  const me = denyRead(req, res); if (!me) return;
+/**
+ * Task #1091 — shared payroll-run approve core. The REST route and the
+ * Riser chat capability (finance.approve_payroll_run) BOTH run this so
+ * the partner-tier gate, empty-run + GL period-lock checks, salary
+ * journal posting (Dr 6000 / Cr 2100) and audit never fork. Payroll
+ * approval is MONEY-OUT → the chat capability wraps this in a typed-name
+ * confirm. Returns an HTTP-shaped `{ status, body }` outcome.
+ */
+export async function approvePayrollRunCore(args: {
+  me: Me;
+  id: string;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
   if (!isPartnerTier(me))
-    return res.status(403).json({ error: "forbidden", message: "Payroll approval requires partner tier." });
-  const run = await loadRun(req.params.id, me.orgId);
-  if (!run) return res.status(404).json({ error: "not_found" });
+    return { status: 403, body: { error: "forbidden", message: "Payroll approval requires partner tier." } };
+  const run = await loadRun(args.id, me.orgId);
+  if (!run) return { status: 404, body: { error: "not_found" } };
   if (run.status !== "draft")
-    return res.status(409).json({ error: "already_decided", status: run.status, journalEntryId: run.journalEntryId });
+    return { status: 409, body: { error: "already_decided", status: run.status, journalEntryId: run.journalEntryId } };
   if (!run.lines.length || run.totalAmount <= 0)
-    return res.status(400).json({ error: "empty_run", message: "The run has no payable salary lines." });
+    return { status: 400, body: { error: "empty_run", message: "The run has no payable salary lines." } };
   if (await isGlPeriodLocked(me.orgId, run.periodLabel))
-    return res.status(409).json({ error: "period_locked", message: `Period ${run.periodLabel} is locked for the GL module.` });
+    return { status: 409, body: { error: "period_locked", message: `Period ${run.periodLabel} is locked for the GL module.` } };
 
   const y = Number(run.periodLabel.slice(0, 4));
   const m = Number(run.periodLabel.slice(5, 7));
@@ -442,7 +452,7 @@ router.post("/payroll/runs/:id/approve", async (req, res) => {
     memo: `Payroll ${run.periodLabel} — ${run.lines.length} employee(s)`,
     debitCode: "6000", creditCode: "2100", amount: run.totalAmount, userId: me.id,
   });
-  if ("error" in posted) return res.status(400).json(posted);
+  if ("error" in posted) return { status: 400, body: posted };
   await db.update(atelierPayrollRun).set({
     status: "approved", approvedByUserId: me.id, approvedAt: new Date(),
     journalEntryId: posted.journalEntryId, updatedAt: new Date(),
@@ -451,7 +461,14 @@ router.post("/payroll/runs/:id/approve", async (req, res) => {
     action: "payroll.run_approve",
     payload: { periodLabel: run.periodLabel, totalAmount: run.totalAmount, journalEntryId: posted.journalEntryId },
     summary: `Approved payroll ${run.periodLabel} (USD ${run.totalAmount}) — salary journal posted` });
-  return res.json({ ok: true, data: { journalEntryId: posted.journalEntryId } });
+  return { status: 200, body: { ok: true, data: { journalEntryId: posted.journalEntryId, periodLabel: run.periodLabel, totalAmount: run.totalAmount, employees: run.lines.length } } };
+}
+
+// @cli-skip: chat parity via finance.approve_payroll_run (financeApprovalsCapabilities, #1091); REST stays authoritative
+router.post("/payroll/runs/:id/approve", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const out = await approvePayrollRunCore({ me, id: req.params.id });
+  return res.status(out.status).json(out.body);
 });
 
 const MarkPaidSchema = z.object({

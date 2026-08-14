@@ -6,4 +6,6 @@ Typed-name re-confirmation for chat writes is RISK-based, not attachment-based. 
 
 **Why:** the old rule ("benign prompt ⇒ force typed name") made users retype their full name to save their own visa scan; the jailbreak defense only needs to fire when actual risk signals are present.
 
+`typedNameRequired` must be a value the confirmation copy actually names and the user can read off the preview (invoice number, period label) — never an opaque internal id, or the platform enforces something the user was never asked to type.
+
 **How to apply:** keep both enforcement points consistent — preview stamps requiresTypedName/typedNameExpected onto pendingWrite; confirm phase re-checks pending.requiresTypedName OR isIrreversibleTool. Client wiring: mobile keys off boolean `requiresTypedName`; web keys off top-level STRING `typedNameRequired` in the needs_confirmation frame (server must lift it out of diff — web never reads diff.typedNameRequired).

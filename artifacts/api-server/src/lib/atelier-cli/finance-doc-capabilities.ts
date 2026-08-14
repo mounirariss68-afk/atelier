@@ -260,6 +260,11 @@ defineCapability({
     // a guessed value. A model-fabricated `confirm:true` without the
     // phase-1 commit token lands here too (preview, never a write).
     let parseConfidence: number | null = null;
+    // Task #1091 — which of the four required fields were supplied by the
+    // AI parser (vs typed by the human). Only when ALL required fields are
+    // parser-originated (the human overrode none) does the commit qualify
+    // as `via:"parsed_doc"` and become eligible for the auto-post engine.
+    const parsedFieldNames = new Set<string>();
     if (!verifiedCommit) {
       const needParse = !supplierName || amount == null || !currency || !reference;
       const text = (loaded.extracted?.normalizedText ?? "").trim();
@@ -270,6 +275,10 @@ defineCapability({
         });
         if (parsed.ok) {
           parseConfidence = parsed.confidence;
+          if (supplierName == null && parsed.fields.supplierName != null) parsedFieldNames.add("supplierName");
+          if (amount == null && parsed.fields.amount != null) parsedFieldNames.add("amount");
+          if (currency == null && parsed.fields.currency != null) parsedFieldNames.add("currency");
+          if (reference == null && parsed.fields.reference != null) parsedFieldNames.add("reference");
           supplierName = supplierName ?? parsed.fields.supplierName;
           amount = amount ?? parsed.fields.amount;
           currency = currency ?? parsed.fields.currency;
@@ -382,6 +391,12 @@ defineCapability({
                 ...(periodLabel ? { periodLabel } : {}),
                 ...(notes ? { notes } : {}),
                 ...(userEntityId ? { legalEntityId: userEntityId } : {}),
+                // Task #1091 — carry the AI parse provenance into phase 2 so
+                // the commit can gate the auto-post engine on the REAL parse
+                // confidence. Included in the signed commit-token below, so a
+                // model cannot forge these to fabricate an auto-approval.
+                ...(parseConfidence != null ? { parseConfidence } : {}),
+                ...(parsedFieldNames.size > 0 ? { parsedFields: [...parsedFieldNames].sort() } : {}),
                 confirm: true,
               };
               pin.commitToken = commitTokenFor("ingest_supplier_invoice", pin);
@@ -403,6 +418,29 @@ defineCapability({
       };
     }
     const firm = await findPartnerFirmByName(me.orgId, supplierName);
+    // Task #1091 — auto-post eligibility. The parse provenance rode through
+    // the signed commit token (phase 1 stamped it). The commit qualifies as
+    // `via:"parsed_doc"` — and thus becomes eligible for the auto-post engine
+    // — ONLY when the AI parser produced ALL FOUR required fields (the human
+    // overrode none of them). If the human typed even one required field, the
+    // doc is treated as a manual filing (`via:"chat"`, never auto-advances).
+    const REQUIRED = ["supplierName", "amount", "currency", "reference"] as const;
+    const signedParseConfidence =
+      typeof input.parseConfidence === "number" && Number.isFinite(input.parseConfidence)
+        ? Math.max(0, Math.min(1, input.parseConfidence))
+        : null;
+    const signedParsedFields = Array.isArray(input.parsedFields)
+      ? new Set(input.parsedFields.filter((f): f is string => typeof f === "string"))
+      : new Set<string>();
+    const fullyParsed =
+      signedParseConfidence != null && REQUIRED.every((f) => signedParsedFields.has(f));
+    // One confidence per required field. The parser reports a single overall
+    // confidence for "this is a supplier invoice AND the key fields are
+    // correct"; apply it to each parser-produced required field. (When a
+    // field was human-typed we'd not be on this branch at all.)
+    const fieldConfidences = fullyParsed
+      ? REQUIRED.map(() => signedParseConfidence as number)
+      : undefined;
     const out = await createSupplierInvoiceCore({
       me,
       fileBuffer: bytes,
@@ -416,24 +454,36 @@ defineCapability({
       notes,
       partnerFirmId: firm?.id ?? null,
       explicitLegalEntityId: str(input.legalEntityId, 100),
-      via: "chat",
+      via: fullyParsed ? "parsed_doc" : "chat",
+      fieldConfidences,
+      agentRunId: null,
+      agentName: "Finance Doc Autopilot",
     });
     const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
     if (out.status === 201) {
       // Task #1095 — surface the entity allocation the engine landed.
-      const item = (out.body as { item?: { legalEntityId?: string | null; allocStatus?: string | null; allocJustification?: string | null } }).item;
+      const item = (out.body as { item?: { legalEntityId?: string | null; allocStatus?: string | null; allocJustification?: string | null; status?: string | null } }).item;
+      // Task #1091 — the core returns autoAdvanced when the auto-post engine
+      // authorised skipping review (high-confidence, known vendor, under the
+      // founder-set ceiling). Reflect the real landed status in the reply.
+      const autoAdvanced = Boolean((out.body as { autoAdvanced?: boolean }).autoAdvanced);
+      const landedStatus = item?.status ?? (autoAdvanced ? "approved" : "submitted");
       const allocMsg =
         item?.allocStatus === "proposed"
           ? ` Proposed entity allocation: ${item.allocJustification ?? "see the review queue"} (finance approves it with the invoice).`
           : item?.allocStatus === "needs_input"
             ? " Entity allocation needs manual input — it's queued on the GL allocations list."
             : "";
+      const statusMsg = autoAdvanced
+        ? `Invoice ${reference} from ${supplierName} cleared autopilot and is approved — ready to pay (status: ${landedStatus}). Founders can still adjust or reject it before the next payment run.`
+        : `Invoice ${reference} from ${supplierName} is in the payables review queue (status: ${landedStatus}).`;
       return {
         ok: true,
         data: {
           item,
+          autoAdvanced,
           linkedFirm: firm ? { id: firm.id, name: firm.name, hasBankDetails: firm.hasBankDetails } : null,
-          message: `Invoice ${reference} from ${supplierName} is in the payables review queue (status: submitted).${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}${allocMsg}`,
+          message: `${statusMsg}${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}${allocMsg}`,
           navigateTo,
         },
       };

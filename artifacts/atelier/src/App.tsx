@@ -102,13 +102,13 @@ import {
 // other sections re-mount existing wallet/ledger/forecast/pricing/reports
 // pages under canonical /finance/* paths with old URLs preserved.
 import FinanceHome from "@/pages/finance/FinanceHome";
+// Task #1091 — unified finance approvals inbox + autopilot settings.
+import FinanceApprovals from "@/pages/finance/FinanceApprovals";
 import FinanceEntities from "@/pages/finance/FinanceEntities";
 import FinanceEntityDetail from "@/pages/finance/FinanceEntityDetail";
 import FinanceSection from "@/pages/finance/FinanceSection";
 // Task #418 — Finance Payables (P2P) hardening sub-pages.
 import {
-  FinancePayablesVendors,
-  FinancePayablesPo,
   FinancePayablesPaymentRuns,
   FinancePayablesRunHistory,
   FinancePayablesSelfBilling,
@@ -755,6 +755,10 @@ function Router() {
             forecast / pricing / reports surfaces re-mounted under
             canonical /finance/* paths. */}
         <Route path="/finance" component={FinanceHome} />
+        {/* Task #1091 — unified approvals inbox (founding_partner |
+            partner | finance; the finance lens itself is already gated to
+            those roles). */}
+        <Route path="/finance/approvals" component={FinanceApprovals} />
         <Route path="/finance/entities" component={FinanceEntities} />
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/billing/worklist" component={BillingWorklist} />
@@ -764,8 +768,6 @@ function Router() {
         <Route path="/finance/payables/partner-invoices" component={FinancePayablesPartnerInvoices} />
         {/* Task #1070 — internal supplier-invoice upload + review. */}
         <Route path="/finance/payables/supplier-invoices" component={FinancePayablesSupplierInvoices} />
-        <Route path="/finance/payables/vendors" component={FinancePayablesVendors} />
-        <Route path="/finance/payables/po" component={FinancePayablesPo} />
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
         <Route path="/finance/payables/run-history" component={FinancePayablesRunHistory} />
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />

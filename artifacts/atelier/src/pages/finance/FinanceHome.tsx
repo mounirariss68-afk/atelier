@@ -293,16 +293,6 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         presCcy={filters.presCcy}
       />
       <MetricTile
-        testId="cfo-tile-backlog"
-        label="Backlog coverage"
-        value="—"
-        wave={{ wave: 5, note: "Backlog model lands Wave 5" }}
-        rag="neutral"
-        ccy={ccy}
-        localCode={localCode}
-        presCcy={filters.presCcy}
-      />
-      <MetricTile
         testId="cfo-tile-realisation"
         label="Realisation"
         value={realisation != null ? formatPct(realisation) : "—"}
@@ -390,24 +380,6 @@ function CashAndRevenue({ ctx, cash, ar, wip, margin }: {
           )}
         </Card>
 
-        <Card className="p-4 grid grid-cols-2 gap-4" data-testid="cfo-cash-mix">
-          <div className="opacity-60 border border-dashed border-border-soft rounded p-3">
-            <div className="flex items-center justify-between">
-              <Eyebrow>Currency mix</Eyebrow>
-              <MonoChip>Wave 4</MonoChip>
-            </div>
-            <div className="text-2xl font-light text-text-faint mt-2">—</div>
-            <div className="text-[10px] font-mono text-text-faint italic mt-1">Multi-bank balance feed lands Wave 4.</div>
-          </div>
-          <div className="opacity-60 border border-dashed border-border-soft rounded p-3">
-            <div className="flex items-center justify-between">
-              <Eyebrow>FX exposure</Eyebrow>
-              <MonoChip>Wave 4</MonoChip>
-            </div>
-            <div className="text-2xl font-light text-text-faint mt-2">—</div>
-            <div className="text-[10px] font-mono text-text-faint italic mt-1">90-day VaR on non-presentation currencies — Wave 4.</div>
-          </div>
-        </Card>
       </div>
 
       {/* Revenue Engine */}
@@ -442,7 +414,7 @@ function CashAndRevenue({ ctx, cash, ar, wip, margin }: {
           <div className="text-[10px] font-mono text-text-mute mt-1">
             Target band 1.0–1.5x revenue. Stalled: {forecast?.stalledCount ?? 0} · Total opps: {forecast?.totalCount ?? 0}
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-3">
+          <div className="mt-2">
             <div>
               <div className="text-[10px] font-mono uppercase text-text-faint mb-1">Top 5 expected receipts</div>
               <ul className="text-[11px] space-y-0.5">
@@ -454,13 +426,6 @@ function CashAndRevenue({ ctx, cash, ar, wip, margin }: {
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="opacity-60 border border-dashed border-border-soft rounded p-2">
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] font-mono uppercase text-text-faint">Top 5 disbursements</div>
-                <MonoChip>Wave 3</MonoChip>
-              </div>
-              <div className="text-[11px] text-text-faint italic mt-1">Payment-run register lands Wave 3.</div>
             </div>
           </div>
         </Card>
@@ -669,25 +634,6 @@ function PeopleAndWorkingCapital({ ctx, util, ar, wip, margin }: {
           ) : (
             <div className="text-xs text-text-faint italic">No utilisation snapshot.</div>
           )}
-        </div>
-
-        {/* Wave-4 placeholder tiles — no synthetic numbers */}
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: "Bench %", note: "Roster + roll-on lands Wave 4" },
-            { label: "Time-compliance", note: "Time-sheet hygiene lands Wave 4" },
-            { label: "Headcount plan vs actual", note: "Headcount plan lands Wave 4" },
-            { label: "90-day attrition", note: "HRIS feed lands Wave 4" },
-          ].map((p) => (
-            <div key={p.label} className="opacity-60 border border-dashed border-border-soft rounded p-2 min-h-[72px]">
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] font-mono uppercase text-text-faint">{p.label}</div>
-                <MonoChip>Wave 4</MonoChip>
-              </div>
-              <div className="text-xl font-light text-text-faint mt-1">—</div>
-              <div className="text-[10px] font-mono text-text-faint italic">{p.note}</div>
-            </div>
-          ))}
         </div>
       </Card>
 

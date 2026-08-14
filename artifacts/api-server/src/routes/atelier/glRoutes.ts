@@ -333,9 +333,20 @@ router.get("/gl/journal", async (req, res) => {
   const period = String(req.query.period ?? "");
   const accountCode = String(req.query.accountCode ?? "");
   const engagementId = String(req.query.engagementId ?? "");
+  // Task #1091 — queryable agent-provenance filter. `postedByAgent=1`
+  // (or `=<name>`) narrows to journals an agent posted (agentRunId set),
+  // optionally to a specific agent name.
+  const postedByAgent = String(req.query.postedByAgent ?? "").trim();
   const conds = [eq(atelierGlJournalEntry.orgId, me.orgId), isNull(atelierGlJournalEntry.deletedAt)];
   if (entityId) conds.push(eq(atelierGlJournalEntry.legalEntityId, entityId));
   if (period && PERIOD_RE.test(period)) conds.push(eq(atelierGlJournalEntry.periodLabel, period));
+  if (postedByAgent) {
+    if (postedByAgent === "1" || postedByAgent === "true") {
+      conds.push(sql`${atelierGlJournalEntry.agentRunId} is not null`);
+    } else {
+      conds.push(eq(atelierGlJournalEntry.agentName, postedByAgent));
+    }
+  }
   const entries = await db.select().from(atelierGlJournalEntry).where(and(...conds))
     .orderBy(desc(atelierGlJournalEntry.entryDate), desc(atelierGlJournalEntry.createdAt))
     .limit(500);

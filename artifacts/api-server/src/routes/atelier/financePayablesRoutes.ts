@@ -32,6 +32,7 @@ import {
 } from "@workspace/db";
 import { runSelfBillingClerk } from "../../lib/atelier-agents/selfBillingClerk.js";
 import { nextRunNumber } from "../../lib/atelier-agents/selfBillingClerk.js";
+import { runAgentExclusive } from "../../lib/atelier-agents/exclusive-runs.js";
 import { notifySupplierOfInvoice } from "../../lib/selfBilledInvoiceEmail.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
@@ -39,13 +40,15 @@ import {
   loadContractBytes,
   storeContractBytes,
 } from "../../lib/atelier-contracts.js";
-import { convertToUsd } from "../../lib/atelier-fx.js";
+import { convertToUsd, convertUsdTo } from "../../lib/atelier-fx.js";
 import {
   proposeSupplierInvoiceAllocation,
   decideAllocation,
 } from "../../lib/atelier-entity-allocation.js";
+import { evaluateAutoPost } from "../../lib/atelier-finance-autopolicy.js";
+import { loadFinanceAutopilotThresholds } from "../../lib/atelier-finance-autopilot-settings.js";
 
-type Me = typeof atelierUsers.$inferSelect;
+export type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
 
 function rid(prefix: string): string {
@@ -106,84 +109,25 @@ function writeGate(req: Request, res: Response): Me | null {
 }
 
 // ============================================================
-// Vendors
-// ============================================================
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/vendors", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.json({ items: [] });
-});
-
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/vendors/:id", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/vendors/:id/bank-change", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "vendor-not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/vendors/:id/bank-change/:changeId/oob-confirm", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "vendor-not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/vendors/:id/bank-change/:changeId/decide", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "vendor-not-found" });
-});
-
-// ============================================================
-// Purchase Orders + GRNs
-// ============================================================
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/po", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.json({ items: [] });
-});
-
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/po/:id", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// ============================================================
-// Vendor invoices + 3-way match
+// Task #1091 (blueprint §6 / D2) — the dead vendor master / purchase-order /
+// 3-way-match / vendor bank-change stub routes were REMOVED here. A
+// two-founder consultancy has no PO discipline to match against; vendor
+// registry folds into counterparty resolution, and vendor bank-change
+// approval stays prevention-first + founder-manual (not rebuilt). Revisit
+// only if real procurement volume appears. (No OpenAPI spec entries
+// existed for those.)
+//
+// EXCEPTION: `/finance/payables/invoices` is NOT dead — it still backs the
+// live Subcontractors "pay-when-paid" surface (usePayablesInvoices in the
+// web app filters these for on_hold_pwp / subcontractor-linked holds).
+// It sits alongside the equally-live `/finance/payables/subcontractors`
+// stub; both return empty sets until the pay-when-paid feature is wired to
+// real data. It is retained (never a 404) so the surface renders cleanly.
 // ============================================================
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/invoices", (req, res) => {
   if (!readGate(req, res)) return;
   res.json({ items: [] });
-});
-
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/invoices/:id", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/invoices/:id/match", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/invoices/:id/approve", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/invoices/:id/override", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
 });
 
 // ============================================================
@@ -251,10 +195,22 @@ router.post("/finance/payables/self-billing/run", async (req, res, next) => {
     const weeksIso = Array.isArray(req.body?.weeksIso)
       ? (req.body.weeksIso as unknown[]).filter((w): w is string => typeof w === "string" && /^\d{4}-W\d{2}$/.test(w))
       : undefined;
-    const result = await runSelfBillingClerk({
-      input: { weeksIso: weeksIso?.length ? weeksIso : undefined },
-      triggeredByUserId: me.id,
+    // Task #1105 — single-flight through the SHARED per-agent lock the cron
+    // scheduler also uses. A manual trigger while a run (manual or scheduled)
+    // is in flight returns 409 rather than racing to double-materialise.
+    const ex = await runAgentExclusive({
+      agent: "self_billing_clerk", orgId: me.orgId, userId: me.id,
+      label: "Self-Billing Clerk — manual run", resultHref: "/finance/payables/self-billing",
+      work: () => runSelfBillingClerk({
+        input: { weeksIso: weeksIso?.length ? weeksIso : undefined },
+        triggeredByUserId: me.id,
+      }),
     });
+    if (!ex.ran) {
+      res.status(409).json({ error: "already_running", message: "A Self-Billing Clerk run is already in progress — try again once it finishes." });
+      return;
+    }
+    const result = ex.result;
     await audit({
       entityType: "self_billing_clerk", entityId: result.runId, actor: me,
       action: "finance.self_billing.run",
@@ -278,60 +234,81 @@ async function loadInvoice(me: Me, id: string) {
 }
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+/**
+ * Task #1091 — shared self-billing approve core. The REST route and the
+ * Riser chat capability (finance.approve_self_billing) BOTH run this so
+ * the status transition, audit and supplier email never fork. Returns an
+ * HTTP-shaped `{ status, body }` outcome plus the invoice for previews.
+ */
+export async function approveSelfBillingCore(args: {
+  me: Me;
+  id: string;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  const inv = await loadInvoice(me, args.id);
+  if (!inv) return { status: 404, body: { error: "not-found" } };
+  if (inv.status !== "draft")
+    return { status: 409, body: { error: "invalid-status", message: `Only draft invoices can be approved (status: ${inv.status}).` } };
+  await db.update(atelierSelfBilledInvoices).set({
+    status: "approved", approvedByUserId: me.id, approvedAt: new Date(), updatedAt: new Date(),
+  }).where(eq(atelierSelfBilledInvoices.id, inv.id));
+  await audit({
+    entityType: "self_billed_invoice", entityId: inv.id, actor: me,
+    action: "finance.self_billing.approve",
+    payload: { invoiceNumber: inv.invoiceNumber, totalUsd: inv.totalUsd },
+    summary: `Approved self-billed invoice ${inv.invoiceNumber} ($${inv.totalUsd.toFixed(2)}).`,
+  });
+  // Notify the supplier with the invoice PDF attached. Never blocks
+  // the approval — the outcome is recorded on the invoice row.
+  const email = await notifySupplierOfInvoice(inv.id, "approval", {
+    actor: { name: me.name, email: me.email },
+  });
+  return { status: 200, body: { ok: true, email, invoiceNumber: inv.invoiceNumber, totalAmount: inv.totalAmount, currency: inv.currency } };
+}
+
+/** Task #1091 — shared self-billing reject core (see approveSelfBillingCore). */
+export async function rejectSelfBillingCore(args: {
+  me: Me;
+  id: string;
+  reason?: string | null;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  const inv = await loadInvoice(me, args.id);
+  if (!inv) return { status: 404, body: { error: "not-found" } };
+  if (inv.status !== "draft" && inv.status !== "disputed" && inv.status !== "approved")
+    return { status: 409, body: { error: "invalid-status", message: `Cannot reject an invoice in status ${inv.status}.` } };
+  if (inv.paymentRunId)
+    return { status: 409, body: { error: "in-payment-run", message: "Remove the invoice from its payment run first." } };
+  const reason = typeof args.reason === "string" ? args.reason.slice(0, 2000) : null;
+  await db.update(atelierSelfBilledInvoices).set({
+    status: "rejected", rejectedByUserId: me.id, rejectedAt: new Date(), rejectedReason: reason, updatedAt: new Date(),
+  }).where(eq(atelierSelfBilledInvoices.id, inv.id));
+  await audit({
+    entityType: "self_billed_invoice", entityId: inv.id, actor: me,
+    action: "finance.self_billing.reject",
+    payload: { invoiceNumber: inv.invoiceNumber, reason },
+    summary: `Rejected self-billed invoice ${inv.invoiceNumber}.`,
+  });
+  return { status: 200, body: { ok: true, invoiceNumber: inv.invoiceNumber } };
+}
+
+// @cli-skip: chat parity via finance.approve_self_billing (financeApprovalsCapabilities, #1091); REST stays authoritative
 router.post("/finance/payables/self-billing/:id/approve", async (req, res, next) => {
   try {
     const me = writeGate(req, res);
     if (!me) return;
-    const inv = await loadInvoice(me, req.params.id);
-    if (!inv) { res.status(404).json({ error: "not-found" }); return; }
-    if (inv.status !== "draft") {
-      res.status(409).json({ error: "invalid-status", message: `Only draft invoices can be approved (status: ${inv.status}).` });
-      return;
-    }
-    await db.update(atelierSelfBilledInvoices).set({
-      status: "approved", approvedByUserId: me.id, approvedAt: new Date(), updatedAt: new Date(),
-    }).where(eq(atelierSelfBilledInvoices.id, inv.id));
-    await audit({
-      entityType: "self_billed_invoice", entityId: inv.id, actor: me,
-      action: "finance.self_billing.approve",
-      payload: { invoiceNumber: inv.invoiceNumber, totalUsd: inv.totalUsd },
-      summary: `Approved self-billed invoice ${inv.invoiceNumber} ($${inv.totalUsd.toFixed(2)}).`,
-    });
-    // Notify the supplier with the invoice PDF attached. Never blocks
-    // the approval — the outcome is recorded on the invoice row.
-    const email = await notifySupplierOfInvoice(inv.id, "approval", {
-      actor: { name: me.name, email: me.email },
-    });
-    res.json({ ok: true, email });
+    const out = await approveSelfBillingCore({ me, id: req.params.id });
+    res.status(out.status).json(out.body);
   } catch (err) { next(err); }
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+// @cli-skip: chat parity via finance.reject_self_billing (financeApprovalsCapabilities, #1091); REST stays authoritative
 router.post("/finance/payables/self-billing/:id/reject", async (req, res, next) => {
   try {
     const me = writeGate(req, res);
     if (!me) return;
-    const inv = await loadInvoice(me, req.params.id);
-    if (!inv) { res.status(404).json({ error: "not-found" }); return; }
-    if (inv.status !== "draft" && inv.status !== "disputed" && inv.status !== "approved") {
-      res.status(409).json({ error: "invalid-status", message: `Cannot reject an invoice in status ${inv.status}.` });
-      return;
-    }
-    if (inv.paymentRunId) {
-      res.status(409).json({ error: "in-payment-run", message: "Remove the invoice from its payment run first." });
-      return;
-    }
-    const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 2000) : null;
-    await db.update(atelierSelfBilledInvoices).set({
-      status: "rejected", rejectedByUserId: me.id, rejectedAt: new Date(), rejectedReason: reason, updatedAt: new Date(),
-    }).where(eq(atelierSelfBilledInvoices.id, inv.id));
-    await audit({
-      entityType: "self_billed_invoice", entityId: inv.id, actor: me,
-      action: "finance.self_billing.reject",
-      payload: { invoiceNumber: inv.invoiceNumber, reason },
-      summary: `Rejected self-billed invoice ${inv.invoiceNumber}.`,
-    });
-    res.json({ ok: true });
+    const out = await rejectSelfBillingCore({ me, id: req.params.id, reason: req.body?.reason });
+    res.status(out.status).json(out.body);
   } catch (err) { next(err); }
 });
 
@@ -672,7 +649,7 @@ router.get("/finance/payables/payment-runs/:id", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+// @cli-skip: #1091 — signing collects legal signatures against per-signatory bank limits (maker-checker, dual-sign) and needs the full run line-item view; chat deep-links to the payment-run page (finance.approvals_inbox item) instead of committing signatures inline
 router.post("/finance/payables/payment-runs/:id/sign", async (req, res, next) => {
   try {
     const me = writeGate(req, res);
@@ -1258,8 +1235,18 @@ export async function createSupplierInvoiceCore(args: {
   partnerFirmId?: string | null;
   /** Task #1095 — user picked the entity allocation up-front (chat card). */
   explicitLegalEntityId?: string | null;
-  /** Audit provenance: "ui_upload" (default) or "chat". */
-  via?: "ui_upload" | "chat";
+  /** Audit provenance: "ui_upload" (default), "chat", or "parsed_doc"
+   * (the AI finance-doc pipeline). Only the parsed-doc path can carry the
+   * per-field confidences that let the auto-post engine authorise an
+   * auto-advance; ui/chat uploads never auto (no confidence signal). */
+  via?: "ui_upload" | "chat" | "parsed_doc";
+  /** parsed_doc only: per-key-field extraction confidences (0..1). ALL must
+   * clear the founder threshold for the invoice to auto-advance. */
+  fieldConfidences?: number[];
+  /** parsed_doc only: the agent run that parsed/coded the document, for
+   * autopilot attribution on the auto-advance. */
+  agentRunId?: string | null;
+  agentName?: string | null;
 }): Promise<{ status: number; body: Record<string, unknown> }> {
   const { me } = args;
   if (!args.fileBuffer || args.fileBuffer.length === 0) {
@@ -1374,25 +1361,78 @@ export async function createSupplierInvoiceCore(args: {
       },
     };
   }
-  await audit({
-    entityType: "partner_firm_invoice", entityId: id, actor: me,
-    action: "finance.supplier_invoice.upload",
-    payload: {
-      supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null,
-      reference, amount, currency, periodLabel, sha256, via: args.via ?? "ui_upload",
-    },
-    summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)}).`,
-  });
   // Task #1095 — entity-allocation prefill (deterministic; AI fallback
-  // gets the notes/reference text when the rules can't decide).
+  // gets the notes/reference text when the rules can't decide). Run this
+  // FIRST so the auto-post engine below can see whether allocation
+  // resolved cleanly (an unresolved allocation blocks auto-advance).
   await proposeSupplierInvoiceAllocation(id, {
     actorId: me.id,
     explicitEntityId: args.explicitLegalEntityId ?? null,
     aiText: [`supplier: ${firm?.name ?? supplierName}`, `reference: ${reference}`, notes ? `notes: ${notes}` : null]
       .filter(Boolean).join("\n"),
   }).catch(() => {});
-  const [row] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
-  return { status: 201, body: { ok: true, item: supplierInvoiceWire(row) } };
+
+  // Task #1091 — auto-post policy (blueprint §4). The intake decision
+  // (auto → approved/"ready to pay" vs founder review) is authorised
+  // SOLELY by the shared engine, with thresholds from the founder-editable
+  // settings (never hardcoded here). ui_upload / chat carry NO field
+  // confidences, so the engine returns auto:false and the invoice stays
+  // "submitted" for review — behaviour identical to before. Only the
+  // parsed-doc pipeline supplies confidences that can clear the bar.
+  const via = args.via ?? "ui_upload";
+  const thresholds = await loadFinanceAutopilotThresholds(me.orgId);
+  const amountAed = await convertUsdTo(+fx.usdAmount.toFixed(2), "AED", now).catch(() => null);
+  const policy = evaluateAutoPost({
+    kind: "supplier_invoice",
+    thresholds,
+    amountAedEquivalent: amountAed ? amountAed.amount : null,
+    // Field confidences ONLY exist on the parsed-doc path.
+    confidences: via === "parsed_doc" ? (args.fieldConfidences ?? []) : [],
+    knownVendor: Boolean(firm?.id),
+  });
+
+  // Re-read to observe the allocation outcome the proposal just wrote.
+  let row = (await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id)))[0];
+
+  // Auto-advance is gated by the engine AND by allocation being
+  // automatically resolvable (a proposed single-entity allocation). If the
+  // allocation needs a human ("needs_input"), the invoice STAYS in review
+  // even when the engine said auto — money never moves on a guessed entity.
+  let autoAdvanced = false;
+  const autoReasons = [...policy.reasons];
+  if (policy.auto) {
+    const allocResolvable = row.allocStatus === "proposed" || row.allocStatus === "approved" || row.allocStatus === "overridden";
+    if (!allocResolvable) {
+      autoReasons.push(`held for review: allocation ${row.allocStatus ?? "unset"} needs a human decision`);
+    } else {
+      // Reuse the SAME transition the manual review "approve" performs —
+      // bank-details hold, allocation decide, status → approved — so the
+      // auto path and the human path never fork. Attributed to autopilot.
+      const advanced = await reviewSupplierInvoiceCore({
+        me, id, decision: "approve",
+        autopilot: { agentRunId: args.agentRunId ?? null, agentName: args.agentName ?? "Finance Autopilot", reasons: autoReasons },
+      });
+      if (advanced.status === 200) {
+        autoAdvanced = true;
+        row = (await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id)))[0];
+      } else {
+        // e.g. bank-details-missing (409) — legitimately can't auto-advance.
+        autoReasons.push(`held for review: ${String((advanced.body as { error?: string }).error ?? "auto-advance blocked")}`);
+      }
+    }
+  }
+
+  await audit({
+    entityType: "partner_firm_invoice", entityId: id, actor: me,
+    action: "finance.supplier_invoice.upload",
+    payload: {
+      supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null,
+      reference, amount, currency, periodLabel, sha256, via,
+      autopilot: { auto: policy.auto, autoAdvanced, finalStatus: row.status, reasons: autoReasons },
+    },
+    summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)})${autoAdvanced ? " — auto-approved by autopilot" : ""}.`,
+  });
+  return { status: 201, body: { ok: true, item: supplierInvoiceWire(row), autoAdvanced } };
 }
 
 /** Task #1090 — chat firm-linking parity: org-scoped case-insensitive
@@ -1484,76 +1524,116 @@ const SUPPLIER_INVOICE_REVIEW: Record<string, string[]> = {
   reject: ["submitted", "under_review"],
 };
 
-// @cli-skip: Task #1070 audited finance write; UI-workflow only
+/**
+ * Task #1091 — shared supplier-invoice review core. The REST route and
+ * the Riser chat capability (finance.review_supplier_invoice) BOTH run
+ * this so the transition machine, bank-details hold, entity-allocation
+ * decision and audit never fork. Returns an HTTP-shaped `{ status, body }`
+ * outcome; the caller reads `body.invoice` for the preview/recap.
+ *
+ * Allocation constraint parity: when the row's allocation still needs a
+ * human decision (or the caller overrides the proposed entity), the
+ * caller must surface that in preview and pass `legalEntityId`
+ * (+ `allocationOverrideReason` when overriding) — exactly the fields the
+ * UI review form sends.
+ */
+export async function reviewSupplierInvoiceCore(args: {
+  me: Me;
+  id: string;
+  decision: string;
+  reason?: string | null;
+  legalEntityId?: string | null;
+  allocationOverrideReason?: string | null;
+  /** Task #1091 — set when the auto-post engine authorised this approve
+   * (never a human click). Records autopilot attribution in the audit. */
+  autopilot?: { agentRunId: string | null; agentName: string; reasons: string[] } | null;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  const decision = args.decision;
+  const allowedFrom = SUPPLIER_INVOICE_REVIEW[decision];
+  if (!allowedFrom) return { status: 400, body: { error: "invalid-decision" } };
+  const row = await loadSupplierInvoice(me.orgId, args.id);
+  if (!row) return { status: 404, body: { error: "not-found" } };
+  if (!allowedFrom.includes(row.status))
+    return { status: 409, body: { error: "invalid-status", status: row.status } };
+  const reason = typeof args.reason === "string" ? args.reason.slice(0, 2000).trim() : "";
+  const now = new Date();
+  if (decision === "start_review") {
+    await db.update(atelierPartnerFirmInvoices).set({
+      status: "under_review", reviewedByUserId: me.id, updatedAt: now,
+    }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+  } else if (decision === "approve") {
+    // Bank-details hold applies when the supplier is a registered
+    // partner firm — payments only ever go to finance-approved firm
+    // bank details. Unregistered suppliers carry no firm registry;
+    // their details are keyed into the bank file at run time.
+    if (row.partnerFirmId) {
+      const [firm] = await db.select({ bankIban: atelierPartnerFirms.bankIban })
+        .from(atelierPartnerFirms)
+        .where(and(eq(atelierPartnerFirms.id, row.partnerFirmId), eq(atelierPartnerFirms.orgId, me.orgId)));
+      if (!firm || !(firm.bankIban ?? "").trim())
+        return { status: 409, body: { error: "bank-details-missing", message: "The linked partner firm has no finance-approved bank details yet; approve is blocked until onboarding records them." } };
+    }
+    // Task #1095 — approving the invoice approves (or overrides) its
+    // entity allocation in the same act. A different `legalEntityId`
+    // than the proposal requires `allocationOverrideReason`.
+    if (row.allocStatus === "proposed" || row.allocStatus === "needs_input" || typeof args.legalEntityId === "string") {
+      const decided = await decideAllocation({
+        kind: "supplier_invoice",
+        id: row.id,
+        orgId: me.orgId,
+        actor: { id: me.id, name: me.name },
+        entityId: typeof args.legalEntityId === "string" && args.legalEntityId ? args.legalEntityId : null,
+        overrideReason: typeof args.allocationOverrideReason === "string" ? args.allocationOverrideReason : null,
+      });
+      if (!decided.ok && decided.error !== "entity_required") {
+        // needs_input with nothing picked stays queued; real mistakes 400.
+        return { status: 400, body: { error: decided.error, message: decided.message } };
+      }
+      // The autopilot path must NEVER approve on an unresolved allocation
+      // (a human clicking approve without picking is the legacy fall-
+      // through, but money can't move on a guessed entity under autopilot).
+      if (args.autopilot && !decided.ok && decided.error === "entity_required") {
+        return { status: 409, body: { error: "allocation-needs-input", message: "Autopilot cannot approve: entity allocation needs a human decision." } };
+      }
+    }
+    await db.update(atelierPartnerFirmInvoices).set({
+      status: "approved", reviewedByUserId: me.id, reviewedAt: now, updatedAt: now,
+    }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+  } else {
+    if (!reason) return { status: 400, body: { error: "reason-required", message: "A rejection reason is required." } };
+    await db.update(atelierPartnerFirmInvoices).set({
+      status: "rejected", reviewedByUserId: me.id, reviewedAt: now,
+      rejectedAt: now, rejectedReason: reason, updatedAt: now,
+    }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+  }
+  await audit({
+    entityType: "partner_firm_invoice", entityId: row.id, actor: me,
+    action: `finance.supplier_invoice.${decision}`,
+    payload: {
+      supplierName: row.partnerFirmName, reference: row.reference, amount: row.costAmount, currency: row.costCurrency,
+      ...(reason ? { reason } : {}),
+      ...(args.autopilot ? { autopilot: { agentRunId: args.autopilot.agentRunId, agentName: args.autopilot.agentName, reasons: args.autopilot.reasons } } : {}),
+    },
+    summary: `${args.autopilot ? `${args.autopilot.agentName} auto-approved` : decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : "Rejected"} supplier invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
+  });
+  const updated = await loadSupplierInvoice(me.orgId, row.id);
+  return { status: 200, body: { ok: true, invoice: updated ? supplierInvoiceWire(updated) : null } };
+}
+
+// @cli-skip: chat parity via finance.review_supplier_invoice (financeApprovalsCapabilities, #1091); REST stays authoritative
 router.post("/finance/payables/supplier-invoices/:id/review", async (req, res, next) => {
   try {
     const me = writeGate(req, res);
     if (!me) return;
-    const decision = typeof req.body?.decision === "string" ? req.body.decision : "";
-    const allowedFrom = SUPPLIER_INVOICE_REVIEW[decision];
-    if (!allowedFrom) { res.status(400).json({ error: "invalid-decision" }); return; }
-    const row = await loadSupplierInvoice(me.orgId, req.params.id);
-    if (!row) { res.status(404).json({ error: "not-found" }); return; }
-    if (!allowedFrom.includes(row.status)) {
-      res.status(409).json({ error: "invalid-status", status: row.status });
-      return;
-    }
-    const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 2000).trim() : "";
-    const now = new Date();
-    if (decision === "start_review") {
-      await db.update(atelierPartnerFirmInvoices).set({
-        status: "under_review", reviewedByUserId: me.id, updatedAt: now,
-      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
-    } else if (decision === "approve") {
-      // Bank-details hold applies when the supplier is a registered
-      // partner firm — payments only ever go to finance-approved firm
-      // bank details. Unregistered suppliers carry no firm registry;
-      // their details are keyed into the bank file at run time.
-      if (row.partnerFirmId) {
-        const [firm] = await db.select({ bankIban: atelierPartnerFirms.bankIban })
-          .from(atelierPartnerFirms)
-          .where(and(eq(atelierPartnerFirms.id, row.partnerFirmId), eq(atelierPartnerFirms.orgId, me.orgId)));
-        if (!firm || !(firm.bankIban ?? "").trim()) {
-          res.status(409).json({ error: "bank-details-missing", message: "The linked partner firm has no finance-approved bank details yet; approve is blocked until onboarding records them." });
-          return;
-        }
-      }
-      // Task #1095 — approving the invoice approves (or overrides) its
-      // entity allocation in the same act. A different `legalEntityId`
-      // than the proposal requires `allocationOverrideReason`.
-      if (row.allocStatus === "proposed" || row.allocStatus === "needs_input" || typeof req.body?.legalEntityId === "string") {
-        const decided = await decideAllocation({
-          kind: "supplier_invoice",
-          id: row.id,
-          orgId: me.orgId,
-          actor: { id: me.id, name: me.name },
-          entityId: typeof req.body?.legalEntityId === "string" && req.body.legalEntityId ? req.body.legalEntityId : null,
-          overrideReason: typeof req.body?.allocationOverrideReason === "string" ? req.body.allocationOverrideReason : null,
-        });
-        if (!decided.ok && decided.error !== "entity_required") {
-          // needs_input with nothing picked stays queued; real mistakes 400.
-          res.status(400).json({ error: decided.error, message: decided.message });
-          return;
-        }
-      }
-      await db.update(atelierPartnerFirmInvoices).set({
-        status: "approved", reviewedByUserId: me.id, reviewedAt: now, updatedAt: now,
-      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
-    } else {
-      if (!reason) { res.status(400).json({ error: "reason-required", message: "A rejection reason is required." }); return; }
-      await db.update(atelierPartnerFirmInvoices).set({
-        status: "rejected", reviewedByUserId: me.id, reviewedAt: now,
-        rejectedAt: now, rejectedReason: reason, updatedAt: now,
-      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
-    }
-    await audit({
-      entityType: "partner_firm_invoice", entityId: row.id, actor: me,
-      action: `finance.supplier_invoice.${decision}`,
-      payload: { supplierName: row.partnerFirmName, reference: row.reference, amount: row.costAmount, currency: row.costCurrency, ...(reason ? { reason } : {}) },
-      summary: `${decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : "Rejected"} supplier invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
+    const out = await reviewSupplierInvoiceCore({
+      me, id: req.params.id,
+      decision: typeof req.body?.decision === "string" ? req.body.decision : "",
+      reason: req.body?.reason,
+      legalEntityId: typeof req.body?.legalEntityId === "string" ? req.body.legalEntityId : null,
+      allocationOverrideReason: typeof req.body?.allocationOverrideReason === "string" ? req.body.allocationOverrideReason : null,
     });
-    const updated = await loadSupplierInvoice(me.orgId, row.id);
-    res.json({ ok: true, invoice: updated ? supplierInvoiceWire(updated) : null });
+    res.status(out.status).json(out.body);
   } catch (err) { next(err); }
 });
 

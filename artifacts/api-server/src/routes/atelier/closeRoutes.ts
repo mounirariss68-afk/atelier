@@ -51,6 +51,7 @@ import {
   type ClosePeriodType,
 } from "../../lib/atelier-agents/closeController.js";
 import { runCollectionsAgent } from "../../lib/atelier-agents/collections.js";
+import { runAgentExclusive } from "../../lib/atelier-agents/exclusive-runs.js";
 import { sendEmail } from "../../lib/email.js";
 import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
 
@@ -61,7 +62,7 @@ function rid(p: string): string {
 }
 function round2(n: number): number { return Math.round(n * 100) / 100; }
 
-type Me = typeof atelierUsers.$inferSelect;
+export type Me = typeof atelierUsers.$inferSelect;
 function ensure(req: Request, res: Response): Me | null {
   if (!req.atelierPersona) { res.status(401).json({ error: "no-active-persona" }); return null; }
   return req.atelierPersona;
@@ -466,23 +467,35 @@ router.post("/close/cycles/:id/ct-provision", async (req, res) => {
 // ─────────────────────── accrual decisions ───────────────────────
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/close/accruals/:id/approve", async (req, res) => {
-  const me = denyRead(req, res); if (!me) return;
+/**
+ * Task #1091 — shared close-accrual approve core. The REST route and the
+ * Riser chat capability (finance.approve_close_accrual) BOTH run this so
+ * the partner-tier gate, GL period-lock check, balance validation,
+ * journal posting (+ auto-reversal) and audit never fork. Returns an
+ * HTTP-shaped `{ status, body }` outcome. Covers both close accruals and
+ * CT provisions (same table / status machine).
+ */
+export async function approveCloseAccrualCore(args: {
+  me: Me;
+  id: string;
+  note?: string | null;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
   if (!isPartnerTier(me))
-    return res.status(403).json({ error: "forbidden", message: "Accrual approval requires partner tier." });
+    return { status: 403, body: { error: "forbidden", message: "Accrual approval requires partner tier." } };
   const [acc] = await db.select().from(atelierCloseAccrual)
-    .where(and(eq(atelierCloseAccrual.id, req.params.id), eq(atelierCloseAccrual.orgId, me.orgId), isNull(atelierCloseAccrual.deletedAt)));
-  if (!acc) return res.status(404).json({ error: "not_found" });
+    .where(and(eq(atelierCloseAccrual.id, args.id), eq(atelierCloseAccrual.orgId, me.orgId), isNull(atelierCloseAccrual.deletedAt)));
+  if (!acc) return { status: 404, body: { error: "not_found" } };
   if (acc.status !== "proposed")
-    return res.status(409).json({ error: "already_decided", status: acc.status, journalEntryId: acc.journalEntryId });
+    return { status: 409, body: { error: "already_decided", status: acc.status, journalEntryId: acc.journalEntryId } };
   if (await isGlPeriodLocked(me.orgId, acc.periodLabel))
-    return res.status(409).json({ error: "period_locked", message: `Period ${acc.periodLabel} is locked for the GL module.` });
+    return { status: 409, body: { error: "period_locked", message: `Period ${acc.periodLabel} is locked for the GL module.` } };
 
   const lines = acc.lines ?? [];
   const totalDebit = round2(lines.reduce((s, l) => s + (l.debit || 0), 0));
   const totalCredit = round2(lines.reduce((s, l) => s + (l.credit || 0), 0));
   if (lines.length < 2 || Math.abs(totalDebit - totalCredit) > 0.011 || totalDebit <= 0)
-    return res.status(400).json({ error: "unbalanced", totalDebit, totalCredit });
+    return { status: 400, body: { error: "unbalanced", totalDebit, totalCredit } };
 
   const accounts = await db.select().from(atelierGlAccount).where(and(
     eq(atelierGlAccount.orgId, me.orgId),
@@ -492,7 +505,7 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
   const byCode = new Map(accounts.map((a) => [a.code, a]));
   for (const l of lines) {
     if (!byCode.has(l.accountCode))
-      return res.status(400).json({ error: "missing_account", accountCode: l.accountCode, message: "Seed the entity's chart of accounts first." });
+      return { status: 400, body: { error: "missing_account", accountCode: l.accountCode, message: "Seed the entity's chart of accounts first." } };
   }
 
   const y = Number(acc.periodLabel.slice(0, 4));
@@ -504,10 +517,10 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
   // GL-locked rather than silently skipping the reversal.
   const nextPeriod = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
   if (acc.autoReverse && (await isGlPeriodLocked(me.orgId, nextPeriod)))
-    return res.status(409).json({
+    return { status: 409, body: {
       error: "next_period_locked",
       message: `Cannot approve: the reversing journal would post into ${nextPeriod}, which is locked for the GL module. Reopen ${nextPeriod} first or disable auto-reverse for this accrual.`,
-    });
+    } };
 
   const entryId = rid("gljrn");
   const reversalId = acc.autoReverse ? rid("gljrn") : null;
@@ -550,7 +563,7 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
     await tx.update(atelierCloseAccrual).set({
       status: "approved", journalEntryId: entryId, reversalEntryId: reversalId,
       decidedByUserId: me.id, decidedAt: new Date(),
-      decisionNote: (req.body as { note?: string })?.note ?? null,
+      decisionNote: args.note ?? null,
       updatedAt: new Date(),
     }).where(eq(atelierCloseAccrual.id, acc.id));
   });
@@ -558,27 +571,45 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
     action: "close.accrual_approve",
     payload: { cycleId: acc.cycleId, periodLabel: acc.periodLabel, amount: acc.amount, journalEntryId: entryId, reversalEntryId: reversalId, reversalPeriod: reversalId ? nextPeriod : null },
     summary: `Approved accrual "${acc.memo}" (${acc.currency} ${acc.amount}) — journal posted${reversalId ? ` with auto-reversal on ${nextPeriod}-01` : ""}` });
-  return res.json({ ok: true, data: { journalEntryId: entryId, reversalEntryId: reversalId } });
+  return { status: 200, body: { ok: true, data: { journalEntryId: entryId, reversalEntryId: reversalId, memo: acc.memo, amount: acc.amount, currency: acc.currency, periodLabel: acc.periodLabel, isCt: acc.sourceKey === "ct_provision" } } };
+}
+
+// @cli-skip: chat parity via finance.approve_close_accrual (financeApprovalsCapabilities, #1091); REST stays authoritative
+router.post("/close/accruals/:id/approve", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const out = await approveCloseAccrualCore({ me, id: req.params.id, note: (req.body as { note?: string })?.note ?? null });
+  return res.status(out.status).json(out.body);
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/close/accruals/:id/reject", async (req, res) => {
-  const me = denyRead(req, res); if (!me) return;
+/** Task #1091 — shared close-accrual reject core (see approveCloseAccrualCore). */
+export async function rejectCloseAccrualCore(args: {
+  me: Me;
+  id: string;
+  note?: string | null;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
   if (!isPartnerTier(me))
-    return res.status(403).json({ error: "forbidden", message: "Accrual rejection requires partner tier." });
+    return { status: 403, body: { error: "forbidden", message: "Accrual rejection requires partner tier." } };
   const [acc] = await db.select().from(atelierCloseAccrual)
-    .where(and(eq(atelierCloseAccrual.id, req.params.id), eq(atelierCloseAccrual.orgId, me.orgId), isNull(atelierCloseAccrual.deletedAt)));
-  if (!acc) return res.status(404).json({ error: "not_found" });
+    .where(and(eq(atelierCloseAccrual.id, args.id), eq(atelierCloseAccrual.orgId, me.orgId), isNull(atelierCloseAccrual.deletedAt)));
+  if (!acc) return { status: 404, body: { error: "not_found" } };
   if (acc.status !== "proposed")
-    return res.status(409).json({ error: "already_decided", status: acc.status });
+    return { status: 409, body: { error: "already_decided", status: acc.status } };
   await db.update(atelierCloseAccrual).set({
     status: "rejected", decidedByUserId: me.id, decidedAt: new Date(),
-    decisionNote: (req.body as { note?: string })?.note ?? null, updatedAt: new Date(),
+    decisionNote: args.note ?? null, updatedAt: new Date(),
   }).where(eq(atelierCloseAccrual.id, acc.id));
   await audit({ entityType: "close_accrual", entityId: acc.id, actor: me,
     action: "close.accrual_reject", payload: { cycleId: acc.cycleId, amount: acc.amount },
     summary: `Rejected accrual proposal "${acc.memo}"` });
-  return res.json({ ok: true });
+  return { status: 200, body: { ok: true, memo: acc.memo, amount: acc.amount, currency: acc.currency, isCt: acc.sourceKey === "ct_provision" } };
+}
+
+// @cli-skip: chat parity via finance.reject_close_accrual (financeApprovalsCapabilities, #1091); REST stays authoritative
+router.post("/close/accruals/:id/reject", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const out = await rejectCloseAccrualCore({ me, id: req.params.id, note: (req.body as { note?: string })?.note ?? null });
+  return res.status(out.status).json(out.body);
 });
 
 // ─────────────────────── year-end rollover ───────────────────────
@@ -623,11 +654,20 @@ router.get("/collections/drafts", async (req, res) => {
 router.post("/collections/run", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
   const b = req.body as { asOf?: string; invoiceId?: string };
-  const out = await runCollectionsAgent({
-    orgId: me.orgId,
-    input: { asOf: b?.asOf, invoiceId: b?.invoiceId },
-    triggeredByUserId: me.id,
+  // Task #1105 — single-flight through the SHARED per-agent lock the cron
+  // scheduler also uses; a manual trigger during an in-flight run returns 409.
+  const ex = await runAgentExclusive({
+    agent: "collections_agent", orgId: me.orgId, userId: me.id,
+    label: "Collections Agent — manual run", resultHref: "/finance/collections",
+    work: () => runCollectionsAgent({
+      orgId: me.orgId,
+      input: { asOf: b?.asOf, invoiceId: b?.invoiceId },
+      triggeredByUserId: me.id,
+    }),
   });
+  if (!ex.ran)
+    return res.status(409).json({ error: "already_running", message: "A Collections Agent run is already in progress — try again once it finishes." });
+  const out = ex.result;
   await audit({ entityType: "collections_run", entityId: out.runId, actor: me,
     action: "collections.run",
     payload: { drafts: out.output.draftsCreated, refreshed: out.output.draftsRefreshed, escalations: out.output.escalationsDrafted },
@@ -635,16 +675,30 @@ router.post("/collections/run", async (req, res) => {
   return res.json({ ok: true, data: out.output, runId: out.runId });
 });
 
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/collections/drafts/:id/approve-send", async (req, res) => {
-  const me = denyRead(req, res); if (!me) return;
+/**
+ * Task #1091 — shared collections approve-send core. The REST route and
+ * the Riser chat capability (finance.approve_send_collections) BOTH run
+ * this so the partner-approval gate, the internal-escalation branch, the
+ * send-time re-validation (invoice state, cadence/ladder position,
+ * open promise-to-pay) and the OUTBOUND client email never fork.
+ *
+ * OUTBOUND note: for the client-email branch (escalation === false) the
+ * chat capability wraps this in a typed-name confirm — the message leaves
+ * the building. The escalation branch is internal-only (no client email).
+ * Returns an HTTP-shaped `{ status, body }` outcome.
+ */
+export async function approveSendCollectionsDraftCore(args: {
+  me: Me;
+  id: string;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
   const [draft] = await db.select().from(atelierCollectionsDraft)
-    .where(and(eq(atelierCollectionsDraft.id, req.params.id), eq(atelierCollectionsDraft.orgId, me.orgId), isNull(atelierCollectionsDraft.deletedAt)));
-  if (!draft) return res.status(404).json({ error: "not_found" });
+    .where(and(eq(atelierCollectionsDraft.id, args.id), eq(atelierCollectionsDraft.orgId, me.orgId), isNull(atelierCollectionsDraft.deletedAt)));
+  if (!draft) return { status: 404, body: { error: "not_found" } };
   if (draft.status !== "draft")
-    return res.status(409).json({ error: "not_draft", status: draft.status });
+    return { status: 409, body: { error: "not_draft", status: draft.status } };
   if (draft.requireApproval && !isPartnerTier(me))
-    return res.status(403).json({ error: "forbidden", message: "This step requires partner approval." });
+    return { status: 403, body: { error: "forbidden", message: "This step requires partner approval." } };
 
   // Escalations are internal: acknowledging marks them handled — no client
   // email, no dunning event.
@@ -657,29 +711,29 @@ router.post("/collections/drafts/:id/approve-send", async (req, res) => {
       action: "collections.escalation_ack",
       payload: { invoiceId: draft.invoiceId, daysOverdue: draft.daysOverdue, outstandingUsd: draft.outstandingUsd },
       summary: `Escalation acknowledged for invoice ${draft.invoiceNumber ?? draft.invoiceId}` });
-    return res.json({ ok: true, data: { sentVia: "internal", escalation: true } });
+    return { status: 200, body: { ok: true, data: { sentVia: "internal", escalation: true, invoiceNumber: draft.invoiceNumber } } };
   }
 
   // Re-validate the invoice, cadence and promise-to-pay at send time.
   const [inv] = await db.select().from(atelierInvoice)
     .where(and(eq(atelierInvoice.id, draft.invoiceId), eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt)));
   if (!inv || inv.status !== "issued" || inv.voidedAt)
-    return res.status(409).json({ error: "invalid_state", message: "Invoice is no longer issued/outstanding." });
+    return { status: 409, body: { error: "invalid_state", message: "Invoice is no longer issued/outstanding." } };
   if (round2(inv.total - inv.amountPaid) <= 0.011)
-    return res.status(409).json({ error: "already_paid", message: "Invoice has no outstanding balance." });
+    return { status: 409, body: { error: "already_paid", message: "Invoice has no outstanding balance." } };
   const events = await db.select().from(atelierDunningEvent).where(eq(atelierDunningEvent.invoiceId, inv.id));
   if (events.length !== draft.stepIndex)
-    return res.status(409).json({ error: "step_out_of_date", message: `Ladder position moved (now at step ${events.length}, draft is step ${draft.stepIndex}). Re-run the Collections Agent.` });
+    return { status: 409, body: { error: "step_out_of_date", message: `Ladder position moved (now at step ${events.length}, draft is step ${draft.stepIndex}). Re-run the Collections Agent.` } };
   const openPromises = await db.select().from(atelierPromiseToPay)
     .where(and(eq(atelierPromiseToPay.invoiceId, inv.id), eq(atelierPromiseToPay.status, "open")));
   const now = new Date();
   const future = openPromises.find((p) => new Date(p.promisedDate).getTime() >= now.getTime());
   if (future)
-    return res.status(409).json({ error: "promise_open", message: `Open promise-to-pay through ${future.promisedDate} — dunning is suppressed.` });
+    return { status: 409, body: { error: "promise_open", message: `Open promise-to-pay through ${future.promisedDate} — dunning is suppressed.` } };
 
   const recipient = inv.billTo?.contactEmail;
   if (!recipient)
-    return res.status(400).json({ error: "no_recipient", message: "Invoice bill-to has no contact email. Add one before sending." });
+    return { status: 400, body: { error: "no_recipient", message: "Invoice bill-to has no contact email. Add one before sending." } };
 
   const chase = buildCogniriseEmail({
     title: draft.subject,
@@ -712,7 +766,14 @@ router.post("/collections/drafts/:id/approve-send", async (req, res) => {
     action: "collections.approve_send",
     payload: { invoiceId: inv.id, stepIndex: draft.stepIndex, recipient, via, dunningEventId: eventId },
     summary: `Approved + sent chase step ${draft.stepIndex + 1} for invoice ${inv.invoiceNumber ?? inv.id} via ${via}` });
-  return res.json({ ok: true, data: { dunningEventId: eventId, via, delivered: via === "resend" } });
+  return { status: 200, body: { ok: true, data: { dunningEventId: eventId, via, delivered: via === "resend", recipient, invoiceNumber: inv.invoiceNumber ?? inv.id } } };
+}
+
+// @cli-skip: chat parity via finance.approve_send_collections (financeApprovalsCapabilities, #1091); REST stays authoritative
+router.post("/collections/drafts/:id/approve-send", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const out = await approveSendCollectionsDraftCore({ me, id: req.params.id });
+  return res.status(out.status).json(out.body);
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure

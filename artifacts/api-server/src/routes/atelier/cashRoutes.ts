@@ -25,6 +25,8 @@ import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { runCashApplicationMatcher, runCashFlowForecaster } from "../../lib/atelier-agents/runner.js";
 import { runBookkeeper } from "../../lib/atelier-agents/bookkeeper.js";
 import { proposeOutflowCandidates, entityCompatible } from "../../lib/atelier-cash-ops.js";
+import { evaluateAutoPost } from "../../lib/atelier-finance-autopolicy.js";
+import { loadFinanceAutopilotThresholds } from "../../lib/atelier-finance-autopilot-settings.js";
 import {
   atelierBankAccount,
   atelierCashForecastSnapshot,
@@ -387,9 +389,27 @@ router.post("/triage/:id/confirm", async (req, res) => {
     matchedState: "matched", matchedRefKind: "invoice_application", matchedRefId: appId,
     parkedReason: null, parkedByUserId: null, updatedAt: new Date(),
   }).where(eq(atelierBankTransaction.id, txn.id));
+  // Task #1091 — cash-application auto-post policy (blueprint §4).
+  // IMPORTANT: today the cash-application MATCHER only PROPOSES candidates
+  // (runCashApplicationMatcher writes matchProposal; it never applies), and
+  // application is ALWAYS a human confirm through this endpoint. So there is
+  // no unattended auto-apply path to gate — the engine call here classifies
+  // whether this confirm matched the engine's auto-eligible shape (exact
+  // single candidate, no operator override) and records that reason for the
+  // audit/review-&-revise contract. If a future agent gains an auto-apply
+  // path, it MUST call evaluateAutoPost({kind:"cash_application", ...}) and
+  // treat auto:true as the ONLY authorization to skip this human confirm.
+  const candidateCount = proposal?.candidates?.length ?? 0;
+  const cashThresholds = await loadFinanceAutopilotThresholds(me.orgId);
+  const cashPolicy = evaluateAutoPost({
+    kind: "cash_application",
+    thresholds: cashThresholds,
+    exactSingleCandidate: candidateCount === 1 && (!b.invoiceId || b.invoiceId === recommendedInvoiceId),
+  });
   await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
     action: "cash_triage.confirm_inflow",
-    payload: { receiptId: receipt.id, invoiceId: inv.id, applied, applicationId: appId },
+    payload: { receiptId: receipt.id, invoiceId: inv.id, applied, applicationId: appId,
+      autopilot: { auto: cashPolicy.auto, reasons: cashPolicy.reasons } },
     summary: `Confirmed receipt ${receipt.currency} ${applied} → invoice ${inv.invoiceNumber ?? inv.id}` });
   // GL via Bookkeeper: deterministic + idempotent per source row, so a
   // failed posting can safely be retried from the GL screen.

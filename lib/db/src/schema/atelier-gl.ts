@@ -85,6 +85,20 @@ export const atelierGlJournalEntry = pgTable(
     agentRunId: text("agent_run_id"), // atelier_agent_runs.id when posted by Bookkeeper
     /** Set on the entry being reversed; the reversal entry points back here. */
     reversesEntryId: text("reverses_entry_id"),
+    /**
+     * Task #1091 — reverse-and-repost linkage ("Fix this"). The corrected
+     * repost entry points back at the ORIGINAL journal it supersedes, so the
+     * chain original ← reversal ← repost is fully queryable. Never edit a
+     * posted journal in place; corrections always create these two entries.
+     */
+    repostOfEntryId: text("repost_of_entry_id"),
+    /**
+     * Task #1091 — agent provenance for a queryable "postedByAgent" filter.
+     * agentRunId already links to atelier_agent_runs; agentName snapshots the
+     * agent label at post time so the journal list can show/filter attribution
+     * without a join to a possibly-reaped run row.
+     */
+    agentName: text("agent_name"),
     ...COMMON,
   },
   (t) => [

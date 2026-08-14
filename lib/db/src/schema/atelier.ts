@@ -4359,6 +4359,38 @@ export const atelierFirmProfile = pgTable(
 );
 
 // ============================================================
+// FINANCE AUTOPILOT SETTINGS — Task #1091 (blueprint D1).
+//
+// Founder-editable thresholds that drive the auto-post policy engine
+// (src/lib/atelier-finance-autopolicy.ts). One row per org. Production
+// no-seed policy: the READ path returns the blueprint defaults when no
+// row exists, so this table is NEVER seeded — a row only appears after a
+// founding_partner/partner PATCHes it. PATCH is audited.
+//
+// Defaults (blueprint §4 / §9 D1):
+//   journalAutoConfidence      0.9   (≥ this clears the confidence bar)
+//   supplierInvoiceAutoMaxAed  1000  (auto to "ready to pay" ceiling)
+//   journalAutoMaxAed          5000  (AI-coded journal auto-post ceiling)
+// ============================================================
+export const atelierFinanceAutopilotSettings = pgTable(
+  "atelier_finance_autopilot_settings",
+  {
+    id: text("id").primaryKey(), // fas_<orgId>
+    orgId: ORG("org_id"),
+    journalAutoConfidence: doublePrecision("journal_auto_confidence").notNull().default(0.9),
+    supplierInvoiceAutoMaxAed: doublePrecision("supplier_invoice_auto_max_aed").notNull().default(1000),
+    journalAutoMaxAed: doublePrecision("journal_auto_max_aed").notNull().default(5000),
+    updatedByUserId: text("updated_by_user_id"),
+    updatedByName: text("updated_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_finance_autopilot_org").on(t.orgId),
+  ],
+);
+
+// ============================================================
 // Task #297 — PROPOSAL RECIPIENTS. Per-recipient watermarked
 // Salon URL: /salon/proposal/:proposalId/:token. Token is the
 // auth — no Salon persona required. Each open is audited.

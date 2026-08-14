@@ -35,6 +35,7 @@ import {
   GraduationCap,
   Hammer,
   Handshake,
+  Inbox,
   KeyRound,
   Landmark,
   LayoutDashboard,
@@ -211,6 +212,9 @@ export const LENSES: readonly LensDef[] = [
     shortcutKey: "5",
     sections: [
       { id: "overview", label: "Overview", href: "/finance", icon: LayoutDashboard },
+      // Task #1091 — unified approvals inbox. Gated to finance leadership
+      // (founding_partner | partner | finance) via financeSectionVisibleForRole.
+      { id: "approvals", label: "Approvals", href: "/finance/approvals", icon: Inbox },
       { id: "entities", label: "Entities", href: "/finance/entities", icon: Landmark },
       { id: "ledger", label: "Record", href: "/finance/ledger", icon: BookOpen },
       { id: "billing", label: "Bill & Collect", href: "/finance/billing", icon: Receipt },
@@ -297,6 +301,23 @@ export function meSectionVisibleForRole(
   }
   if (sectionId === "assist") {
     return role === "employee" || role === "contractor";
+  }
+  return true;
+}
+
+/**
+ * Task #1091 — the Finance lens is visible to every non-self-only role, but
+ * the Approvals inbox aggregates founder/finance-only approval queues (the
+ * server 403s non-leadership on /finance/approvals/inbox). Gate the tab to
+ * finance leadership so it never shows a dead 403 surface to, e.g., a
+ * consultant browsing the Finance lens.
+ */
+export function financeSectionVisibleForRole(
+  sectionId: string,
+  role: string | null | undefined,
+): boolean {
+  if (sectionId === "approvals") {
+    return role === "founding_partner" || role === "partner" || role === "finance";
   }
   return true;
 }

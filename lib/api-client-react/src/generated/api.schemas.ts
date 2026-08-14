@@ -3818,6 +3818,51 @@ export interface AtelierExpenseTaxonomyResponse {
   bankAccounts?: AtelierExpenseTaxonomyResponseBankAccountsItem[];
 }
 
+export interface AtelierFinanceAutopilotSettings {
+  journalAutoConfidence: number;
+  supplierInvoiceAutoMaxAed: number;
+  journalAutoMaxAed: number;
+  /** False when returning built-in defaults (no stored row). */
+  customised: boolean;
+  updatedByUserId?: string | null;
+  updatedByName?: string | null;
+  updatedAt?: string | null;
+}
+
+export type AtelierApprovalInboxItemAmount = {
+  currency: string;
+  value: number;
+};
+
+export type AtelierApprovalInboxItemRequiredRole =
+  (typeof AtelierApprovalInboxItemRequiredRole)[keyof typeof AtelierApprovalInboxItemRequiredRole];
+
+export const AtelierApprovalInboxItemRequiredRole = {
+  partner: "partner",
+  finance: "finance",
+} as const;
+
+export type AtelierApprovalInboxItemAgent = {
+  name: string;
+  runId: string;
+};
+
+export interface AtelierApprovalInboxItem {
+  id: string;
+  kind: string;
+  title: string;
+  subtitle?: string;
+  amount?: AtelierApprovalInboxItemAmount;
+  submittedAt: string | null;
+  requiredRole: AtelierApprovalInboxItemRequiredRole;
+  href: string;
+  agent?: AtelierApprovalInboxItemAgent;
+  /** True when the source agent run is dead/stale. */
+  stale?: boolean;
+  /** False when the caller's role cannot action this item (kept visible). */
+  actionable: boolean;
+}
+
 export type AtelierExpenseGlMappingVatTreatment =
   (typeof AtelierExpenseGlMappingVatTreatment)[keyof typeof AtelierExpenseGlMappingVatTreatment];
 
@@ -9274,6 +9319,105 @@ export type AtelierReplaceBankSignatoriesBody = {
 export type AtelierReplaceBankSignatories200 = {
   ok: boolean;
   count: number;
+};
+
+export type AtelierGetFinanceAutopilotSettings200Data = {
+  settings: AtelierFinanceAutopilotSettings;
+  canEdit: boolean;
+};
+
+export type AtelierGetFinanceAutopilotSettings200 = {
+  ok: boolean;
+  data: AtelierGetFinanceAutopilotSettings200Data;
+};
+
+export type AtelierUpdateFinanceAutopilotSettingsBody = {
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  journalAutoConfidence?: number;
+  /**
+   * @minimum 0
+   * @maximum 10000000
+   */
+  supplierInvoiceAutoMaxAed?: number;
+  /**
+   * @minimum 0
+   * @maximum 10000000
+   */
+  journalAutoMaxAed?: number;
+};
+
+export type AtelierUpdateFinanceAutopilotSettings200Data = {
+  settings: AtelierFinanceAutopilotSettings;
+};
+
+export type AtelierUpdateFinanceAutopilotSettings200 = {
+  ok: boolean;
+  data: AtelierUpdateFinanceAutopilotSettings200Data;
+};
+
+export type AtelierGetFinanceApprovalsInbox200DataTotals = {
+  [key: string]: {
+    count: number;
+    actionable: number;
+  };
+};
+
+export type AtelierGetFinanceApprovalsInbox200DataWalletApprovals = {
+  href: string;
+  timesheets: number;
+  leave: number;
+  expenses: number;
+};
+
+export type AtelierGetFinanceApprovalsInbox200Data = {
+  items: AtelierApprovalInboxItem[];
+  totals: AtelierGetFinanceApprovalsInbox200DataTotals;
+  walletApprovals: AtelierGetFinanceApprovalsInbox200DataWalletApprovals;
+  viewerRole: string;
+  includesNonActionable: boolean;
+};
+
+export type AtelierGetFinanceApprovalsInbox200 = {
+  ok: boolean;
+  data: AtelierGetFinanceApprovalsInbox200Data;
+};
+
+export type AtelierReverseRepostJournalBodyLinesItem = {
+  accountCode: string;
+  engagementId?: string;
+  /** @minimum 0 */
+  debit?: number;
+  /** @minimum 0 */
+  credit?: number;
+  /** @maxLength 300 */
+  memo?: string;
+};
+
+export type AtelierReverseRepostJournalBody = {
+  /**
+   * @minLength 3
+   * @maxLength 300
+   */
+  memo: string;
+  /**
+   * @minItems 2
+   * @maxItems 50
+   */
+  lines: AtelierReverseRepostJournalBodyLinesItem[];
+};
+
+export type AtelierReverseRepostJournal201Data = {
+  reversalId: string;
+  repostId: string;
+  originalId: string;
+};
+
+export type AtelierReverseRepostJournal201 = {
+  ok: boolean;
+  data: AtelierReverseRepostJournal201Data;
 };
 
 export type AtelierSetEngagementExpenseMarkupBody = {

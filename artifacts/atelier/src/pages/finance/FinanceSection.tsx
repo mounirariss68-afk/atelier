@@ -71,8 +71,6 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     lede:
       "Vendors, PO / non-PO invoices and 3-way match, employee expenses (policy, VAT recovery, approvals, cards), VAT / WHT, payment runs and treasury.",
     subPages: [
-      { label: "Vendors", href: "/finance/payables/vendors", blurb: "Vendor master with KYC, beneficial ownership, sanctions screen, bank-detail change controls.", status: "live" },
-      { label: "Purchase orders", href: "/finance/payables/po", blurb: "POs, GRNs, 3-way match against invoices.", status: "live" },
       { label: "Payment runs", href: "/finance/payables/payment-runs", blurb: "Maker-checker + dual-signatory payment runs with bank-file output.", status: "live" },
       { label: "Run history", href: "/finance/payables/run-history", blurb: "Settled and cancelled runs with signatures, remittance references, and audit trail.", status: "live" },
       { label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance.", status: "live" },
@@ -111,7 +109,6 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Scenarios", href: "/finance/plan/scenarios", blurb: "Base / upside / downside / KSA-led — utilisation, rate, FX and attrition deltas vs base.", status: "live" },
       { label: "Renewals calendar", href: "/finance/plan/renewals", blurb: "MSAs, retainers, subscriptions and frameworks expiring in the next 12 months.", status: "live" },
       { label: "Bonus & commission accrual", href: "/finance/plan/bonus", blurb: "YTD accrual gated on firm gross margin × individual performance × commission on new ARR.", status: "live" },
-      { label: "Long-range forecast", href: "/finance/plan/long-range", blurb: "Pipeline weighted forecast roll-ups (by partner / offering / sector / quarter).", status: "live" },
       { label: "13-week cash forecast", href: "/finance/plan/cash-13w", blurb: "Direct-method receipts and disbursements over the next 13 weeks with min-cash and covenant overlays.", status: "live" },
       { label: "Backlog & pipeline coverage", href: "/finance/plan/backlog", blurb: "Signed backlog plus probability-weighted pipeline against the next two quarters of revenue plan.", status: "live" },
     ],

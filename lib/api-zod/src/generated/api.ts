@@ -1852,6 +1852,177 @@ export const AtelierReplaceBankSignatoriesResponse = zod.object({
 });
 
 /**
+ * @summary Read finance autopilot thresholds (finance leadership; defaults when unset)
+ */
+export const AtelierGetFinanceAutopilotSettingsResponse = zod.object({
+  ok: zod.boolean(),
+  data: zod.object({
+    settings: zod.object({
+      journalAutoConfidence: zod.number(),
+      supplierInvoiceAutoMaxAed: zod.number(),
+      journalAutoMaxAed: zod.number(),
+      customised: zod
+        .boolean()
+        .describe("False when returning built-in defaults (no stored row)."),
+      updatedByUserId: zod.string().nullish(),
+      updatedByName: zod.string().nullish(),
+      updatedAt: zod.string().nullish(),
+    }),
+    canEdit: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Update finance autopilot thresholds (partner tier only; audited)
+ */
+export const atelierUpdateFinanceAutopilotSettingsBodyJournalAutoConfidenceMin = 0;
+export const atelierUpdateFinanceAutopilotSettingsBodyJournalAutoConfidenceMax = 1;
+
+export const atelierUpdateFinanceAutopilotSettingsBodySupplierInvoiceAutoMaxAedMin = 0;
+export const atelierUpdateFinanceAutopilotSettingsBodySupplierInvoiceAutoMaxAedMax = 10000000;
+
+export const atelierUpdateFinanceAutopilotSettingsBodyJournalAutoMaxAedMin = 0;
+export const atelierUpdateFinanceAutopilotSettingsBodyJournalAutoMaxAedMax = 10000000;
+
+export const AtelierUpdateFinanceAutopilotSettingsBody = zod.object({
+  journalAutoConfidence: zod
+    .number()
+    .min(atelierUpdateFinanceAutopilotSettingsBodyJournalAutoConfidenceMin)
+    .max(atelierUpdateFinanceAutopilotSettingsBodyJournalAutoConfidenceMax)
+    .optional(),
+  supplierInvoiceAutoMaxAed: zod
+    .number()
+    .min(atelierUpdateFinanceAutopilotSettingsBodySupplierInvoiceAutoMaxAedMin)
+    .max(atelierUpdateFinanceAutopilotSettingsBodySupplierInvoiceAutoMaxAedMax)
+    .optional(),
+  journalAutoMaxAed: zod
+    .number()
+    .min(atelierUpdateFinanceAutopilotSettingsBodyJournalAutoMaxAedMin)
+    .max(atelierUpdateFinanceAutopilotSettingsBodyJournalAutoMaxAedMax)
+    .optional(),
+});
+
+export const AtelierUpdateFinanceAutopilotSettingsResponse = zod.object({
+  ok: zod.boolean(),
+  data: zod.object({
+    settings: zod.object({
+      journalAutoConfidence: zod.number(),
+      supplierInvoiceAutoMaxAed: zod.number(),
+      journalAutoMaxAed: zod.number(),
+      customised: zod
+        .boolean()
+        .describe("False when returning built-in defaults (no stored row)."),
+      updatedByUserId: zod.string().nullish(),
+      updatedByName: zod.string().nullish(),
+      updatedAt: zod.string().nullish(),
+    }),
+  }),
+});
+
+/**
+ * @summary Unified pending-approvals inbox (aggregation only; finance leadership)
+ */
+export const AtelierGetFinanceApprovalsInboxResponse = zod.object({
+  ok: zod.boolean(),
+  data: zod.object({
+    items: zod.array(
+      zod.object({
+        id: zod.string(),
+        kind: zod.string(),
+        title: zod.string(),
+        subtitle: zod.string().optional(),
+        amount: zod
+          .object({
+            currency: zod.string(),
+            value: zod.number(),
+          })
+          .optional(),
+        submittedAt: zod.string().nullable(),
+        requiredRole: zod.enum(["partner", "finance"]),
+        href: zod.string(),
+        agent: zod
+          .object({
+            name: zod.string(),
+            runId: zod.string(),
+          })
+          .optional(),
+        stale: zod
+          .boolean()
+          .optional()
+          .describe("True when the source agent run is dead\/stale."),
+        actionable: zod
+          .boolean()
+          .describe(
+            "False when the caller's role cannot action this item (kept visible).",
+          ),
+      }),
+    ),
+    totals: zod.record(
+      zod.string(),
+      zod.object({
+        count: zod.number(),
+        actionable: zod.number(),
+      }),
+    ),
+    walletApprovals: zod.object({
+      href: zod.string(),
+      timesheets: zod.number(),
+      leave: zod.number(),
+      expenses: zod.number(),
+    }),
+    viewerRole: zod.string(),
+    includesNonActionable: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Reverse a posted journal and post a corrected replacement (partner tier; one txn)
+ */
+export const AtelierReverseRepostJournalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierReverseRepostJournalBodyMemoMin = 3;
+export const atelierReverseRepostJournalBodyMemoMax = 300;
+
+export const atelierReverseRepostJournalBodyLinesItemDebitMin = 0;
+
+export const atelierReverseRepostJournalBodyLinesItemCreditMin = 0;
+
+export const atelierReverseRepostJournalBodyLinesItemMemoMax = 300;
+
+export const atelierReverseRepostJournalBodyLinesMin = 2;
+export const atelierReverseRepostJournalBodyLinesMax = 50;
+
+export const AtelierReverseRepostJournalBody = zod.object({
+  memo: zod
+    .string()
+    .min(atelierReverseRepostJournalBodyMemoMin)
+    .max(atelierReverseRepostJournalBodyMemoMax),
+  lines: zod
+    .array(
+      zod.object({
+        accountCode: zod.string(),
+        engagementId: zod.string().optional(),
+        debit: zod
+          .number()
+          .min(atelierReverseRepostJournalBodyLinesItemDebitMin)
+          .optional(),
+        credit: zod
+          .number()
+          .min(atelierReverseRepostJournalBodyLinesItemCreditMin)
+          .optional(),
+        memo: zod
+          .string()
+          .max(atelierReverseRepostJournalBodyLinesItemMemoMax)
+          .optional(),
+      }),
+    )
+    .min(atelierReverseRepostJournalBodyLinesMin)
+    .max(atelierReverseRepostJournalBodyLinesMax),
+});
+
+/**
  * @summary Set the rechargeable-expense markup percentage (finance/partner only)
  */
 export const AtelierSetEngagementExpenseMarkupParams = zod.object({

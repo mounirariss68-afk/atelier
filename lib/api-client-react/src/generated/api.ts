@@ -136,6 +136,8 @@ import type {
   AtelierGetActivityParams,
   AtelierGetBankSignatories200,
   AtelierGetExpenseGlMappings200,
+  AtelierGetFinanceApprovalsInbox200,
+  AtelierGetFinanceAutopilotSettings200,
   AtelierGetMyCalendar502,
   AtelierGetMyCalendarParams,
   AtelierGetMyReceiptUploadUrl200,
@@ -285,6 +287,8 @@ import type {
   AtelierResearchFact,
   AtelierRespondToTaskBody,
   AtelierReverifyFactResult,
+  AtelierReverseRepostJournal201,
+  AtelierReverseRepostJournalBody,
   AtelierReviewReleaseInput,
   AtelierRevisePovInput,
   AtelierRevokeDocumentAccess200,
@@ -339,6 +343,8 @@ import type {
   AtelierUpdateContactInput,
   AtelierUpdateDocument200,
   AtelierUpdateDocumentBody,
+  AtelierUpdateFinanceAutopilotSettings200,
+  AtelierUpdateFinanceAutopilotSettingsBody,
   AtelierUpdateMyDependent200,
   AtelierUpdateMyDocument200,
   AtelierUpdateMyEmergencyContact200,
@@ -3360,6 +3366,351 @@ export const useAtelierReplaceBankSignatories = <
   TContext
 > => {
   return useMutation(getAtelierReplaceBankSignatoriesMutationOptions(options));
+};
+
+/**
+ * @summary Read finance autopilot thresholds (finance leadership; defaults when unset)
+ */
+export const getAtelierGetFinanceAutopilotSettingsUrl = () => {
+  return `/api/atelier/finance/autopilot/settings`;
+};
+
+export const atelierGetFinanceAutopilotSettings = async (
+  options?: RequestInit,
+): Promise<AtelierGetFinanceAutopilotSettings200> => {
+  return customFetch<AtelierGetFinanceAutopilotSettings200>(
+    getAtelierGetFinanceAutopilotSettingsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetFinanceAutopilotSettingsQueryKey = () => {
+  return [`/api/atelier/finance/autopilot/settings`] as const;
+};
+
+export const getAtelierGetFinanceAutopilotSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetFinanceAutopilotSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>
+  > = ({ signal }) =>
+    atelierGetFinanceAutopilotSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetFinanceAutopilotSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>
+>;
+export type AtelierGetFinanceAutopilotSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Read finance autopilot thresholds (finance leadership; defaults when unset)
+ */
+
+export function useAtelierGetFinanceAutopilotSettings<
+  TData = Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceAutopilotSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions =
+    getAtelierGetFinanceAutopilotSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update finance autopilot thresholds (partner tier only; audited)
+ */
+export const getAtelierUpdateFinanceAutopilotSettingsUrl = () => {
+  return `/api/atelier/finance/autopilot/settings`;
+};
+
+export const atelierUpdateFinanceAutopilotSettings = async (
+  atelierUpdateFinanceAutopilotSettingsBody: AtelierUpdateFinanceAutopilotSettingsBody,
+  options?: RequestInit,
+): Promise<AtelierUpdateFinanceAutopilotSettings200> => {
+  return customFetch<AtelierUpdateFinanceAutopilotSettings200>(
+    getAtelierUpdateFinanceAutopilotSettingsUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateFinanceAutopilotSettingsBody),
+    },
+  );
+};
+
+export const getAtelierUpdateFinanceAutopilotSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>,
+    TError,
+    { data: BodyType<AtelierUpdateFinanceAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>,
+  TError,
+  { data: BodyType<AtelierUpdateFinanceAutopilotSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateFinanceAutopilotSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>,
+    { data: BodyType<AtelierUpdateFinanceAutopilotSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierUpdateFinanceAutopilotSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateFinanceAutopilotSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>
+>;
+export type AtelierUpdateFinanceAutopilotSettingsMutationBody =
+  BodyType<AtelierUpdateFinanceAutopilotSettingsBody>;
+export type AtelierUpdateFinanceAutopilotSettingsMutationError =
+  ErrorType<unknown>;
+
+/**
+ * @summary Update finance autopilot thresholds (partner tier only; audited)
+ */
+export const useAtelierUpdateFinanceAutopilotSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>,
+    TError,
+    { data: BodyType<AtelierUpdateFinanceAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateFinanceAutopilotSettings>>,
+  TError,
+  { data: BodyType<AtelierUpdateFinanceAutopilotSettingsBody> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateFinanceAutopilotSettingsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Unified pending-approvals inbox (aggregation only; finance leadership)
+ */
+export const getAtelierGetFinanceApprovalsInboxUrl = () => {
+  return `/api/atelier/finance/approvals/inbox`;
+};
+
+export const atelierGetFinanceApprovalsInbox = async (
+  options?: RequestInit,
+): Promise<AtelierGetFinanceApprovalsInbox200> => {
+  return customFetch<AtelierGetFinanceApprovalsInbox200>(
+    getAtelierGetFinanceApprovalsInboxUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetFinanceApprovalsInboxQueryKey = () => {
+  return [`/api/atelier/finance/approvals/inbox`] as const;
+};
+
+export const getAtelierGetFinanceApprovalsInboxQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetFinanceApprovalsInboxQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>
+  > = ({ signal }) =>
+    atelierGetFinanceApprovalsInbox({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetFinanceApprovalsInboxQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>
+>;
+export type AtelierGetFinanceApprovalsInboxQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Unified pending-approvals inbox (aggregation only; finance leadership)
+ */
+
+export function useAtelierGetFinanceApprovalsInbox<
+  TData = Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetFinanceApprovalsInbox>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetFinanceApprovalsInboxQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Reverse a posted journal and post a corrected replacement (partner tier; one txn)
+ */
+export const getAtelierReverseRepostJournalUrl = (id: string) => {
+  return `/api/atelier/gl/journals/${id}/reverse-repost`;
+};
+
+export const atelierReverseRepostJournal = async (
+  id: string,
+  atelierReverseRepostJournalBody: AtelierReverseRepostJournalBody,
+  options?: RequestInit,
+): Promise<AtelierReverseRepostJournal201> => {
+  return customFetch<AtelierReverseRepostJournal201>(
+    getAtelierReverseRepostJournalUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierReverseRepostJournalBody),
+    },
+  );
+};
+
+export const getAtelierReverseRepostJournalMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReverseRepostJournal>>,
+    TError,
+    { id: string; data: BodyType<AtelierReverseRepostJournalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReverseRepostJournal>>,
+  TError,
+  { id: string; data: BodyType<AtelierReverseRepostJournalBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierReverseRepostJournal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReverseRepostJournal>>,
+    { id: string; data: BodyType<AtelierReverseRepostJournalBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierReverseRepostJournal(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReverseRepostJournalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReverseRepostJournal>>
+>;
+export type AtelierReverseRepostJournalMutationBody =
+  BodyType<AtelierReverseRepostJournalBody>;
+export type AtelierReverseRepostJournalMutationError = ErrorType<void>;
+
+/**
+ * @summary Reverse a posted journal and post a corrected replacement (partner tier; one txn)
+ */
+export const useAtelierReverseRepostJournal = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReverseRepostJournal>>,
+    TError,
+    { id: string; data: BodyType<AtelierReverseRepostJournalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReverseRepostJournal>>,
+  TError,
+  { id: string; data: BodyType<AtelierReverseRepostJournalBody> },
+  TContext
+> => {
+  return useMutation(getAtelierReverseRepostJournalMutationOptions(options));
 };
 
 /**

@@ -121,6 +121,7 @@ import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 import revrecRoutes from "./revrecRoutes";
 import glRoutes from "./glRoutes";
 import closeRoutes from "./closeRoutes";
+import financeAutopilotRoutes from "./financeAutopilotRoutes";
 import vatRoutes from "./vatRoutes";
 import marginReportsRoutes from "./marginReportsRoutes";
 import bankRoutes from "./bankRoutes";
@@ -489,6 +490,11 @@ router.use(revrecRoutes);
 // journal, entity tagging, Bookkeeper posting agent, trial balance.
 router.use(glRoutes);
 router.use(closeRoutes);
+// Task #1091 — Finance autopilot: founder-editable thresholds (D1), the
+// unified approvals inbox (aggregation only — actions stay on the existing
+// endpoints), and reverse-and-repost for agent-posted journals. Persona
+// gating (finance leadership) is enforced per-handler.
+router.use(financeAutopilotRoutes);
 router.use(vatRoutes);
 
 // Task #434 — Margin / realization reporting suite: sold-position

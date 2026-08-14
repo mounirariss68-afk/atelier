@@ -20,6 +20,8 @@ export type {
   AtelierReplaceBankSignatoriesBody,
   AtelierReplaceExpenseGlMappingsBody,
   AtelierSetEngagementExpenseMarkupBody,
+  AtelierReverseRepostJournalBody,
+  AtelierUpdateFinanceAutopilotSettingsBody,
   AtelierCreateRateCardVersionBody,
   AtelierPricingHandoffBillingBody,
   AuthLoginResponse,

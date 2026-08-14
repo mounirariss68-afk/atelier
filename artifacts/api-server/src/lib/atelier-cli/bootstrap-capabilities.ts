@@ -122,6 +122,13 @@ import "./partner-portal-capabilities.js";
 // route cores as the Finance UI; the `bank` module keeps them stripped
 // from restricted personas and board observers at the catalog gate.
 import "./finance-doc-capabilities.js";
+// Task #1091 — Riser finance approvals inbox: the unified queue read
+// ("what needs my approval?") + the approve/reject/send writes founders
+// act on it with. Every commit runs through the SAME route cores as the
+// Finance UI; the `ledger` module keeps the whole slice stripped from
+// restricted / self-only / alliance personas at the catalog gate, above
+// each entry's finance-leadership requiredRoles.
+import "./finance-autopilot-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

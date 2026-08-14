@@ -10,7 +10,16 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import {
+  useAtelierGetMe,
+  useAtelierReverseRepostJournal,
+  type AtelierReverseRepostJournalBodyLinesItem,
+} from "@workspace/api-client-react";
+import { PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Bot } from "lucide-react";
 import {
   useFinanceEntities,
   useGlAccounts,
@@ -21,6 +30,7 @@ import {
   useGlBookkeeperStatus,
   postJson,
   type BookkeeperRunResult,
+  type GlJournalEntryRow,
 } from "@/lib/v5-hooks";
 
 function fmt(n: number): string {
@@ -236,50 +246,242 @@ function TrialBalanceTab({ entityId, period }: { entityId: string | null; period
   );
 }
 
+/** Short id reference for reverse/repost linkage chips. */
+function shortRef(id: string): string {
+  return id.length > 10 ? `…${id.slice(-6)}` : id;
+}
+
 function JournalTab({ entityId, period }: { entityId: string | null; period: string }) {
-  const { data, isLoading } = useGlJournal({ entityId, period: /^\d{4}-\d{2}$/.test(period) ? period : undefined });
+  const { data: me } = useAtelierGetMe();
+  const isPartnerTier = me?.role === "partner" || me?.role === "founding_partner";
+  // Task #1091 — agent-provenance filter toggle (wires ?postedByAgent=1).
+  const [agentsOnly, setAgentsOnly] = React.useState(false);
+  const { data, isLoading } = useGlJournal({
+    entityId,
+    period: /^\d{4}-\d{2}$/.test(period) ? period : undefined,
+    postedByAgent: agentsOnly ? "1" : undefined,
+  });
   const [open, setOpen] = React.useState<string | null>(null);
+  const [fixTarget, setFixTarget] = React.useState<GlJournalEntryRow | null>(null);
   if (isLoading) return <Card className="p-6 text-text-mute">Loading journal…</Card>;
   const rows = data?.data.rows ?? [];
   return (
     <div className="space-y-2" data-testid="list-journal">
+      <div className="flex items-center justify-end">
+        <label className="inline-flex items-center gap-2 text-xs font-mono text-text-mute cursor-pointer" data-testid="toggle-posted-by-agent">
+          <input
+            type="checkbox"
+            checked={agentsOnly}
+            onChange={(e) => setAgentsOnly(e.target.checked)}
+            className="accent-gold"
+          />
+          <span className="inline-flex items-center gap-1"><Bot className="w-3.5 h-3.5" /> Posted by agents</span>
+        </label>
+      </div>
       {rows.length === 0 && <Card className="p-6 text-text-mute">No journal entries for this filter.</Card>}
-      {rows.map((e) => (
-        <Card key={e.id} className="p-3" data-testid={`journal-entry-${e.id}`}>
-          <div
-            role="button"
-            tabIndex={0}
-            className="w-full text-left cursor-pointer"
-            onClick={() => setOpen(open === e.id ? null : e.id)}
-            onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setOpen(open === e.id ? null : e.id); }}
-          >
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <MonoChip>{e.entryDate}</MonoChip>
-                <MonoChip tone={e.kind === "manual" ? "gold" : "default"}>{e.sourceKind}</MonoChip>
-                <span className="truncate">{e.memo}</span>
-                {e.sourceHref && <SourceLink href={e.sourceHref} testId={`link-journal-source-${e.id}`} />}
+      {rows.map((e) => {
+        const byAgent = !!e.agentRunId;
+        return (
+          <Card key={e.id} className="p-3" data-testid={`journal-entry-${e.id}`}>
+            <div
+              role="button"
+              tabIndex={0}
+              className="w-full text-left cursor-pointer"
+              onClick={() => setOpen(open === e.id ? null : e.id)}
+              onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setOpen(open === e.id ? null : e.id); }}
+            >
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <MonoChip>{e.entryDate}</MonoChip>
+                  <MonoChip tone={e.kind === "manual" ? "gold" : "default"}>{e.sourceKind}</MonoChip>
+                  {byAgent && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] text-gold"
+                      title={`Posted by ${e.agentName ?? "agent"} · run ${e.agentRunId}`}
+                      data-testid={`journal-agent-${e.id}`}
+                    >
+                      <Bot className="w-3 h-3" /> {e.agentName ?? "agent"}
+                    </span>
+                  )}
+                  {e.reversesEntryId && (
+                    <MonoChip tone="red" data-testid={`journal-reverses-${e.id}`}>
+                      reverses {shortRef(e.reversesEntryId)}
+                    </MonoChip>
+                  )}
+                  {e.repostOfEntryId && (
+                    <MonoChip tone="amber" data-testid={`journal-repost-${e.id}`}>
+                      repost of {shortRef(e.repostOfEntryId)}
+                    </MonoChip>
+                  )}
+                  <span className="truncate">{e.memo}</span>
+                  {e.sourceHref && <SourceLink href={e.sourceHref} testId={`link-journal-source-${e.id}`} />}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {byAgent && isPartnerTier && (
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); setFixTarget(e); }}
+                      className="text-xs text-gold hover:underline whitespace-nowrap"
+                      data-testid={`journal-fix-${e.id}`}
+                    >
+                      Fix this
+                    </button>
+                  )}
+                  <span className="font-mono text-sm">{e.currency} {fmt(e.totalDebit)}</span>
+                </div>
               </div>
-              <span className="font-mono text-sm">{e.currency} {fmt(e.totalDebit)}</span>
             </div>
-          </div>
-          {open === e.id && (
-            <table className="w-full text-xs font-mono mt-2 border-t border-border/40">
-              <tbody>
-                {e.lines.map((l) => (
-                  <tr key={l.id} className="border-b border-border/20">
-                    <td className="px-2 py-1">{l.accountCode} {l.accountName}</td>
-                    <td className="px-2 py-1 text-text-mute">{l.engagementId ?? ""}</td>
-                    <td className="px-2 py-1 text-right">{l.debit > 0 ? fmt(l.debit) : ""}</td>
-                    <td className="px-2 py-1 text-right">{l.credit > 0 ? fmt(l.credit) : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
-      ))}
+            {open === e.id && (
+              <table className="w-full text-xs font-mono mt-2 border-t border-border/40">
+                <tbody>
+                  {e.lines.map((l) => (
+                    <tr key={l.id} className="border-b border-border/20">
+                      <td className="px-2 py-1">{l.accountCode} {l.accountName}</td>
+                      <td className="px-2 py-1 text-text-mute">{l.engagementId ?? ""}</td>
+                      <td className="px-2 py-1 text-right">{l.debit > 0 ? fmt(l.debit) : ""}</td>
+                      <td className="px-2 py-1 text-right">{l.credit > 0 ? fmt(l.credit) : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        );
+      })}
+      {fixTarget && (
+        <FixJournalDialog entry={fixTarget} onClose={() => setFixTarget(null)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * FixJournalDialog — Task #1091 "reverse-and-repost". Posted journals are
+ * never edited in place: this creates the reversing journal + a corrected
+ * repost as one audited operation (partner tier). Prefilled with the
+ * original lines/memo for correction.
+ */
+function FixJournalDialog({ entry, onClose }: { entry: GlJournalEntryRow; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [memo, setMemo] = React.useState(entry.memo ?? "");
+  const [lines, setLines] = React.useState<AtelierReverseRepostJournalBodyLinesItem[]>(
+    entry.lines.map((l) => ({
+      accountCode: l.accountCode,
+      engagementId: l.engagementId ?? undefined,
+      debit: l.debit || 0,
+      credit: l.credit || 0,
+      memo: l.memo ?? undefined,
+    })),
+  );
+
+  const mutation = useAtelierReverseRepostJournal({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("atelier-gl") });
+        toast({ title: "Journal reversed and reposted." });
+        onClose();
+      },
+      onError: (err) => {
+        const status = (err as { status?: number } | null)?.status;
+        toast({
+          title: "Could not fix journal",
+          description:
+            status === 409
+              ? "This period is signed off — reopen it first."
+              : err instanceof Error
+                ? err.message
+                : "Please try again.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const setLine = (i: number, patch: Partial<AtelierReverseRepostJournalBodyLinesItem>) => {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  };
+
+  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const balanced = Math.abs(totalDebit - totalCredit) < 0.011 && totalDebit > 0;
+
+  const submit = () => {
+    mutation.mutate({
+      id: entry.id,
+      data: {
+        memo,
+        lines: lines.map((l) => ({
+          accountCode: l.accountCode,
+          engagementId: l.engagementId || undefined,
+          debit: Number(l.debit) || 0,
+          credit: Number(l.credit) || 0,
+          memo: l.memo || undefined,
+        })),
+      },
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-fix-journal">
+        <DialogHeader>
+          <DialogTitle>Fix this journal</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-text-mute">
+          The original entry is reversed and a corrected replacement is posted as one audited operation.
+          Correct the lines below.
+        </p>
+        <div className="space-y-1 mt-2">
+          <label className="text-[11px] font-mono uppercase text-text-faint">Correction memo</label>
+          <Input value={memo} onChange={(e) => setMemo(e.target.value)} data-testid="fix-journal-memo" />
+        </div>
+        <table className="w-full text-xs mt-3">
+          <thead>
+            <tr className="text-left text-[10px] font-mono uppercase text-text-faint border-b border-border">
+              <th className="py-1">Account</th><th>Engagement</th>
+              <th className="text-right">Debit</th><th className="text-right">Credit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l, i) => (
+              <tr key={i} className="border-b border-border/30">
+                <td className="py-1 pr-2">
+                  <Input value={l.accountCode} onChange={(e) => setLine(i, { accountCode: e.target.value })} className="h-8" data-testid={`fix-line-account-${i}`} />
+                </td>
+                <td className="pr-2">
+                  <Input value={l.engagementId ?? ""} onChange={(e) => setLine(i, { engagementId: e.target.value })} className="h-8" />
+                </td>
+                <td className="pr-2">
+                  <Input type="number" value={String(l.debit ?? 0)} onChange={(e) => setLine(i, { debit: Number(e.target.value) })} className="h-8 text-right font-mono" data-testid={`fix-line-debit-${i}`} />
+                </td>
+                <td>
+                  <Input type="number" value={String(l.credit ?? 0)} onChange={(e) => setLine(i, { credit: Number(e.target.value) })} className="h-8 text-right font-mono" data-testid={`fix-line-credit-${i}`} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex items-center justify-between mt-2 font-mono text-xs">
+          <span className={balanced ? "text-success" : "text-amber-400"}>
+            {balanced ? "Balanced" : "Debits must equal credits"}
+          </span>
+          <span className="text-text-mute">
+            Dr {entry.currency} {fmt(totalDebit)} · Cr {entry.currency} {fmt(totalCredit)}
+          </span>
+        </div>
+        <div className="flex items-center justify-end gap-2 mt-3">
+          <button type="button" className="text-xs text-text-mute hover:text-text" onClick={onClose}>Cancel</button>
+          <PillButton
+            onClick={submit}
+            disabled={mutation.isPending || !balanced || memo.trim().length < 3}
+            data-testid="fix-journal-submit"
+          >
+            {mutation.isPending ? "Posting…" : "Reverse & repost"}
+          </PillButton>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

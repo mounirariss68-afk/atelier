@@ -154,4 +154,5 @@
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
 - [Chat commit-token defense](chat-commit-token.md) — twoPhaseConfirm is model-trusted; sensitive chat writes HMAC-stamp pending.input so a fabricated confirm:true only re-previews.
 - [Entity allocation engine](atelier-entity-allocation.md) — benefit-principle propose/decide helpers are the only allocation path; scratch-DB leftover entities break country rules in probes.
+- [Finance autopilot policy & inbox](atelier-finance-autopilot.md) — evaluateAutoPost is the SOLE authorization to skip human review; never-auto matrix; shared inbox loader; scheduler lockKeys.
 - [One-off DB cleanups](oneoff-db-cleanups.md) — purge = committed idempotent script + explicit per-table delete/unlink policy + system audit row + rerun-safe fixture-scoped probe.

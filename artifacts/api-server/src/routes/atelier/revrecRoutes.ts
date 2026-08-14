@@ -49,6 +49,7 @@ import {
   isBoardObserver,
 } from "./personaRoles";
 import { runRevenueRecognizer } from "../../lib/atelier-agents/revenue-recognizer";
+import { runAgentExclusive } from "../../lib/atelier-agents/exclusive-runs";
 
 const router: IRouter = Router();
 
@@ -499,7 +500,14 @@ router.post("/revrec/schedules/compute", async (req: Request, res: Response) => 
     res.status(400).json({ error: "invalid-input", details: parsed.error.flatten() });
     return;
   }
-  const out = await withRls(req, async (tx) => {
+  // Task #1105 — single-flight through the SHARED per-agent lock the cron
+  // Revenue Recognizer also uses. This manual compute and the scheduled
+  // org-wide run both write atelier_revenue_schedule, so they must be
+  // mutually exclusive; a concurrent trigger returns 409.
+  const ex = await runAgentExclusive({
+    agent: "revenue_recognizer", orgId: me.orgId, userId: me.id,
+    label: `Revenue Recognizer — manual compute ${parsed.data.periodLabel}`, resultHref: "/finance/revrec",
+    work: () => withRls(req, async (tx) => {
     const methods = await tx
       .select()
       .from(atelierRevenueMethod)
@@ -617,7 +625,13 @@ router.post("/revrec/schedules/compute", async (req: Request, res: Response) => 
       }
     }
     return written;
+    }),
   });
+  if (!ex.ran) {
+    res.status(409).json({ error: "already_running", message: "A Revenue Recognizer run is already in progress — try again once it finishes." });
+    return;
+  }
+  const out = ex.result;
   await audit(me.id, me.name, {
     entityType: "revenue_schedule",
     entityId: parsed.data.periodLabel,

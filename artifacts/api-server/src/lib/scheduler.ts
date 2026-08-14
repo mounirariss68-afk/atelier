@@ -12,6 +12,10 @@ import { runMsMeetingAutolog } from "./msMeetingAutolog";
 import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
 import { runMsLicenseSeatForecast } from "./msLicenseForecast";
 import { runProcurementRenewalScan } from "./atelier-procurement-renewal";
+import { runSelfBillingClerk } from "./atelier-agents/selfBillingClerk";
+import { runCollectionsAgent } from "./atelier-agents/collections";
+import { runRevenueRecognizerForOrg } from "./atelier-agents/revrec-scheduler";
+import { runAgentExclusive } from "./atelier-agents/exclusive-runs";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -42,6 +46,19 @@ const MS_LICENSE_FORECAST_CRON = process.env.MS_LICENSE_FORECAST_CRON ?? "15 5 *
 // renewal cadence) on the responsible partner's Pane A + one-time email nudge.
 const PROCUREMENT_RENEWAL_CRON = process.env.PROCUREMENT_RENEWAL_CRON ?? "45 5 * * *";
 
+// Task #1091 — finance autopilot cadences. All rerun-safe: each agent is
+// idempotent (drafts key off period/week, revrec skips frozen schedules)
+// and concurrency-guarded through the background-jobs running-unique index
+// (lockKey), so a double-fire or an overlapping manual run can't run twice.
+// Self-Billing Clerk — weekly (Mon 03:30 UTC): draft RCTIs for the week.
+const SELF_BILLING_CRON = process.env.SELF_BILLING_CRON ?? "30 3 * * 1";
+// Collections Agent — daily (06:15 UTC): draft dunning/escalations.
+const COLLECTIONS_AGENT_CRON = process.env.COLLECTIONS_AGENT_CRON ?? "15 6 * * *";
+// Revenue Recognizer — monthly (1st, 04:00 UTC): compute period schedules.
+const REVENUE_RECOGNIZER_CRON = process.env.REVENUE_RECOGNIZER_CRON ?? "0 4 1 * *";
+const AUTOPILOT_ORG_ID = process.env.ATELIER_AUTOPILOT_ORG_ID ?? "aico";
+const SYSTEM_USER_ID = "system";
+
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
@@ -54,6 +71,9 @@ let cashForecasterTask: ScheduledTask | null = null;
 let msCalSyncTask: ScheduledTask | null = null;
 let msLicenseForecastTask: ScheduledTask | null = null;
 let procurementRenewalTask: ScheduledTask | null = null;
+let selfBillingTask: ScheduledTask | null = null;
+let collectionsAgentTask: ScheduledTask | null = null;
+let revenueRecognizerTask: ScheduledTask | null = null;
 
 // Task #629 — hourly: renew Graph calendar subscriptions (max ~3-day
 // lifetime), roll cache windows forward, and safety-sync stale caches.
@@ -392,6 +412,89 @@ export function startScheduler(): void {
     );
   }
 
+  // ── Task #1091 — finance autopilot agents ──────────────────────────
+  // Each block guards concurrency with the background-jobs registry: a
+  // running row keyed by lockKey is inserted first; if one already exists
+  // (a still-running manual or prior scheduled run) the insert returns null
+  // and we skip — the agents themselves are idempotent so this is belt-and-
+  // suspenders. The job row is completed/failed in a finally-style pair.
+
+  // Self-Billing Clerk — weekly.
+  if (cron.validate(SELF_BILLING_CRON)) {
+    selfBillingTask = cron.schedule(
+      SELF_BILLING_CRON,
+      async () => {
+        try {
+          // Shared single-flight guard (Task #1105): the SAME per-agent lock
+          // the manual route uses, so a cron tick and a manual trigger can
+          // never both run. Stable lockKey + singleton target (not per-date).
+          const res = await runAgentExclusive({
+            agent: "self_billing_clerk", orgId: AUTOPILOT_ORG_ID, userId: SYSTEM_USER_ID,
+            label: "Self-Billing Clerk — weekly draft", resultHref: "/finance/payables/self-billing",
+            work: () => runSelfBillingClerk({ input: {}, triggeredByUserId: null }),
+          });
+          if (!res.ran) { logger.info("Self-Billing Clerk skipped — run already in progress"); return; }
+          logger.info({ runId: res.result.runId }, "Self-Billing Clerk scheduled run finished");
+        } catch (err) {
+          logger.error({ err }, "Self-Billing Clerk scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: SELF_BILLING_CRON }, "Self-Billing Clerk scheduler started");
+  } else {
+    logger.error({ cron: SELF_BILLING_CRON }, "Invalid SELF_BILLING_CRON expression, Self-Billing Clerk not scheduled");
+  }
+
+  // Collections Agent — daily.
+  if (cron.validate(COLLECTIONS_AGENT_CRON)) {
+    collectionsAgentTask = cron.schedule(
+      COLLECTIONS_AGENT_CRON,
+      async () => {
+        try {
+          const res = await runAgentExclusive({
+            agent: "collections_agent", orgId: AUTOPILOT_ORG_ID, userId: SYSTEM_USER_ID,
+            label: "Collections Agent — daily draft", resultHref: "/finance/collections",
+            work: () => runCollectionsAgent({ orgId: AUTOPILOT_ORG_ID, input: {}, triggeredByUserId: null }),
+          });
+          if (!res.ran) { logger.info("Collections Agent skipped — run already in progress"); return; }
+          logger.info({ runId: res.result.runId }, "Collections Agent scheduled run finished");
+        } catch (err) {
+          logger.error({ err }, "Collections Agent scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: COLLECTIONS_AGENT_CRON }, "Collections Agent scheduler started");
+  } else {
+    logger.error({ cron: COLLECTIONS_AGENT_CRON }, "Invalid COLLECTIONS_AGENT_CRON expression, Collections Agent not scheduled");
+  }
+
+  // Revenue Recognizer — monthly.
+  if (cron.validate(REVENUE_RECOGNIZER_CRON)) {
+    revenueRecognizerTask = cron.schedule(
+      REVENUE_RECOGNIZER_CRON,
+      async () => {
+        const period = new Date().toISOString().slice(0, 7);
+        try {
+          const res = await runAgentExclusive({
+            agent: "revenue_recognizer", orgId: AUTOPILOT_ORG_ID, userId: SYSTEM_USER_ID,
+            label: `Revenue Recognizer — ${period}`, resultHref: "/finance/revrec",
+            work: () => runRevenueRecognizerForOrg({ orgId: AUTOPILOT_ORG_ID, periodLabel: period }),
+          });
+          if (!res.ran) { logger.info("Revenue Recognizer skipped — run already in progress"); return; }
+          logger.info(res.result, "Revenue Recognizer scheduled run finished");
+        } catch (err) {
+          logger.error({ err }, "Revenue Recognizer scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: REVENUE_RECOGNIZER_CRON }, "Revenue Recognizer scheduler started");
+  } else {
+    logger.error({ cron: REVENUE_RECOGNIZER_CRON }, "Invalid REVENUE_RECOGNIZER_CRON expression, Revenue Recognizer not scheduled");
+  }
+
   // Boot pass: ensure subscriptions exist for already-connected users
   // shortly after startup (delayed so boot isn't slowed by Graph calls).
   setTimeout(() => {
@@ -460,6 +563,21 @@ export function stopScheduler(): void {
     msLicenseForecastTask.stop();
     msLicenseForecastTask = null;
     logger.info("MS license seat forecast scheduler stopped");
+  }
+  if (selfBillingTask) {
+    selfBillingTask.stop();
+    selfBillingTask = null;
+    logger.info("Self-Billing Clerk scheduler stopped");
+  }
+  if (collectionsAgentTask) {
+    collectionsAgentTask.stop();
+    collectionsAgentTask = null;
+    logger.info("Collections Agent scheduler stopped");
+  }
+  if (revenueRecognizerTask) {
+    revenueRecognizerTask.stop();
+    revenueRecognizerTask = null;
+    logger.info("Revenue Recognizer scheduler stopped");
   }
 }
 

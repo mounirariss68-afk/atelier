@@ -8,11 +8,12 @@
  * ONLY page the self-only personas (employee / contractor) can use.
  */
 import * as React from "react";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMyProfile,
   useAtelierGetMyApprovals,
+  useAtelierGetFinanceApprovalsInbox,
   useAtelierListMyNotifications,
   useAtelierDismissMyNotification,
   getAtelierListMyNotificationsQueryKey,
@@ -220,9 +221,16 @@ export default function MeHome() {
 type Profile = AtelierSelfProfile | undefined;
 
 function OverviewSection({ loading, profile }: { loading: boolean; profile: Profile }) {
+  const role = profile?.user?.role;
+  // Task #1091 — finance leadership also see a compact finance-approvals
+  // card fed by the unified inbox. Gate the query on role: employee /
+  // contractor (and other non-leadership) viewers would 403 the endpoint.
+  const financeLeader =
+    role === "founding_partner" || role === "partner" || role === "finance";
   return (
     <div className="space-y-6">
       <PendingApprovalsCard />
+      {financeLeader && <FinanceApprovalsCard />}
       <NotificationCards />
       {/* Task #327 — the viewer's Microsoft 365 meetings, also on Home. */}
       <MyMeetingsCard />
@@ -314,6 +322,55 @@ function PendingApprovalsCard() {
           ))}
         </ul>
       ) : null}
+    </Card>
+  );
+}
+
+/**
+ * FinanceApprovalsCard — Task #1091. A compact digest of the unified
+ * finance approvals inbox for finance-leadership viewers: total actionable
+ * count, the top 3 items, and a link into /finance/approvals. The caller
+ * gates rendering (and thus the query) on role so non-leadership viewers
+ * never fire the 403'd inbox endpoint.
+ */
+function FinanceApprovalsCard() {
+  const { data, isLoading } = useAtelierGetFinanceApprovalsInbox();
+  const inbox = data?.data;
+  if (isLoading || !inbox) return null;
+  const actionable = inbox.items.filter((i) => i.actionable);
+  if (actionable.length === 0) return null;
+  const top = actionable.slice(0, 3);
+  return (
+    <Card className="p-4 border-gold/40" data-testid="me-finance-approvals">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text">Finance approvals</h3>
+          <span
+            className="inline-flex items-center justify-center rounded-full bg-gold/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-gold"
+            data-testid="me-finance-approvals-count"
+          >
+            {actionable.length}
+          </span>
+        </div>
+        <Link href="/finance/approvals" className="text-xs text-gold hover:underline">
+          Open inbox →
+        </Link>
+      </div>
+      <ul className="mt-2 divide-y divide-border-soft">
+        {top.map((i) => (
+          <li key={i.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+            <div className="min-w-0 flex items-center gap-2">
+              <MonoChip tone={i.stale ? "red" : "gold"}>{i.kind.replace(/_/g, " ")}</MonoChip>
+              <span className="truncate text-text">{i.title}</span>
+            </div>
+            {i.amount && (
+              <span className="shrink-0 font-mono text-[11px] text-text-mute">
+                {i.amount.currency} {i.amount.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

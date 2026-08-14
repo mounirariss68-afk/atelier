@@ -35,6 +35,7 @@ import {
 import { runAgent } from "./runAgent.js";
 import { writeAllocationAudit } from "../atelier-entity-allocation.js";
 import { invoiceAccountResolves } from "../invoiceAccountGuard.js";
+import { evaluateAutoPost, FINANCE_AUTOPILOT_DEFAULTS } from "../atelier-finance-autopolicy.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -413,13 +414,32 @@ async function executeBookkeeper(
       return false;
     }
     const entryId = rid("gljrn");
+    // Task #1091 — the auto-post engine is the SOLE authorization for
+    // posting without a human. Deterministic Bookkeeper journals are the
+    // always-auto matrix row; routing through the engine keeps that
+    // authorization in one place and yields the recorded reason.
+    const autoDecision = evaluateAutoPost({ kind: "bookkeeper_journal", thresholds: FINANCE_AUTOPILOT_DEFAULTS });
+    if (!autoDecision.auto) {
+      // Unreachable by matrix, but never post unauthorized: surface as an
+      // exception instead of silently writing.
+      exceptions.push({
+        code: "auto_post_denied", sourceKind: spec.sourceKind, sourceRef: spec.sourceRef,
+        message: `Auto-post engine withheld authorization: ${autoDecision.reasons.join("; ")}`,
+        legalEntityId: spec.legalEntityId, sourceLabel: spec.sourceLabel,
+        details: { reasons: autoDecision.reasons },
+      });
+      return false;
+    }
     await db.transaction(async (tx) => {
       await tx.insert(atelierGlJournalEntry).values({
         id: entryId, orgId, legalEntityId: spec.legalEntityId,
         periodLabel, entryDate: spec.entryDate, kind: "posting",
         sourceKind: spec.sourceKind, sourceRef: spec.sourceRef,
         memo: spec.memo, currency: spec.currency,
-        totalDebit, totalCredit, agentRunId,
+        // Task #1091 — agent provenance: snapshot the agent name so the
+        // journal list "postedByAgent" filter is queryable without joining
+        // a possibly-reaped run row.
+        totalDebit, totalCredit, agentRunId, agentName: "Bookkeeper",
       });
       for (const l of resolved) {
         await tx.insert(atelierGlJournalLine).values({

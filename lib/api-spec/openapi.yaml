@@ -763,6 +763,147 @@ paths:
                 properties:
                   ok: { type: boolean }
                   count: { type: number }
+  /atelier/finance/autopilot/settings:
+    get:
+      operationId: atelierGetFinanceAutopilotSettings
+      tags: [atelier]
+      summary: Read finance autopilot thresholds (finance leadership; defaults when unset)
+      responses:
+        "200":
+          description: Current thresholds plus whether the caller may edit them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    required: [settings, canEdit]
+                    properties:
+                      settings: { $ref: "#/components/schemas/AtelierFinanceAutopilotSettings" }
+                      canEdit: { type: boolean }
+    patch:
+      operationId: atelierUpdateFinanceAutopilotSettings
+      tags: [atelier]
+      summary: Update finance autopilot thresholds (partner tier only; audited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                journalAutoConfidence: { type: number, minimum: 0, maximum: 1 }
+                supplierInvoiceAutoMaxAed: { type: number, minimum: 0, maximum: 10000000 }
+                journalAutoMaxAed: { type: number, minimum: 0, maximum: 10000000 }
+      responses:
+        "200":
+          description: Updated thresholds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    required: [settings]
+                    properties:
+                      settings: { $ref: "#/components/schemas/AtelierFinanceAutopilotSettings" }
+  /atelier/finance/approvals/inbox:
+    get:
+      operationId: atelierGetFinanceApprovalsInbox
+      tags: [atelier]
+      summary: Unified pending-approvals inbox (aggregation only; finance leadership)
+      responses:
+        "200":
+          description: Aggregated pending decisions across finance surfaces
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    required: [items, totals, walletApprovals, viewerRole, includesNonActionable]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AtelierApprovalInboxItem" }
+                      totals:
+                        type: object
+                        additionalProperties:
+                          type: object
+                          required: [count, actionable]
+                          properties:
+                            count: { type: number }
+                            actionable: { type: number }
+                      walletApprovals:
+                        type: object
+                        required: [href, timesheets, leave, expenses]
+                        properties:
+                          href: { type: string }
+                          timesheets: { type: number }
+                          leave: { type: number }
+                          expenses: { type: number }
+                      viewerRole: { type: string }
+                      includesNonActionable: { type: boolean }
+  /atelier/gl/journals/{id}/reverse-repost:
+    post:
+      operationId: atelierReverseRepostJournal
+      tags: [atelier]
+      summary: Reverse a posted journal and post a corrected replacement (partner tier; one txn)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memo, lines]
+              properties:
+                memo: { type: string, minLength: 3, maxLength: 300 }
+                lines:
+                  type: array
+                  minItems: 2
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [accountCode]
+                    properties:
+                      accountCode: { type: string }
+                      engagementId: { type: string }
+                      debit: { type: number, minimum: 0 }
+                      credit: { type: number, minimum: 0 }
+                      memo: { type: string, maxLength: 300 }
+      responses:
+        "201":
+          description: Reversal + corrected repost posted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    required: [reversalId, repostId, originalId]
+                    properties:
+                      reversalId: { type: string }
+                      repostId: { type: string }
+                      originalId: { type: string }
+        "409":
+          description: Period is locked/signed-off for the GL module
   /atelier/wallet/engagements/{engagementId}/expense-markup:
     patch:
       operationId: atelierSetEngagementExpenseMarkup
@@ -9572,6 +9713,51 @@ components:
             properties:
               id: { type: string }
               label: { type: string }
+    AtelierFinanceAutopilotSettings:
+      type: object
+      required:
+        [journalAutoConfidence, supplierInvoiceAutoMaxAed, journalAutoMaxAed, customised]
+      properties:
+        journalAutoConfidence: { type: number }
+        supplierInvoiceAutoMaxAed: { type: number }
+        journalAutoMaxAed: { type: number }
+        customised:
+          type: boolean
+          description: False when returning built-in defaults (no stored row).
+        updatedByUserId: { type: string, nullable: true }
+        updatedByName: { type: string, nullable: true }
+        updatedAt: { type: string, nullable: true }
+    AtelierApprovalInboxItem:
+      type: object
+      required: [id, kind, title, submittedAt, requiredRole, href, actionable]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        amount:
+          type: object
+          required: [currency, value]
+          properties:
+            currency: { type: string }
+            value: { type: number }
+        submittedAt: { type: string, nullable: true }
+        requiredRole:
+          type: string
+          enum: [partner, finance]
+        href: { type: string }
+        agent:
+          type: object
+          required: [name, runId]
+          properties:
+            name: { type: string }
+            runId: { type: string }
+        stale:
+          type: boolean
+          description: True when the source agent run is dead/stale.
+        actionable:
+          type: boolean
+          description: False when the caller's role cannot action this item (kept visible).
     AtelierExpenseGlMapping:
       type: object
       required: [id, entityId, subCategoryCode, glCode, vatTreatment]

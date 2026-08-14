@@ -1602,7 +1602,10 @@ export interface VendorRow2 {
   onboardedAt: string;
   notes: string;
 }
-export const usePayablesVendors = listHook<VendorRow2>("pay-vendors", "/finance/payables/vendors");
+// Task #1091 stub sweep — the vendor master / PO / 3-way-match server
+// routes were deleted (blueprint §6: vendor registry folds into
+// counterparty resolution). The VendorRow2 shape is retained because the
+// subcontractors read still returns it. No list hook — the endpoint is gone.
 
 export interface PoRow {
   id: string;
@@ -1624,7 +1627,7 @@ export interface PoRow {
   invoiceIds: string[];
   expectedReceiptDate: string;
 }
-export const usePayablesPos = listHook<PoRow>("pay-pos", "/finance/payables/po");
+// Task #1091 stub sweep — PO / GRN / 3-way-match routes removed (server).
 
 export interface VendorInvoiceRow {
   id: string;
@@ -1654,6 +1657,9 @@ export interface VendorInvoiceRow {
   subcontractorLinkId: string | null;
   description: string;
 }
+// Retained for the subcontractors pay-when-paid surface (links vendor
+// invoices to AR receipts). The vendor master / PO surfaces were removed
+// in the Task #1091 stub sweep; this list feeds subcontractor hold state.
 export const usePayablesInvoices = listHook<VendorInvoiceRow>("pay-invoices", "/finance/payables/invoices");
 
 // Task #430 — real payment runs over atelier_payment_runs.
@@ -1901,14 +1907,24 @@ export interface GlJournalEntryRow {
   lines: GlJournalLineRow[];
   /** Task #1073 — app route of the source document (null = no detail page). */
   sourceHref: string | null;
+  /** Task #1091 — agent provenance + reverse/repost linkage. */
+  agentRunId?: string | null;
+  agentName?: string | null;
+  reversesEntryId?: string | null;
+  repostOfEntryId?: string | null;
 }
-export function useGlJournal(params: { entityId?: string | null; period?: string; accountCode?: string }) {
+export function useGlJournal(params: {
+  entityId?: string | null; period?: string; accountCode?: string;
+  /** Task #1091 — "1" (any agent) or an agent name narrows to agent-posted rows. */
+  postedByAgent?: string;
+}) {
   const qs = new URLSearchParams();
   if (params.entityId) qs.set("entityId", params.entityId);
   if (params.period) qs.set("period", params.period);
   if (params.accountCode) qs.set("accountCode", params.accountCode);
+  if (params.postedByAgent) qs.set("postedByAgent", params.postedByAgent);
   return useQuery<{ ok: boolean; data: { rows: GlJournalEntryRow[] } }>({
-    queryKey: ["atelier-gl-journal", params.entityId ?? "", params.period ?? "", params.accountCode ?? ""],
+    queryKey: ["atelier-gl-journal", params.entityId ?? "", params.period ?? "", params.accountCode ?? "", params.postedByAgent ?? ""],
     queryFn: () => get(`/gl/journal?${qs.toString()}`),
     staleTime: 10_000,
   });
