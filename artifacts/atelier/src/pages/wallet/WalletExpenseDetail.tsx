@@ -54,6 +54,167 @@ interface Expense {
   rejectedAt: string | null;
   rejectedReason: string | null;
   approvalRoute: string | null;
+  // Task #1095 — entity allocation lifecycle.
+  entityId: string | null;
+  allocStatus: string | null;
+  allocRuleId: string | null;
+  allocJustification: string | null;
+  allocConfidence: number | null;
+  allocDecidedBy: string | null;
+  allocOverrideReason: string | null;
+  tripDestinationCountry: string | null;
+  tripPurpose: string | null;
+}
+
+interface EntityOpt {
+  id: string;
+  shortName: string;
+  legalNameEn: string;
+}
+
+// Task #1095 — entity-allocation card: shows the proposed entity +
+// plain-language justification and lets finance leadership approve or
+// override (with a reason) via the standalone allocation endpoint.
+function AllocationCard({
+  expense,
+  me,
+  busy,
+  onSaved,
+  onError,
+}: {
+  expense: Expense;
+  me: Me | null;
+  busy: boolean;
+  onSaved: (e: Expense) => void;
+  onError: (msg: string) => void;
+}) {
+  const [entities, setEntities] = React.useState<EntityOpt[]>([]);
+  const [pick, setPick] = React.useState<string>("");
+  const [reason, setReason] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const isLeader = me != null && ["founding_partner", "partner", "finance"].includes(me.role);
+
+  React.useEffect(() => {
+    if (!isLeader) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/atelier/finance/entities", { credentials: "include" });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) {
+          setEntities(
+            (d.items ?? d.entities ?? []).map((e: EntityOpt) => ({
+              id: e.id,
+              shortName: e.shortName || e.legalNameEn,
+              legalNameEn: e.legalNameEn,
+            })),
+          );
+        }
+      } catch {
+        // non-fatal — the select simply stays empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLeader]);
+
+  const entityName = (id: string | null) =>
+    entities.find((e) => e.id === id)?.shortName ?? id ?? "—";
+
+  const decide = async () => {
+    setSaving(true);
+    try {
+      const overriding = pick && pick !== (expense.entityId ?? "");
+      const r = await fetch(`/api/atelier/wallet/expenses/${expense.id}/allocation`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(pick ? { entityId: pick } : {}),
+          ...(overriding && reason.trim() ? { reason: reason.trim() } : {}),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) onError(d.message ?? d.error ?? `error-${r.status}`);
+      else onSaved(d.expense);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!expense.allocStatus && !expense.entityId) return null;
+  const overriding = pick && pick !== (expense.entityId ?? "");
+  return (
+    <Card data-testid="card-entity-allocation">
+      <h2 className="font-serif text-lg">Entity allocation</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="text-stone-500">Entity</dt>
+          <dd data-testid="alloc-entity">{entityName(expense.entityId)}</dd>
+        </div>
+        <div>
+          <dt className="text-stone-500">Status</dt>
+          <dd>
+            <MonoChip>{expense.allocStatus ?? "tagged"}</MonoChip>
+            {expense.allocDecidedBy ? <span className="ml-2 text-xs text-stone-500">via {expense.allocDecidedBy}</span> : null}
+            {expense.allocConfidence != null ? <span className="ml-2 text-xs text-stone-500">{Math.round(expense.allocConfidence * 100)}%</span> : null}
+          </dd>
+        </div>
+      </dl>
+      {expense.allocJustification ? (
+        <p className="mt-2 text-sm text-stone-700" data-testid="alloc-justification">{expense.allocJustification}</p>
+      ) : null}
+      {expense.allocOverrideReason ? (
+        <p className="mt-1 text-xs italic text-stone-600">Override reason: {expense.allocOverrideReason}</p>
+      ) : null}
+      {(expense.tripDestinationCountry || expense.tripPurpose) ? (
+        <p className="mt-1 text-xs text-stone-500">
+          Trip: {expense.tripDestinationCountry ?? "—"}{expense.tripPurpose ? ` · ${expense.tripPurpose.replace(/_/g, " ")}` : ""}
+        </p>
+      ) : null}
+      {isLeader && (expense.allocStatus === "proposed" || expense.allocStatus === "needs_input") ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-xs text-stone-500">
+            Entity
+            <select
+              className="mt-1 block rounded border border-stone-300 px-2 py-1.5 text-sm"
+              value={pick}
+              onChange={(e) => setPick(e.target.value)}
+              data-testid="select-alloc-entity"
+            >
+              <option value="">{expense.entityId ? `Keep proposal (${entityName(expense.entityId)})` : "Pick entity…"}</option>
+              {entities.map((e) => (
+                <option key={e.id} value={e.id}>{e.shortName}</option>
+              ))}
+            </select>
+          </label>
+          {overriding ? (
+            <label className="text-xs text-stone-500">
+              Override reason
+              <input
+                className="mt-1 block rounded border border-stone-300 px-2 py-1.5 text-sm"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                data-testid="input-alloc-override-reason"
+              />
+            </label>
+          ) : null}
+          <button
+            className="rounded bg-stone-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+            disabled={busy || saving || (!!overriding && !reason.trim()) || (!pick && !expense.entityId)}
+            onClick={() => void decide()}
+            data-testid="btn-decide-allocation"
+          >
+            {saving ? "Saving…" : overriding ? "Override allocation" : "Approve allocation"}
+          </button>
+        </div>
+      ) : null}
+    </Card>
+  );
 }
 
 interface Me {
@@ -343,6 +504,18 @@ export default function WalletExpenseDetail() {
               onError={(msg) => setError(msg)}
             />
           </Card>
+
+          <AllocationCard
+            expense={expense}
+            me={me}
+            busy={busy}
+            onSaved={(e) => {
+              setExpense(e);
+              setNotice("Entity allocation updated.");
+              setError(null);
+            }}
+            onError={(msg) => setError(msg)}
+          />
 
           {expense.receiptFileRef?.startsWith("/objects/") ? (
             <Card>

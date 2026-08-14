@@ -60,6 +60,8 @@ interface CreateBody {
   km?: number;
   days?: number;
   perDiemUsd?: number;
+  tripDestinationCountry?: string;
+  tripPurpose?: string;
 }
 
 export default function WalletNewExpense() {
@@ -98,6 +100,10 @@ export default function WalletNewExpense() {
   const [fixtureKey, setFixtureKey] = React.useState<string>("riyadh_taxi_01");
   const [receiptFileName, setReceiptFileName] = React.useState<string>("");
   const [cardId, setCardId] = React.useState<string>("");
+  // Task #1095 — lightweight trip context feeding the entity-allocation
+  // travel rules (destination vs home). Optional; AI infers when blank.
+  const [tripDestinationCountry, setTripDestinationCountry] = React.useState("");
+  const [tripPurpose, setTripPurpose] = React.useState("");
   const [km, setKm] = React.useState<number>(0);
   const [days, setDays] = React.useState<number>(1);
   const [perDiemUsd, setPerDiemUsd] = React.useState<number>(75);
@@ -130,6 +136,8 @@ export default function WalletNewExpense() {
         engagementId: engagementId || null,
         expenseDate: new Date().toISOString().slice(0, 10),
       };
+      if (tripDestinationCountry.trim()) body.tripDestinationCountry = tripDestinationCountry.trim().toUpperCase();
+      if (tripPurpose) body.tripPurpose = tripPurpose;
       if (path === "manual" || path === "card_feed") {
         body.amount = amount;
         body.currency = currency;
@@ -252,6 +260,31 @@ export default function WalletNewExpense() {
                 {engagements.map((e) => (
                   <option key={e.id} value={e.id}>{e.name}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Task #1095 — optional trip context for entity allocation */}
+            <div>
+              <label className={labelCls}>Trip destination (ISO-2, optional)</label>
+              <input
+                className={inputCls}
+                value={tripDestinationCountry}
+                maxLength={2}
+                placeholder="e.g. SA"
+                onChange={(e) => setTripDestinationCountry(e.target.value.toUpperCase())}
+                data-testid="input-trip-destination"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Trip purpose (optional)</label>
+              <select className={inputCls} value={tripPurpose} onChange={(e) => setTripPurpose(e.target.value)} data-testid="select-trip-purpose">
+                <option value="">— not a trip / infer from receipt —</option>
+                <option value="bd">Business development</option>
+                <option value="client_project">Client project</option>
+                <option value="internal_meeting">Internal meeting</option>
+                <option value="training_deliver">Deliver a training</option>
+                <option value="training_attend">Attend a training</option>
+                <option value="personal_dev">Personal development</option>
               </select>
             </div>
 

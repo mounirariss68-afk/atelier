@@ -12,7 +12,7 @@
  * entity via atelier_documents.entity_id.
  */
 
-import { pgTable, text, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, jsonb, timestamp, index, boolean } from "drizzle-orm/pg-core";
 
 export interface EntityRegistration {
   id: string;
@@ -168,6 +168,12 @@ export const atelierLegalEntities = pgTable(
     cashPolicy: jsonb("cash_policy").$type<EntityCashPolicy | null>(),
     /** Task #655 — statutory-payroll overrides (country rules live in code). */
     statutory: jsonb("statutory").$type<EntityStatutory | null>(),
+    /**
+     * Task #1095 — head/default entity: carries firm-wide/shared costs
+     * (group software, brand, hosting) in the allocation engine. At most
+     * one active entity per org should be flagged (write path enforces).
+     */
+    isHeadEntity: boolean("is_head_entity").notNull().default(false),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

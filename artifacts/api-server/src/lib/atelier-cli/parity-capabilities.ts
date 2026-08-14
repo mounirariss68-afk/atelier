@@ -37,6 +37,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { runPursuitScout } from "../atelier-agents/runner.js";
+import { proposeExpenseAllocation } from "../atelier-entity-allocation.js";
 import { persistBriefAndFacts } from "../atelier-agents/scout-persist.js";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -2045,6 +2046,8 @@ defineCapability({
       status: "draft",
       createdByUserId: ctx.persona.id,
     });
+    // Task #1095 — prefill the entity allocation (fail-soft).
+    await proposeExpenseAllocation(id, { allowAi: false, actorId: ctx.persona.id }).catch(() => null);
     await recordAudit(ctx, "expense", id, "wallet.expense.create.cli", { amount, currency, merchant, expenseDate }, `${ctx.persona.name} created expense ${amount} ${currency} at ${merchant}.`);
     // Task #509 — new expenses land on the expense detail page.
     return {

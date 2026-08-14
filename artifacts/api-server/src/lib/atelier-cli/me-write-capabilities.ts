@@ -62,6 +62,7 @@ import { resolveSelfSubject, type SelfSubject } from "./me-capabilities.js";
 // Task #589 — chat submits must fire the same notification rows as the
 // Me-lens REST submit paths so requests don't sit invisible.
 import { emitSelfNotification } from "../../routes/atelier/meRoutes.js";
+import { proposeExpenseAllocation } from "../atelier-entity-allocation.js";
 import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
 import {
   storePersonDocBytes,
@@ -583,6 +584,8 @@ defineSelfWriteCapability({
       policyStatus: "green",
       createdByUserId: subject.user.id,
     });
+    // Task #1095 — prefill the entity allocation (fail-soft).
+    await proposeExpenseAllocation(id, { allowAi: false, actorId: subject.user.id }).catch(() => null);
     await audit({
       subject,
       entityType: "expense",

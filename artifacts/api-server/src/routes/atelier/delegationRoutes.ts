@@ -60,6 +60,7 @@ import {
 import { emitSelfNotification } from "./meRoutes";
 import { isFoundingPartner, isHr, isPartner } from "./personaRoles.js";
 import { convertToUsd } from "../../lib/atelier-fx.js";
+import { proposeExpenseAllocation } from "../../lib/atelier-entity-allocation.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
   ObjectStorageService,
@@ -1026,6 +1027,8 @@ async function applyApprovedItem(
       policyStatus: "green",
       createdByUserId: ea.id,
     });
+    // Task #1095 — prefill the entity allocation (fail-soft).
+    await proposeExpenseAllocation(expId, { allowAi: false, actorId: ea.id }).catch(() => null);
     return expId;
   }
   // meeting_task → a card on the partner's Me home (in-app; calendar

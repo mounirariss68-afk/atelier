@@ -38,6 +38,11 @@ import {
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import {
+  proposeExpenseAllocation,
+  proposeSupplierInvoiceAllocation,
+  decideAllocation,
+} from "../../lib/atelier-entity-allocation.js";
+import {
   DEFAULT_CHART,
   ensureChartSeeded,
   isGlPeriodLocked,
@@ -557,15 +562,41 @@ router.post("/gl/tag", async (req, res) => {
   if (b.kind === "invoice") {
     updated = (await db.update(atelierInvoice).set({ legalEntityId: ent.id, updatedAt: new Date() })
       .where(and(eq(atelierInvoice.id, b.id), eq(atelierInvoice.orgId, me.orgId))).returning({ id: atelierInvoice.id })).length;
-  } else if (b.kind === "expense") {
-    updated = (await db.update(atelierExpenses).set({ entityId: ent.id, updatedAt: new Date() })
-      .where(and(eq(atelierExpenses.id, b.id), eq(atelierExpenses.orgId, me.orgId))).returning({ id: atelierExpenses.id })).length;
+  } else if (b.kind === "expense" || b.kind === "partner_firm_invoice") {
+    // Task #1095 — manual GL tagging IS an allocation decision: route it
+    // through the shared decide path so period-close locks, mandatory
+    // override reasons, and allocation.approve/override audits all apply.
+    const sourceKind = b.kind;
+    const [posted] = await db
+      .select({ periodLabel: atelierGlJournalEntry.periodLabel })
+      .from(atelierGlJournalEntry)
+      .where(and(
+        eq(atelierGlJournalEntry.orgId, me.orgId),
+        eq(atelierGlJournalEntry.sourceKind, sourceKind),
+        eq(atelierGlJournalEntry.sourceRef, b.id),
+        isNull(atelierGlJournalEntry.deletedAt)))
+      .limit(1);
+    if (posted && (await isGlPeriodLocked(me.orgId, posted.periodLabel))) {
+      return res.status(409).json({
+        error: "period-locked",
+        message: `Posted in close-locked period ${posted.periodLabel}; use reversal/repost instead.`,
+      });
+    }
+    const decided = await decideAllocation({
+      kind: b.kind === "expense" ? "expense" : "supplier_invoice",
+      id: b.id, orgId: me.orgId,
+      actor: { id: me.id, name: me.name },
+      entityId: ent.id,
+      overrideReason: typeof (req.body ?? {}).reason === "string" ? String((req.body as any).reason) : null,
+    });
+    if (!decided.ok) {
+      const httpStatus = decided.error === "not_found" ? 404 : 400;
+      return res.status(httpStatus).json({ error: decided.error, message: decided.message });
+    }
+    return res.json({ ok: true, data: { status: decided.status, entityId: decided.entityId } });
   } else if (b.kind === "contractor_payment") {
     updated = (await db.update(atelierContractorPayments).set({ legalEntityId: ent.id, updatedAt: new Date() })
       .where(and(eq(atelierContractorPayments.id, b.id), eq(atelierContractorPayments.orgId, me.orgId))).returning({ id: atelierContractorPayments.id })).length;
-  } else if (b.kind === "partner_firm_invoice") {
-    updated = (await db.update(atelierPartnerFirmInvoices).set({ legalEntityId: ent.id, updatedAt: new Date() })
-      .where(and(eq(atelierPartnerFirmInvoices.id, b.id), eq(atelierPartnerFirmInvoices.orgId, me.orgId))).returning({ id: atelierPartnerFirmInvoices.id })).length;
   } else if (b.kind === "bank_transaction") {
     updated = (await db.update(atelierBankTransaction).set({ legalEntityId: ent.id, updatedAt: new Date() })
       .where(and(eq(atelierBankTransaction.id, b.id), eq(atelierBankTransaction.orgId, me.orgId))).returning({ id: atelierBankTransaction.id })).length;
@@ -575,6 +606,122 @@ router.post("/gl/tag", async (req, res) => {
     action: "gl.entity_tag", payload: { legalEntityId: ent.id },
     summary: `Tagged ${b.kind} ${b.id} to ${ent.shortName || ent.legalNameEn}` });
   return res.json({ ok: true });
+});
+
+// ─────────────── Task #1095 — entity-allocation queue & sweep ───────────────
+
+// Pending-allocation queue: expenses + supplier invoices whose allocation
+// is proposed (awaiting approval) or needs_input (engine could not decide).
+// @cli-skip: finance-leadership GL surface; read parity pending Task #340
+router.get("/gl/allocations/pending", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const [expenses, pfis] = await Promise.all([
+    db.select().from(atelierExpenses).where(and(
+      eq(atelierExpenses.orgId, me.orgId),
+      inArray(atelierExpenses.allocStatus, ["proposed", "needs_input"]),
+      isNull(atelierExpenses.deletedAt))).limit(200),
+    db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      inArray(atelierPartnerFirmInvoices.allocStatus, ["proposed", "needs_input"]),
+      isNull(atelierPartnerFirmInvoices.deletedAt))).limit(200),
+  ]);
+  res.json({
+    ok: true,
+    data: {
+      rows: [
+        ...expenses.map((r) => ({
+          kind: "expense", id: r.id,
+          label: `${r.merchant ?? r.category} · ${r.expenseDate}`,
+          amount: r.usdAmount, currency: "USD",
+          allocStatus: r.allocStatus, allocRuleId: r.allocRuleId,
+          allocJustification: r.allocJustification, allocConfidence: r.allocConfidence,
+          allocDecidedBy: r.allocDecidedBy, entityId: r.entityId,
+        })),
+        ...pfis.map((r) => ({
+          kind: "partner_firm_invoice", id: r.id,
+          label: `${r.partnerFirmName} · ${r.weekIso}`,
+          amount: r.usdAmount, currency: "USD",
+          allocStatus: r.allocStatus, allocRuleId: r.allocRuleId,
+          allocJustification: r.allocJustification, allocConfidence: r.allocConfidence,
+          allocDecidedBy: r.allocDecidedBy, entityId: r.legalEntityId,
+        })),
+      ].map((r) => ({ ...r, sourceHref: glSourceHref(r.kind, r.id) })),
+    },
+  });
+});
+
+// Founder/finance-triggered sweep: run the allocation engine over existing
+// untagged / never-allocated expenses and supplier invoices. Deterministic
+// by default; pass { allowAi: true } to let the AI fallback run.
+// @cli-skip: UI-workflow bulk write; founder-triggered from the GL surface
+router.post("/gl/allocations/sweep", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const allowAi = (req.body ?? {}).allowAi === true;
+  const [expenses, pfis] = await Promise.all([
+    db.select({ id: atelierExpenses.id }).from(atelierExpenses).where(and(
+      eq(atelierExpenses.orgId, me.orgId),
+      isNull(atelierExpenses.allocStatus),
+      isNull(atelierExpenses.entityId),
+      inArray(atelierExpenses.status, ["draft", "submitted", "approved", "reimbursed"]),
+      isNull(atelierExpenses.deletedAt))).limit(100),
+    db.select({ id: atelierPartnerFirmInvoices.id }).from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      isNull(atelierPartnerFirmInvoices.allocStatus),
+      isNull(atelierPartnerFirmInvoices.legalEntityId),
+      isNull(atelierPartnerFirmInvoices.deletedAt))).limit(100),
+  ]);
+  let proposed = 0, needsInput = 0;
+  for (const e of expenses) {
+    const r = await proposeExpenseAllocation(e.id, { allowAi, actorId: me.id }).catch(() => null);
+    if (r?.status === "proposed") proposed++;
+    else if (r?.status === "needs_input") needsInput++;
+  }
+  for (const p of pfis) {
+    const r = await proposeSupplierInvoiceAllocation(p.id, { allowAi, actorId: me.id }).catch(() => null);
+    if (r?.status === "proposed") proposed++;
+    else if (r?.status === "needs_input") needsInput++;
+  }
+  await audit({
+    entityType: "gl", entityId: "allocation_sweep", actor: me,
+    action: "allocation.propose",
+    payload: { scanned: expenses.length + pfis.length, proposed, needsInput, allowAi },
+    summary: `Allocation sweep: ${proposed} proposed, ${needsInput} need input (of ${expenses.length + pfis.length} scanned).`,
+  });
+  res.json({ ok: true, data: { scanned: expenses.length + pfis.length, proposed, needsInput } });
+});
+
+// Approve / override the allocation on a queue item (period-lock aware).
+// @cli-skip: UI-workflow write; allocation decisions ride the approval surfaces
+router.post("/gl/allocations/:kind/:id/decide", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const kind = req.params.kind === "expense" ? "expense" as const
+    : req.params.kind === "partner_firm_invoice" ? "supplier_invoice" as const : null;
+  if (!kind) return res.status(400).json({ error: "invalid_kind" });
+  const b = (req.body ?? {}) as { entityId?: string; reason?: string };
+  const sourceKind = req.params.kind;
+  const [posted] = await db
+    .select({ periodLabel: atelierGlJournalEntry.periodLabel })
+    .from(atelierGlJournalEntry)
+    .where(and(
+      eq(atelierGlJournalEntry.orgId, me.orgId),
+      eq(atelierGlJournalEntry.sourceKind, sourceKind),
+      eq(atelierGlJournalEntry.sourceRef, req.params.id),
+      isNull(atelierGlJournalEntry.deletedAt)))
+    .limit(1);
+  if (posted && (await isGlPeriodLocked(me.orgId, posted.periodLabel))) {
+    return res.status(409).json({
+      error: "period-locked",
+      message: `Posted in close-locked period ${posted.periodLabel}; use reversal/repost instead.`,
+    });
+  }
+  const decided = await decideAllocation({
+    kind, id: req.params.id, orgId: me.orgId,
+    actor: { id: me.id, name: me.name },
+    entityId: typeof b.entityId === "string" && b.entityId ? b.entityId : null,
+    overrideReason: b.reason ?? null,
+  });
+  if (!decided.ok) return res.status(400).json({ error: decided.error, message: decided.message });
+  return res.json({ ok: true, data: { status: decided.status, entityId: decided.entityId } });
 });
 
 export default router;

@@ -767,7 +767,39 @@ type SupplierInvoiceRow = {
   paymentRunId: string | null;
   paidAt: string | null;
   hasBankDetails: boolean;
+  // Task #1095 — entity allocation lifecycle.
+  legalEntityId: string | null;
+  allocStatus: string | null;
+  allocRuleId: string | null;
+  allocJustification: string | null;
+  allocConfidence: number | null;
+  allocDecidedBy: string | null;
+  allocOverrideReason: string | null;
 };
+
+// Task #1095 — entity options for the allocation override select.
+type AllocEntityOption = { id: string; shortName: string; legalNameEn: string };
+function useAllocEntities(): AllocEntityOption[] {
+  const [entities, setEntities] = React.useState<AllocEntityOption[]>([]);
+  React.useEffect(() => {
+    let alive = true;
+    void fetch(`${API_BASE}/finance/entities`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => {
+        if (alive)
+          setEntities(
+            (d.items ?? d.entities ?? []).map((e: AllocEntityOption) => ({
+              id: e.id,
+              shortName: e.shortName || e.legalNameEn,
+              legalNameEn: e.legalNameEn,
+            })),
+          );
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  return entities;
+}
 
 function useSupplierInvoices(): { items: SupplierInvoiceRow[]; refetch: () => void } {
   const [items, setItems] = React.useState<SupplierInvoiceRow[]>([]);
@@ -919,9 +951,13 @@ export function FinancePayablesSupplierInvoices() {
   const { items, refetch } = useSupplierInvoices();
   const { busy, error, run } = useMutate();
   const [filter, setFilter] = React.useState<(typeof SUPPLIER_STATUS_FILTERS)[number]>("all");
-  const act = (id: string, decision: string, reason?: string) =>
+  const entities = useAllocEntities();
+  // Task #1095 — per-invoice entity override pick ("" = keep proposal).
+  const [allocPick, setAllocPick] = React.useState<Record<string, string>>({});
+  const entityName = (id: string | null) => entities.find((e) => e.id === id)?.shortName ?? id ?? "—";
+  const act = (id: string, decision: string, reason?: string, extra?: Record<string, unknown>) =>
     run(`${decision}:${id}`, async () => {
-      await postJson(`/finance/payables/supplier-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}) });
+      await postJson(`/finance/payables/supplier-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}), ...(extra ?? {}) });
       refetch();
     });
   const pending = items.filter((i) => i.status === "submitted" || i.status === "under_review");
@@ -973,6 +1009,16 @@ export function FinancePayablesSupplierInvoices() {
                   ≈ {fmtUsd(inv.usdAmount)}
                 </div>
                 {inv.notes && <div className="text-xs text-text-mute mt-1">{inv.notes}</div>}
+                {/* Task #1095 — entity allocation + justification */}
+                {(inv.allocStatus || inv.legalEntityId) && (
+                  <div className="text-xs mt-1" data-testid={`supplier-invoice-alloc-${inv.id}`}>
+                    <span className="text-text-mute">Entity: </span>
+                    {entityName(inv.legalEntityId)}
+                    {inv.allocStatus && <MonoChip tone={inv.allocStatus === "needs_input" ? "amber" : inv.allocStatus === "proposed" ? "default" : "green"}>{inv.allocStatus.replace(/_/g, " ")}</MonoChip>}
+                    {inv.allocJustification && <div className="text-text-mute mt-0.5">{inv.allocJustification}</div>}
+                    {inv.allocOverrideReason && <div className="italic text-text-mute mt-0.5">Override: {inv.allocOverrideReason}</div>}
+                  </div>
+                )}
                 {inv.status === "rejected" && inv.rejectedReason && (
                   <div className="text-xs text-danger mt-1">Rejected: {inv.rejectedReason}</div>
                 )}
@@ -992,13 +1038,45 @@ export function FinancePayablesSupplierInvoices() {
               </div>
             </div>
             {(inv.status === "submitted" || inv.status === "under_review") && (
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2 mt-4 items-center flex-wrap">
                 {inv.status === "submitted" && (
                   <Button size="sm" variant="outline" disabled={!!busy} onClick={() => act(inv.id, "start_review")} data-testid={`btn-supplier-start-review-${inv.id}`}>
                     Start review
                   </Button>
                 )}
-                <Button size="sm" disabled={!!busy || (!!inv.partnerFirmId && !inv.hasBankDetails)} onClick={() => act(inv.id, "approve")} data-testid={`btn-supplier-approve-${inv.id}`}>
+                {/* Task #1095 — entity override select; approving decides the allocation in the same act */}
+                {(inv.allocStatus === "proposed" || inv.allocStatus === "needs_input") && entities.length > 0 && (
+                  <select
+                    className="bg-bg-deep border border-border-soft rounded px-2 py-1 text-xs"
+                    value={allocPick[inv.id] ?? ""}
+                    onChange={(e) => setAllocPick((m) => ({ ...m, [inv.id]: e.target.value }))}
+                    data-testid={`select-supplier-alloc-${inv.id}`}
+                  >
+                    <option value="">{inv.legalEntityId ? `Entity: keep proposal (${entityName(inv.legalEntityId)})` : "Entity: pick…"}</option>
+                    {entities.map((e) => (
+                      <option key={e.id} value={e.id}>{e.shortName}</option>
+                    ))}
+                  </select>
+                )}
+                <Button
+                  size="sm"
+                  disabled={!!busy || (!!inv.partnerFirmId && !inv.hasBankDetails)}
+                  onClick={() => {
+                    const pick = allocPick[inv.id] ?? "";
+                    const overriding = pick && pick !== (inv.legalEntityId ?? "");
+                    let overrideReason: string | undefined;
+                    if (overriding) {
+                      const r = window.prompt(`Overriding entity allocation to ${entityName(pick)} — reason?`);
+                      if (r === null || !r.trim()) return;
+                      overrideReason = r.trim();
+                    }
+                    act(inv.id, "approve", undefined, {
+                      ...(pick ? { legalEntityId: pick } : {}),
+                      ...(overrideReason ? { allocationOverrideReason: overrideReason } : {}),
+                    });
+                  }}
+                  data-testid={`btn-supplier-approve-${inv.id}`}
+                >
                   Approve
                 </Button>
                 <Button

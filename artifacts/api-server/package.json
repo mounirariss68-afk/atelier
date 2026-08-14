@@ -62,6 +62,7 @@
     "test:partner-billing": "tsx ./tests/partner-billing/run.ts",
     "test:bank-recon": "tsx ./tests/bank-recon/run.ts",
     "test:supplier-invoices": "tsx ./tests/supplier-invoices/run.ts",
+    "test:entity-allocation": "tsx ./tests/entity-allocation/run.ts",
     "test:partner-registration": "tsx ./tests/partner-registration/run.ts",
     "test:entity-detail": "tsx ./tests/entity-detail/run.ts",
     "test:who-works": "tsx ./tests/cli-catalog/who-works.ts",

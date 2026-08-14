@@ -38,6 +38,10 @@ import {
   type FinanceDocKind,
 } from "../atelier-finance-docs.js";
 import {
+  loadAllocationContext,
+  evaluateAllocationRules,
+} from "../atelier-entity-allocation.js";
+import {
   createSupplierInvoiceCore,
   findPartnerFirmByName,
 } from "../../routes/atelier/financePayablesRoutes.js";
@@ -206,6 +210,9 @@ defineCapability({
       invoiceDate: { type: "string" },
       periodLabel: { type: "string" },
       notes: { type: "string" },
+      // Task #1095 — optional explicit entity allocation (overrides the
+      // engine's proposal shown on the confirm card).
+      legalEntityId: { type: "string" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -328,17 +335,40 @@ defineCapability({
       // only (same as picking the firm in the UI selector); no fuzzy
       // guessing. New/unmatched suppliers stay unlinked.
       const firm = await findPartnerFirmByName(ctx.persona.orgId, supplierName!);
+      // Task #1095 — preview the entity allocation on the confirm card so
+      // the human can change it (pass legalEntityId) before committing.
+      const userEntityId = str(input.legalEntityId, 100);
+      const allocCtx = await loadAllocationContext(ctx.persona.orgId);
+      const allocPreview = evaluateAllocationRules({
+        kind: "supplier_invoice",
+        explicitEntityId: userEntityId,
+        counterpartyName: firm?.name ?? supplierName,
+        entities: allocCtx.entities,
+        defaultEntityId: allocCtx.defaultEntityId,
+      });
+      const allocEnt = allocPreview
+        ? allocCtx.entities.find((e) => e.id === allocPreview.entityId)
+        : null;
+      const allocLine = allocPreview && allocEnt
+        ? ` Proposed entity allocation: ${allocEnt.shortName} — ${allocPreview.justification} (say the entity name to change it.)`
+        : ` Entity allocation: undecided — it will queue for manual allocation unless you name the entity now.`;
       return {
         ok: true,
-        data: { preview: partial },
+        data: {
+          preview: partial,
+          allocation: allocPreview && allocEnt
+            ? { entityId: allocPreview.entityId, entityName: allocEnt.shortName, ruleId: allocPreview.ruleId, justification: allocPreview.justification, confidence: allocPreview.confidence }
+            : null,
+        },
         confirmation: {
-          summary: `File supplier invoice ${reference} from ${supplierName} — ${currency} ${amount!.toFixed(2)}${firm ? ` (linked to registered firm ${firm.name}${firm.hasBankDetails ? "" : "; approval will hold until firm bank details are on file"})` : " (unregistered supplier — no firm link)"}? It lands in the payables review queue for approval.`,
+          summary: `File supplier invoice ${reference} from ${supplierName} — ${currency} ${amount!.toFixed(2)}${firm ? ` (linked to registered firm ${firm.name}${firm.hasBankDetails ? "" : "; approval will hold until firm bank details are on file"})` : " (unregistered supplier — no firm link)"}? It lands in the payables review queue for approval.${allocLine}`,
           diff: {
             create: {
               table: "atelier_partner_firm_invoices",
               values: {
                 supplierName, reference, amount, currency,
                 invoiceDate, periodLabel, partnerFirmId: firm?.id ?? null,
+                legalEntityId: allocPreview?.entityId ?? null,
                 status: "submitted", source: "internal_upload",
               },
             },
@@ -351,6 +381,7 @@ defineCapability({
                 ...(invoiceDate ? { invoiceDate } : {}),
                 ...(periodLabel ? { periodLabel } : {}),
                 ...(notes ? { notes } : {}),
+                ...(userEntityId ? { legalEntityId: userEntityId } : {}),
                 confirm: true,
               };
               pin.commitToken = commitTokenFor("ingest_supplier_invoice", pin);
@@ -384,16 +415,25 @@ defineCapability({
       periodLabel,
       notes,
       partnerFirmId: firm?.id ?? null,
+      explicitLegalEntityId: str(input.legalEntityId, 100),
       via: "chat",
     });
     const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
     if (out.status === 201) {
+      // Task #1095 — surface the entity allocation the engine landed.
+      const item = (out.body as { item?: { legalEntityId?: string | null; allocStatus?: string | null; allocJustification?: string | null } }).item;
+      const allocMsg =
+        item?.allocStatus === "proposed"
+          ? ` Proposed entity allocation: ${item.allocJustification ?? "see the review queue"} (finance approves it with the invoice).`
+          : item?.allocStatus === "needs_input"
+            ? " Entity allocation needs manual input — it's queued on the GL allocations list."
+            : "";
       return {
         ok: true,
         data: {
-          item: (out.body as { item?: unknown }).item,
+          item,
           linkedFirm: firm ? { id: firm.id, name: firm.name, hasBankDetails: firm.hasBankDetails } : null,
-          message: `Invoice ${reference} from ${supplierName} is in the payables review queue (status: submitted).${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}`,
+          message: `Invoice ${reference} from ${supplierName} is in the payables review queue (status: submitted).${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}${allocMsg}`,
           navigateTo,
         },
       };

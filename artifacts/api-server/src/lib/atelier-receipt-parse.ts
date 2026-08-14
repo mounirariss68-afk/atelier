@@ -28,6 +28,7 @@ import { convertToUsd } from "./atelier-fx.js";
 import { evaluateExpense } from "./atelier-expense-policy.js";
 import { runExpenseAuditor } from "./atelier-agents/runner.js";
 import { assertAuditAction } from "../routes/atelier/auditContract.js";
+import { proposeExpenseAllocation } from "./atelier-entity-allocation.js";
 
 type ExpenseRow = typeof atelierExpenses.$inferSelect;
 type UserRow = typeof atelierUsers.$inferSelect;
@@ -847,6 +848,11 @@ export async function parseReceiptForExpense(args: {
     payload: { runId, policyStatus: policy.status, via, extractionMethod, merchantResolution },
     payloadSummary: `Auditor parsed receipt for ${updated.merchant ?? row.id} → policy ${policy.status}`,
   });
+
+  // Task #1095 — entity-allocation prefill after the parse lands its
+  // update (the OCR gives the engine the document country; the AI
+  // fallback may infer trip purpose/destination from the receipt text).
+  await proposeExpenseAllocation(row.id, { actorId: me.id }).catch(() => {});
 
   return {
     ok: true,

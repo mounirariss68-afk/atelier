@@ -40,6 +40,10 @@ import {
   storeContractBytes,
 } from "../../lib/atelier-contracts.js";
 import { convertToUsd } from "../../lib/atelier-fx.js";
+import {
+  proposeSupplierInvoiceAllocation,
+  decideAllocation,
+} from "../../lib/atelier-entity-allocation.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -1164,6 +1168,15 @@ function supplierInvoiceWire(
     paymentRunId: row.paymentRunId,
     remittanceRef: row.remittanceRef,
     paidAt: row.paidAt?.toISOString() ?? null,
+    // Task #1095 — entity-allocation lifecycle.
+    legalEntityId: row.legalEntityId,
+    allocStatus: row.allocStatus,
+    allocRuleId: row.allocRuleId,
+    allocJustification: row.allocJustification,
+    allocConfidence: row.allocConfidence,
+    allocDecidedBy: row.allocDecidedBy,
+    allocShared: row.allocShared,
+    allocOverrideReason: row.allocOverrideReason,
     // Unlinked suppliers have no firm bank registry — no hold applies.
     hasBankDetails: hasBankDetails ?? !row.partnerFirmId,
   };
@@ -1243,6 +1256,8 @@ export async function createSupplierInvoiceCore(args: {
   invoiceDate?: string | null;
   notes?: string | null;
   partnerFirmId?: string | null;
+  /** Task #1095 — user picked the entity allocation up-front (chat card). */
+  explicitLegalEntityId?: string | null;
   /** Audit provenance: "ui_upload" (default) or "chat". */
   via?: "ui_upload" | "chat";
 }): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -1368,6 +1383,14 @@ export async function createSupplierInvoiceCore(args: {
     },
     summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)}).`,
   });
+  // Task #1095 — entity-allocation prefill (deterministic; AI fallback
+  // gets the notes/reference text when the rules can't decide).
+  await proposeSupplierInvoiceAllocation(id, {
+    actorId: me.id,
+    explicitEntityId: args.explicitLegalEntityId ?? null,
+    aiText: [`supplier: ${firm?.name ?? supplierName}`, `reference: ${reference}`, notes ? `notes: ${notes}` : null]
+      .filter(Boolean).join("\n"),
+  }).catch(() => {});
   const [row] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
   return { status: 201, body: { ok: true, item: supplierInvoiceWire(row) } };
 }
@@ -1492,6 +1515,24 @@ router.post("/finance/payables/supplier-invoices/:id/review", async (req, res, n
           .where(and(eq(atelierPartnerFirms.id, row.partnerFirmId), eq(atelierPartnerFirms.orgId, me.orgId)));
         if (!firm || !(firm.bankIban ?? "").trim()) {
           res.status(409).json({ error: "bank-details-missing", message: "The linked partner firm has no finance-approved bank details yet; approve is blocked until onboarding records them." });
+          return;
+        }
+      }
+      // Task #1095 — approving the invoice approves (or overrides) its
+      // entity allocation in the same act. A different `legalEntityId`
+      // than the proposal requires `allocationOverrideReason`.
+      if (row.allocStatus === "proposed" || row.allocStatus === "needs_input" || typeof req.body?.legalEntityId === "string") {
+        const decided = await decideAllocation({
+          kind: "supplier_invoice",
+          id: row.id,
+          orgId: me.orgId,
+          actor: { id: me.id, name: me.name },
+          entityId: typeof req.body?.legalEntityId === "string" && req.body.legalEntityId ? req.body.legalEntityId : null,
+          overrideReason: typeof req.body?.allocationOverrideReason === "string" ? req.body.allocationOverrideReason : null,
+        });
+        if (!decided.ok && decided.error !== "entity_required") {
+          // needs_input with nothing picked stays queued; real mistakes 400.
+          res.status(400).json({ error: decided.error, message: decided.message });
           return;
         }
       }

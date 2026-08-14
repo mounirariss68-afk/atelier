@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -231,6 +231,8 @@ const entityBody = z.object({
   fiscal: fiscalSchema.nullish(),
   cashPolicy: cashPolicySchema.nullish(),
   statutory: statutorySchema.nullish(),
+  /** Task #1095 — head/default entity for firm-wide cost allocation. */
+  isHeadEntity: z.boolean().optional(),
   notes: optStr(4000),
 });
 
@@ -347,6 +349,7 @@ function entityShape(e: EntityRow) {
     fiscal: e.fiscal ?? null,
     cashPolicy: e.cashPolicy ?? null,
     statutory: e.statutory ?? null,
+    isHeadEntity: e.isHeadEntity ?? false,
     notes: e.notes,
     archivedAt: e.archivedAt,
     createdAt: e.createdAt,
@@ -709,9 +712,19 @@ router.post("/finance/entities", async (req, res) => {
       fiscal: normalizeFiscal(b.fiscal),
       cashPolicy: normalizeCashPolicy(b.cashPolicy),
       statutory: normalizeStatutory(b.statutory),
+      isHeadEntity: b.isHeadEntity ?? false,
       notes: b.notes ?? null,
     })
     .returning();
+  if (b.isHeadEntity === true) {
+    // At most one head entity per org — the newest flag wins.
+    await db.update(atelierLegalEntities)
+      .set({ isHeadEntity: false, updatedAt: new Date() })
+      .where(and(
+        eq(atelierLegalEntities.orgId, me.orgId),
+        eq(atelierLegalEntities.isHeadEntity, true),
+        ne(atelierLegalEntities.id, id)));
+  }
   await auditEntity({
     entityId: id,
     actor: me,
@@ -772,6 +785,7 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.fiscal !== undefined) assign("fiscal", normalizeFiscal(b.fiscal));
   if (b.cashPolicy !== undefined) assign("cashPolicy", normalizeCashPolicy(b.cashPolicy));
   if (b.statutory !== undefined) assign("statutory", normalizeStatutory(b.statutory));
+  if (b.isHeadEntity !== undefined) assign("isHeadEntity", b.isHeadEntity);
   if (b.notes !== undefined) assign("notes", b.notes ?? null);
   if (Object.keys(changes).length === 0) {
     res.json({ entity: entityShape(existing) });
@@ -782,6 +796,15 @@ router.patch("/finance/entities/:id", async (req, res) => {
     .set(patch)
     .where(eq(atelierLegalEntities.id, existing.id))
     .returning();
+  if (b.isHeadEntity === true) {
+    // At most one head entity per org — the newest flag wins.
+    await db.update(atelierLegalEntities)
+      .set({ isHeadEntity: false, updatedAt: new Date() })
+      .where(and(
+        eq(atelierLegalEntities.orgId, me.orgId),
+        eq(atelierLegalEntities.isHeadEntity, true),
+        ne(atelierLegalEntities.id, existing.id)));
+  }
   await auditEntity({
     entityId: existing.id,
     actor: me,

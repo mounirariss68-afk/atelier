@@ -128,6 +128,7 @@ export interface PersonWire {
   preferredName?: string | null;
   employmentStatus?: string | null;
   employingEntity?: string | null;
+  homeCountry?: string | null;
   contractType?: string | null;
   avatarUrl?: string | null;
   notes?: string | null;
@@ -296,6 +297,7 @@ export function toBusinessWire(p: PersonWire): PersonWire {
     preferredName: p.preferredName ?? null,
     employmentStatus: p.employmentStatus ?? null,
     employingEntity: p.employingEntity ?? null,
+    homeCountry: p.homeCountry ?? null,
     contractType: p.contractType ?? null,
     avatarUrl: p.avatarUrl ?? null,
     notes: null,
@@ -578,6 +580,8 @@ function employeeToWire(
     preferredName: r.preferredName ?? null,
     employmentStatus: r.employmentStatus ?? null,
     employingEntity: r.employingEntity ?? null,
+    // Task #1095 — home country (ISO-2) for entity-allocation travel rules.
+    homeCountry: r.homeCountry ?? null,
     // Task #645 — public contact fields for the business-card vCard QR.
     cellPhones: r.cellPhones ?? [],
     officeAddress: r.officeAddress ?? null,
@@ -1417,6 +1421,15 @@ const employeeEditSchema = z
     employmentType: z.enum(["FTE", "fixed_term", "intern"]),
     employmentStatus: z.enum(["active", "notice", "on_leave", "terminated"]),
     employingEntity: zNullableTrimmed(120),
+    // Task #1095 — home country (ISO-2) feeding the entity-allocation
+    // travel rules (home vs destination). HR/founding editable like the
+    // rest of this schema.
+    homeCountry: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/)
+      .nullable(),
     startDate: zIsoDate,
     endDate: zIsoDate,
     noticePeriodDays: z.number().int().min(0).max(365),
@@ -1443,6 +1456,13 @@ const contractorEditSchema = z
     nationality: zNationality,
     gender: zGender,
     vendorEntity: zNullableTrimmed(200),
+    // Task #1095 — home country (ISO-2) for entity-allocation travel rules.
+    homeCountry: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/)
+      .nullable(),
     contractType: z.enum(["T&M", "fixed_fee", "retainer"]).nullable(),
     startDate: zIsoDate,
     endDate: zIsoDate,

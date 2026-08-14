@@ -81,6 +81,7 @@ import {
   runExpenseAuditor,
   type ExpenseAuditorProposal,
 } from "../../lib/atelier-agents/runner.js";
+import { proposeExpenseAllocation } from "../../lib/atelier-entity-allocation.js";
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
 import { convertToUsd, convertUsdTo, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
 import { PUSH_CATEGORIES, resolvePushCategoryPrefs } from "../../lib/expoPush.js";
@@ -2265,6 +2266,8 @@ router.post("/me/expenses", async (req, res, next) => {
       policyStatus: "green",
       createdByUserId: me.id,
     });
+    // Task #1095 — prefill the benefit-principle entity allocation (fail-soft).
+    await proposeExpenseAllocation(id, { allowAi: false, actorId: me.id }).catch(() => null);
     await audit({
       entityType: "expense",
       entityId: id,

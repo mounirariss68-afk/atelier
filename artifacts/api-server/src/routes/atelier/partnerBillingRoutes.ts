@@ -54,6 +54,7 @@ import {
   CONTRACT_TYPES,
   type ContractType,
 } from "../../lib/atelier-contracts.js";
+import { proposeSupplierInvoiceAllocation } from "../../lib/atelier-entity-allocation.js";
 import { convertToUsd } from "../../lib/atelier-fx.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { randomBytes } from "node:crypto";
@@ -407,6 +408,8 @@ router.post("/partner-portal/invoices", (req, res, next) => {
         blobRef,
         notes,
       });
+      // Task #1095 — prefill the entity allocation (fail-soft).
+      await proposeSupplierInvoiceAllocation(id, { allowAi: false, actorId: me.id }).catch(() => null);
       await audit({
         entityType: "partner_firm_invoice", entityId: id, actor: me,
         action: "partner_portal.invoice.submit",

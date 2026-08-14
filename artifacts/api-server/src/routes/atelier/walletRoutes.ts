@@ -68,6 +68,12 @@ import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStora
 import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
 // Task #396 — shared receipt/invoice parse pipeline + merchant enrichment.
 import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
+import {
+  proposeExpenseAllocation,
+  decideAllocation,
+} from "../../lib/atelier-entity-allocation.js";
+import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
+import { atelierGlJournalEntry } from "@workspace/db";
 import { runMerchantEnrichment } from "../../lib/atelier-merchant/enrichment.js";
 // Task #408 — manual merchant corrections feed org-scoped aliases.
 import { rememberMerchantAlias, listAliasMatchKeys } from "../../lib/atelier-merchant/aliases.js";
@@ -261,6 +267,19 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
     fundingBankAccountId: e.fundingBankAccountId,
     timesheetWeekId: e.timesheetWeekId,
     approvalRoute: e.approvalRoute,
+    // Task #1095 — entity-allocation lifecycle + trip context.
+    allocStatus: e.allocStatus,
+    allocRuleId: e.allocRuleId,
+    allocJustification: e.allocJustification,
+    allocConfidence: e.allocConfidence,
+    allocDecidedBy: e.allocDecidedBy,
+    allocShared: e.allocShared,
+    allocApprovedByUserId: e.allocApprovedByUserId,
+    allocApprovedAt: e.allocApprovedAt?.toISOString() ?? null,
+    allocOverrideReason: e.allocOverrideReason,
+    tripDestinationCountry: e.tripDestinationCountry,
+    tripPurpose: e.tripPurpose,
+    tripContextSource: e.tripContextSource,
     reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
   };
@@ -641,6 +660,9 @@ interface CreateExpenseBody {
   // per-diem
   days?: number;
   perDiemUsd?: number;
+  // Task #1095 — trip context (destination ISO-2 + purpose).
+  tripDestinationCountry?: string;
+  tripPurpose?: string;
 }
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -721,7 +743,25 @@ router.post("/wallet/expenses", async (req, res) => {
     status: "draft",
     policyStatus: "green",
     createdByUserId: me.id,
+    // Task #1095 — lightweight trip context feeding the allocation engine.
+    tripDestinationCountry:
+      typeof b.tripDestinationCountry === "string" && /^[A-Za-z]{2}$/.test(b.tripDestinationCountry.trim())
+        ? b.tripDestinationCountry.trim().toUpperCase()
+        : null,
+    tripPurpose:
+      typeof b.tripPurpose === "string" && b.tripPurpose.trim()
+        ? b.tripPurpose.trim().slice(0, 40)
+        : null,
+    tripContextSource:
+      (typeof b.tripDestinationCountry === "string" && b.tripDestinationCountry.trim()) ||
+      (typeof b.tripPurpose === "string" && b.tripPurpose.trim())
+        ? "user"
+        : null,
   });
+
+  // Task #1095 — deterministic allocation prefill on create (fast path;
+  // the AI fallback runs at submit / receipt-parse time instead).
+  await proposeExpenseAllocation(id, { allowAi: false, actorId: me.id }).catch(() => {});
 
   await audit({
     entityType: "expense",
@@ -1091,6 +1131,10 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     .update(atelierExpenses)
     .set({ policyStatus: finalPolicy.status, policyFindings: finalPolicy.findings, updatedAt: new Date() })
     .where(eq(atelierExpenses.id, existing.id));
+
+  // Task #1095 — entity-allocation prefill at submit (AI fallback allowed:
+  // trip purpose may need inferring from the receipt/description).
+  await proposeExpenseAllocation(existing.id, { actorId: me.id }).catch(() => {});
   const [expense] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
 
   // Hard refusal from auditor (e.g. missing OCR) blocks submit unconditionally.
@@ -1364,6 +1408,65 @@ export async function autoApproveTimesheetExpenses(
   return { approved, skipped };
 }
 
+// Task #1095 — standalone allocation decision (approve / override) on an
+// expense. Finance leadership only; overrides after posting are blocked
+// when the posted period is close-locked (reversal/repost must be used).
+// @cli-skip: UI-workflow write; allocation decisions ride the approval surfaces
+router.post("/wallet/expenses/:id/allocation", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden", message: "Entity allocations are decided by finance leadership." });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(
+      eq(atelierExpenses.id, req.params.id),
+      eq(atelierExpenses.orgId, me.orgId),
+      isNull(atelierExpenses.deletedAt),
+    ));
+  if (!existing) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  const b = (req.body ?? {}) as { entityId?: string; reason?: string };
+  // Period-close lock: once the expense is posted into a locked period,
+  // the allocation cannot be silently changed — reversal/repost only.
+  const [posted] = await db
+    .select({ periodLabel: atelierGlJournalEntry.periodLabel })
+    .from(atelierGlJournalEntry)
+    .where(and(
+      eq(atelierGlJournalEntry.orgId, me.orgId),
+      eq(atelierGlJournalEntry.sourceKind, "expense"),
+      eq(atelierGlJournalEntry.sourceRef, existing.id),
+      isNull(atelierGlJournalEntry.deletedAt),
+    ))
+    .limit(1);
+  if (posted && b.entityId && b.entityId !== existing.entityId && (await isGlPeriodLocked(me.orgId, posted.periodLabel))) {
+    res.status(409).json({
+      error: "period-locked",
+      message: `This expense is posted in ${posted.periodLabel}, which is close-locked. Reopen the period or use reversal/repost.`,
+    });
+    return;
+  }
+  const decided = await decideAllocation({
+    kind: "expense",
+    id: existing.id,
+    orgId: me.orgId,
+    actor: { id: me.id, name: me.name },
+    entityId: typeof b.entityId === "string" && b.entityId ? b.entityId : null,
+    overrideReason: b.reason ?? null,
+  });
+  if (!decided.ok) {
+    res.status(400).json({ error: decided.error, message: decided.message });
+    return;
+  }
+  const [row] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
+  res.json({ ok: true, status: decided.status, expense: expenseToWire(row) });
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -1397,7 +1500,37 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     categoryCode?: string;
     subCategoryCode?: string;
     clientBillable?: boolean;
+    // Task #1095 — approving the expense approves (or overrides) its
+    // entity allocation in the same act. `entityId` different from the
+    // proposal requires `allocationOverrideReason`.
+    entityId?: string;
+    allocationOverrideReason?: string;
   };
+  // Task #1095 — allocation decision rides the expense approval. Only
+  // finance leadership may decide allocations; other approval routes
+  // (engagement lead / line manager) leave the allocation untouched.
+  if (existing.allocStatus === "proposed" || existing.allocStatus === "needs_input" || b.entityId) {
+    if (isLeadership(me)) {
+      const decided = await decideAllocation({
+        kind: "expense",
+        id: existing.id,
+        orgId: me.orgId,
+        actor: { id: me.id, name: me.name },
+        entityId: typeof b.entityId === "string" && b.entityId ? b.entityId : null,
+        overrideReason: b.allocationOverrideReason ?? null,
+      });
+      if (!decided.ok && decided.error !== "entity_required") {
+        // needs_input with no entity picked is tolerated (expense can be
+        // approved, allocation stays queued); other failures are the
+        // caller's mistake.
+        res.status(400).json({ error: decided.error, message: decided.message });
+        return;
+      }
+    } else if (b.entityId) {
+      res.status(403).json({ error: "allocation-requires-finance", message: "Only finance leadership can change the entity allocation." });
+      return;
+    }
+  }
   const correction: Record<string, unknown> = {};
   if (b.categoryCode !== undefined || b.subCategoryCode !== undefined) {
     const pair =

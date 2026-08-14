@@ -33,6 +33,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
+import { writeAllocationAudit } from "../atelier-entity-allocation.js";
 import { invoiceAccountResolves } from "../invoiceAccountGuard.js";
 
 function rid(p: string): string {
@@ -533,6 +534,42 @@ async function executeBookkeeper(
   ))).filter((x) => tsInPeriod(x.approvedAt, from, to) || (!x.approvedAt && x.expenseDate >= from && x.expenseDate < to));
   for (const x of expenses) {
     sourcesScanned++;
+    // Task #1095 — post only human-decided allocations. `proposed` /
+    // `needs_input` rows surface as an allocation_pending exception (a
+    // "needs allocation" queue) instead of silently posting a prefill.
+    if (x.allocStatus === "proposed" || x.allocStatus === "needs_input" ||
+        (x.allocStatus == null && !x.entityId)) {
+      const lbl = `${x.merchant ?? x.category} · ${x.expenseDate}`;
+      exceptions.push({
+        code: "allocation_pending", sourceKind: "expense", sourceRef: x.id,
+        message:
+          x.allocStatus === "proposed"
+            ? `Expense (${lbl}) has a proposed entity allocation awaiting finance approval${x.allocJustification ? ` — ${x.allocJustification}` : ""}.`
+            : x.allocStatus === "needs_input"
+              ? `Expense (${lbl}) needs a manual entity allocation — the allocation engine could not decide.`
+              : `Expense (${lbl}) has no entity allocation — run the allocation sweep or decide it manually.`,
+        sourceLabel: lbl,
+        details: { allocStatus: x.allocStatus, allocRuleId: x.allocRuleId, allocJustification: x.allocJustification },
+      });
+      continue;
+    }
+    if (x.allocStatus == null && x.entityId) {
+      // Legacy row tagged before the allocation lifecycle existed: honor the
+      // explicit tag as an approved allocation, audited once, then post.
+      await db.update(atelierExpenses).set({
+        allocStatus: "approved", allocRuleId: "legacy_tag", allocDecidedBy: "human",
+        allocJustification: "Legacy entity tag predates the allocation lifecycle; honored as approved.",
+        allocConfidence: 1, updatedAt: new Date(),
+      }).where(and(eq(atelierExpenses.id, x.id), isNull(atelierExpenses.allocStatus)));
+      await writeAllocationAudit({
+        entityType: "expense", entityId: x.id, actorId: null, actorLabel: "Bookkeeper",
+        action: "allocation.approve",
+        changes: [{ field: "allocStatus", from: null, to: "approved" }],
+        ruleId: "legacy_tag", justification: "Legacy entity tag honored as approved.",
+        confidence: 1, decidedBy: "human",
+        summary: `Legacy entity tag on expense ${x.id} honored as an approved allocation.`,
+      });
+    }
     const ent = await resolveEntity(x.entityId, async (eid) => {
       await db.update(atelierExpenses).set({ entityId: eid, updatedAt: new Date() })
         .where(eq(atelierExpenses.id, x.id));
@@ -676,6 +713,40 @@ async function executeBookkeeper(
   ))).filter((p) => tsInPeriod(p.paidAt, from, to) && !coveredProposalIds.has(p.id));
   for (const p of pfis) {
     sourcesScanned++;
+    // Task #1095 — see the expense loop: prefis with an undecided
+    // allocation queue up instead of posting.
+    if (p.allocStatus === "proposed" || p.allocStatus === "needs_input" ||
+        (p.allocStatus == null && !p.legalEntityId)) {
+      const lbl = `${p.partnerFirmName} · ${p.weekIso}`;
+      exceptions.push({
+        code: "allocation_pending", sourceKind: "partner_firm_invoice", sourceRef: p.id,
+        message:
+          p.allocStatus === "proposed"
+            ? `Partner-firm invoice (${lbl}) has a proposed entity allocation awaiting finance approval${p.allocJustification ? ` — ${p.allocJustification}` : ""}.`
+            : p.allocStatus === "needs_input"
+              ? `Partner-firm invoice (${lbl}) needs a manual entity allocation.`
+              : `Partner-firm invoice (${lbl}) has no entity allocation — run the allocation sweep or decide it manually.`,
+        sourceLabel: lbl,
+        details: { allocStatus: p.allocStatus, allocRuleId: p.allocRuleId, allocJustification: p.allocJustification },
+      });
+      continue;
+    }
+    if (p.allocStatus == null && p.legalEntityId) {
+      // Legacy tagged invoice: honor the explicit tag as approved, audited.
+      await db.update(atelierPartnerFirmInvoices).set({
+        allocStatus: "approved", allocRuleId: "legacy_tag", allocDecidedBy: "human",
+        allocJustification: "Legacy entity tag predates the allocation lifecycle; honored as approved.",
+        allocConfidence: 1, updatedAt: new Date(),
+      }).where(and(eq(atelierPartnerFirmInvoices.id, p.id), isNull(atelierPartnerFirmInvoices.allocStatus)));
+      await writeAllocationAudit({
+        entityType: "partner_firm_invoice", entityId: p.id, actorId: null, actorLabel: "Bookkeeper",
+        action: "allocation.approve",
+        changes: [{ field: "allocStatus", from: null, to: "approved" }],
+        ruleId: "legacy_tag", justification: "Legacy entity tag honored as approved.",
+        confidence: 1, decidedBy: "human",
+        summary: `Legacy entity tag on partner-firm invoice ${p.id} honored as an approved allocation.`,
+      });
+    }
     const ent = await resolveEntity(p.legalEntityId, async (eid) => {
       await db.update(atelierPartnerFirmInvoices).set({ legalEntityId: eid, updatedAt: new Date() })
         .where(eq(atelierPartnerFirmInvoices.id, p.id));

@@ -29,6 +29,7 @@ import {
 } from "@workspace/db";
 import { and, eq, isNull, inArray, or } from "drizzle-orm";
 import { convertToUsd } from "./atelier-fx.js";
+import { proposeSupplierInvoiceAllocation } from "./atelier-entity-allocation.js";
 
 const PARTNER_APPROVAL_THRESHOLD_USD = 250;
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
@@ -369,8 +370,9 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
         .where(eq(atelierPartnerFirmInvoices.id, existing.id));
       summary.partnerFirmProposals.updated++;
     } else {
+      const pfiId = rid("pfi");
       await db.insert(atelierPartnerFirmInvoices).values({
-        id: rid("pfi"),
+        id: pfiId,
         partnerFirmId: b.partnerFirmId,
         partnerFirmName,
         engagementId: b.engagementId,
@@ -384,6 +386,8 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
         proposalRunId,
         evidenceFirmHourIds: b.rowIds,
       });
+      // Task #1095 — prefill the entity allocation (fail-soft).
+      await proposeSupplierInvoiceAllocation(pfiId, { allowAi: false }).catch(() => null);
       summary.partnerFirmProposals.created++;
     }
   }

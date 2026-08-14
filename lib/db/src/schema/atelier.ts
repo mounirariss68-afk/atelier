@@ -2545,6 +2545,10 @@ export const atelierEmployees = pgTable(
     nationality: text("nationality"), // ISO-3166 alpha-2 country code, nullable
     employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
     employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)
+    // Task #1095 — home country (ISO-3166 alpha-2) for the entity-allocation
+    // travel rules (home vs destination). Editable by HR/founding via the
+    // roster PATCH; the home *entity* resolves via legalEntityId first.
+    homeCountry: text("home_country"),
     startDate: text("start_date"), // ISO date
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | on_leave | offboarded
@@ -2626,6 +2630,9 @@ export const atelierContractors = pgTable(
       .notNull()
       .default([]), // PRD §2.1 — default scope chips applied on grant
     contractingEntity: text("contracting_entity"), // PRD §2.1 (which Cognirise entity contracts them)
+    // Task #1095 — home country (ISO alpha-2) for entity-allocation travel
+    // rules; mirrors the employee column.
+    homeCountry: text("home_country"),
     conflictsDisclosedJson: jsonb("conflicts_disclosed_json")
       .$type<Array<{ party: string; nature: string }>>()
       .notNull()
@@ -3998,6 +4005,24 @@ export const atelierExpenses = pgTable(
     fundingBankAccountId: text("funding_bank_account_id"), // atelier_bank_account.id when company_account
     timesheetWeekId: text("timesheet_week_id"), // optional link to a ledger week (auto-approve opt-in)
     approvalRoute: text("approval_route"), // engagement_lead | line_manager | hr | leadership (stamped at first approval)
+    // Task #1095 — entity-allocation engine (benefit principle). `entityId`
+    // above stays the allocated legal entity; these fields carry the
+    // proposal lifecycle: proposed (agent prefill) | approved | overridden
+    // (human picked a different entity) | needs_input (engine could not
+    // decide — never a guess). Null allocStatus = legacy/explicit tag.
+    allocStatus: text("alloc_status"),
+    allocRuleId: text("alloc_rule_id"), // explicit_choice | engagement_entity | registry_match | travel_destination | travel_home | person_home | default_entity | ai
+    allocJustification: text("alloc_justification"),
+    allocConfidence: doublePrecision("alloc_confidence"),
+    allocDecidedBy: text("alloc_decided_by"), // deterministic | ai | human
+    allocShared: boolean("alloc_shared").notNull().default(false), // firm-wide cost flagged for future intercompany recharge
+    allocApprovedByUserId: text("alloc_approved_by_user_id"),
+    allocApprovedAt: timestamp("alloc_approved_at"),
+    allocOverrideReason: text("alloc_override_reason"),
+    // Task #1095 — lightweight trip context feeding the travel rules.
+    tripDestinationCountry: text("trip_destination_country"), // ISO-3166 alpha-2
+    tripPurpose: text("trip_purpose"), // bd | client_project | internal_meeting | training_deliver | training_attend | personal_dev | other
+    tripContextSource: text("trip_context_source"), // user | ai
     reimbursedAt: timestamp("reimbursed_at"),
     reimbursedByUserId: text("reimbursed_by_user_id"),
     createdByUserId: text("created_by_user_id"),
@@ -4126,6 +4151,16 @@ export const atelierPartnerFirmInvoices = pgTable(
     engagementId: text("engagement_id"),
     // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
     legalEntityId: text("legal_entity_id"),
+    // Task #1095 — entity-allocation lifecycle (see atelierExpenses.allocStatus).
+    allocStatus: text("alloc_status"),
+    allocRuleId: text("alloc_rule_id"),
+    allocJustification: text("alloc_justification"),
+    allocConfidence: doublePrecision("alloc_confidence"),
+    allocDecidedBy: text("alloc_decided_by"),
+    allocShared: boolean("alloc_shared").notNull().default(false),
+    allocApprovedByUserId: text("alloc_approved_by_user_id"),
+    allocApprovedAt: timestamp("alloc_approved_at"),
+    allocOverrideReason: text("alloc_override_reason"),
     weekIso: text("week_iso").notNull(),
     hours: doublePrecision("hours").notNull().default(0),
     costAmount: doublePrecision("cost_amount").notNull().default(0),

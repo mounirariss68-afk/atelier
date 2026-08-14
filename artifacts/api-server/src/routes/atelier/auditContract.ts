@@ -162,6 +162,12 @@ export const V3_AUDIT_ACTIONS = {
   // Task #509 — invitation lifecycle rationalisation.
   ROSTER_INVITATION_ACCEPTED: "invitation.accepted",
   ROSTER_INVITATION_LOGIN_CREATED: "invitation.login.created",
+
+  // Task #1095 — entity allocation lifecycle (expenses + supplier invoices).
+  ALLOCATION_PROPOSE: "allocation.propose",
+  ALLOCATION_NEEDS_INPUT: "allocation.needs_input",
+  ALLOCATION_APPROVE: "allocation.approve",
+  ALLOCATION_OVERRIDE: "allocation.override",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

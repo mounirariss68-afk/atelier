@@ -107,6 +107,12 @@ import {
 import { loadAttachment, loadChunk, purgeAttachment, type DocChunk } from "./attachments/index.js";
 import { searchDocumentChunks, setChunkScope } from "./attachments/retrieval.js";
 import { wrapAttachment } from "./prompt-guard.js";
+import {
+  loadAllocationContext,
+  evaluateAllocationRules,
+  engagementEntityId,
+  proposeExpenseAllocation,
+} from "../atelier-entity-allocation.js";
 import { scoreRubric, type RubricChunk } from "./qualification-rubric.js";
 import { entityNavPath } from "./orchestrator-capabilities.js";
 
@@ -579,6 +585,9 @@ defineCapability({
     properties: {
       attachmentIds: { type: "array", items: { type: "string" }, minItems: 1 },
       engagementId: { type: "string" },
+      // Task #1095 — optional explicit entity allocation for the batch
+      // (overrides the engine's proposal shown on the confirm card).
+      legalEntityId: { type: "string" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentIds"],
@@ -675,20 +684,49 @@ defineCapability({
         errorMessage: "no parseable receipts found in attachments",
       };
     }
+    // Task #1095 — preview the entity allocation on the confirm card so
+    // the human can change it (name an entity / pass legalEntityId).
+    const userEntityId =
+      typeof input.legalEntityId === "string" && input.legalEntityId.trim()
+        ? input.legalEntityId.trim()
+        : null;
+    const allocCtx = await loadAllocationContext(ctx.persona.orgId);
+    const engEntityId = engagementId
+      ? await engagementEntityId(ctx.persona.orgId, engagementId)
+      : null;
     if (input.confirm !== true) {
+      const previews = drafts.map((d) => {
+        const dec = evaluateAllocationRules({
+          kind: "expense",
+          explicitEntityId: userEntityId,
+          engagementEntityId: engEntityId,
+          counterpartyName: d.merchant,
+          category: d.category,
+          documentCountry: d.country,
+          entities: allocCtx.entities,
+          defaultEntityId: allocCtx.defaultEntityId,
+        });
+        const ent = dec ? allocCtx.entities.find((e) => e.id === dec.entityId) : null;
+        return { ...d, allocation: dec && ent ? { entityId: dec.entityId, entityName: ent.shortName, ruleId: dec.ruleId, justification: dec.justification, confidence: dec.confidence } : null };
+      });
+      const allocated = previews.filter((p) => p.allocation);
+      const allocLine =
+        allocated.length > 0
+          ? ` Proposed entity allocation: ${[...new Set(allocated.map((p) => p.allocation!.entityName))].join(", ")} — ${allocated[0].allocation!.justification}${previews.length > allocated.length ? ` (${previews.length - allocated.length} need manual allocation)` : ""} (say the entity name to change it).`
+          : ` Entity allocation: undecided — the drafts will queue for manual allocation unless you name the entity now.`;
       return {
         ok: true,
-        data: { preview: drafts },
+        data: { preview: previews },
         confirmation: {
           summary: `Stage ${drafts.length} draft expense(s) from ${attachmentIds.length} attachment(s).${
             drafts.some((d) => d.needsReview)
               ? ` ${drafts.filter((d) => d.needsReview).length} could not be fully read and will be flagged for review.`
               : ""
-          }`,
+          }${allocLine}`,
           diff: { create: { table: "atelier_expenses", count: drafts.length } },
           pending: {
             tool: "ingest_receipts_to_expenses",
-            input: { ...input, confirm: true },
+            input: { ...input, ...(userEntityId ? { legalEntityId: userEntityId } : {}), confirm: true },
           },
         },
       };
@@ -732,6 +770,14 @@ defineCapability({
         },
         payloadSummary: `CLI staged expense ${d.merchant} (${d.currency} ${d.amount})`,
       });
+      // Task #1095 — entity-allocation prefill (deterministic; the AI
+      // fallback runs at submit / receipt-parse time). A user-picked
+      // entity from the confirm card wins as explicit choice.
+      await proposeExpenseAllocation(id, {
+        allowAi: false,
+        actorId: ctx.persona.id,
+        explicitEntityId: userEntityId,
+      }).catch(() => {});
       created.push(id);
     }
     // Task #575 — when receipts are filed against an engagement, scope
