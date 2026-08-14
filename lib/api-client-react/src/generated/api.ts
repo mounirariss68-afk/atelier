@@ -131,6 +131,8 @@ import type {
   AtelierExpenseSuggestResponse,
   AtelierExpenseTaxonomyResponse,
   AtelierExportEngagementExpensesParams,
+  AtelierExtractContractSalary202,
+  AtelierExtractContractSalary409,
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
@@ -187,6 +189,8 @@ import type {
   AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
+  AtelierListSalaryProposals200,
+  AtelierListSalaryProposalsParams,
   AtelierListSignatureRequestsParams,
   AtelierMarginOverrideInput,
   AtelierMarginPolicy,
@@ -277,6 +281,7 @@ import type {
   AtelierRateCardRowInput,
   AtelierRegeneratePovOutlineInput,
   AtelierRejectProposalSectionInput,
+  AtelierRejectSalaryProposalBody,
   AtelierRemindSignatureRequest200,
   AtelierReplaceBankSignatories200,
   AtelierReplaceBankSignatoriesBody,
@@ -297,6 +302,8 @@ import type {
   AtelierRosterPersonalView,
   AtelierRosterQuickAddRequest,
   AtelierRosterQuickAddResponse,
+  AtelierSalaryProposalApprove,
+  AtelierSalaryProposalDecisionResponse,
   AtelierScoutInput,
   AtelierSearchContractCounterpartiesParams,
   AtelierSelfDocumentList,
@@ -6646,6 +6653,395 @@ export const useAtelierSendContractForSignature = <
   return useMutation(
     getAtelierSendContractForSignatureMutationOptions(options),
   );
+};
+
+/**
+ * Creates a salary-extraction proposal and kicks the extractor
+fire-and-forget. Idempotent — a live (processing/pending) proposal
+returns 409 with its id. Gated on the payroll-editor set (people
+editors + finance). Contract must be signed + employment-type with an
+employee counterparty. NEVER writes payroll; produces a proposal for
+review.
+
+ * @summary Contracts — (re)run salary digitization for a signed employment contract
+ */
+export const getAtelierExtractContractSalaryUrl = (id: string) => {
+  return `/api/atelier/contracts/${id}/salary-extract`;
+};
+
+export const atelierExtractContractSalary = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierExtractContractSalary202> => {
+  return customFetch<AtelierExtractContractSalary202>(
+    getAtelierExtractContractSalaryUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierExtractContractSalaryMutationOptions = <
+  TError = ErrorType<AuthErrorResponse | AtelierExtractContractSalary409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierExtractContractSalary>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierExtractContractSalary>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierExtractContractSalary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierExtractContractSalary>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierExtractContractSalary(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierExtractContractSalaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierExtractContractSalary>>
+>;
+
+export type AtelierExtractContractSalaryMutationError = ErrorType<
+  AuthErrorResponse | AtelierExtractContractSalary409
+>;
+
+/**
+ * @summary Contracts — (re)run salary digitization for a signed employment contract
+ */
+export const useAtelierExtractContractSalary = <
+  TError = ErrorType<AuthErrorResponse | AtelierExtractContractSalary409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierExtractContractSalary>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierExtractContractSalary>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierExtractContractSalaryMutationOptions(options));
+};
+
+/**
+ * @summary Roster — contract salary proposals with current comp side-by-side
+ */
+export const getAtelierListSalaryProposalsUrl = (
+  params?: AtelierListSalaryProposalsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/roster/salary-proposals?${stringifiedParams}`
+    : `/api/atelier/roster/salary-proposals`;
+};
+
+export const atelierListSalaryProposals = async (
+  params?: AtelierListSalaryProposalsParams,
+  options?: RequestInit,
+): Promise<AtelierListSalaryProposals200> => {
+  return customFetch<AtelierListSalaryProposals200>(
+    getAtelierListSalaryProposalsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListSalaryProposalsQueryKey = (
+  params?: AtelierListSalaryProposalsParams,
+) => {
+  return [
+    `/api/atelier/roster/salary-proposals`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListSalaryProposalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListSalaryProposals>>,
+  TError = ErrorType<AuthErrorResponse>,
+>(
+  params?: AtelierListSalaryProposalsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListSalaryProposals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListSalaryProposalsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListSalaryProposals>>
+  > = ({ signal }) =>
+    atelierListSalaryProposals(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListSalaryProposals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListSalaryProposalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListSalaryProposals>>
+>;
+export type AtelierListSalaryProposalsQueryError = ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Roster — contract salary proposals with current comp side-by-side
+ */
+
+export function useAtelierListSalaryProposals<
+  TData = Awaited<ReturnType<typeof atelierListSalaryProposals>>,
+  TError = ErrorType<AuthErrorResponse>,
+>(
+  params?: AtelierListSalaryProposalsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListSalaryProposals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListSalaryProposalsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Roster — approve a salary proposal (applies comp via the audited payroll write)
+ */
+export const getAtelierApproveSalaryProposalUrl = (id: string) => {
+  return `/api/atelier/roster/salary-proposals/${id}/approve`;
+};
+
+export const atelierApproveSalaryProposal = async (
+  id: string,
+  atelierSalaryProposalApprove?: AtelierSalaryProposalApprove,
+  options?: RequestInit,
+): Promise<AtelierSalaryProposalDecisionResponse> => {
+  return customFetch<AtelierSalaryProposalDecisionResponse>(
+    getAtelierApproveSalaryProposalUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSalaryProposalApprove),
+    },
+  );
+};
+
+export const getAtelierApproveSalaryProposalMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveSalaryProposal>>,
+    TError,
+    { id: string; data: BodyType<AtelierSalaryProposalApprove> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApproveSalaryProposal>>,
+  TError,
+  { id: string; data: BodyType<AtelierSalaryProposalApprove> },
+  TContext
+> => {
+  const mutationKey = ["atelierApproveSalaryProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApproveSalaryProposal>>,
+    { id: string; data: BodyType<AtelierSalaryProposalApprove> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierApproveSalaryProposal(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApproveSalaryProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApproveSalaryProposal>>
+>;
+export type AtelierApproveSalaryProposalMutationBody =
+  BodyType<AtelierSalaryProposalApprove>;
+export type AtelierApproveSalaryProposalMutationError =
+  ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Roster — approve a salary proposal (applies comp via the audited payroll write)
+ */
+export const useAtelierApproveSalaryProposal = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveSalaryProposal>>,
+    TError,
+    { id: string; data: BodyType<AtelierSalaryProposalApprove> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApproveSalaryProposal>>,
+  TError,
+  { id: string; data: BodyType<AtelierSalaryProposalApprove> },
+  TContext
+> => {
+  return useMutation(getAtelierApproveSalaryProposalMutationOptions(options));
+};
+
+/**
+ * @summary Roster — reject a salary proposal
+ */
+export const getAtelierRejectSalaryProposalUrl = (id: string) => {
+  return `/api/atelier/roster/salary-proposals/${id}/reject`;
+};
+
+export const atelierRejectSalaryProposal = async (
+  id: string,
+  atelierRejectSalaryProposalBody?: AtelierRejectSalaryProposalBody,
+  options?: RequestInit,
+): Promise<AtelierSalaryProposalDecisionResponse> => {
+  return customFetch<AtelierSalaryProposalDecisionResponse>(
+    getAtelierRejectSalaryProposalUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRejectSalaryProposalBody),
+    },
+  );
+};
+
+export const getAtelierRejectSalaryProposalMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectSalaryProposal>>,
+    TError,
+    { id: string; data: BodyType<AtelierRejectSalaryProposalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRejectSalaryProposal>>,
+  TError,
+  { id: string; data: BodyType<AtelierRejectSalaryProposalBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierRejectSalaryProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRejectSalaryProposal>>,
+    { id: string; data: BodyType<AtelierRejectSalaryProposalBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierRejectSalaryProposal(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRejectSalaryProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRejectSalaryProposal>>
+>;
+export type AtelierRejectSalaryProposalMutationBody =
+  BodyType<AtelierRejectSalaryProposalBody>;
+export type AtelierRejectSalaryProposalMutationError =
+  ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Roster — reject a salary proposal
+ */
+export const useAtelierRejectSalaryProposal = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectSalaryProposal>>,
+    TError,
+    { id: string; data: BodyType<AtelierRejectSalaryProposalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRejectSalaryProposal>>,
+  TError,
+  { id: string; data: BodyType<AtelierRejectSalaryProposalBody> },
+  TContext
+> => {
+  return useMutation(getAtelierRejectSalaryProposalMutationOptions(options));
 };
 
 /**

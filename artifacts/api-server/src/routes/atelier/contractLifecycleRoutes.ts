@@ -47,7 +47,14 @@ import {
   type ContractTemplateField,
   type PriorFieldReview,
 } from "@workspace/db";
-import { canApproveAsPartner } from "./personaRoles";
+import { canApproveAsPartner, canEditPeople, isFinance } from "./personaRoles";
+import {
+  createSalaryProposal,
+  findLiveProposal,
+  isSalaryEligible,
+  runSalaryExtraction,
+} from "../../lib/atelier-contract-salary-service.js";
+import { assertAuditAction } from "./auditContract.js";
 import { emitSelfNotification } from "./meRoutes.js";
 import { canSeeAccount } from "./accountRoutes";
 import { accessibleEngagementIds } from "./engagementRoutes";
@@ -1614,6 +1621,86 @@ router.post("/contracts/:id/request-signature", async (req, res) => {
     contract: contractShape(updated),
     notified: signatories.map((s) => ({ userId: s.userId, name: s.name })),
   });
+});
+
+// Task #1137 — on-demand back-process: (re)run salary digitization for a
+// signed employment contract whose counterparty is an employee. Gated on the
+// payroll editor set (people editors + finance). Returns the existing live
+// proposal via 409 (idempotent), else creates one + kicks extraction (202).
+// @cli-skip: UI-workflow write; payroll-adjacent extraction — CLI exposure needs confirm-flow design
+router.post("/contracts/:id/salary-extract", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!(canEditPeople(me.role) || isFinance(me.role))) {
+    res.status(403).json({
+      error: "payroll-role",
+      message: "Only people editors and finance may digitize contract salary.",
+    });
+    return;
+  }
+  const contract = await loadContract(me.orgId, String(req.params.id));
+  if (!contract) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (contract.status !== "signed") {
+    res.status(409).json({
+      error: "invalid-status",
+      message: "Salary can only be digitized from a signed contract.",
+    });
+    return;
+  }
+  const { eligible, employeeId } = await isSalaryEligible(contract);
+  if (!eligible || !employeeId) {
+    res.status(409).json({
+      error: "not-eligible",
+      message:
+        "Salary digitization applies to employment contracts whose counterparty is an employee.",
+    });
+    return;
+  }
+  const live = await findLiveProposal(me.orgId, contract.id);
+  if (live) {
+    res.status(409).json({
+      error: "proposal-in-flight",
+      message: "A salary proposal for this contract is already being processed or awaiting review.",
+      proposalId: live.id,
+    });
+    return;
+  }
+  const { proposal, created } = await createSalaryProposal({
+    orgId: me.orgId,
+    contractId: contract.id,
+    personId: employeeId,
+  });
+  // Lost the create race (a concurrent request beat us) — treat identically
+  // to the pre-check 409: no audit, no second extraction.
+  if (!created) {
+    res.status(409).json({
+      error: "proposal-in-flight",
+      message: "A salary proposal for this contract is already being processed or awaiting review.",
+      proposalId: proposal.id,
+    });
+    return;
+  }
+  assertAuditAction("contract.salary.extract_requested");
+  await auditContractEntity({
+    entityType: "atelier_contract_record",
+    entityId: contract.id,
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "contract.salary.extract_requested",
+    payload: { proposalId: proposal.id, personId: employeeId },
+    summary: `${me.name} requested salary digitization for contract "${contract.title}"`,
+  });
+  // Fire-and-forget — never block the request thread on the LLM.
+  void runSalaryExtraction(proposal.id).catch((err) =>
+    console.error(
+      `[contracts] salary extraction crashed for ${proposal.id}:`,
+      err instanceof Error ? err.message : err,
+    ),
+  );
+  res.status(202).json({ proposalId: proposal.id });
 });
 
 // @cli-skip: binary download surface (Task #159)

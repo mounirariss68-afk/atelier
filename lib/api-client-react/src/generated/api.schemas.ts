@@ -8205,6 +8205,142 @@ export interface AtelierContractSend {
   signFirst?: boolean;
 }
 
+/**
+ * Task 1137 — the four comp figures + effective date extracted from a signed contract
+ */
+export interface AtelierSalaryExtractedFigures {
+  /** @nullable */
+  baseCompensation?: number | null;
+  /** @nullable */
+  baseCurrency?: string | null;
+  /** @nullable */
+  basicWageMonthly?: number | null;
+  /** @nullable */
+  housingAllowanceMonthly?: number | null;
+  /** @nullable */
+  effectiveDate?: string | null;
+}
+
+export interface AtelierSalarySnippet {
+  snippet: string;
+  attribution: string;
+}
+
+export type AtelierSalaryProposalStatus =
+  (typeof AtelierSalaryProposalStatus)[keyof typeof AtelierSalaryProposalStatus];
+
+export const AtelierSalaryProposalStatus = {
+  processing: "processing",
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  failed: "failed",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierSalaryProposalSource =
+  | (typeof AtelierSalaryProposalSource)[keyof typeof AtelierSalaryProposalSource]
+  | null;
+
+export const AtelierSalaryProposalSource = {
+  field_values: "field_values",
+  llm_text: "llm_text",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierSalaryProposalSnippets = {
+  [key: string]: AtelierSalarySnippet;
+} | null;
+
+/**
+ * Current roster comp values, side-by-side with the proposal
+ * @nullable
+ */
+export type AtelierSalaryProposalCurrent = {
+  /** @nullable */
+  baseCompensation?: number | null;
+  /** @nullable */
+  baseCurrency?: string | null;
+  /** @nullable */
+  basicWageMonthly?: number | null;
+  /** @nullable */
+  housingAllowanceMonthly?: number | null;
+} | null;
+
+export type AtelierSalaryProposalAppliedChangesItem = {
+  field?: string;
+};
+
+export interface AtelierSalaryProposal {
+  id: string;
+  contractId: string;
+  /** @nullable */
+  contractTitle?: string | null;
+  /** @nullable */
+  contractType?: string | null;
+  personId: string;
+  /** @nullable */
+  personName?: string | null;
+  /** @nullable */
+  personStatus?: string | null;
+  status: AtelierSalaryProposalStatus;
+  /** @nullable */
+  source?: AtelierSalaryProposalSource;
+  extracted?: AtelierSalaryExtractedFigures | null;
+  /** @nullable */
+  snippets?: AtelierSalaryProposalSnippets;
+  /** @nullable */
+  error?: string | null;
+  /**
+   * Current roster comp values, side-by-side with the proposal
+   * @nullable
+   */
+  current?: AtelierSalaryProposalCurrent;
+  /** @nullable */
+  appliedChanges?: AtelierSalaryProposalAppliedChangesItem[] | null;
+  /** @nullable */
+  decidedByLabel?: string | null;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decisionNote?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Task 1137 — optional overrides of the extracted comp values (subset of payroll edit schema)
+ */
+export interface AtelierSalaryProposalApprove {
+  /** @nullable */
+  baseCompensation?: number | null;
+  /** @nullable */
+  baseCurrency?: string | null;
+  /** @nullable */
+  basicWageMonthly?: number | null;
+  /** @nullable */
+  housingAllowanceMonthly?: number | null;
+  /** @maxLength 2000 */
+  decisionNote?: string;
+}
+
+export type AtelierSalaryProposalDecisionResponseProposalAppliedChangesItem = {
+  field?: string;
+};
+
+export type AtelierSalaryProposalDecisionResponseProposal = {
+  id: string;
+  status: string;
+  appliedChanges?: AtelierSalaryProposalDecisionResponseProposalAppliedChangesItem[];
+};
+
+export interface AtelierSalaryProposalDecisionResponse {
+  proposal: AtelierSalaryProposalDecisionResponseProposal;
+}
+
 export type AtelierSigningEntityAuthorisedSignatoriesItem = {
   userId: string;
   name: string;
@@ -9621,6 +9757,32 @@ export const AtelierSearchContractCounterpartiesKind = {
   contact: "contact",
   account: "account",
 } as const;
+
+export type AtelierExtractContractSalary202 = {
+  proposalId: string;
+};
+
+export type AtelierExtractContractSalary409 = {
+  error: string;
+  message?: string;
+  proposalId?: string;
+};
+
+export type AtelierListSalaryProposalsParams = {
+  /**
+   * Filter by proposal status (processing|pending|approved|rejected|failed)
+   */
+  status?: string;
+};
+
+export type AtelierListSalaryProposals200 = {
+  proposals: AtelierSalaryProposal[];
+};
+
+export type AtelierRejectSalaryProposalBody = {
+  /** @maxLength 2000 */
+  note?: string;
+};
 
 export type AtelierUploadMyPhotoBody = {
   /** JPEG/PNG/WebP, ≤8 MB */

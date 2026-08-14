@@ -43,6 +43,8 @@ import {
   atelierTitles,
   atelierPersons,
   atelierLegalEntities,
+  atelierContractRecords,
+  atelierContractSalaryProposals,
 } from "@workspace/db";
 // Task #538 — unified person model: structured names resolve through the
 // shared parser/sanitizer and persist via the person-sync helper.
@@ -1934,6 +1936,107 @@ const payrollEditSchema = z
   .partial()
   .strict();
 
+/**
+ * Task #660/#1137 — shared audited payroll-write core.
+ *
+ * The single sanctioned mutation of the four comp fields (+ legal-entity
+ * link). Both the payroll PATCH route and the contract-salary proposal
+ * approve route go through here so the audited write semantics
+ * (roster.person.updated / change:"payroll" + field-by-field changes) can
+ * never drift between surfaces. `extraPayload` lets the salary-approve path
+ * attach its contract/proposal provenance.
+ *
+ * Returns a typed result; the caller maps it to HTTP. NEVER writes when the
+ * person is missing or not an employee (fail-loud 404/422).
+ */
+export type ApplyPayrollResult =
+  | { ok: false; code: "person-not-found" | "employee-only" | "legal-entity-not-found" }
+  | {
+      ok: false;
+      code: "no-change";
+      changes: Array<{ field: string; from: unknown; to: unknown }>;
+    }
+  | { ok: true; changes: Array<{ field: string; from: unknown; to: unknown }> };
+
+export async function applyPayrollUpdate(args: {
+  orgId: string;
+  personId: string;
+  actor: { id: string; name: string | null };
+  patch: Record<string, unknown>;
+  extraPayload?: Record<string, unknown>;
+  summaryPrefix?: string;
+}): Promise<ApplyPayrollResult> {
+  const [row] = await db
+    .select()
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.id, args.personId), eq(atelierEmployees.orgId, args.orgId)))
+    .limit(1);
+  if (!row) return { ok: false, code: "person-not-found" };
+  const raw = row as unknown as Record<string, unknown>;
+
+  let entityRow: typeof atelierLegalEntities.$inferSelect | null = null;
+  if ("legalEntityId" in args.patch && args.patch.legalEntityId != null) {
+    const [ent] = await db
+      .select()
+      .from(atelierLegalEntities)
+      .where(
+        and(
+          eq(atelierLegalEntities.id, String(args.patch.legalEntityId)),
+          eq(atelierLegalEntities.orgId, args.orgId),
+          eq(atelierLegalEntities.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (!ent) return { ok: false, code: "legal-entity-not-found" };
+    entityRow = ent;
+  }
+
+  const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
+  const update: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args.patch)) {
+    const before = raw[k] ?? null;
+    const after = v ?? null;
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    update[k] = v;
+    changes.push({ field: k, from: before, to: after });
+  }
+  if (entityRow && "legalEntityId" in update) {
+    const mirror = entityRow.shortName || entityRow.legalNameEn;
+    if ((raw.employingEntity ?? null) !== mirror) {
+      update.employingEntity = mirror;
+      changes.push({ field: "employingEntity", from: raw.employingEntity ?? null, to: mirror });
+    }
+  }
+  if (changes.length === 0) return { ok: false, code: "no-change", changes: [] };
+
+  update.updatedAt = new Date();
+  await db
+    .update(atelierEmployees)
+    .set(update)
+    .where(and(eq(atelierEmployees.id, args.personId), eq(atelierEmployees.orgId, args.orgId)));
+
+  assertAuditAction("roster.person.updated");
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "person",
+    entityId: args.personId,
+    actorType: "user",
+    actorId: args.actor.id,
+    actorLabel: args.actor.name ?? args.actor.id,
+    action: "roster.person.updated",
+    payload: {
+      workerType: "employee",
+      change: "payroll",
+      changes,
+      ...(args.extraPayload ?? {}),
+    },
+    payloadSummary: `${args.summaryPrefix ?? `${args.actor.name ?? args.actor.id} updated payroll fields for ${row.fullName}`} (${changes
+      .map((c) => c.field)
+      .join(", ")})`,
+  });
+  return { ok: true, changes };
+}
+
 // @cli-skip: UI-workflow write; comp data — CLI exposure needs confirm-flow capability design
 router.patch("/roster/people/:id/payroll", async (req, res, next) => {
   try {
@@ -1969,86 +2072,476 @@ router.patch("/roster/people/:id/payroll", async (req, res, next) => {
       return;
     }
 
-    const [row] = await db
-      .select()
-      .from(atelierEmployees)
-      .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)))
-      .limit(1);
-    if (!row) {
+    const result = await applyPayrollUpdate({
+      orgId: me.orgId,
+      personId: person.id,
+      actor: { id: me.id, name: me.name },
+      patch,
+    });
+    if (!result.ok && result.code === "person-not-found") {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
-    const raw = row as unknown as Record<string, unknown>;
-
-    // Entity link must point at a live (active) legal entity in this org.
-    // The employingEntity display mirror follows the link so list views and
-    // the general edit form stay truthful.
-    let entityRow: typeof atelierLegalEntities.$inferSelect | null = null;
-    if ("legalEntityId" in patch && patch.legalEntityId != null) {
-      const [ent] = await db
-        .select()
-        .from(atelierLegalEntities)
-        .where(
-          and(
-            eq(atelierLegalEntities.id, String(patch.legalEntityId)),
-            eq(atelierLegalEntities.orgId, me.orgId),
-            eq(atelierLegalEntities.status, "active"),
-          ),
-        )
-        .limit(1);
-      if (!ent) {
-        res.status(422).json({ error: "legal-entity-not-found" });
-        return;
-      }
-      entityRow = ent;
+    if (!result.ok && result.code === "legal-entity-not-found") {
+      res.status(422).json({ error: "legal-entity-not-found" });
+      return;
     }
-
-    const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
-    const update: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(patch)) {
-      const before = raw[k] ?? null;
-      const after = v ?? null;
-      if (JSON.stringify(before) === JSON.stringify(after)) continue;
-      update[k] = v;
-      changes.push({ field: k, from: before, to: after });
-    }
-    if (entityRow && "legalEntityId" in update) {
-      const mirror = entityRow.shortName || entityRow.legalNameEn;
-      if ((raw.employingEntity ?? null) !== mirror) {
-        update.employingEntity = mirror;
-        changes.push({ field: "employingEntity", from: raw.employingEntity ?? null, to: mirror });
-      }
-    }
-    if (changes.length === 0) {
+    if (!result.ok && result.code === "no-change") {
       res.json({ person: await getPerson(person.id, canSeeComp(me.role)), changes: [] });
       return;
     }
-    update.updatedAt = new Date();
-    await db
-      .update(atelierEmployees)
-      .set(update)
-      .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)));
+    const updated = await getPerson(person.id, canSeeComp(me.role));
+    res.json({ person: updated, changes: result.ok ? result.changes : [] });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    assertAuditAction("roster.person.updated");
+// -----------------------------------------------------------------
+// Task #1137 — contract salary proposals (review + decide).
+//
+// Proposals are produced by the extractor from SIGNED employment contracts;
+// they never touch payroll until an authorised reviewer approves. All
+// surfaces here share the payroll-editor gate (people editors + finance).
+// -----------------------------------------------------------------
+
+/** Latest APPROVED proposal for an employee (drives the drift flag). */
+export async function latestApprovedSalaryProposal(
+  orgId: string,
+  personId: string,
+): Promise<typeof atelierContractSalaryProposals.$inferSelect | null> {
+  const [row] = await db
+    .select()
+    .from(atelierContractSalaryProposals)
+    .where(
+      and(
+        eq(atelierContractSalaryProposals.orgId, orgId),
+        eq(atelierContractSalaryProposals.personId, personId),
+        eq(atelierContractSalaryProposals.status, "approved"),
+      ),
+    )
+    .orderBy(desc(atelierContractSalaryProposals.decidedAt))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * compDiffersFromContract — computed at read time against the latest approved
+ * proposal's RESOLVED approved values (approvedValues), NOT appliedChanges.
+ *
+ * approvedValues records every comp field that was approved — including fields
+ * that were a no-op at approval time (current payroll already matched the
+ * extracted/overridden value). appliedChanges omits those, so comparing
+ * against it would miss a later manual edit of a then-unchanged field. Using
+ * approvedValues as the baseline makes any subsequent divergence surface as
+ * drift.
+ *
+ * null when there is no approved proposal (or it carries no comp baseline);
+ * true/false otherwise.
+ */
+export async function computeCompDrift(
+  orgId: string,
+  personId: string,
+): Promise<boolean | null> {
+  const proposal = await latestApprovedSalaryProposal(orgId, personId);
+  if (!proposal) return null;
+  const compFields = [
+    "baseCompensation",
+    "baseCurrency",
+    "basicWageMonthly",
+    "housingAllowanceMonthly",
+  ] as const;
+  const approved = (proposal.approvedValues ?? {}) as Record<string, unknown>;
+  const baseline = compFields.filter((f) => f in approved);
+  if (baseline.length === 0) return null;
+  const [emp] = await db
+    .select()
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.id, personId), eq(atelierEmployees.orgId, orgId)))
+    .limit(1);
+  if (!emp) return null;
+  const raw = emp as unknown as Record<string, unknown>;
+  for (const f of baseline) {
+    if (JSON.stringify(raw[f] ?? null) !== JSON.stringify(approved[f] ?? null)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// @cli-skip: UI-workflow read; payroll-adjacent review queue
+router.get("/roster/salary-proposals", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canEditPayrollFields(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const statusFilter =
+      typeof req.query.status === "string" && req.query.status.trim()
+        ? req.query.status.trim()
+        : null;
+    const where = statusFilter
+      ? and(
+          eq(atelierContractSalaryProposals.orgId, me.orgId),
+          eq(atelierContractSalaryProposals.status, statusFilter),
+        )
+      : eq(atelierContractSalaryProposals.orgId, me.orgId);
+    const rows = await db
+      .select({
+        p: atelierContractSalaryProposals,
+        contractTitle: atelierContractRecords.title,
+        contractType: atelierContractRecords.contractType,
+      })
+      .from(atelierContractSalaryProposals)
+      .leftJoin(
+        atelierContractRecords,
+        eq(atelierContractSalaryProposals.contractId, atelierContractRecords.id),
+      )
+      .where(where)
+      .orderBy(desc(atelierContractSalaryProposals.createdAt));
+
+    const proposals = [];
+    for (const { p, contractTitle, contractType } of rows) {
+      const [emp] = await db
+        .select({
+          id: atelierEmployees.id,
+          fullName: atelierEmployees.fullName,
+          status: atelierEmployees.status,
+          baseCompensation: atelierEmployees.baseCompensation,
+          baseCurrency: atelierEmployees.baseCurrency,
+          basicWageMonthly: atelierEmployees.basicWageMonthly,
+          housingAllowanceMonthly: atelierEmployees.housingAllowanceMonthly,
+        })
+        .from(atelierEmployees)
+        .where(and(eq(atelierEmployees.id, p.personId), eq(atelierEmployees.orgId, me.orgId)))
+        .limit(1);
+      proposals.push({
+        id: p.id,
+        contractId: p.contractId,
+        contractTitle: contractTitle ?? null,
+        contractType: contractType ?? null,
+        personId: p.personId,
+        personName: emp?.fullName ?? null,
+        personStatus: emp?.status ?? null,
+        status: p.status,
+        source: p.source,
+        extracted: p.extracted ?? null,
+        snippets: p.sourceSnippets ?? null,
+        error: p.error ?? null,
+        current: emp
+          ? {
+              baseCompensation: emp.baseCompensation ?? null,
+              baseCurrency: emp.baseCurrency ?? null,
+              basicWageMonthly: emp.basicWageMonthly ?? null,
+              housingAllowanceMonthly: emp.housingAllowanceMonthly ?? null,
+            }
+          : null,
+        appliedChanges: p.appliedChanges ?? null,
+        decidedByLabel: p.decidedByLabel ?? null,
+        decidedAt: p.decidedAt ? p.decidedAt.toISOString() : null,
+        decisionNote: p.decisionNote ?? null,
+        createdAt: p.createdAt.toISOString(),
+      });
+    }
+    res.json({ proposals });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Approve overrides — the four comp fields only (subset of payrollEditSchema).
+const salaryApproveSchema = z
+  .object({
+    baseCompensation: z.number().positive().finite().nullable(),
+    baseCurrency: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z]{3}$/, "ISO 4217 code")
+      .transform((s) => s.toUpperCase())
+      .nullable(),
+    basicWageMonthly: z.number().positive().finite().nullable(),
+    housingAllowanceMonthly: z.number().min(0).finite().nullable(),
+    decisionNote: z.string().trim().max(2000).optional(),
+  })
+  .partial()
+  .strict();
+
+// @cli-skip: UI-workflow write; payroll write via proposal — CLI exposure needs confirm-flow design
+router.post("/roster/salary-proposals/:id/approve", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canEditPayrollFields(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const parsed = salaryApproveSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(422).json({
+        error: "invalid-body",
+        issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      });
+      return;
+    }
+    const { decisionNote, ...overrides } = parsed.data as Record<string, unknown> & {
+      decisionNote?: string;
+    };
+
+    // Read (unclaimed) to validate the employee + build the patch. The
+    // authoritative pending→approved claim happens below via a conditional
+    // UPDATE, so two concurrent approvers can never both apply payroll.
+    const [proposal] = await db
+      .select()
+      .from(atelierContractSalaryProposals)
+      .where(
+        and(
+          eq(atelierContractSalaryProposals.id, req.params.id),
+          eq(atelierContractSalaryProposals.orgId, me.orgId),
+        ),
+      )
+      .limit(1);
+    if (!proposal) {
+      res.status(404).json({ error: "proposal-not-found" });
+      return;
+    }
+    if (proposal.status !== "pending") {
+      res.status(409).json({
+        error: "not-pending",
+        message: `Proposal is ${proposal.status}; only pending proposals can be approved.`,
+      });
+      return;
+    }
+
+    // Employee must still exist and be active — fail loud otherwise.
+    const [emp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(
+        and(
+          eq(atelierEmployees.id, proposal.personId),
+          eq(atelierEmployees.orgId, me.orgId),
+          isNull(atelierEmployees.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!emp) {
+      res.status(422).json({ error: "employee-gone" });
+      return;
+    }
+    if (emp.status && emp.status !== "active") {
+      res.status(422).json({
+        error: "employee-inactive",
+        message: `Employee is ${emp.status}; reactivate before applying contract salary.`,
+      });
+      return;
+    }
+
+    // Build the comp patch with PARTIAL-override semantics:
+    //  - a field present in the body (incl. explicit null) is used verbatim
+    //    (explicit null = deliberate clear);
+    //  - a field absent from the body falls back to the extracted value ONLY
+    //    when the proposal extracted a non-null value for it;
+    //  - a field that is absent from BOTH the body and the extraction is
+    //    NEVER written (existing payroll values are never null-cleared).
+    // zod .partial() drops absent keys but keeps explicit-null keys, so
+    // `f in overrides` is the precise "present in body" test.
+    const extracted = (proposal.extracted ?? {}) as Record<string, unknown>;
+    const compFields = [
+      "baseCompensation",
+      "baseCurrency",
+      "basicWageMonthly",
+      "housingAllowanceMonthly",
+    ] as const;
+    const patch: Record<string, unknown> = {};
+    for (const f of compFields) {
+      if (f in overrides) patch[f] = overrides[f];
+      else if (extracted[f] != null) patch[f] = extracted[f];
+    }
+    if (Object.keys(patch).length === 0) {
+      res.status(422).json({ error: "nothing-to-apply" });
+      return;
+    }
+
+    // ATOMIC CLAIM: flip pending→approved conditionally FIRST. Only the
+    // winner gets a row back; a concurrent approver sees 0 rows → 409. This
+    // guarantees the payroll write below runs at most once per proposal.
+    const now = new Date();
+    const claimed = await db
+      .update(atelierContractSalaryProposals)
+      .set({
+        status: "approved",
+        decidedBy: me.id,
+        decidedByLabel: me.name ?? me.id,
+        decidedAt: now,
+        decisionNote: decisionNote ?? null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(atelierContractSalaryProposals.id, proposal.id),
+          eq(atelierContractSalaryProposals.status, "pending"),
+        ),
+      )
+      .returning({ id: atelierContractSalaryProposals.id });
+    if (claimed.length === 0) {
+      res.status(409).json({
+        error: "not-pending",
+        message: "Proposal was already decided by a concurrent request.",
+      });
+      return;
+    }
+
+    // We own the claim — apply payroll. If the employee vanished between the
+    // read and here, roll the claim back to pending so it can be retried.
+    const result = await applyPayrollUpdate({
+      orgId: me.orgId,
+      personId: proposal.personId,
+      actor: { id: me.id, name: me.name },
+      patch,
+      extraPayload: {
+        source: "contract_salary_proposal",
+        contractId: proposal.contractId,
+        proposalId: proposal.id,
+      },
+      summaryPrefix: `${me.name ?? me.id} applied contract-sourced salary for ${emp.fullName} (contract ${proposal.contractId}, proposal ${proposal.id})`,
+    });
+    if (!result.ok && result.code === "person-not-found") {
+      await db
+        .update(atelierContractSalaryProposals)
+        .set({ status: "pending", decidedBy: null, decidedByLabel: null, decidedAt: null, updatedAt: new Date() })
+        .where(eq(atelierContractSalaryProposals.id, proposal.id));
+      res.status(422).json({ error: "employee-gone" });
+      return;
+    }
+    if (!result.ok && result.code === "legal-entity-not-found") {
+      await db
+        .update(atelierContractSalaryProposals)
+        .set({ status: "pending", decidedBy: null, decidedByLabel: null, decidedAt: null, updatedAt: new Date() })
+        .where(eq(atelierContractSalaryProposals.id, proposal.id));
+      res.status(422).json({ error: "legal-entity-not-found" });
+      return;
+    }
+    // appliedChanges reflects EXACTLY what the payroll write persisted (the
+    // fields that actually changed). approvedValues is the RESOLVED approved
+    // patch — every field we approved (incl. ones that were a no-op at
+    // approval time) — and is the drift baseline computeCompDrift compares
+    // against, so a later manual edit of a then-unchanged field still drifts.
+    const appliedChanges = result.ok
+      ? result.changes
+      : result.code === "no-change"
+        ? result.changes
+        : [];
+    await db
+      .update(atelierContractSalaryProposals)
+      .set({ appliedChanges, approvedValues: patch, updatedAt: new Date() })
+      .where(eq(atelierContractSalaryProposals.id, proposal.id));
+
+    assertAuditAction("contract.salary.proposal_approved");
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
-      entityType: "person",
-      entityId: person.id,
+      entityType: "contract_salary_proposal",
+      entityId: proposal.id,
       actorType: "user",
       actorId: me.id,
       actorLabel: me.name ?? me.id,
-      action: "roster.person.updated",
+      action: "contract.salary.proposal_approved",
       payload: {
-        workerType: person.workerType,
-        change: "payroll",
-        changes,
+        contractId: proposal.contractId,
+        personId: proposal.personId,
+        source: proposal.source,
+        appliedChanges,
+        decisionNote: decisionNote ?? null,
       },
-      payloadSummary: `${me.name ?? me.id} updated payroll fields for ${person.fullName} (${changes
-        .map((c) => c.field)
-        .join(", ")})`,
+      payloadSummary: `${me.name ?? me.id} approved contract salary proposal for ${emp.fullName}`,
     });
-    const updated = await getPerson(person.id, canSeeComp(me.role));
-    res.json({ person: updated, changes });
+
+    res.json({
+      proposal: { id: proposal.id, status: "approved", appliedChanges },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: UI-workflow write; proposal decision
+router.post("/roster/salary-proposals/:id/reject", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canEditPayrollFields(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const note =
+      typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 2000) : null;
+    const [proposal] = await db
+      .select()
+      .from(atelierContractSalaryProposals)
+      .where(
+        and(
+          eq(atelierContractSalaryProposals.id, req.params.id),
+          eq(atelierContractSalaryProposals.orgId, me.orgId),
+        ),
+      )
+      .limit(1);
+    if (!proposal) {
+      res.status(404).json({ error: "proposal-not-found" });
+      return;
+    }
+    if (proposal.status !== "pending") {
+      res.status(409).json({
+        error: "not-pending",
+        message: `Proposal is ${proposal.status}; only pending proposals can be rejected.`,
+      });
+      return;
+    }
+    // ATOMIC CLAIM: conditional pending→rejected so a concurrent decision
+    // (approve or reject) can't double-fire.
+    const now = new Date();
+    const claimed = await db
+      .update(atelierContractSalaryProposals)
+      .set({
+        status: "rejected",
+        decidedBy: me.id,
+        decidedByLabel: me.name ?? me.id,
+        decidedAt: now,
+        decisionNote: note,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(atelierContractSalaryProposals.id, proposal.id),
+          eq(atelierContractSalaryProposals.status, "pending"),
+        ),
+      )
+      .returning({ id: atelierContractSalaryProposals.id });
+    if (claimed.length === 0) {
+      res.status(409).json({
+        error: "not-pending",
+        message: "Proposal was already decided by a concurrent request.",
+      });
+      return;
+    }
+
+    assertAuditAction("contract.salary.proposal_rejected");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "contract_salary_proposal",
+      entityId: proposal.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name ?? me.id,
+      action: "contract.salary.proposal_rejected",
+      payload: {
+        contractId: proposal.contractId,
+        personId: proposal.personId,
+        decisionNote: note,
+      },
+      payloadSummary: `${me.name ?? me.id} rejected contract salary proposal ${proposal.id}`,
+    });
+    res.json({ proposal: { id: proposal.id, status: "rejected" } });
   } catch (err) {
     next(err);
   }
@@ -2064,8 +2557,17 @@ router.get("/roster/people/:id", async (req, res, next) => {
     const person = await ensureRosterViewAccess(me, req.params.id, res);
     if (!person) return;
     const full = hasFullRosterView(me.role);
+    // Task #1137 — drift flag for the payroll editor: does current roster
+    // comp differ from the latest approved contract-salary proposal's applied
+    // values? null when no approved proposal / not comp-visible / not an
+    // employee. Computed at read time.
+    const compDiffersFromContract =
+      full && canSeeComp(me.role) && person.workerType === "employee"
+        ? await computeCompDrift(me.orgId, person.id)
+        : null;
     res.json({
       person,
+      compDiffersFromContract,
       viewerCanSeeComp: full && canSeeComp(me.role),
       // Task #221 — drives the sensitive tabs (personal / documents / HR
       // notes) in the roster UI; mirrors canViewSensitivePeopleData.

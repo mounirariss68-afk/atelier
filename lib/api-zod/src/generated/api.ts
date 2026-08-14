@@ -4912,6 +4912,171 @@ export const AtelierSendContractForSignatureBody = zod.object({
 });
 
 /**
+ * Creates a salary-extraction proposal and kicks the extractor
+fire-and-forget. Idempotent — a live (processing/pending) proposal
+returns 409 with its id. Gated on the payroll-editor set (people
+editors + finance). Contract must be signed + employment-type with an
+employee counterparty. NEVER writes payroll; produces a proposal for
+review.
+
+ * @summary Contracts — (re)run salary digitization for a signed employment contract
+ */
+export const AtelierExtractContractSalaryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Roster — contract salary proposals with current comp side-by-side
+ */
+export const AtelierListSalaryProposalsQueryParams = zod.object({
+  status: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Filter by proposal status (processing|pending|approved|rejected|failed)",
+    ),
+});
+
+export const AtelierListSalaryProposalsResponse = zod.object({
+  proposals: zod.array(
+    zod.object({
+      id: zod.string(),
+      contractId: zod.string(),
+      contractTitle: zod.string().nullish(),
+      contractType: zod.string().nullish(),
+      personId: zod.string(),
+      personName: zod.string().nullish(),
+      personStatus: zod.string().nullish(),
+      status: zod.enum([
+        "processing",
+        "pending",
+        "approved",
+        "rejected",
+        "failed",
+      ]),
+      source: zod
+        .union([
+          zod.literal("field_values"),
+          zod.literal("llm_text"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      extracted: zod
+        .union([
+          zod
+            .object({
+              baseCompensation: zod.number().nullish(),
+              baseCurrency: zod.string().nullish(),
+              basicWageMonthly: zod.number().nullish(),
+              housingAllowanceMonthly: zod.number().nullish(),
+              effectiveDate: zod.string().nullish(),
+            })
+            .describe(
+              "Task 1137 — the four comp figures + effective date extracted from a signed contract",
+            ),
+          zod.null(),
+        ])
+        .optional(),
+      snippets: zod
+        .record(
+          zod.string(),
+          zod.object({
+            snippet: zod.string(),
+            attribution: zod.string(),
+          }),
+        )
+        .nullish(),
+      error: zod.string().nullish(),
+      current: zod
+        .object({
+          baseCompensation: zod.number().nullish(),
+          baseCurrency: zod.string().nullish(),
+          basicWageMonthly: zod.number().nullish(),
+          housingAllowanceMonthly: zod.number().nullish(),
+        })
+        .nullish()
+        .describe("Current roster comp values, side-by-side with the proposal"),
+      appliedChanges: zod
+        .array(
+          zod.object({
+            field: zod.string().optional(),
+          }),
+        )
+        .nullish(),
+      decidedByLabel: zod.string().nullish(),
+      decidedAt: zod.string().nullish(),
+      decisionNote: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Roster — approve a salary proposal (applies comp via the audited payroll write)
+ */
+export const AtelierApproveSalaryProposalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierApproveSalaryProposalBodyDecisionNoteMax = 2000;
+
+export const AtelierApproveSalaryProposalBody = zod
+  .object({
+    baseCompensation: zod.number().nullish(),
+    baseCurrency: zod.string().nullish(),
+    basicWageMonthly: zod.number().nullish(),
+    housingAllowanceMonthly: zod.number().nullish(),
+    decisionNote: zod
+      .string()
+      .max(atelierApproveSalaryProposalBodyDecisionNoteMax)
+      .optional(),
+  })
+  .describe(
+    "Task 1137 — optional overrides of the extracted comp values (subset of payroll edit schema)",
+  );
+
+export const AtelierApproveSalaryProposalResponse = zod.object({
+  proposal: zod.object({
+    id: zod.string(),
+    status: zod.string(),
+    appliedChanges: zod
+      .array(
+        zod.object({
+          field: zod.string().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+/**
+ * @summary Roster — reject a salary proposal
+ */
+export const AtelierRejectSalaryProposalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierRejectSalaryProposalBodyNoteMax = 2000;
+
+export const AtelierRejectSalaryProposalBody = zod.object({
+  note: zod.string().max(atelierRejectSalaryProposalBodyNoteMax).optional(),
+});
+
+export const AtelierRejectSalaryProposalResponse = zod.object({
+  proposal: zod.object({
+    id: zod.string(),
+    status: zod.string(),
+    appliedChanges: zod
+      .array(
+        zod.object({
+          field: zod.string().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+/**
  * @summary Me lens — upload/replace the caller's own profile photo
  */
 export const AtelierUploadMyPhotoBody = zod.object({

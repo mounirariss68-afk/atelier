@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "wouter";
 import { useAtelierUpdateRosterPerson } from "@workspace/api-client-react";
 import type { AtelierRosterPersonEdit } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
@@ -61,6 +62,8 @@ export interface EditablePerson {
   basicWageMonthly?: number | null;
   housingAllowanceMonthly?: number | null;
   schemeRegisteredOn?: string | null;
+  // Task #1137 — whether current comp differs from the signed contract.
+  compDiffersFromContract?: boolean | null;
 }
 
 // Task #660 — payroll draft, saved via the dedicated payroll PATCH (raw
@@ -676,6 +679,18 @@ export function EditPersonForm({
       {showPayroll && (
         <section className="space-y-2" data-testid="edit-payroll-section">
           <div className={label}>Payroll (statutory)</div>
+          {/* Task #1137 — subtle warning when current comp differs from the
+              signed contract; links to the salary review queue. */}
+          {person.compDiffersFromContract === true && (
+            <Link href="/people/reward/salary">
+              <div
+                className="flex items-center gap-2 rounded border border-warn/40 bg-warn/5 px-2 py-1 text-[11px] text-warn hover:border-warn/70"
+                data-testid="edit-payroll-comp-differs"
+              >
+                <span>⚠ Current comp differs from the signed contract — review &amp; reconcile →</span>
+              </div>
+            </Link>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             <FieldWrap label="Employing legal entity *">
               <select className={input} value={payroll.legalEntityId} data-testid="edit-payroll-entity"

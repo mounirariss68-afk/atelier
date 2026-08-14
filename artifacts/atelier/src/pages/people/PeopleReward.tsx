@@ -4,10 +4,12 @@ import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useCanSeeReward } from "./peoplePerms";
 import { PayDocsAdminView, BankChangesAdminView } from "./PeoplePayAdmin";
+import { SalaryReviewView } from "./PeopleSalaryReview";
 
 const SUBS = [
   { id: "paydocs",      label: "Pay documents" },
   { id: "bankchanges",  label: "Bank changes" },
+  { id: "salary",       label: "Salary from contracts" },
 ];
 
 export default function PeopleReward() {
@@ -39,8 +41,8 @@ export default function PeopleReward() {
   return (
     <PeopleShell stage="reward">
       <LensPageHeader
-        headline="Pay documents and bank changes"
-        lede="Payslips and pay documents issued to each person, and the bank-detail changes awaiting review."
+        headline="Pay, bank changes and salary from contracts"
+        lede="Payslips and pay documents issued to each person, the bank-detail changes awaiting review, and salary figures digitized from signed employment contracts."
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
@@ -53,6 +55,7 @@ export default function PeopleReward() {
         <div className="mt-4">
           {section === "paydocs" && <PayDocsAdminView />}
           {section === "bankchanges" && <BankChangesAdminView />}
+          {section === "salary" && <SalaryReviewView />}
         </div>
       </div>
     </PeopleShell>

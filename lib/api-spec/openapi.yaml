@@ -1663,6 +1663,163 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierEsignUpstreamError"
+  /atelier/contracts/{id}/salary-extract:
+    post:
+      operationId: atelierExtractContractSalary
+      tags: [atelier]
+      summary: Contracts — (re)run salary digitization for a signed employment contract
+      description: |
+        Creates a salary-extraction proposal and kicks the extractor
+        fire-and-forget. Idempotent — a live (processing/pending) proposal
+        returns 409 with its id. Gated on the payroll-editor set (people
+        editors + finance). Contract must be signed + employment-type with an
+        employee counterparty. NEVER writes payroll; produces a proposal for
+        review.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Proposal created; extraction running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposalId]
+                properties:
+                  proposalId: { type: string }
+        "403":
+          description: Not a payroll editor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "404":
+          description: Contract not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "409":
+          description: Not signed / not eligible / a live proposal already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string }
+                  message: { type: string }
+                  proposalId: { type: string }
+  /atelier/roster/salary-proposals:
+    get:
+      operationId: atelierListSalaryProposals
+      tags: [atelier]
+      summary: Roster — contract salary proposals with current comp side-by-side
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by proposal status (processing|pending|approved|rejected|failed)
+          schema: { type: string }
+      responses:
+        "200":
+          description: Salary proposals, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposals]
+                properties:
+                  proposals:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierSalaryProposal" }
+        "403":
+          description: Not a payroll editor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /atelier/roster/salary-proposals/{id}/approve:
+    post:
+      operationId: atelierApproveSalaryProposal
+      tags: [atelier]
+      summary: Roster — approve a salary proposal (applies comp via the audited payroll write)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSalaryProposalApprove"
+      responses:
+        "200":
+          description: Approved; comp applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSalaryProposalDecisionResponse"
+        "403":
+          description: Not a payroll editor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "409":
+          description: Proposal not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "422":
+          description: Employee gone/deactivated, invalid body, or nothing to apply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /atelier/roster/salary-proposals/{id}/reject:
+    post:
+      operationId: atelierRejectSalaryProposal
+      tags: [atelier]
+      summary: Roster — reject a salary proposal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSalaryProposalDecisionResponse"
+        "403":
+          description: Not a payroll editor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "409":
+          description: Proposal not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
   /atelier/me/photo:
     post:
       operationId: atelierUploadMyPhoto
@@ -13096,6 +13253,92 @@ components:
         signFirst:
           type: boolean
           description: Task 335 — caller signs in-app first; requires the caller to be an authorised signatory of the contract's signing entity
+
+    AtelierSalaryExtractedFigures:
+      type: object
+      description: Task 1137 — the four comp figures + effective date extracted from a signed contract
+      properties:
+        baseCompensation: { type: ["number", "null"] }
+        baseCurrency: { type: ["string", "null"] }
+        basicWageMonthly: { type: ["number", "null"] }
+        housingAllowanceMonthly: { type: ["number", "null"] }
+        effectiveDate: { type: ["string", "null"] }
+
+    AtelierSalarySnippet:
+      type: object
+      required: [snippet, attribution]
+      properties:
+        snippet: { type: string }
+        attribution: { type: string }
+
+    AtelierSalaryProposal:
+      type: object
+      required: [id, contractId, personId, status, createdAt]
+      properties:
+        id: { type: string }
+        contractId: { type: string }
+        contractTitle: { type: ["string", "null"] }
+        contractType: { type: ["string", "null"] }
+        personId: { type: string }
+        personName: { type: ["string", "null"] }
+        personStatus: { type: ["string", "null"] }
+        status:
+          type: string
+          enum: [processing, pending, approved, rejected, failed]
+        source: { type: ["string", "null"], enum: [field_values, llm_text, null] }
+        extracted:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierSalaryExtractedFigures"
+            - type: "null"
+        snippets:
+          type: ["object", "null"]
+          additionalProperties: { $ref: "#/components/schemas/AtelierSalarySnippet" }
+        error: { type: ["string", "null"] }
+        current:
+          type: ["object", "null"]
+          description: Current roster comp values, side-by-side with the proposal
+          properties:
+            baseCompensation: { type: ["number", "null"] }
+            baseCurrency: { type: ["string", "null"] }
+            basicWageMonthly: { type: ["number", "null"] }
+            housingAllowanceMonthly: { type: ["number", "null"] }
+        appliedChanges:
+          type: ["array", "null"]
+          items:
+            type: object
+            properties:
+              field: { type: string }
+        decidedByLabel: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"] }
+        decisionNote: { type: ["string", "null"] }
+        createdAt: { type: string }
+
+    AtelierSalaryProposalApprove:
+      type: object
+      description: Task 1137 — optional overrides of the extracted comp values (subset of payroll edit schema)
+      properties:
+        baseCompensation: { type: ["number", "null"] }
+        baseCurrency: { type: ["string", "null"] }
+        basicWageMonthly: { type: ["number", "null"] }
+        housingAllowanceMonthly: { type: ["number", "null"] }
+        decisionNote: { type: string, maxLength: 2000 }
+
+    AtelierSalaryProposalDecisionResponse:
+      type: object
+      required: [proposal]
+      properties:
+        proposal:
+          type: object
+          required: [id, status]
+          properties:
+            id: { type: string }
+            status: { type: string }
+            appliedChanges:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
 
     AtelierSigningEntity:
       type: object

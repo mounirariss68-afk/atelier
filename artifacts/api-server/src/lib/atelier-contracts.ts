@@ -1008,6 +1008,33 @@ export async function syncContractFromSignatureRequest(
     },
     summary: `Contract "${record.title}" moved ${record.status} → ${next} via signature flow`,
   });
+
+  // Task #1137 — after the signed transition commits, kick salary
+  // digitization for employment-type contracts whose counterparty is an
+  // employee. FULLY DETACHED: the dynamic import, employee/live-proposal
+  // lookups and the insert all run in a fire-and-forget task so a slow or
+  // failing DB op can never delay or break the e-sign webhook. Contractor
+  // counterparties are skipped inside the trigger.
+  if (next === "signed") {
+    const detachArg = {
+      id: record.id,
+      orgId: record.orgId,
+      contractType: record.contractType,
+      counterpartyKind: record.counterpartyKind,
+      personId: record.personId,
+    };
+    void (async () => {
+      const { triggerSalaryExtractionOnSigned } = await import(
+        "./atelier-contract-salary-service.js"
+      );
+      await triggerSalaryExtractionOnSigned(detachArg);
+    })().catch((err) =>
+      console.error(
+        `[contracts] salary-extraction trigger failed for ${record.id}:`,
+        err instanceof Error ? err.message : err,
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

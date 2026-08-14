@@ -18,6 +18,7 @@ import {
   useAtelierUpdateContract,
   useAtelierRegenerateContract,
   useAtelierSendContractForSignature,
+  useAtelierExtractContractSalary,
   type AtelierContract,
   type AtelierContractDocument,
   type AtelierContractEnvelopeFieldsItem,
@@ -35,12 +36,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Upload, Send, RefreshCw, FileText } from "lucide-react";
+import { Download, Upload, Send, RefreshCw, FileText, Sparkles } from "lucide-react";
 import {
   ContractStatusChip,
   CONTRACT_TYPE_LABELS,
   fmtContractDate,
 } from "@/components/contracts/ContractsPanel";
+import { canSeeReward } from "@/pages/people/peoplePerms";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -571,6 +573,11 @@ export default function ContractDetail() {
   const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
   const canManage = me?.role === "founding_partner" || me?.role === "partner";
+  // Task #1137 — the salary-extract server gate is the payroll-editor set
+  // (founding_partner | hr | finance), NOT ordinary partners. Mirror it
+  // with the same predicate the Reward lens uses so ordinary partners don't
+  // see an action that only 403s for them.
+  const canDigitizeSalary = canSeeReward(me?.role);
   const { data, isLoading } = useAtelierGetContract(id);
   const contract = data?.contract;
   // Task #335 — per-entity authorised signatories: who may "Sign & send".
@@ -689,6 +696,37 @@ export default function ContractDetail() {
     },
   });
 
+  // Task #1137 — digitize salary from a signed employment contract. 202 →
+  // toast + link to the review page; 409 → friendly message (live proposal
+  // or not eligible). Never writes payroll; produces a proposal for review.
+  const digitizeSalary = useAtelierExtractContractSalary({
+    mutation: {
+      onSuccess: () => {
+        toast({
+          title: "Salary digitization started",
+          description: "Review the extracted figures under People › Reward › Salary from contracts.",
+        });
+      },
+      onError: (err: unknown) => {
+        const e = err as { status?: number; data?: { message?: string; error?: string } };
+        if (e.status === 409) {
+          toast({
+            title: "Nothing to digitize right now",
+            description:
+              e.data?.message ??
+              "A salary proposal for this contract is already in review, or this contract isn't eligible.",
+          });
+          return;
+        }
+        toast({
+          title: "Could not digitize salary",
+          description: e.data?.message ?? e.data?.error ?? "Please try again in a moment.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
   if (isLoading || !contract) {
     return (
       <div className="mx-auto max-w-4xl px-4 md:px-6 py-6">
@@ -701,6 +739,15 @@ export default function ContractDetail() {
   }
 
   const terminal = TERMINAL.has(contract.status);
+  // Task #1137 — a signed employment-type contract with a person counterparty
+  // can have its salary digitized. Server re-checks eligibility (employee
+  // counterparty) and returns 409 when it isn't; this just gates the button.
+  const salaryEligible =
+    contract.status === "signed" &&
+    (contract.contractType === "employment" ||
+      contract.contractType === "non_equity_partner_employment") &&
+    contract.counterpartyKind === "person" &&
+    Boolean(contract.personId);
   const counterpartyHref =
     contract.counterpartyKind === "account" && contract.accountId
       ? `/clients/accounts/${contract.accountId}`
@@ -789,6 +836,22 @@ export default function ContractDetail() {
                   {linkBusy ? "Fetching signing form…" : "Continue signing"}
                 </Button>
               )}
+            </div>
+          )}
+          {/* Task #1137 — signed employment contracts: digitize the salary
+              into a review proposal (gated to the payroll-editor set; the
+              server re-checks and 403s / 409s where appropriate). */}
+          {canDigitizeSalary && salaryEligible && (
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <Button
+                variant="ghost"
+                onClick={() => digitizeSalary.mutate({ id })}
+                disabled={digitizeSalary.isPending}
+                data-testid="button-digitize-salary"
+              >
+                <Sparkles className="w-4 h-4 mr-1" />
+                {digitizeSalary.isPending ? "Digitizing…" : "Digitize salary"}
+              </Button>
             </div>
           )}
         </div>

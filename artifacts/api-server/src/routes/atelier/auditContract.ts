@@ -171,6 +171,11 @@ export const V3_AUDIT_ACTIONS = {
   ALLOCATION_NEEDS_INPUT: "allocation.needs_input",
   ALLOCATION_APPROVE: "allocation.approve",
   ALLOCATION_OVERRIDE: "allocation.override",
+
+  // Task #1137 — salary digitization from signed employment contracts.
+  CONTRACT_SALARY_EXTRACT_REQUESTED: "contract.salary.extract_requested",
+  CONTRACT_SALARY_PROPOSAL_APPROVED: "contract.salary.proposal_approved",
+  CONTRACT_SALARY_PROPOSAL_REJECTED: "contract.salary.proposal_rejected",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

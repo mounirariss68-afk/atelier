@@ -23,6 +23,7 @@
  *     signed_pdf. Blobs in object storage, never in rows.
  */
 
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -279,5 +280,100 @@ export const atelierContractDocuments = pgTable(
   (t) => [
     index("idx_atelier_cdoc_contract").on(t.contractId),
     uniqueIndex("uniq_atelier_cdoc_version").on(t.contractId, t.versionNumber),
+  ],
+);
+
+/**
+ * Task #1137 — salary digitization proposals from signed employment
+ * contracts.
+ *
+ * When an employment (or non_equity_partner_employment) contract reaches
+ * `signed` via the e-sign sync AND its counterparty resolves to an
+ * atelier_employees row, a proposal row is created and an extractor runs
+ * fire-and-forget: it reads the signed contract's structured fieldValues
+ * first (deterministic) and falls back to a single fail-loud LLM pass over
+ * the signed document text. NOTHING is ever written to payroll silently —
+ * the proposal is reviewed under the same audited semantics as the payroll
+ * PATCH before comp fields change.
+ *
+ * `extracted` holds the four comp figures + an effective date; every field
+ * carries a `sourceSnippets` attribution (field label + value for the
+ * structured path, verbatim document quote for the LLM path). One live
+ * (processing|pending) proposal per contract; a re-trigger returns it.
+ */
+export interface ContractSalaryExtracted {
+  /** Annual base compensation. */
+  baseCompensation?: number;
+  /** ISO-4217 currency code (uppercase). */
+  baseCurrency?: string;
+  /** Monthly basic wage (statutory). */
+  basicWageMonthly?: number;
+  /** Monthly housing allowance (statutory). */
+  housingAllowanceMonthly?: number;
+  /** ISO date (YYYY-MM-DD) the compensation takes effect. */
+  effectiveDate?: string;
+}
+
+export interface ContractSalarySnippet {
+  /** Verbatim quote (LLM path) or "label: value" (field-values path). */
+  snippet: string;
+  /** Attribution: template field key/label, or "document". */
+  attribution: string;
+}
+
+export const atelierContractSalaryProposals = pgTable(
+  "atelier_contract_salary_proposals",
+  {
+    id: text("id").primaryKey(), // csp_...
+    orgId: text("org_id").notNull().default("aico"),
+    contractId: text("contract_id").notNull(),
+    /** atelier_employees.id (counterparty resolved to an employee). */
+    personId: text("person_id").notNull(),
+    /** processing | pending | approved | rejected | failed */
+    status: text("status").notNull().default("processing"),
+    /** field_values | llm_text | null (until extraction resolves). */
+    source: text("source"),
+    /** Extracted comp figures (see ContractSalaryExtracted). */
+    extracted: jsonb("extracted").$type<ContractSalaryExtracted>(),
+    /** Per-field snippet + attribution (keyed by extracted field). */
+    sourceSnippets:
+      jsonb("source_snippets").$type<Record<string, ContractSalarySnippet>>(),
+    /** Populated when status = failed: the fail-loud reason. */
+    error: text("error"),
+    decidedBy: text("decided_by"),
+    decidedByLabel: text("decided_by_label"),
+    decidedAt: timestamp("decided_at"),
+    decisionNote: text("decision_note"),
+    /** On approve: {field, from, to}[] actually applied to payroll. */
+    appliedChanges:
+      jsonb("applied_changes").$type<
+        Array<{ field: string; from: unknown; to: unknown }>
+      >(),
+    /**
+     * On approve: the RESOLVED approved comp patch — extracted values merged
+     * with reviewer overrides, limited to fields actually proposed (present in
+     * the approve body OR extracted non-null; explicit-null clears included).
+     * This is the drift BASELINE (distinct from appliedChanges, which only
+     * records fields that changed at approval time). computeCompDrift compares
+     * current payroll against this map so a later manual edit of a field that
+     * was a no-op at approval still surfaces as drift.
+     */
+    approvedValues:
+      jsonb("approved_values").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_csp_org").on(t.orgId),
+    index("idx_atelier_csp_contract").on(t.contractId),
+    index("idx_atelier_csp_person").on(t.orgId, t.personId),
+    index("idx_atelier_csp_status").on(t.orgId, t.status),
+    // Task #1137 — race-safe "one live proposal per contract": at most one
+    // processing|pending row per contract. Insert with onConflictDoNothing
+    // against this index so a lost race returns the existing live row rather
+    // than creating a duplicate.
+    uniqueIndex("uniq_atelier_csp_live_per_contract")
+      .on(t.contractId)
+      .where(sql`${t.status} in ('processing', 'pending')`),
   ],
 );

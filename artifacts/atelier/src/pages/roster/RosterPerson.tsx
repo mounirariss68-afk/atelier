@@ -53,6 +53,8 @@ interface Person {
   partnerFirmId?: string | null;
   // Task #744 — employees only; membership numbers may arrive masked.
   travelProfile?: TravelProfileValue | null;
+  // Task #1137 — whether current comp differs from the signed contract.
+  compDiffersFromContract?: boolean | null;
 }
 
 const TABS = [
@@ -300,6 +302,13 @@ function ProfileTab({
             <MonoChip className="text-warning border-warning/40">
               hidden — comp-policy lock (Founding Partner / HR / Finance)
             </MonoChip>
+          )}
+          {/* Task #1137 — comp differs from the signed contract: link to the
+              salary review queue so HR/finance can reconcile. */}
+          {viewerCanSeeComp && person.compDiffersFromContract === true && (
+            <Link href="/people/reward/salary" data-testid="comp-differs-badge">
+              <MonoChip tone="amber">differs from signed contract →</MonoChip>
+            </Link>
           )}
         </h3>
         {viewerCanSeeComp ? (
