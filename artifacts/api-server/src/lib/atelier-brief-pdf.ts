@@ -407,6 +407,49 @@ function povSectionText(s: PovSection): string {
 }
 
 /**
+ * Task #1054 — client-ready POV section text. Drafted section bodies keep
+ * the section-writer's raw inline markers (`[#f_…]` fact citations,
+ * `<sup data-fact>` tags) and Markdown emphasis. For the exported PDF:
+ *  - every fact marker whose fact has a source URL becomes a numbered
+ *    reference `[n]` that maps to the same Sources appendix registry;
+ *  - markers without a resolvable source are dropped (never leak ids);
+ *  - Markdown emphasis/heading delimiters are removed, keeping the text.
+ * Returns the cleaned text plus how many inline refs were emitted so the
+ * caller can skip the redundant trailing refs line when inline refs exist.
+ */
+function povClientSectionText(
+  s: PovSection,
+  factById: Map<string, AgentFact>,
+  sources: SourceRegistry,
+): { text: string; inlineRefCount: number } {
+  const raw = (s.body && s.body.trim()) || (s.content && s.content.trim()) || "";
+  let inlineRefCount = 0;
+  const refForFact = (factId: string): string => {
+    const url = factById.get(factId)?.sourceUrl;
+    if (!url) return "";
+    inlineRefCount += 1;
+    return ` ${refsFor([url], sources) ?? ""}`;
+  };
+  let text = raw
+    // <sup data-fact="f_x">3</sup> → numbered source ref
+    .replace(/<sup[^>]*data-fact="([^"]+)"[^>]*>[^<]*<\/sup>/g, (_m, id: string) => refForFact(id))
+    // [#f_x] / [f_x] inline markers → numbered source ref
+    .replace(/\[#?(f_[a-z0-9_]+)\]/gi, (_m, id: string) => refForFact(id));
+  text = text
+    .replace(/<[^>]+>/g, " ")
+    // Markdown emphasis/strong/code delimiters — keep the inner text
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(^|\s)[*_]([^*_\n]+)[*_](?=[\s.,;:!?)]|$)/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    // Stray markdown heading/bullet prefixes at line starts
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\s+([.,;:])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { text, inlineRefCount };
+}
+
+/**
  * Render a POV version. After the cover: table of contents, POV sections
  * in version order, citation coverage, sources appendix.
  */
@@ -445,21 +488,26 @@ export function buildPovPdf(
   }
 
   if (sections.length > 0) {
+    const factById = new Map<string, AgentFact>();
+    for (const f of v.citations as AgentFact[]) if (f.id) factById.set(f.id, f);
     for (const section of sections) {
       const blocks: BrandBlock[] = [];
-      const text = povSectionText(section);
+      const { text, inlineRefCount } = povClientSectionText(section, factById, sources);
       if (text) {
         blocks.push(block.body(text));
       } else if (section.intent) {
         blocks.push(block.italic(`Intent: ${section.intent}`));
       }
-      // Attach citation refs for facts cited in this section (drafted
-      // versions store citationIds; older outline versions store factIds).
-      const citedIds = section.citationIds ?? section.factIds ?? [];
-      const linked = (v.citations as AgentFact[]).filter((f) => f.id && citedIds.includes(f.id));
-      const urls = [...new Set(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!))];
-      const refs = refsFor(urls, sources);
-      if (refs) blocks.push(block.refs(refs, 0));
+      // Trailing citation refs only when the body carried no inline markers
+      // (older outline-style versions). Drafted bodies now get numbered
+      // inline refs mapped to the Sources appendix instead.
+      if (inlineRefCount === 0) {
+        const citedIds = section.citationIds ?? section.factIds ?? [];
+        const linked = (v.citations as AgentFact[]).filter((f) => f.id && citedIds.includes(f.id));
+        const urls = [...new Set(linked.filter((f) => f.sourceUrl).map((f) => f.sourceUrl!))];
+        const refs = refsFor(urls, sources);
+        if (refs) blocks.push(block.refs(refs, 0));
+      }
       glassSection(doc, section.heading ?? null, blocks);
     }
   } else if (v.body && v.body.trim()) {
