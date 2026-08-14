@@ -8,6 +8,7 @@
  */
 
 import * as React from "react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import {
@@ -17,6 +18,7 @@ import {
   useGlTrialBalance,
   useGlExceptions,
   useGlUntagged,
+  useGlBookkeeperStatus,
   postJson,
   type BookkeeperRunResult,
 } from "@/lib/v5-hooks";
@@ -24,6 +26,30 @@ import {
 function fmt(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+/** Small "open source document" link rendered where a destination exists. */
+function SourceLink({ href, testId }: { href: string; testId: string }) {
+  return (
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="text-xs font-mono text-gold hover:underline whitespace-nowrap"
+      data-testid={testId}
+    >
+      open source ↗
+    </Link>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function currentPeriod(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -48,6 +74,8 @@ export default function LedgerPage() {
   const [running, setRunning] = React.useState(false);
   const [runResult, setRunResult] = React.useState<BookkeeperRunResult | null>(null);
   const [runError, setRunError] = React.useState<string | null>(null);
+  const { data: statusData } = useGlBookkeeperStatus(period);
+  const lastRun = statusData?.data.lastRun ?? null;
 
   const effEntity = entityId ?? entities[0]?.id ?? null;
 
@@ -104,6 +132,15 @@ export default function LedgerPage() {
             >
               {running ? "Posting…" : "Run Bookkeeper"}
             </button>
+            <span className="text-text-mute w-full text-right" data-testid="text-bookkeeper-last-run">
+              {lastRun === null
+                ? "Posts automatically — no run yet for this period."
+                : lastRun.status === "running"
+                  ? `${lastRun.mode === "auto" ? "Auto-post" : "Manual run"} in progress…`
+                  : lastRun.status === "failed"
+                    ? `Last ${lastRun.mode} run failed ${lastRun.finishedAt ? timeAgo(lastRun.finishedAt) : ""}`.trim()
+                    : `Last ${lastRun.mode === "auto" ? "auto-post" : "manual run"} ${lastRun.finishedAt ? timeAgo(lastRun.finishedAt) : ""}${lastRun.entriesCreated != null ? ` · ${lastRun.entriesCreated} posted` : ""}`}
+            </span>
           </div>
         </div>
       </PageHero>
@@ -209,16 +246,23 @@ function JournalTab({ entityId, period }: { entityId: string | null; period: str
       {rows.length === 0 && <Card className="p-6 text-text-mute">No journal entries for this filter.</Card>}
       {rows.map((e) => (
         <Card key={e.id} className="p-3" data-testid={`journal-entry-${e.id}`}>
-          <button className="w-full text-left" onClick={() => setOpen(open === e.id ? null : e.id)}>
+          <div
+            role="button"
+            tabIndex={0}
+            className="w-full text-left cursor-pointer"
+            onClick={() => setOpen(open === e.id ? null : e.id)}
+            onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setOpen(open === e.id ? null : e.id); }}
+          >
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 min-w-0">
                 <MonoChip>{e.entryDate}</MonoChip>
                 <MonoChip tone={e.kind === "manual" ? "gold" : "default"}>{e.sourceKind}</MonoChip>
                 <span className="truncate">{e.memo}</span>
+                {e.sourceHref && <SourceLink href={e.sourceHref} testId={`link-journal-source-${e.id}`} />}
               </div>
               <span className="font-mono text-sm">{e.currency} {fmt(e.totalDebit)}</span>
             </div>
-          </button>
+          </div>
           {open === e.id && (
             <table className="w-full text-xs font-mono mt-2 border-t border-border/40">
               <tbody>
@@ -341,7 +385,19 @@ function ExceptionsTab({ onChanged }: { onChanged: () => void }) {
                   <span className="text-xs font-mono text-text-mute">{x.periodLabel}</span>
                 </div>
                 <p className="text-sm mt-1">{x.message}</p>
-                {x.sourceLabel && <p className="text-xs font-mono text-text-faint mt-0.5">{x.sourceLabel}</p>}
+                {x.sourceLabel && (
+                  x.sourceHref ? (
+                    <Link
+                      href={x.sourceHref}
+                      className="block text-xs font-mono text-gold hover:underline mt-0.5"
+                      data-testid={`link-exception-source-${x.id}`}
+                    >
+                      {x.sourceLabel} ↗
+                    </Link>
+                  ) : (
+                    <p className="text-xs font-mono text-text-faint mt-0.5">{x.sourceLabel}</p>
+                  )
+                )}
               </div>
               {x.status === "open" && (
                 <button
@@ -387,7 +443,17 @@ function UntaggedTab({ entities, onChanged }: {
         <Card key={`${r.kind}:${r.id}`} className="p-3 flex items-center justify-between gap-3 flex-wrap" data-testid={`untagged-${r.id}`}>
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <MonoChip>{r.kind.replace(/_/g, " ")}</MonoChip>
-            <span className="truncate">{r.label}</span>
+            {r.sourceHref ? (
+              <Link
+                href={r.sourceHref}
+                className="truncate text-gold hover:underline"
+                data-testid={`link-untagged-source-${r.id}`}
+              >
+                {r.label} ↗
+              </Link>
+            ) : (
+              <span className="truncate">{r.label}</span>
+            )}
             <span className="font-mono text-xs text-text-mute">{r.currency} {fmt(r.amount)}</span>
           </div>
           <select

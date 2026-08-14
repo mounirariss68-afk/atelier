@@ -43,6 +43,37 @@ import {
   isGlPeriodLocked,
   runBookkeeper,
 } from "../../lib/atelier-agents/bookkeeper.js";
+import {
+  BOOKKEEPER_JOB_KINDS,
+  BOOKKEEPER_LOCK_KEY,
+  BOOKKEEPER_STALE_MS,
+  bookkeeperJobTargetId,
+  getLatestBookkeeperJob,
+} from "../../lib/atelier-agents/bookkeeperAuto.js";
+import {
+  startBackgroundJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  reapStaleRunningJob,
+} from "../../lib/background-jobs.js";
+
+/**
+ * Task #1073 — drill-through: resolve a journal/exception source to the
+ * app route where that document lives. Kinds without a destination
+ * return null and render as plain text (never guess a URL).
+ */
+export function glSourceHref(sourceKind: string, sourceRef: string): string | null {
+  switch (sourceKind) {
+    case "invoice": return `/wallet/invoices/${encodeURIComponent(sourceRef)}`;
+    case "expense": return `/wallet/expenses/${encodeURIComponent(sourceRef)}`;
+    case "revrec_line": return "/wallet/revrec";
+    case "self_billed_invoice": return "/finance/payables/self-billing";
+    case "partner_firm_invoice": return "/finance/payables/partner-invoices";
+    case "contractor_payment": return "/finance/payables/subcontractors";
+    case "bank_transaction": return "/wallet/cash";
+    default: return null; // manual, unknown kinds
+  }
+}
 
 const router: IRouter = Router();
 
@@ -171,18 +202,71 @@ router.post("/gl/bookkeeper/run", async (req, res) => {
     return res.status(400).json({ error: "invalid_input", message: "periodLabel must be YYYY-MM" });
   if (await isGlPeriodLocked(me.orgId, b.periodLabel))
     return res.status(409).json({ error: "period_locked", message: `Period ${b.periodLabel} is locked for the GL module.` });
+  // Task #1073 — claim the same per-(org, period) lock the auto sweep
+  // uses so a manual run can't overlap an in-flight automatic run.
+  const targetId = bookkeeperJobTargetId(me.orgId, b.periodLabel);
+  await reapStaleRunningJob([...BOOKKEEPER_JOB_KINDS], targetId, me.orgId, BOOKKEEPER_STALE_MS);
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: "gl_bookkeeper_manual",
+    lockKey: BOOKKEEPER_LOCK_KEY,
+    targetType: "gl_period",
+    targetId,
+    label: `Bookkeeper run ${b.periodLabel}`,
+    resultHref: "/finance/ledger",
+  });
+  if (!jobId)
+    return res.status(409).json({ error: "run_in_progress", message: `A Bookkeeper run for ${b.periodLabel} is already in progress — it posts the same sources; refresh in a moment.` });
   try {
     const out = await runBookkeeper({
       orgId: me.orgId,
       input: { periodLabel: b.periodLabel, entityId: b.entityId || undefined },
       triggeredByUserId: me.id,
     });
+    await completeBackgroundJob(jobId, {
+      result: {
+        entriesCreated: out.output.entriesCreated,
+        entriesSkippedExisting: out.output.entriesSkippedExisting,
+        exceptionsOpen: out.output.exceptionsOpen,
+        sourcesScanned: out.output.sourcesScanned,
+        rationaleSummary: out.output.rationaleSummary,
+      },
+    });
     return res.json({ ok: true, data: out.output, runId: out.runId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    await failBackgroundJob(jobId, msg);
     if (msg.startsWith("period-locked")) return res.status(409).json({ error: "period_locked", message: msg });
     throw err;
   }
+});
+
+// Task #1073 — last Bookkeeper run (auto or manual) for a period, so the
+// Ledger page can show when the ledger was last refreshed automatically.
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/gl/bookkeeper/status", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const period = String(req.query.period ?? "");
+  if (!PERIOD_RE.test(period))
+    return res.status(400).json({ error: "invalid_input", message: "period must be YYYY-MM" });
+  const job = await getLatestBookkeeperJob(me.orgId, period);
+  if (!job) return res.json({ ok: true, data: { lastRun: null } });
+  const result = (job.result ?? null) as Record<string, unknown> | null;
+  return res.json({
+    ok: true,
+    data: {
+      lastRun: {
+        mode: job.kind === "gl_bookkeeper_auto" ? "auto" : "manual",
+        status: job.status, // running | done | failed
+        startedAt: job.createdAt,
+        finishedAt: job.finishedAt,
+        error: job.error ?? null,
+        entriesCreated: typeof result?.entriesCreated === "number" ? result.entriesCreated : null,
+        exceptionsOpen: typeof result?.exceptionsOpen === "number" ? result.exceptionsOpen : null,
+      },
+    },
+  });
 });
 
 // ─────────────────────── journal + trial balance ───────────────────────
@@ -223,7 +307,12 @@ router.get("/gl/journal", async (req, res) => {
   res.json({
     ok: true,
     data: {
-      rows: filtered.map((e) => ({ ...e, lines: linesByEntry.get(e.id) ?? [] })),
+      rows: filtered.map((e) => ({
+        ...e,
+        lines: linesByEntry.get(e.id) ?? [],
+        // Task #1073 — drill-through to the source document (null = no page).
+        sourceHref: glSourceHref(e.sourceKind, e.sourceRef),
+      })),
     },
   });
 });
@@ -336,7 +425,12 @@ router.get("/gl/exceptions", async (req, res) => {
   if (status === "open" || status === "resolved") conds.push(eq(atelierGlPostingException.status, status));
   const rows = await db.select().from(atelierGlPostingException).where(and(...conds))
     .orderBy(desc(atelierGlPostingException.updatedAt)).limit(300);
-  res.json({ ok: true, data: { rows } });
+  res.json({
+    ok: true,
+    data: {
+      rows: rows.map((r) => ({ ...r, sourceHref: glSourceHref(r.sourceKind, r.sourceRef) })),
+    },
+  });
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
@@ -388,7 +482,7 @@ router.get("/gl/untagged", async (req, res) => {
         ...cps.map((r) => ({ kind: "contractor_payment", id: r.id, label: `${r.payeeName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null })),
         ...pfis.map((r) => ({ kind: "partner_firm_invoice", id: r.id, label: `${r.partnerFirmName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null })),
         ...txns.map((r) => ({ kind: "bank_transaction", id: r.id, label: `${r.counterpartyNameRaw ?? "Bank txn"} · ${r.postedDate}`, amount: r.amount, currency: r.currency, date: r.postedDate })),
-      ],
+      ].map((r) => ({ ...r, sourceHref: glSourceHref(r.kind, r.id) })),
     },
   });
 });

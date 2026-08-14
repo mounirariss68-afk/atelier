@@ -11,6 +11,7 @@ import { ensureAtelierSelfLinkage } from "./lib/atelier-self-linkage";
 import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
+import { startBookkeeperAutoJob } from "./lib/atelier-agents/bookkeeperAuto";
 import { startEsignPolling } from "./lib/atelier-esign";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 import { warmEmbedder } from "./lib/atelier-cli/embeddings";
@@ -277,6 +278,10 @@ app.listen(port, (err) => {
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
+  // Task #1073 — auto-post the GL: periodic idempotent Bookkeeper sweep
+  // per org for the current + previous period (period-lock aware, guarded
+  // by the durable background-job registry against overlapping runs).
+  startBookkeeperAutoJob();
   // Task #62 — polling fallback that reconciles open signature requests
   // against DocuSeal (webhooks can't always reach the dev environment).
   startEsignPolling();

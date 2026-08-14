@@ -1883,6 +1883,8 @@ export interface GlJournalEntryRow {
   kind: string; sourceKind: string; sourceRef: string; memo: string;
   currency: string; totalDebit: number; totalCredit: number;
   lines: GlJournalLineRow[];
+  /** Task #1073 — app route of the source document (null = no detail page). */
+  sourceHref: string | null;
 }
 export function useGlJournal(params: { entityId?: string | null; period?: string; accountCode?: string }) {
   const qs = new URLSearchParams();
@@ -1910,6 +1912,7 @@ export interface GlExceptionRow {
   id: string; legalEntityId: string | null; periodLabel: string;
   sourceKind: string; sourceRef: string; sourceLabel: string | null;
   code: string; message: string; status: string; updatedAt: string;
+  sourceHref: string | null;
 }
 export function useGlExceptions(status: "open" | "resolved" | "all") {
   return useQuery<{ ok: boolean; data: { rows: GlExceptionRow[] } }>({
@@ -1920,6 +1923,7 @@ export function useGlExceptions(status: "open" | "resolved" | "all") {
 }
 export interface GlUntaggedRow {
   kind: string; id: string; label: string; amount: number; currency: string; date: string | null;
+  sourceHref: string | null;
 }
 export function useGlUntagged() {
   return useQuery<{ ok: boolean; data: { rows: GlUntaggedRow[] } }>({
@@ -1928,10 +1932,31 @@ export function useGlUntagged() {
     staleTime: 10_000,
   });
 }
+
+export interface GlBookkeeperLastRun {
+  mode: "auto" | "manual";
+  status: "running" | "done" | "failed";
+  startedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+  entriesCreated: number | null;
+  exceptionsOpen: number | null;
+}
 export interface BookkeeperRunResult {
   periodLabel: string; entitiesConsidered: number; sourcesScanned: number;
   entriesCreated: number; entriesSkippedExisting: number; tagsBackfilled: number;
   exceptionsOpen: number;
   exceptions: Array<{ code: string; sourceKind: string; sourceRef: string; message: string }>;
   rationaleSummary: string;
+}
+
+export function useGlBookkeeperStatus(period: string) {
+  const valid = /^\d{4}-\d{2}$/.test(period);
+  return useQuery<{ ok: boolean; data: { lastRun: GlBookkeeperLastRun | null } }>({
+    queryKey: ["atelier-gl-bookkeeper-status", period],
+    queryFn: () => get(`/gl/bookkeeper/status?period=${period}`),
+    enabled: valid,
+    staleTime: 15_000,
+    refetchInterval: 60_000, // auto runs land in the background — keep fresh
+  });
 }
