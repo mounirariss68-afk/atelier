@@ -2,7 +2,6 @@
  * Task #428 — Finance GL backbone routes.
  *
  *   GET    /gl/accounts?entityId=            chart of accounts (per entity)
- *   POST   /gl/accounts/seed                 seed default chart for an entity
  *   POST   /gl/accounts                      add an account (finance roles)
  *   PATCH  /gl/accounts/:id                  rename / (de)activate an account
  *   POST   /gl/bookkeeper/run                run the Bookkeeper posting agent
@@ -176,23 +175,6 @@ router.get("/gl/accounts", async (req, res) => {
   const rows = await db.select().from(atelierGlAccount).where(where)
     .orderBy(atelierGlAccount.legalEntityId, atelierGlAccount.code);
   res.json({ ok: true, data: { rows, defaultChart: DEFAULT_CHART } });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/gl/accounts/seed", async (req, res) => {
-  const me = denyRead(req, res); if (!me) return;
-  const b = req.body as { entityId?: string };
-  if (!b.entityId) return res.status(400).json({ error: "invalid_input" });
-  const [ent] = await db.select().from(atelierLegalEntities)
-    .where(and(eq(atelierLegalEntities.id, b.entityId), eq(atelierLegalEntities.orgId, me.orgId)));
-  if (!ent) return res.status(404).json({ error: "not_found" });
-  const out = await ensureChartSeeded({
-    orgId: me.orgId, legalEntityId: ent.id,
-    entityLabel: ent.shortName || ent.legalNameEn,
-    actor: { kind: "human", userId: me.id, label: me.name },
-    reason: "explicit seed request",
-  });
-  return res.json({ ok: true, data: out });
 });
 
 const AccountCreateSchema = z.object({

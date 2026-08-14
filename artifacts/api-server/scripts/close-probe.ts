@@ -50,8 +50,8 @@ async function main() {
       entIds.push(j.entity.id);
     }
     const [entA] = entIds;
-    const s = await fetch(`${base}/gl/accounts/seed`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entA }) });
-    check("seed chart", s.status === 200);
+    const s = await fetch(`${base}/gl/accounts?entityId=${entA}`, { headers: hdrs });
+    check("chart auto-seeded on read", s.status === 200);
 
     // 1) create a month cycle → checklist scaffolded
     const c1 = await fetch(`${base}/close/cycles`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entA, periodType: "month", periodLabel: PERIOD }) });

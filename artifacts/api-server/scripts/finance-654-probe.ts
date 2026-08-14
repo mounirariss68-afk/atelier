@@ -53,8 +53,8 @@ async function main() {
     check("create entity", er.status === 201 && !!ej.entity?.id, ej);
     const entA = ej.entity.id as string;
     entIds.push(entA);
-    const s = await fetch(`${base}/gl/accounts/seed`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entA }) });
-    check("seed chart", s.status === 200);
+    const s = await fetch(`${base}/gl/accounts?entityId=${entA}`, { headers: hdrs });
+    check("chart auto-seeded on read", s.status === 200);
     const accts = await db.select().from(atelierGlAccount).where(and(eq(atelierGlAccount.legalEntityId, entA), isNull(atelierGlAccount.deletedAt)));
     check("chart has 6950", accts.some((a: any) => a.code === "6950"), accts.map((a: any) => a.code));
 

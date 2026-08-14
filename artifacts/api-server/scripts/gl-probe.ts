@@ -38,12 +38,12 @@ async function main() {
     }
     const [entA] = entIds;
 
-    // 1) seed default chart for entity A
-    const s = await fetch(`${base}/gl/accounts/seed`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entA }) });
+    // 1) chart auto-seeds on GL reads (Task #1081) — first read seeds, second is a no-op
+    const s = await fetch(`${base}/gl/accounts?entityId=${entA}`, { headers: hdrs });
     const sj = await s.json();
-    check("seed chart creates accounts", s.status === 200 && sj.data.created >= 20, sj);
-    const s2 = await fetch(`${base}/gl/accounts/seed`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entA }) }).then(r => r.json());
-    check("seed idempotent", s2.data.created === 0, s2);
+    check("auto-seed on read creates accounts", s.status === 200 && sj.data.rows.length >= 20, sj.data?.rows?.length);
+    const s2 = await fetch(`${base}/gl/accounts?entityId=${entA}`, { headers: hdrs }).then(r => r.json());
+    check("auto-seed idempotent", s2.data.rows.length === sj.data.rows.length, s2.data?.rows?.length);
     const accts = await fetch(`${base}/gl/accounts?entityId=${entA}`, { headers: hdrs }).then(r => r.json());
     check("accounts listed", accts.data.rows.some((a: any) => a.code === "1100" && a.isSystem), accts.data?.rows?.length);
 

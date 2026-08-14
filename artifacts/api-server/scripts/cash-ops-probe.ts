@@ -47,8 +47,8 @@ async function main() {
     const ej = await er.json();
     check("create entity", er.status === 201 && !!ej.entity?.id, ej);
     entId = ej.entity.id;
-    const sd = await fetch(`${base}/gl/accounts/seed`, { method: "POST", headers: hdrs, body: JSON.stringify({ entityId: entId }) });
-    check("seed chart", sd.status === 200, await sd.text().catch(() => ""));
+    const sd = await fetch(`${base}/gl/accounts?entityId=${entId}`, { headers: hdrs });
+    check("chart auto-seeded on read", sd.status === 200, await sd.text().catch(() => ""));
     const glAccts = await db.select().from(atelierGlAccount)
       .where(and(eq(atelierGlAccount.legalEntityId, entId), eq(atelierGlAccount.type, "expense")));
     check("expense accounts exist", glAccts.length > 0, glAccts.length);
