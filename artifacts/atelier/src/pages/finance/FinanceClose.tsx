@@ -487,7 +487,7 @@ export default function FinanceClose() {
             {entity && (
               <div className="grid lg:grid-cols-2 gap-4">
                 <PayrollPanel entityId={entity.id} entityName={entity.shortName} isPartner={isPartner} busy={busy} act={act} />
-                <VatPanel entityId={entity.id} entityName={entity.shortName} isPartner={isPartner} busy={busy} act={act} />
+                <VatPanel entityId={entity.id} entityName={entity.shortName} entityCountry={entity.country} isPartner={isPartner} busy={busy} act={act} />
               </div>
             )}
 
@@ -756,6 +756,8 @@ interface VatReturnData {
   settlementJournalEntryId: string | null;
   vatPeriodSetting: string | null;
   nextVatFilingDate: string | null;
+  vat201Available?: boolean;
+  vat201LastExportedAt?: string | null;
 }
 
 function defaultVatPeriod(): string {
@@ -765,11 +767,12 @@ function defaultVatPeriod(): string {
 function VatPanel(props: {
   entityId: string;
   entityName: string;
+  entityCountry: string;
   isPartner: boolean;
   busy: string | null;
   act: (key: string, fn: () => Promise<unknown>, okMsg: string) => Promise<void>;
 }) {
-  const { entityId, entityName, isPartner, busy, act } = props;
+  const { entityId, entityName, entityCountry, isPartner, busy, act } = props;
   const [period, setPeriod] = React.useState<string>(defaultVatPeriod());
   const [showLines, setShowLines] = React.useState(false);
   const retQ = useQuery({
@@ -816,6 +819,34 @@ function VatPanel(props: {
               <div className="text-sm font-mono text-gold" data-testid="vat-net">USD {Math.abs(ret.netVat).toLocaleString()}</div>
             </div>
           </div>
+          {entityCountry === "AE" && (
+            <div className="flex items-center justify-between gap-2 bg-bg-elevate/50 rounded px-2 py-1.5" data-testid="vat201-row">
+              <span className="text-[10px] font-mono uppercase text-text-faint">FTA VAT 201 return</span>
+              <div className="flex items-center gap-2">
+                {ret.vat201LastExportedAt && (
+                  <span className="text-[10px] font-mono text-text-faint" data-testid="vat201-exported-at">
+                    exported {String(ret.vat201LastExportedAt).slice(0, 10)}
+                  </span>
+                )}
+                <a
+                  href={`${API_BASE}/vat/return/vat201?entityId=${entityId}&period=${encodeURIComponent(period.trim())}&format=pdf`}
+                  onClick={() => setTimeout(() => void retQ.refetch(), 1500)}
+                  className="text-[10px] font-mono uppercase text-gold hover:underline"
+                  data-testid="link-vat201-pdf"
+                >
+                  PDF
+                </a>
+                <a
+                  href={`${API_BASE}/vat/return/vat201?entityId=${entityId}&period=${encodeURIComponent(period.trim())}&format=csv`}
+                  onClick={() => setTimeout(() => void retQ.refetch(), 1500)}
+                  className="text-[10px] font-mono uppercase text-gold hover:underline"
+                  data-testid="link-vat201-csv"
+                >
+                  CSV
+                </a>
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => setShowLines(!showLines)}
