@@ -67,7 +67,7 @@
 - [CLI slash-command UX](cli-slash-command-ux.md) — aliases carry leading "/"; slash menu must close once args typed or Enter re-picks and resets; parse-rejoin controlled inputs eat commas.
 - [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).
 - [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
-- [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external or silent OCR fallback; async launch-map watchdog + draftId dedupe in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md).
+- [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external; async watchdog in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md); enrichment in [atelier-receipt-enrichment.md](atelier-receipt-enrichment.md).
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (alias→memory→fuzzy→keyword→AI); org aliases learned from corrections apply pre-memory; wallet routes raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
 - [Chat person cross-domain fallback](atelier-person-crossdomain.md) — person detail tools auto-fallback CRM↔roster (ACL-filter BEFORE capping candidates); "final:" markers stripped server-side; card meta keys never render.
@@ -86,11 +86,9 @@
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
 - [Atelier GL statements](atelier-gl-statements.md) — entity P&L/BS/CF from GL journals; BS/CF identities by construction (new stock buckets must wire into CF); IC tagged by account name; budget firm-level only.
 - [Partner NDA → firm linkage](atelier-partner-nda-linkage.md) — no FK between contracts and partner-firm registry; /partners/agreements joins by normalized name → partnerFirmId; UI keys on that, never counterpartyId.
-- [Receipt enrichment details](atelier-receipt-enrichment.md) — category details are baked into `summary` at parse time (ocrPayload gets redacted at 90d); sanitizer+formatter pair owns the format, never the auditor LLM.
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design; invitations source-restricted; login only via onboarding create-login; People nav derives from peopleLifecycle.STAGES.
 - [Partner capability profiles & RAG](atelier-partner-capability-rag.md) — 2-D stage model (agreed⇔agreementStage), profile via approval queue only, org-scoped chunks; PROD re-run of the 7-partner ingest at go-live.
-- [Atelier POV revision loop](atelier-pov-revision.md) — draft/revise are async 202+poll (proxy/timeout); only "done" = success; outline edits 409 while a run is live; POV LLM budget is ATELIER_POV_TIMEOUT_MS.
-- [Atelier POV quality pipeline](atelier-pov-pipeline.md) — snapshot evidence is draft SoT; deterministic 0.8 citation gate on final HTML; multi-pass phases keyed on exact directive markers the probe stub matches.
+- [Atelier POV revision loop](atelier-pov-revision.md) — draft/revise async 202+poll; only "done"=success; quality gates in [atelier-pov-pipeline.md](atelier-pov-pipeline.md).
 - [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
 - [Qualify fit-scorecard adjust](atelier-qualify-fit-scorecard.md) — total/verdict recomputed only via shared computeFitTotals; adjust stamps mark manual scores; noop = no audit; legacy capabilities column unused.
@@ -104,10 +102,9 @@
 - [Holiday override review layer](atelier-holiday-overrides.md) — tentative holiday dates confirmed/adjusted via org override rows merged at read time; new consumers must pass overrides through, filter ranges AFTER adjustment.
 - [Chat receipt image OCR](chat-receipt-vision.md) — vision only ≥4KB images (tests offline); unreadable → needsReview, never filename+0; arithmetic total/tax cross-check rules in [receipt-amount-validation.md](receipt-amount-validation.md).
 - [Chat typed-name guard](chat-typed-name-guard.md) — typed-name confirm is risk-based (destructive verbs/irreversible/outbound), not blanket-attachment; web reads top-level typedNameRequired string, mobile the boolean.
-- [Demo-account showcase data](atelier-demo-showcase.md) — demo persona's fake profile/expenses/meetings live only in the boot seed; broad internal-meeting lists must hide demo-created rows from non-demo viewers.
 - [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
 - [Chat email recipient resolution](atelier-email-recipient-resolution.md) — chat `to` names resolve via shared resolver (roster+contacts, ACL before capping); resolved email pinned in pending input; company docs use separate non-me.* capability.
-- [App Store demo account & public pages](atelier-demo-account.md) — demo@cognirise.ai is force-repaired read-only every boot (guard 403s all writes); /privacypolicy + /support are AuthGate-public static pages.
+- [App Store demo account](atelier-demo-account.md) — demo@cognirise.ai force-repaired read-only every boot; showcase-data hiding rules in [atelier-demo-showcase.md](atelier-demo-showcase.md).
 - [Atelier M365 provisioning](atelier-m365-provisioning.md) — live tenant lacks admin consent: provisioning parks as blocked, never blocks onboarding; stub via MS_*_BASE_URL.
 - [Shared chat-core package](chat-core-shared.md) — web+mobile chat are shims over @workspace/chat-core (2-arg applyFrame, {code,message} error, render-time clarification fields); edit protocol there, never fork a client reducer.
 - [Outlook calendar webhook cache](atelier-calendar-cache.md) — cache read path degrades to live pull unless sub+deltaLink fresh; new Outlook-write surfaces must call noteLocalCalendarChange; dev = live-pull only.
@@ -156,5 +153,6 @@
 - [Task delegation accept/decline](atelier-task-delegation.md) — assignee owns the row; declined filtered via shared notDeclinedAssignment on EVERY read surface; chat cap tasks.assign is non-me.* by design.
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic `selfnotif_ptask_<id>_<epoch>` reminder cards; every mutation must dismiss stale cards.
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.
+- [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Expo-module mock probes](expo-module-mock-probes.md) — tsx probes map expo/RN to tests/mocks/ via probe tsconfig; push has remote|local modes — check remotePushUnavailableReason() before any token call.

@@ -1,4 +1,5 @@
 // ============================================================
+import { distillBriefView } from "./atelier-brief-view.js";
 // Task #589 — Self-contained first-meeting prep card (HTML).
 // ------------------------------------------------------------
 // renderPrepCardHtml(input) projects the Account Cartographer's
@@ -319,8 +320,13 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
       }`
     : emptyNote("No decision-makers captured yet.");
 
-  // ---- Section 7: our angle (1–2 sentences, issue-led) ----
-  const angle = input.cogniriseHypothesis?.trim() || rb.whyNowHypothesis?.trim() || "";
+  // ---- Section 7: our angle (1–2 sentences, issue-led). The distilled
+  // single view (post-stress-test) IS the angle whenever it exists, so the
+  // card never carries a second, competing hypothesis next to Section 9's
+  // "Our view"; the partner-entered hypothesis is only a fallback for
+  // accounts the Cartographer hasn't researched yet. ----
+  const view = distillBriefView(rb);
+  const angle = view.ourView || input.cogniriseHypothesis?.trim() || "";
   const angleInner = angle
     ? `<p class="prose">${escapeHtml(angle)}</p>`
     : emptyNote("No origination angle captured yet.");
@@ -348,19 +354,17 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
         .join("")
     : emptyNote("No priority project areas captured yet.");
 
-  // ---- Section 9: watch-outs (distilled from the stress-test) ----
-  const st = rb.stressTest ?? null;
-  const watchItems: string[] = [
-    ...(st?.likelyObjections ?? []),
-    ...(st?.failureScenarios ?? []),
-    ...(st?.assumptions?.uncertain ?? []),
-  ];
+  // ---- Section 9: our view (one balanced opinion + caveats + confidence,
+  // distilled from the stress-test — never the original hypothesis shown
+  // side-by-side with the attack on it) ----
   const watchInner =
-    watchItems.length || st?.revisedHypothesis
-      ? `${st?.revisedHypothesis ? `<div class="rtw"><span class="rtw-label">Sharpened hypothesis</span>${escapeHtml(st.revisedHypothesis)}</div>` : ""}
+    view.ourView || view.watchOuts.length
+      ? `${view.ourView ? `<div class="rtw"><span class="rtw-label">Our view</span>${escapeHtml(view.ourView)}</div>` : ""}
+        ${view.confidence ? `<div class="kv"><span>Confidence</span><b>${escapeHtml(view.confidence.label)}</b></div>` : ""}
         ${
-          watchItems.length
-            ? `<ul class="rows">${watchItems.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+          view.watchOuts.length
+            ? `<div class="rtw-label" style="margin-top:10px">What could change our view</div>
+               <ul class="rows">${view.watchOuts.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
             : ""
         }`
       : emptyNote("This hypothesis has not been stress-tested yet — re-run the Account Cartographer to surface watch-outs.");
@@ -373,7 +377,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     sectionShell(6, "Who you're meeting", personInner),
     sectionShell(7, "Our angle", angleInner),
     sectionShell(8, "Priority project areas", anglesInner),
-    sectionShell(9, "Watch-outs", watchInner),
+    sectionShell(9, "Our view", watchInner),
   ].join("");
 
   const preparedLine = [

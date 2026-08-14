@@ -86,6 +86,8 @@ type StressTest = {
   evidenceToStrengthen: Array<{ evidence: string; whereToFind: string }>;
   revisedHypothesis: string;
 };
+// Distills the stress-test into the single balanced "Our View" section.
+import { distillBriefView } from "./atelier-brief-view.js";
 
 export interface AccountResearchBriefInput {
   accountName: string;
@@ -190,11 +192,13 @@ export function buildAccountResearchBriefPdf(
 
   addBrandPage(doc);
 
-  // 1. The one thing + why-now
+  // 1. The one thing. (The hypothesis itself moves to the single "Our View"
+  // section below — the pre-stress-test opinion is no longer shown in
+  // parallel with the revised one.)
   if (b.singleMostImportant) {
-    const blocks: BrandBlock[] = [block.body(b.singleMostImportant, { size: 10.5 })];
-    if (b.whyNowHypothesis) blocks.push(block.italic(`Why now: ${b.whyNowHypothesis}`));
-    glassSection(doc, "The One Thing That Matters", blocks);
+    glassSection(doc, "The One Thing That Matters", [
+      block.body(b.singleMostImportant, { size: 10.5 }),
+    ]);
   }
 
   // 2. What's changing
@@ -263,35 +267,33 @@ export function buildAccountResearchBriefPdf(
     glassSection(doc, "Open Questions", b.openQuestions.map((q) => block.bullet(q)));
   }
 
-  // 9. Stress test (optional)
-  if (b.stressTest) {
-    const st = b.stressTest;
-    const blocks: BrandBlock[] = [];
-    if (st.revisedHypothesis) {
-      blocks.push(block.label("Revised hypothesis:"), block.body(st.revisedHypothesis));
-    }
-    if ((st.failureScenarios ?? []).length > 0) {
-      blocks.push(block.label("Failure scenarios:"), ...st.failureScenarios.map((s) => block.bullet(s)));
-    }
-    if ((st.likelyObjections ?? []).length > 0) {
-      blocks.push(block.label("Likely objections:"), ...st.likelyObjections.map((s) => block.bullet(s)));
-    }
-    const assumptions = st.assumptions ?? {};
-    const allAssumptions = [
-      ...(assumptions.evidenced ?? []).map((a) => `[evidenced] ${a}`),
-      ...(assumptions.untestedButLikely ?? []).map((a) => `[likely] ${a}`),
-      ...(assumptions.uncertain ?? []).map((a) => `[uncertain] ${a}`),
-    ];
-    if (allAssumptions.length > 0) {
-      blocks.push(block.label("Assumptions:"), ...allAssumptions.map((a) => block.bullet(a)));
-    }
-    if ((st.evidenceToStrengthen ?? []).length > 0) {
-      blocks.push(block.label("Evidence to strengthen hypothesis:"));
-      for (const e of st.evidenceToStrengthen) {
-        blocks.push(block.bullet(`${e.evidence} (find at: ${e.whereToFind})`));
+  // 9. Our view — ONE synthesized, balanced opinion. The stress-test blob is
+  // distilled into a final view + caveats + confidence instead of showing the
+  // original hypothesis alongside the attack on it.
+  {
+    const view = distillBriefView(b);
+    if (view.ourView || view.watchOuts.length > 0) {
+      const blocks: BrandBlock[] = [];
+      if (view.ourView) {
+        blocks.push(block.label("Our view:"), block.body(view.ourView, { size: 10.5 }));
       }
+      if (view.confidence) {
+        blocks.push(block.italic(view.confidence.label));
+      }
+      if (view.watchOuts.length > 0) {
+        blocks.push(
+          block.label("What could change our view:"),
+          ...view.watchOuts.map((s) => block.bullet(s)),
+        );
+      }
+      if (view.evidenceToStrengthen.length > 0) {
+        blocks.push(block.label("Evidence that would strengthen it:"));
+        for (const e of view.evidenceToStrengthen) {
+          blocks.push(block.bullet(`${e.evidence} (find at: ${e.whereToFind})`));
+        }
+      }
+      glassSection(doc, "Our View", blocks);
     }
-    glassSection(doc, "Stress Test", blocks);
   }
 
   sourcesAppendix(doc, sources);

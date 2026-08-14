@@ -38,6 +38,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { distillBriefView } from "@/lib/briefView";
 import { useCreateAccount } from "@/components/CreateAccountContext";
 import type { CliCapability, CliLocale } from "./types";
 import { s } from "./locale";
@@ -886,8 +887,13 @@ function AccountProposalCard({
     .filter((t) => t.trim().length > 0)
     .slice(0, 5);
 
-  const whyNow =
-    asStr(brief.whyNowHypothesis) || asStr(brief.singleMostImportant);
+  // One balanced view — the post-stress-test revised hypothesis is the single
+  // opinion shown; older drafts without a stress-test fall back to why-now.
+  const briefView = distillBriefView({
+    whyNowHypothesis: asStr(brief.whyNowHypothesis) || null,
+    stressTest: (brief.stressTest ?? null) as never,
+  });
+  const whyNow = briefView.ourView || asStr(brief.singleMostImportant);
   const mandateAngles = asArr(brief.mandateAngles)
     .map((m) => asObj(m))
     .filter((m) => asStr(m.title).trim().length > 0)
@@ -1069,12 +1075,44 @@ function AccountProposalCard({
         </div>
       ) : null}
 
-      {whyNow ? (
+      {whyNow || briefView.watchOuts.length > 0 ? (
         <div className="mt-3 rounded-lg border border-gold/20 bg-gold/5 p-2.5">
-          <div className="text-[10px] uppercase tracking-wide text-gold">
-            {ar ? "لماذا الآن" : "Why now"}
-          </div>
-          <p className="mt-0.5 text-sm text-text">{whyNow}</p>
+          {whyNow ? (
+            <>
+              <div className="text-[10px] uppercase tracking-wide text-gold">
+                {ar ? "رأينا" : "Our view"}
+              </div>
+              <p className="mt-0.5 text-sm text-text">{whyNow}</p>
+            </>
+          ) : null}
+          {briefView.confidence ? (
+            <div className="mt-1 text-[10px] uppercase tracking-wide text-text-mute">
+              {ar
+                ? `ثقة ${
+                    briefView.confidence.level === "strong"
+                      ? "عالية"
+                      : briefView.confidence.level === "moderate"
+                        ? "متوسطة"
+                        : "أولية"
+                  } — ${briefView.confidence.evidenced} مُثبت · ${briefView.confidence.untested} غير مُختبر · ${briefView.confidence.uncertain} غير مؤكد`
+                : briefView.confidence.label}
+            </div>
+          ) : null}
+          {briefView.watchOuts.length > 0 ? (
+            <div className="mt-2">
+              <div className="text-[10px] uppercase tracking-wide text-text-mute">
+                {ar ? "ما الذي قد يغيّر رأينا" : "What could change our view"}
+              </div>
+              <ul className="mt-1 space-y-1">
+                {briefView.watchOuts.slice(0, 3).map((w, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-text-mute">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                    <span className="min-w-0">{w}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

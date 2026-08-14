@@ -107,6 +107,7 @@ import {
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
 import { localizedIndustryName } from "@/lib/reference-data";
+import { distillBriefView } from "@/lib/briefView";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
 // Task #159 — contract records linked to this account.
@@ -856,7 +857,7 @@ const ACCOUNT_BRIEF_SECTION_LABELS: Record<string, string> = {
   partnerFit: "Alliance partner fit",
   businessUnits: "Business units",
   mandateAngles: "Mandate angles",
-  stressTest: "Stress test",
+  stressTest: "Our view & watch-outs",
   whyNowHypothesis: "Why-now hypothesis",
   openQuestions: "Open questions",
   singleMostImportant: "The one thing",
@@ -950,34 +951,87 @@ function ProfileTab({
         onOpenChange={setEditOwnership}
       />
 
-      {/* At-a-glance callout */}
-      {brief?.singleMostImportant && (
+      {/* At-a-glance callout — renders when the brief has EITHER the
+          one-thing headline OR a distillable balanced view (older/partial
+          briefs may have one without the other). */}
+      {(() => {
+        if (!brief) return null;
+        // One balanced view: the post-stress-test revised hypothesis is the
+        // single opinion; the pre-test hypothesis is never shown alongside
+        // it. Older briefs fall back gracefully.
+        const view = distillBriefView(brief);
+        const hasView = !!view.ourView || view.watchOuts.length > 0;
+        if (!brief.singleMostImportant && !hasView) return null;
+        return (
         <Card className="p-5 mb-6 border-gold/40 bg-gold/5">
           <div className="flex items-start gap-3">
             <Lightbulb className="w-5 h-5 text-gold shrink-0 mt-0.5" />
             <div>
-              <Eyebrow>The one thing that matters</Eyebrow>
-              <p className="text-text leading-relaxed mt-1">{brief.singleMostImportant}</p>
-              <NarrativeEvidenceChips
-                refs={rq?.narrativeLinks?.singleMostImportant ?? []}
-                testid="evidence-single-most-important"
-              />
-              {brief.whyNowHypothesis && (
-                <p className="text-text-mute text-sm mt-2">
-                  <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
-                    Why now:{" "}
-                  </span>
-                  {brief.whyNowHypothesis}
-                </p>
-              )}
-              <NarrativeEvidenceChips
-                refs={rq?.narrativeLinks?.whyNowHypothesis ?? []}
-                testid="evidence-why-now"
-              />
+              {brief.singleMostImportant ? (
+                <>
+                  <Eyebrow>The one thing that matters</Eyebrow>
+                  <p className="text-text leading-relaxed mt-1">{brief.singleMostImportant}</p>
+                  <NarrativeEvidenceChips
+                    refs={rq?.narrativeLinks?.singleMostImportant ?? []}
+                    testid="evidence-single-most-important"
+                  />
+                </>
+              ) : null}
+              {(() => {
+                if (!hasView) return null;
+                return (
+                  <div data-testid="section-our-view">
+                    {view.ourView && (
+                      <p className="text-text-mute text-sm mt-2">
+                        <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
+                          Our view:{" "}
+                        </span>
+                        {view.ourView}
+                      </p>
+                    )}
+                    <NarrativeEvidenceChips
+                      refs={
+                        (view.fromStressTest
+                          ? rq?.narrativeLinks?.revisedHypothesis
+                          : rq?.narrativeLinks?.whyNowHypothesis) ?? []
+                      }
+                      testid="evidence-our-view"
+                    />
+                    {view.confidence && (
+                      <p
+                        className="text-text-faint text-xs mt-2 font-mono uppercase tracking-wider"
+                        data-testid="text-brief-confidence"
+                      >
+                        {view.confidence.label}
+                      </p>
+                    )}
+                    {view.watchOuts.length > 0 && (
+                      <div className="mt-2">
+                        <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
+                          What could change our view
+                        </span>
+                        <ul className="mt-1 space-y-1">
+                          {view.watchOuts.map((w, i) => (
+                            <li
+                              key={i}
+                              className="text-text-mute text-sm flex items-start gap-2"
+                              data-testid={`row-watch-out-${i}`}
+                            >
+                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                              <span>{w}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </Card>
-      )}
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
