@@ -362,10 +362,13 @@ export function CommandBar(props: CommandBarProps) {
 
   const reduced = useReducedMotion();
 
-  // Persist locale across opens.
+  // Persist locale across opens. The custom event lets regular pages
+  // (Task #1061 — e.g. the Account brief callout) follow the preference
+  // live via useCliLocalePreference without a refresh.
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("atelier-cli-locale", locale);
+      window.dispatchEvent(new CustomEvent("atelier-cli-locale"));
     }
   }, [locale]);
 

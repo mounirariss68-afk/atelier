@@ -47,6 +47,36 @@ export interface DistilledBriefView {
   evidenceToStrengthen: Array<{ evidence: string; whereToFind: string }>;
 }
 
+// Task #1061 — reader-language rendering. The distilled view stays
+// structural (level + counts); renderers localize via the helpers below so
+// the Account page callout and chat cards share ONE set of strings.
+export type BriefViewLocale = "en" | "ar";
+
+export const BRIEF_VIEW_LABELS: Record<
+  "ourView" | "watchOuts",
+  Record<BriefViewLocale, string>
+> = {
+  ourView: { en: "Our view", ar: "رأينا" },
+  watchOuts: { en: "What could change our view", ar: "ما الذي قد يغيّر رأينا" },
+};
+
+const CONFIDENCE_WORD: Record<BriefConfidenceLevel, Record<BriefViewLocale, string>> = {
+  strong: { en: "Strong", ar: "عالية" },
+  moderate: { en: "Moderate", ar: "متوسطة" },
+  tentative: { en: "Tentative", ar: "أولية" },
+};
+
+/** One localized confidence sentence for every reader-facing surface. */
+export function briefConfidenceLabel(
+  c: { level: BriefConfidenceLevel; evidenced: number; untested: number; uncertain: number },
+  locale: BriefViewLocale = "en",
+): string {
+  if (locale === "ar") {
+    return `ثقة ${CONFIDENCE_WORD[c.level].ar} — ${c.evidenced} مُثبت · ${c.untested} غير مُختبر · ${c.uncertain} غير مؤكد`;
+  }
+  return `${CONFIDENCE_WORD[c.level].en} confidence — ${c.evidenced} evidenced · ${c.untested} untested · ${c.uncertain} uncertain`;
+}
+
 const clean = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const cleanList = (v: unknown): string[] =>
   Array.isArray(v) ? v.map(clean).filter((s) => s.length > 0) : [];
@@ -82,11 +112,11 @@ export function distillBriefView(brief: {
         : uncertain > evidenced
           ? "tentative"
           : "moderate";
-    const word =
-      level === "strong" ? "Strong" : level === "moderate" ? "Moderate" : "Tentative";
     confidence = {
       level,
-      label: `${word} confidence — ${evidenced} evidenced · ${untested} untested · ${uncertain} uncertain`,
+      // English default; locale-aware renderers should call
+      // briefConfidenceLabel(confidence, locale) instead of this field.
+      label: briefConfidenceLabel({ level, evidenced, untested, uncertain }),
       evidenced,
       untested,
       uncertain,

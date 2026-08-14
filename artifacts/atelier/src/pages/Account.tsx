@@ -107,7 +107,14 @@ import {
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
 import { localizedIndustryName } from "@/lib/reference-data";
-import { distillBriefView } from "@/lib/briefView";
+import {
+  distillBriefView,
+  briefConfidenceLabel,
+  BRIEF_VIEW_LABELS,
+} from "@/lib/briefView";
+// Task #1061 — the balanced-view callout follows the reader's language
+// preference (the CLI locale toggle) like the chat cards do.
+import { useCliLocalePreference } from "@/hooks/use-cli-locale";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
 // Task #159 — contract records linked to this account.
@@ -916,6 +923,8 @@ function ProfileTab({
   const [editProfile, setEditProfile] = useState(false);
   const [editOwnership, setEditOwnership] = useState(false);
   const brief = a.researchBrief ?? null;
+  // Task #1061 — reader-language balanced view (labels + confidence line).
+  const briefLocale = useCliLocalePreference();
   // Task #9 — server-computed research-quality signals (completeness,
   // narrative→evidence links, staleness) over the persisted brief.
   const rq = a.researchQuality ?? null;
@@ -980,11 +989,14 @@ function ProfileTab({
               {(() => {
                 if (!hasView) return null;
                 return (
-                  <div data-testid="section-our-view">
+                  <div
+                    data-testid="section-our-view"
+                    dir={briefLocale === "ar" ? "rtl" : "ltr"}
+                  >
                     {view.ourView && (
                       <p className="text-text-mute text-sm mt-2">
                         <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
-                          Our view:{" "}
+                          {BRIEF_VIEW_LABELS.ourView[briefLocale]}:{" "}
                         </span>
                         {view.ourView}
                       </p>
@@ -1002,13 +1014,13 @@ function ProfileTab({
                         className="text-text-faint text-xs mt-2 font-mono uppercase tracking-wider"
                         data-testid="text-brief-confidence"
                       >
-                        {view.confidence.label}
+                        {briefConfidenceLabel(view.confidence, briefLocale)}
                       </p>
                     )}
                     {view.watchOuts.length > 0 && (
                       <div className="mt-2">
                         <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
-                          What could change our view
+                          {BRIEF_VIEW_LABELS.watchOuts[briefLocale]}
                         </span>
                         <ul className="mt-1 space-y-1">
                           {view.watchOuts.map((w, i) => (

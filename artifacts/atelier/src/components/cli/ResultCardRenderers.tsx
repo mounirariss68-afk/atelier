@@ -38,7 +38,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { distillBriefView } from "@/lib/briefView";
+import {
+  distillBriefView,
+  briefConfidenceLabel,
+  BRIEF_VIEW_LABELS,
+} from "@/lib/briefView";
 import { useCreateAccount } from "@/components/CreateAccountContext";
 import type { CliCapability, CliLocale } from "./types";
 import { s } from "./locale";
@@ -1080,28 +1084,20 @@ function AccountProposalCard({
           {whyNow ? (
             <>
               <div className="text-[10px] uppercase tracking-wide text-gold">
-                {ar ? "رأينا" : "Our view"}
+                {BRIEF_VIEW_LABELS.ourView[ar ? "ar" : "en"]}
               </div>
               <p className="mt-0.5 text-sm text-text">{whyNow}</p>
             </>
           ) : null}
           {briefView.confidence ? (
             <div className="mt-1 text-[10px] uppercase tracking-wide text-text-mute">
-              {ar
-                ? `ثقة ${
-                    briefView.confidence.level === "strong"
-                      ? "عالية"
-                      : briefView.confidence.level === "moderate"
-                        ? "متوسطة"
-                        : "أولية"
-                  } — ${briefView.confidence.evidenced} مُثبت · ${briefView.confidence.untested} غير مُختبر · ${briefView.confidence.uncertain} غير مؤكد`
-                : briefView.confidence.label}
+              {briefConfidenceLabel(briefView.confidence, ar ? "ar" : "en")}
             </div>
           ) : null}
           {briefView.watchOuts.length > 0 ? (
             <div className="mt-2">
               <div className="text-[10px] uppercase tracking-wide text-text-mute">
-                {ar ? "ما الذي قد يغيّر رأينا" : "What could change our view"}
+                {BRIEF_VIEW_LABELS.watchOuts[ar ? "ar" : "en"]}
               </div>
               <ul className="mt-1 space-y-1">
                 {briefView.watchOuts.slice(0, 3).map((w, i) => (
