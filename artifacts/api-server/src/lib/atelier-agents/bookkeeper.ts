@@ -30,6 +30,7 @@ import {
   atelierRevenuePeriodPosting,
   atelierRevenuePeriodPostingLine,
   atelierPeriodCloseLock,
+  atelierAuditEvents,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
 import { invoiceAccountResolves } from "../invoiceAccountGuard.js";
@@ -141,6 +142,42 @@ export async function seedChartForEntity(args: {
   return { created, existing: have.size };
 }
 
+/**
+ * Task #1081 — auto-seed the default chart wherever it's missing.
+ * Seeds idempotently and, when anything was actually created, writes the
+ * same `gl.chart_seed` audit entry the old manual button produced so
+ * finance can see when/why a chart appeared.
+ */
+export async function ensureChartSeeded(args: {
+  orgId: string;
+  legalEntityId: string;
+  entityLabel: string;
+  actor:
+    | { kind: "human"; userId: string; label: string }
+    | { kind: "agent"; runId: string; label: string };
+  reason: string;
+}): Promise<{ created: number; existing: number }> {
+  const out = await seedChartForEntity({
+    orgId: args.orgId,
+    legalEntityId: args.legalEntityId,
+    createdByUserId: args.actor.kind === "human" ? args.actor.userId : null,
+  });
+  if (out.created > 0) {
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "gl_account",
+      entityId: args.legalEntityId,
+      actorType: args.actor.kind,
+      actorId: args.actor.kind === "human" ? args.actor.userId : args.actor.runId,
+      actorLabel: args.actor.label,
+      action: "gl.chart_seed",
+      payload: { entityId: args.legalEntityId, reason: args.reason, ...out },
+      payloadSummary: `Auto-seeded default chart for ${args.entityLabel} (${out.created} created) — ${args.reason}`,
+    });
+  }
+  return out;
+}
+
 /** True when the period's close lock covers the GL module. */
 export async function isGlPeriodLocked(orgId: string, periodLabel: string): Promise<boolean> {
   const [lock] = await db
@@ -245,6 +282,35 @@ async function executeBookkeeper(
     .filter((e) => !onlyEntityId || e.id === onlyEntityId);
   const entityIds = new Set(entities.map((e) => e.id));
   const defaultEntityId = entities.length === 1 ? entities[0].id : null;
+
+  // Task #1081 — auto-seed the default chart for any active in-scope
+  // entity that has none, before resolving postings. Idempotent; the
+  // audit entry is attributed to this run.
+  if (entities.length > 0) {
+    const chartCounts = await db
+      .select({
+        legalEntityId: atelierGlAccount.legalEntityId,
+        n: sql<number>`count(*)`,
+      })
+      .from(atelierGlAccount)
+      .where(and(
+        eq(atelierGlAccount.orgId, orgId),
+        inArray(atelierGlAccount.legalEntityId, [...entityIds]),
+        isNull(atelierGlAccount.deletedAt),
+      ))
+      .groupBy(atelierGlAccount.legalEntityId);
+    const haveChart = new Set(chartCounts.filter((r) => Number(r.n) > 0).map((r) => r.legalEntityId));
+    for (const e of entities) {
+      if (haveChart.has(e.id)) continue;
+      await ensureChartSeeded({
+        orgId,
+        legalEntityId: e.id,
+        entityLabel: e.shortName || e.legalNameEn,
+        actor: { kind: "agent", runId: agentRunId, label: "Bookkeeper" },
+        reason: `Bookkeeper run ${periodLabel} found no chart of accounts for this entity`,
+      });
+    }
+  }
 
   // Chart lookup per entity.
   const accounts = entityIds.size > 0

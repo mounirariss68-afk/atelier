@@ -180,7 +180,7 @@ export default function LedgerPage() {
 
         {tab === "trial-balance" && <TrialBalanceTab entityId={effEntity} period={period} />}
         {tab === "journal" && <JournalTab entityId={effEntity} period={period} />}
-        {tab === "accounts" && <AccountsTab entityId={effEntity} onChanged={refetchAll} />}
+        {tab === "accounts" && <AccountsTab entityId={effEntity} />}
         {tab === "exceptions" && <ExceptionsTab onChanged={refetchAll} />}
         {tab === "untagged" && <UntaggedTab entities={entities} onChanged={refetchAll} />}
       </div>
@@ -283,38 +283,13 @@ function JournalTab({ entityId, period }: { entityId: string | null; period: str
   );
 }
 
-function AccountsTab({ entityId, onChanged }: { entityId: string | null; onChanged: () => void }) {
+function AccountsTab({ entityId }: { entityId: string | null }) {
   const { data, isLoading } = useGlAccounts(entityId);
-  const [seeding, setSeeding] = React.useState(false);
-  const [msg, setMsg] = React.useState<string | null>(null);
   if (!entityId) return <Card className="p-6 text-text-mute">Add a legal entity first.</Card>;
   if (isLoading) return <Card className="p-6 text-text-mute">Loading chart…</Card>;
   const rows = (data?.data.rows ?? []).filter((r) => r.legalEntityId === entityId);
-  async function seed() {
-    setSeeding(true); setMsg(null);
-    try {
-      const res = await postJson<{ ok: boolean; data: { created: number } }>("/gl/accounts/seed", { entityId });
-      setMsg(`Seeded ${res.data.created} accounts.`);
-      onChanged();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSeeding(false);
-    }
-  }
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => void seed()}
-          disabled={seeding}
-          className="text-xs font-mono glass-surface border border-border rounded px-3 py-1.5 hover:border-gold/50 disabled:opacity-50"
-          data-testid="button-seed-chart"
-        >
-          {seeding ? "Seeding…" : "Seed default chart"}
-        </button>
-        {msg && <span className="text-xs text-text-mute font-mono" data-testid="text-seed-result">{msg}</span>}
-      </div>
       <Card className="p-0 overflow-x-auto" data-testid="table-accounts">
         <table className="w-full text-sm">
           <thead>
@@ -325,7 +300,7 @@ function AccountsTab({ entityId, onChanged }: { entityId: string | null; onChang
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-text-mute">No chart yet for this entity — seed the default professional-services chart.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-6 text-text-mute">Loading the default chart of accounts…</td></tr>
             )}
             {rows.map((a) => (
               <tr key={a.id} className="border-b border-border/40" data-testid={`account-row-${a.code}`}>

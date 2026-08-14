@@ -39,7 +39,7 @@ import {
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import {
   DEFAULT_CHART,
-  seedChartForEntity,
+  ensureChartSeeded,
   isGlPeriodLocked,
   runBookkeeper,
 } from "../../lib/atelier-agents/bookkeeper.js";
@@ -111,12 +111,45 @@ async function audit(args: {
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
+/**
+ * Task #1081 — lazily seed the default chart for active entities that
+ * have none, so GL reads never show an empty chart. Idempotent; audits
+ * as `gl.chart_seed` attributed to the reading user.
+ */
+async function autoSeedMissingCharts(me: Me, onlyEntityId?: string): Promise<void> {
+  const entities = (await db.select().from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.orgId, me.orgId), eq(atelierLegalEntities.status, "active"))))
+    .filter((e) => !onlyEntityId || e.id === onlyEntityId);
+  if (entities.length === 0) return;
+  const counts = await db
+    .select({ legalEntityId: atelierGlAccount.legalEntityId, n: sql<number>`count(*)` })
+    .from(atelierGlAccount)
+    .where(and(
+      eq(atelierGlAccount.orgId, me.orgId),
+      inArray(atelierGlAccount.legalEntityId, entities.map((e) => e.id)),
+      isNull(atelierGlAccount.deletedAt),
+    ))
+    .groupBy(atelierGlAccount.legalEntityId);
+  const haveChart = new Set(counts.filter((r) => Number(r.n) > 0).map((r) => r.legalEntityId));
+  for (const ent of entities) {
+    if (haveChart.has(ent.id)) continue;
+    await ensureChartSeeded({
+      orgId: me.orgId,
+      legalEntityId: ent.id,
+      entityLabel: ent.shortName || ent.legalNameEn,
+      actor: { kind: "human", userId: me.id, label: me.name },
+      reason: "chart-of-accounts read found no chart for this active entity",
+    });
+  }
+}
+
 // ─────────────────────── chart of accounts ───────────────────────
 
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/gl/accounts", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
   const entityId = String(req.query.entityId ?? "");
+  await autoSeedMissingCharts(me, entityId || undefined);
   const where = entityId
     ? and(eq(atelierGlAccount.orgId, me.orgId), eq(atelierGlAccount.legalEntityId, entityId), isNull(atelierGlAccount.deletedAt))
     : and(eq(atelierGlAccount.orgId, me.orgId), isNull(atelierGlAccount.deletedAt));
@@ -133,10 +166,12 @@ router.post("/gl/accounts/seed", async (req, res) => {
   const [ent] = await db.select().from(atelierLegalEntities)
     .where(and(eq(atelierLegalEntities.id, b.entityId), eq(atelierLegalEntities.orgId, me.orgId)));
   if (!ent) return res.status(404).json({ error: "not_found" });
-  const out = await seedChartForEntity({ orgId: me.orgId, legalEntityId: ent.id, createdByUserId: me.id });
-  await audit({ entityType: "gl_account", entityId: ent.id, actor: me,
-    action: "gl.chart_seed", payload: { entityId: ent.id, ...out },
-    summary: `Seeded default chart for ${ent.shortName || ent.legalNameEn} (${out.created} created)` });
+  const out = await ensureChartSeeded({
+    orgId: me.orgId, legalEntityId: ent.id,
+    entityLabel: ent.shortName || ent.legalNameEn,
+    actor: { kind: "human", userId: me.id, label: me.name },
+    reason: "explicit seed request",
+  });
   return res.json({ ok: true, data: out });
 });
 
@@ -389,6 +424,7 @@ router.get("/gl/trial-balance", async (req, res) => {
   const entityId = String(req.query.entityId ?? "");
   const period = String(req.query.period ?? "");
   if (!entityId) return res.status(400).json({ error: "invalid_input", message: "entityId required" });
+  await autoSeedMissingCharts(me, entityId);
   const conds = [
     eq(atelierGlJournalEntry.orgId, me.orgId),
     eq(atelierGlJournalEntry.legalEntityId, entityId),
