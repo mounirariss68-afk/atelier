@@ -1572,40 +1572,10 @@ export interface BankChangeRequestWire {
   approvedAt: string | null;
   rejectedReason: string | null;
 }
-export interface VendorRow2 {
-  id: string;
-  legalName: string;
-  shortName: string;
-  category: string;
-  isSubcontractor: boolean;
-  jurisdiction: string;
-  country: string;
-  registeredEntityId: string;
-  taxIds: { vat: string | null; corporate: string | null; whtRegistered: boolean };
-  defaultWhtPct: number;
-  paymentTermsDays: number;
-  beneficialOwners: Array<{ id: string; name: string; pctOwnership: number; nationality: string; isPep: boolean }>;
-  sanctions: { lastCheckedAt: string; result: "clear" | "match_review" | "blocked"; list: string; notes: string | null };
-  bankAccounts: Array<{
-    id: string;
-    bank: string;
-    iban: string;
-    swift: string;
-    currency: string;
-    accountHolder: string;
-    primary: boolean;
-    pendingChange?: BankChangeRequestWire | null;
-  }>;
-  primaryContact: { name: string; email: string; phone: string };
-  payAgainstEntityIds: string[];
-  status: "active" | "on_hold" | "blocked";
-  onboardedAt: string;
-  notes: string;
-}
 // Task #1091 stub sweep — the vendor master / PO / 3-way-match server
 // routes were deleted (blueprint §6: vendor registry folds into
-// counterparty resolution). The VendorRow2 shape is retained because the
-// subcontractors read still returns it. No list hook — the endpoint is gone.
+// counterparty resolution). Task #1106 then removed the VendorRow2 shape
+// with the subcontractors pay-when-paid surface; no endpoint returns it.
 
 export interface PoRow {
   id: string;
@@ -1629,38 +1599,13 @@ export interface PoRow {
 }
 // Task #1091 stub sweep — PO / GRN / 3-way-match routes removed (server).
 
-export interface VendorInvoiceRow {
-  id: string;
-  number: string;
-  vendorId: string;
-  buyerEntityId: string;
-  poId: string | null;
-  currency: string;
-  amount: number;
-  amountUsd: number;
-  whtPct: number;
-  whtAmountUsd: number;
-  netPayableUsd: number;
-  invoiceDate: string;
-  dueDate: string;
-  receivedAt: string;
-  status: "received" | "matched" | "exception" | "approved_for_payment" | "scheduled" | "paid" | "rejected" | "on_hold_pwp";
-  match: {
-    outcome: "match" | "qty_mismatch" | "price_mismatch" | "no_grn" | "no_po" | "tolerance_override";
-    poDeltaPct: number;
-    grnDeltaPct: number;
-    notes: string | null;
-    overrideBy: string | null;
-    overrideReason: string | null;
-  };
-  approvalAgeDays: number;
-  subcontractorLinkId: string | null;
-  description: string;
-}
-// Retained for the subcontractors pay-when-paid surface (links vendor
-// invoices to AR receipts). The vendor master / PO surfaces were removed
-// in the Task #1091 stub sweep; this list feeds subcontractor hold state.
-export const usePayablesInvoices = listHook<VendorInvoiceRow>("pay-invoices", "/finance/payables/invoices");
+// Task #1106 — the VendorInvoiceRow shape and usePayablesInvoices hook were
+// removed with the pay-when-paid Subcontractors surface (the backing
+// /finance/payables/invoices endpoint was a live-but-empty stub with no
+// data model). Real payables live in partner/supplier/self-billing hooks.
+export type VendorInvoiceStatus =
+  | "received" | "matched" | "exception" | "approved_for_payment"
+  | "scheduled" | "paid" | "rejected" | "on_hold_pwp";
 
 // Task #430 — real payment runs over atelier_payment_runs.
 export interface PaymentRunItemRow {
@@ -1785,27 +1730,8 @@ export function useWhtRegister(): { items: WhtCertRow[]; remittance: WhtRemittan
   return q.data ?? { items: [], remittance: [] };
 }
 
-export interface SubcontractorLinkRow {
-  id: string;
-  vendorId: string;
-  engagementId: string;
-  engagementName: string;
-  milestoneId: string;
-  milestoneLabel: string;
-  scope: string;
-  ratePerDayUsd: number;
-  payWhenPaidArInvoiceId: string;
-  arReceiptStatus: "open" | "received" | "partial";
-  arReceivedAt: string | null;
-}
-export function useSubcontractors(): { vendors: VendorRow2[]; links: SubcontractorLinkRow[] } {
-  const q = useQuery<{ vendors: VendorRow2[]; links: SubcontractorLinkRow[] }>({
-    queryKey: ["atelier-v5", "pay-subs"],
-    queryFn: () => get<{ vendors: VendorRow2[]; links: SubcontractorLinkRow[] }>("/finance/payables/subcontractors"),
-    staleTime: 30_000,
-  });
-  return q.data ?? { vendors: [], links: [] };
-}
+// Task #1106 — SubcontractorLinkRow / useSubcontractors removed with the
+// pay-when-paid Subcontractors surface (backing endpoint was an empty stub).
 
 export interface ExpectedDisbursementRow {
   invoiceId: string;
@@ -1813,7 +1739,7 @@ export interface ExpectedDisbursementRow {
   vendorName: string;
   amountUsd: number;
   dueDate: string;
-  status: VendorInvoiceRow["status"];
+  status: VendorInvoiceStatus;
   paymentRunNumber: string | null;
 }
 export const useExpectedDisbursements = listHook<ExpectedDisbursementRow>(

@@ -115,7 +115,6 @@ import {
   FinancePayablesPartnerInvoices,
   FinancePayablesSupplierInvoices,
   FinancePayablesWht,
-  FinancePayablesSubcontractors,
   FinancePayablesOverview,
 } from "@/pages/finance/FinancePayables";
 // Task #419 — Wave 7: Finance Comply sub-pages.
@@ -774,7 +773,6 @@ function Router() {
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
         <Route path="/finance/payables/run-history" component={FinancePayablesRunHistory} />
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
-        <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
         <Route path="/finance/close" component={FinanceClose} />
         {/* Task #655 — statutory payroll runs, EOSB, filings. */}
         <Route path="/finance/payroll" component={FinancePayroll} />

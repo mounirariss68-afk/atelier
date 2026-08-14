@@ -6,11 +6,12 @@
  *   - partner/supplier invoices — intake + review
  *   - payment-runs    — maker-checker + dual-signatory enforcement + bank-file
  *   - wht             — withholding-tax certificate register + remittance summary
- *   - subcontractors  — pay-when-paid links between subcontractor invoices and AR
  *
  * Task #1091 stub sweep: the vendor master and PO / 3-way-match surfaces
  * were removed here — the server routes were deleted (blueprint §6: the
  * vendor registry folds into counterparty resolution).
+ * Task #1106: the Subcontractors pay-when-paid surface was folded into the
+ * live invoice tabs — it had no backing data model (empty stubs only).
  */
 
 import * as React from "react";
@@ -28,16 +29,13 @@ import {
 import { ArrowRight, Bot, Clock, Inbox } from "lucide-react";
 import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView, focusOutcome } from "@/lib/useDeepLinkFocus";
 import {
-  usePayablesInvoices,
   usePayablesRuns,
   usePayablesSelfBillingState,
   usePayablesBankAccounts,
   useWhtRegister,
-  useSubcontractors,
   usePayablesAudit,
   postJson,
   API_BASE,
-  type VendorInvoiceRow,
   type PaymentRunRow,
   type SelfBilledInvoiceRow,
 } from "@/lib/v5-hooks";
@@ -45,7 +43,7 @@ import {
 function useInvalidatePayables() {
   const qc = useQueryClient();
   return React.useCallback(() => {
-    for (const k of ["pay-vendors", "pay-pos", "pay-invoices", "pay-runs", "pay-selfbilling", "pay-bankaccounts", "pay-wht", "pay-subs", "pay-disb", "pay-stalled", "pay-audit"]) {
+    for (const k of ["pay-runs", "pay-selfbilling", "pay-bankaccounts", "pay-wht", "pay-disb", "pay-stalled", "pay-audit"]) {
       qc.invalidateQueries({ queryKey: ["atelier-v5", k] });
     }
   }, [qc]);
@@ -1303,102 +1301,11 @@ export function FinancePayablesWht() {
 }
 
 // ------------------------------------------------------------
-// Subcontractors (pay-when-paid)
+// Subcontractors (pay-when-paid) — REMOVED (Task #1106)
 // ------------------------------------------------------------
-function invStatusTone(s: VendorInvoiceRow["status"]): "default" | "amber" | "green" | "red" {
-  if (s === "paid" || s === "approved_for_payment") return "green";
-  if (s === "exception" || s === "rejected") return "red";
-  if (s === "scheduled" || s === "matched" || s === "on_hold_pwp") return "amber";
-  return "default";
-}
-
-export function FinancePayablesSubcontractors() {
-  const { vendors, links } = useSubcontractors();
-  const invoices = usePayablesInvoices();
-  const heldUsd = invoices.filter((i) => i.status === "on_hold_pwp").reduce((n, i) => n + i.netPayableUsd, 0);
-  const releasable = invoices.filter((i) => i.status === "approved_for_payment" && i.subcontractorLinkId);
-  return (
-    <PayablesShell
-      eyebrow="Manage · Finance · Pay · Subcontractors"
-      headline="Subcontractor pay-when-paid"
-      lede="Subcontractor invoices are linked to a client AR receipt. Until that receipt is recorded the invoice sits on `on_hold_pwp` and is excluded from payment runs; once the AR receipt clears the invoice is released for the next run."
-    >
-      <div className="flex flex-wrap gap-2 text-xs font-mono">
-        <MonoChip>{vendors.length} subcontractor(s)</MonoChip>
-        <MonoChip tone="amber">{fmtUsd(heldUsd)} held (pay-when-paid)</MonoChip>
-        <MonoChip tone={releasable.length > 0 ? "green" : "default"}>{releasable.length} ready to release</MonoChip>
-      </div>
-      <Card className="p-4">
-        <Eyebrow>Pay-when-paid links</Eyebrow>
-        <table className="w-full mt-3 text-xs" data-testid="pwp-list">
-          <thead className="text-text-faint">
-            <tr><th className="text-left py-1">Subcontractor</th><th className="text-left">Engagement</th><th className="text-left">Milestone</th><th className="text-right">Day-rate USD</th><th className="text-left">Linked AR</th><th className="text-left">Receipt status</th><th className="text-right">Action</th></tr>
-          </thead>
-          <tbody>
-            {links.length === 0 && (
-              <tr className="border-t border-border-soft" data-testid="pwp-empty">
-                <td colSpan={7} className="py-3 text-center text-text-mute">No pay-when-paid links yet.</td>
-              </tr>
-            )}
-            {links.map((l) => {
-              const v = vendors.find((vv) => vv.id === l.vendorId);
-              return (
-                <PwpRow key={l.id} link={l} vendorName={v?.shortName ?? l.vendorId} />
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-      <Card className="p-4">
-        <Eyebrow>Held subcontractor invoices</Eyebrow>
-        <div className="mt-3 space-y-1.5 text-xs">
-          {invoices.filter((i) => i.subcontractorLinkId).length === 0 && (
-            <p className="py-2 text-center text-text-mute" data-testid="held-invoices-empty">No held subcontractor invoices.</p>
-          )}
-          {invoices.filter((i) => i.subcontractorLinkId).map((inv) => (
-            <div key={inv.id} className="flex items-center justify-between gap-2 border border-border-soft rounded px-2 py-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono">{inv.number}</span>
-                <MonoChip tone={invStatusTone(inv.status)}>{inv.status.replace(/_/g, " ")}</MonoChip>
-                <span className="text-text-mute">{inv.description}</span>
-              </div>
-              <span className="font-mono">{fmtUsd(inv.netPayableUsd)}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </PayablesShell>
-  );
-}
-
-function PwpRow({ link, vendorName }: { link: { id: string; engagementName: string; milestoneLabel: string; ratePerDayUsd: number; payWhenPaidArInvoiceId: string; arReceiptStatus: "open" | "received" | "partial"; arReceivedAt: string | null }; vendorName: string }) {
-  const { busy, error, run } = useMutate();
-  const onReceived = () => run(`r:${link.id}`, () => postJson(`/finance/payables/subcontractors/links/${link.id}/ar-receipt`, { status: "received" }));
-  return (
-    <>
-      <tr className="border-t border-border-soft" data-testid={`pwp-${link.id}`}>
-        <td className="py-1.5">{vendorName}</td>
-        <td>{link.engagementName}</td>
-        <td>{link.milestoneLabel}</td>
-        <td className="text-right font-mono">{fmtUsd(link.ratePerDayUsd)}</td>
-        <td className="font-mono">{link.payWhenPaidArInvoiceId}</td>
-        <td>
-          <MonoChip tone={link.arReceiptStatus === "received" ? "green" : link.arReceiptStatus === "partial" ? "amber" : "default"}>
-            {link.arReceiptStatus}{link.arReceivedAt ? ` · ${link.arReceivedAt}` : ""}
-          </MonoChip>
-        </td>
-        <td className="text-right">
-          {link.arReceiptStatus !== "received" && (
-            <Button size="sm" variant="outline" onClick={onReceived} disabled={!!busy} data-testid={`btn-ar-${link.id}`}>
-              {busy === `r:${link.id}` ? "…" : "Mark AR received"}
-            </Button>
-          )}
-        </td>
-      </tr>
-      {error && <tr><td colSpan={7} className="text-xs text-danger px-2">⚠ {error}</td></tr>}
-    </>
-  );
-}
+// The pay-when-paid surface had no backing data model (its endpoints were
+// live-but-empty stubs). Real invoices live in the Partner invoices,
+// Supplier invoices and Self-billing tabs.
 
 function AuditTrailPanel() {
   const audit = usePayablesAudit();
@@ -1461,7 +1368,6 @@ export const PAYABLES_TAB_GROUPS: ReadonlyArray<{
     tabs: [
       { id: "run-history", label: "Run history", href: "/finance/payables/run-history", blurb: "Settled and cancelled runs with signatures, remittance references, and audit trail." },
       { id: "wht", label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance." },
-      { id: "subcontractors", label: "Subcontractors", href: "/finance/payables/subcontractors", blurb: "Pay-when-paid links between subcontractor invoices and client AR receipts." },
     ],
   },
 ];

@@ -117,18 +117,13 @@ function writeGate(req: Request, res: Response): Me | null {
 // only if real procurement volume appears. (No OpenAPI spec entries
 // existed for those.)
 //
-// EXCEPTION: `/finance/payables/invoices` is NOT dead — it still backs the
-// live Subcontractors "pay-when-paid" surface (usePayablesInvoices in the
-// web app filters these for on_hold_pwp / subcontractor-linked holds).
-// It sits alongside the equally-live `/finance/payables/subcontractors`
-// stub; both return empty sets until the pay-when-paid feature is wired to
-// real data. It is retained (never a 404) so the surface renders cleanly.
+// Task #1106 — the `/finance/payables/invoices` and
+// `/finance/payables/subcontractors` stubs (both live-but-empty) were
+// removed together with the Subcontractors pay-when-paid web surface.
+// There is no vendor-invoice / PWP-link data model behind them; real
+// payables live in Partner invoices, Supplier invoices and Self-billing.
+// Revisit only if a genuine subcontractor pay-when-paid workflow appears.
 // ============================================================
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/invoices", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.json({ items: [] });
-});
 
 // ============================================================
 // Self-billed invoices (RCTI) — Task #430
@@ -918,21 +913,6 @@ router.post("/finance/payables/wht/:id/send", (req, res) => {
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/wht/:id/acknowledge", (req, res) => {
-  if (!writeGate(req, res)) return;
-  res.status(404).json({ error: "not-found" });
-});
-
-// ============================================================
-// Subcontractors
-// ============================================================
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/payables/subcontractors", (req, res) => {
-  if (!readGate(req, res)) return;
-  res.json({ vendors: [], links: [] });
-});
-
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/finance/payables/subcontractors/links/:id/ar-receipt", (req, res) => {
   if (!writeGate(req, res)) return;
   res.status(404).json({ error: "not-found" });
 });

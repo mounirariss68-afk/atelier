@@ -54,7 +54,7 @@ check("revrec_line without periodLabel degrades to the list page", () => {
 });
 
 check("contractor_payment stays on the list page (no per-row UI)", () =>
-  assert.equal(glSourceHref("contractor_payment", "cp_1"), "/finance/payables/subcontractors"));
+  assert.equal(glSourceHref("contractor_payment", "cp_1"), "/finance/payables/self-billing"));
 
 check("manual / unknown kinds → null (render as plain text)", () => {
   assert.equal(glSourceHref("manual", "x"), null);

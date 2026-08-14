@@ -71,7 +71,9 @@ import {
  * highlight. Revrec lines carry the source period so the page loads the
  * right month's schedules (posting-line ids aren't rendered client-side).
  * Contractor payments stay on the list page: paid contractor-payment rows
- * have no per-row UI (they surface as self-billed invoices downstream).
+ * have no per-row UI (they surface as self-billed invoices downstream), so
+ * they deep-link to the Self-billing tab (the pay-when-paid Subcontractors
+ * page was removed in Task #1106).
  */
 export function glSourceHref(
   sourceKind: string,
@@ -88,7 +90,7 @@ export function glSourceHref(
         : "/wallet/revrec";
     case "self_billed_invoice": return `/finance/payables/self-billing?focus=${ref}`;
     case "partner_firm_invoice": return `/finance/payables/partner-invoices?focus=${ref}`;
-    case "contractor_payment": return "/finance/payables/subcontractors";
+    case "contractor_payment": return "/finance/payables/self-billing";
     case "bank_transaction": return `/wallet/cash?txn=${ref}`;
     default: return null; // manual, unknown kinds
   }
