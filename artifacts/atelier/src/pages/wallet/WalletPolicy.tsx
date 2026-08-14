@@ -1,6 +1,6 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 
 interface Rule {
   id: string;
@@ -70,14 +70,7 @@ export default function WalletPolicy() {
           lede="Caps, hard blocks, and approval thresholds — keep the firm clean."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "cards", label: "Cards", href: "/wallet/cards" },
-        { id: "policy", label: "Policy", href: "/wallet/policy" },
-        { id: "vat", label: "VAT register", href: "/wallet/vat" },
-      ]}
-      />
+      <WalletTabs group="main" />
       <div className="px-6 py-4 max-w-6xl mx-auto space-y-3">
         <div className="flex justify-between items-center">
           <p className="text-sm text-text-mute">{rules.length} rules · most-specific (role + country) wins.</p>

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 
 interface AgedRow {
   invoice: { id: string; invoiceNumber: string | null; jurisdiction: string; billTo: { name?: string }; currency: string; total: number; amountPaid: number };
@@ -62,14 +62,7 @@ export default function WalletCollections() {
           lede="The dunning ladder runs per jurisdiction. Each step needs a real human nudge, and (after step one) a partner approver."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "invoices", label: "Invoices", href: "/wallet/invoices" },
-        { id: "ar", label: "AR aging", href: "/wallet/ar" },
-        { id: "collections", label: "Collections", href: "/wallet/collections" },
-      ]}
-      />
+      <WalletTabs group="main" />
 
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         {rows.length === 0 ? (

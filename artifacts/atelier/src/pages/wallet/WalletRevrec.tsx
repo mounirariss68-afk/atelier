@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -211,14 +211,7 @@ export default function WalletRevrec() {
           lede="Schedules, period postings, and lock state for ASC 606 / IFRS 15 revenue recognition."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "revrec", label: "Rev-rec", href: "/wallet/revrec" },
-        { id: "wip", label: "WIP", href: "/wallet/wip" },
-        { id: "margin", label: "Margin & leakage", href: "/wallet/margin" },
-      ]}
-      />
+      <WalletTabs group="revrec" />
 
       <div className="px-6 py-4 max-w-7xl mx-auto">
       {missing && (

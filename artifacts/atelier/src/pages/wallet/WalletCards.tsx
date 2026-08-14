@@ -1,6 +1,6 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 
 interface CorporateCard {
   id: string;
@@ -33,13 +33,7 @@ export default function WalletCards() {
           lede="Card-feed lines auto-flow into expense drafts; reconciled at submit."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "expenses-new", label: "+ New expense", href: "/wallet/expenses/new" },
-        { id: "cards", label: "Cards", href: "/wallet/cards" },
-      ]}
-      />
+      <WalletTabs group="main" />
       <div className="px-6 py-4 max-w-5xl mx-auto">
         {loading && <div className="text-text-mute">Loading…</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card, PillButton, MonoChip } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 
 interface ForecastWeek {
   weekIndex: number;
@@ -81,14 +81,7 @@ export default function WalletTreasury() {
           </PillButton>
         </div>
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "cash", label: "Cash", href: "/wallet/cash" },
-        { id: "cash-recon", label: "Bank reconciliation", href: "/wallet/cash/recon" },
-        { id: "treasury", label: "Treasury", href: "/wallet/treasury" },
-        { id: "ar", label: "AR aging", href: "/wallet/ar" },
-      ]}
-      />
+      <WalletTabs group="cash" />
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         {wc && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="working-capital-cards">

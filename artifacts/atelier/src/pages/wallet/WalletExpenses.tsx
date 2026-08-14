@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { RecordCard } from "@/components/ui/record-card";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 
 interface Expense {
   id: string;
@@ -192,18 +192,7 @@ export default function WalletExpenses() {
           lede="Every expense policy-checked, VAT-handled, traceable to the client."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "invoices", label: "Invoices", href: "/wallet/invoices" },
-        { id: "ar", label: "AR aging", href: "/wallet/ar" },
-        { id: "collections", label: "Collections", href: "/wallet/collections" },
-        { id: "expenses-new", label: "+ New expense", href: "/wallet/expenses/new" },
-        { id: "cards", label: "Cards", href: "/wallet/cards" },
-        { id: "policy", label: "Policy", href: "/wallet/policy", hidden: !isLeader },
-        { id: "vat", label: "VAT register", href: "/wallet/vat", hidden: !isLeader },
-      ]}
-      />
+      <WalletTabs group="main" />
 
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono">

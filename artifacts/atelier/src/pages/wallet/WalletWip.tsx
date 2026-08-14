@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
-import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { WalletTabs } from "./walletTabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,14 +60,7 @@ export default function WalletWip() {
           lede="Unbilled WIP, recognised vs invoiced revenue, and per-engagement WIP snapshots."
         />
       </PageHero>
-      <SubSectionTabs
-        tabs={[
-        { id: "expenses", label: "Expenses", href: "/wallet" },
-        { id: "revrec", label: "Rev-rec", href: "/wallet/revrec" },
-        { id: "wip", label: "WIP", href: "/wallet/wip" },
-        { id: "margin", label: "Margin & leakage", href: "/wallet/margin" },
-      ]}
-      />
+      <WalletTabs group="revrec" />
 
       <div className="px-6 py-4 max-w-7xl mx-auto">
       {latest && (
