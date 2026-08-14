@@ -72,6 +72,19 @@ app.listen(port, (err) => {
     })().catch((err) => {
       logger.error({ err }, "Background-job boot sweep failed");
     });
+    // Task #1118 — a restart can kill an in-flight Billing Orchestrator run
+    // whose completion re-scan would have picked up milestones marked
+    // invoiceable while it ran. Recover them now (after the sweep above has
+    // freed any orphaned lock) so they still draft today, not tomorrow.
+    await (async () => {
+      const { recoverMissedBillingMilestoneEvents } = await import(
+        "./lib/atelier-agents/billingOrchestratorJobs"
+      );
+      const n = await recoverMissedBillingMilestoneEvents();
+      if (n > 0) logger.info({ launched: n }, "Recovered missed milestone-event billing runs");
+    })().catch((err) => {
+      logger.error({ err }, "Milestone-event billing recovery failed");
+    });
     // Task #1046 — agent runs (atelier_agent_runs) are plain in-process
     // promises too: rows left "running" by a dead process showed in the
     // Background Work bell forever and blocked relaunch guards.

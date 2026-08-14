@@ -74,6 +74,7 @@
 - [Atelier self-only shell gating](atelier-selfonly-shell-gating.md) — guard holds org routes unmounted until /me loads; app-wide dialogs gate queries on open; polls/tabs gated on role or employees 403-flood.
 - [RN sheet → picker deferral](rn-sheet-picker-defer.md) — never timer-race native pickers after Modal close; defer via onDismiss + single-flight runExclusivePick or expo-document-picker wedges.
 - [Atelier pricing structures](atelier-pricing-structures.md) — risk-adjusted blend is 0.2/0.6/0.2; agent run status is "complete"; opp direct seeds need slug/lead/hypothesis/etc.
+- [Durable deferred-retry for locked runs](billing-event-rescan.md) — skipped event launches need a durable, CAS-acked pending signal consumed on completion/failure/boot; never in-memory timers or timestamp windows.
 - [Billing trigger draft concurrency](billing-trigger-concurrency.md) — invoice-from-trigger paths must FOR UPDATE-claim the trigger row in a tx; overlapping runs otherwise draft duplicates.
 - [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, guarded on title IS NULL; stub probes see an extra title call.
 - [Chat timesheet tools](atelier-chat-timesheet.md) — chat timesheet writes resolve roster person + ISO week server-side (never model ids) and recompute week totals; current-week fixtures must use isoWeekOf, not hardcoded week labels.
