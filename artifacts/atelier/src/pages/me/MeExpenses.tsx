@@ -724,9 +724,13 @@ export default function MeExpenses() {
     }
   };
 
+  // Task #1069 — post-submit copy: a submitted claim awaits approval and
+  // does not count in finance reports until it is approved.
+  const [submitNote, setSubmitNote] = React.useState<string | null>(null);
   const submit = async (id: string, overrideRationale?: string) => {
     setBusy(true);
     setError(null);
+    setSubmitNote(null);
     try {
       const r = await fetch(`${API}/expenses/${id}/submit`, {
         method: "POST",
@@ -759,6 +763,9 @@ export default function MeExpenses() {
       }
       setAmberFor(null);
       setRationale("");
+      setSubmitNote(
+        "Claim submitted — it's now awaiting approval. It will count in finance reports (and be paid out) only after an approver signs it off.",
+      );
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -864,6 +871,14 @@ export default function MeExpenses() {
         <ExpenseCharts claims={claims} displayCurrency={displayCurrency} />
       )}
 
+      {submitNote && (
+        <Card
+          className="border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-200"
+          data-testid="expense-submit-note"
+        >
+          {submitNote}
+        </Card>
+      )}
       {error && (
         <Card className="border-red-500/40 bg-red-500/5 p-3 text-sm text-red-300">{error}</Card>
       )}

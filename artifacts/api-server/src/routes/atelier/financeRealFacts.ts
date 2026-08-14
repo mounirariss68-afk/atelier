@@ -163,6 +163,10 @@ export interface FinanceFacts {
   balances: FactBalances;
   /** balances as-of each month end, "YYYY-MM" → snapshot (last 24 months). */
   balancesByMonth: Record<string, FactBalances>;
+  /** Submitted-but-unapproved expense spend, "YYYY-MM" → USD (Task #1069).
+   *  Correctly EXCLUDED from monthly facts — surfaced separately so
+   *  pending spend is never invisible on facts-driven reports. */
+  pendingByMonth: Record<string, number>;
 }
 
 // ─────────────────────── helpers ───────────────────────
@@ -248,11 +252,14 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
   const now = new Date();
   const today = isoDay(now);
 
-  const [invoices, expenses, employees, contractorPayments, opportunities, engagements, budgets, ctds, milestones] =
+  const [invoices, expenses, submittedExpenses, employees, contractorPayments, opportunities, engagements, budgets, ctds, milestones] =
     await Promise.all([
       db.select().from(atelierInvoice).where(and(eq(atelierInvoice.orgId, orgId), isNull(atelierInvoice.deletedAt))),
       db.select().from(atelierExpenses)
         .where(and(eq(atelierExpenses.orgId, orgId), isNull(atelierExpenses.deletedAt), inArray(atelierExpenses.status, ["approved", "reimbursed"]))),
+      // Task #1069 — pending (submitted) claims, reported separately.
+      db.select().from(atelierExpenses)
+        .where(and(eq(atelierExpenses.orgId, orgId), isNull(atelierExpenses.deletedAt), eq(atelierExpenses.status, "submitted"))),
       db.select().from(atelierEmployees).where(and(eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt), eq(atelierEmployees.status, "active"))),
       db.select().from(atelierContractorPayments).where(and(eq(atelierContractorPayments.orgId, orgId), isNull(atelierContractorPayments.deletedAt))),
       db.select().from(atelierOpportunities).where(and(eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt), inArray(atelierOpportunities.salesStage, OPEN_STAGES))),
@@ -586,6 +593,14 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
   for (const k of monthKeys) balancesByMonth[k] = balancesAsOf(endOfMonthIso(k));
   const balances = balancesAsOf(today);
 
+  // ── Pending (submitted) expense spend per expense-date month ──
+  const pendingByMonth: Record<string, number> = {};
+  for (const ex of submittedExpenses) {
+    const k = monthKeyFromIso(ex.expenseDate);
+    if (!k || (ex.usdAmount ?? 0) <= 0) continue;
+    pendingByMonth[k] = (pendingByMonth[k] ?? 0) + (ex.usdAmount ?? 0);
+  }
+
   return {
     loadedAt: now.toISOString(),
     receipts,
@@ -600,5 +615,6 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
     cube,
     balances,
     balancesByMonth,
+    pendingByMonth,
   };
 }

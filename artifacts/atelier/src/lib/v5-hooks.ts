@@ -1027,6 +1027,16 @@ export interface PnlResp {
   consolidated: { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines } | null;
   eliminations: ReportEliminations | null;
   variance: PnlVariance | null; commentary: string[];
+  // Task #1069 — GL-presence signals so empty periods are never bare zeros.
+  glJournals?: {
+    entitiesRegistered: boolean;
+    anyJournalsInScope: boolean;
+    missingPeriods: string[];
+    entitiesWithoutJournals: string[];
+    missingByEntity: Record<string, string[]>;
+    unpostedActivity: { revenueUsd: number; costUsd: number; netUsd: number } | null;
+  } | null;
+  pendingApprovalUsd?: number;
   preliminary?: boolean; closedPeriods?: string[];
 }
 export interface BsResp {

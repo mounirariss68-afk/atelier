@@ -22,6 +22,11 @@ import {
   zeroStocks,
   type GlAggRow,
 } from "../../src/routes/atelier/financeGlStatements";
+import {
+  computeGlPresence,
+  sumUnpostedActivity,
+  sumPendingApproval,
+} from "../../src/routes/atelier/financeReportSignals";
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +160,60 @@ check("DPO 30d", near(wc.dpo ?? -1, 30), `got ${wc.dpo}`);
 check("lockup 40d", near(wc.lockupDays ?? -1, 40), `got ${wc.lockupDays}`);
 const wcZero = computeWorkingCapital({ ar: 10, wip: 0, ap: 5, revenue: 0, spend: 0, days: 30 });
 check("zero revenue → null day metrics", wcZero.dso === null && wcZero.wipDays === null && wcZero.dpo === null && wcZero.lockupDays === null);
+
+// ── 7. Silent-zero signals (Task #1069) ──────────────────────
+console.log("gl presence / unposted / pending signals");
+{
+  // Entity registered + EMPTY GL → notice signal present for every period.
+  const empty = computeGlPresence({}, ["ent_dxb"], ["2026-06", "2026-07"]);
+  check("empty GL → no journals in scope", !empty.anyJournalsInScope);
+  check("empty GL → all periods missing", empty.missingPeriods.join(",") === "2026-06,2026-07");
+  check("empty GL → entity flagged", empty.entitiesWithoutJournals.join(",") === "ent_dxb");
+
+  // Journals posted → notice gone for covered periods.
+  const withJournals = computeGlPresence(stmts, [E], ["2026-06", "2026-07"]);
+  check("posted GL → journals in scope", withJournals.anyJournalsInScope);
+  check("posted GL → no missing periods", withJournals.missingPeriods.length === 0);
+  check("posted GL → entity not flagged", withJournals.entitiesWithoutJournals.length === 0);
+
+  // Mixed scope (like a YTD/R12 view): journals in some months only —
+  // the un-posted months must still be flagged, per entity too.
+  const partial = computeGlPresence(stmts, [E], ["2026-07", "2026-08"]);
+  check("partial GL → Aug missing only", partial.missingPeriods.join(",") === "2026-08");
+  check("partial GL → still counts as journals in scope", partial.anyJournalsInScope);
+  check("partial GL → entity NOT in fully-absent list", partial.entitiesWithoutJournals.length === 0);
+  check("partial GL → per-entity missing months exposed", partial.missingByEntity[E]?.join(",") === "2026-08");
+  const emptyPer = computeGlPresence({}, ["ent_dxb"], ["2026-06", "2026-07"]);
+  check("empty GL → per-entity missing = all periods", emptyPer.missingByEntity["ent_dxb"].join(",") === "2026-06,2026-07");
+
+  // Mixed scope: unposted hint computed over ONLY the missing months, so
+  // posted months don't dilute or suppress the explanation.
+  const mixedMonthly = {
+    "2026-07": { revenueUsd: 0, directCostUsd: 0, payrollUsd: 0, opexUsd: 900 },
+    "2026-08": { revenueUsd: 0, directCostUsd: 0, payrollUsd: 0, opexUsd: 1514 },
+  };
+  const mixedHint = sumUnpostedActivity(mixedMonthly, partial.missingPeriods);
+  check("mixed scope → hint covers only unposted months", mixedHint.costUsd === 1514);
+
+  // Unposted-activity hint: facts-derived totals over the scope.
+  // Approved expense appears in its expense-date month.
+  const monthly = {
+    "2026-07": { revenueUsd: 0, directCostUsd: 0, payrollUsd: 0, opexUsd: 1514 },
+    "2026-06": { revenueUsd: 5000, directCostUsd: 1000, payrollUsd: 2000, opexUsd: 500 },
+  };
+  const julyOnly = sumUnpostedActivity(monthly, ["2026-07"]);
+  check("July approved spend surfaces as unposted cost", julyOnly.costUsd === 1514 && julyOnly.revenueUsd === 0);
+  check("July unposted net", julyOnly.netUsd === -1514);
+  const both = sumUnpostedActivity(monthly, ["2026-06", "2026-07"]);
+  check("scope sums revenue + all cost buckets", both.revenueUsd === 5000 && both.costUsd === 5014);
+  check("months outside scope excluded", sumUnpostedActivity(monthly, ["2026-05"]).costUsd === 0);
+
+  // Pending-approval spend reported separately per period.
+  const pending = { "2026-07": 321.4, "2026-06": 100 };
+  check("pending sums in scope", sumPendingApproval(pending, ["2026-07"]) === 321);
+  check("pending across periods", sumPendingApproval(pending, ["2026-06", "2026-07"]) === 421);
+  check("no pending → zero", sumPendingApproval({}, ["2026-07"]) === 0);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

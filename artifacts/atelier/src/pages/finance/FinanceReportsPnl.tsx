@@ -3,6 +3,7 @@
  * budget / forecast / prior year and auto-commentary (Task #417, Wave 5).
  */
 import * as React from "react";
+import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import {
   useFinanceReportsPeriods, useFinanceReportsPnl,
@@ -57,6 +58,45 @@ export default function FinanceReportsPnl() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-6">
+        {/* Task #1069 — explain empty GL instead of showing silent zeros. */}
+        {data?.glJournals && data.glJournals.missingPeriods.length > 0 && (
+          <Card className="p-4 border-amber-500/40 bg-amber-500/5" data-testid="pnl-missing-journals-notice">
+            <div className="text-sm text-amber-300 font-semibold">
+              No journals posted for {data.glJournals.missingPeriods.join(", ")}
+            </div>
+            <p className="text-sm text-text-mute mt-1">
+              Entity P&amp;L figures come only from the posted general ledger, so{" "}
+              {data.glJournals.anyJournalsInScope
+                ? "these months contribute zero to this report"
+                : "this report shows zeros"}{" "}
+              until journals are posted.{" "}
+              <Link href="/finance/ledger" className="text-gold underline">
+                Run the Bookkeeper in Finance → Ledger
+              </Link>{" "}
+              to post them.
+            </p>
+            {data.glJournals.unpostedActivity &&
+              (data.glJournals.unpostedActivity.revenueUsd !== 0 ||
+                data.glJournals.unpostedActivity.costUsd !== 0) && (
+                <p className="text-sm text-text mt-2" data-testid="pnl-unposted-hint">
+                  Not yet posted: USD {data.glJournals.unpostedActivity.revenueUsd.toLocaleString()} revenue ·
+                  USD {data.glJournals.unpostedActivity.costUsd.toLocaleString()} costs of approved activity
+                  (net USD {data.glJournals.unpostedActivity.netUsd.toLocaleString()}). Posted GL remains the
+                  accounting source of truth.
+                </p>
+              )}
+          </Card>
+        )}
+        {(data?.pendingApprovalUsd ?? 0) > 0 && (
+          <Card className="p-4 border-border" data-testid="pnl-pending-approval-line">
+            <p className="text-sm text-text-mute">
+              <MonoChip tone="gold">awaiting approval</MonoChip>{" "}
+              USD {(data?.pendingApprovalUsd ?? 0).toLocaleString()} of submitted expenses are awaiting
+              approval and are <span className="text-text">not included</span> in this P&amp;L.{" "}
+              <Link href="/wallet" className="text-gold underline">Review in Wallet → Expenses</Link>.
+            </p>
+          </Card>
+        )}
         {data?.commentary && data.commentary.length > 0 && (
           <Card className="p-4">
             <div className="text-xs font-mono uppercase tracking-widest text-text-faint mb-2">Auto commentary</div>
@@ -132,7 +172,16 @@ export default function FinanceReportsPnl() {
               <tbody>
                 {data.perEntity.map((e) => (
                   <tr key={e.entityId} className="border-b border-border-soft/40">
-                    <td className="py-1.5">{e.entityName}</td>
+                    <td className="py-1.5">
+                      {e.entityName}
+                      {data.glJournals?.entitiesWithoutJournals.includes(e.entityId) ? (
+                        <MonoChip tone="amber" className="ml-2">no journals posted</MonoChip>
+                      ) : (data.glJournals?.missingByEntity?.[e.entityId]?.length ?? 0) > 0 ? (
+                        <MonoChip tone="amber" className="ml-2">
+                          no journals: {data.glJournals!.missingByEntity[e.entityId].join(", ")}
+                        </MonoChip>
+                      ) : null}
+                    </td>
                     <td className="py-1.5 text-right tabular-nums">{fmtMoney(e.actual.netRevenue, filters.currency)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fmtMoney(e.actual.grossProfit, filters.currency)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fmtMoney(e.actual.ebitda, filters.currency)}</td>

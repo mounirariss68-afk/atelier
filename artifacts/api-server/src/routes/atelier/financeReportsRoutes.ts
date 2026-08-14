@@ -47,6 +47,13 @@ import {
   type GlBsStocks,
   type GlPnlFlows,
 } from "./financeGlStatements";
+import {
+  computeGlPresence,
+  sumUnpostedActivity,
+  sumPendingApproval,
+  type GlPresence,
+  type UnpostedActivity,
+} from "./financeReportSignals";
 import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
@@ -85,9 +92,10 @@ function denyRecruiter(me: Me, res: Response): boolean {
 // ──────────────────────────────────────────────────────────────
 // Anchor = the real current month, so reports always cover the trailing
 // 12 months ending today (Task #177 — no hard-coded demo clock).
-const NOW = new Date();
-const ANCHOR_YEAR = NOW.getUTCFullYear();
-const ANCHOR_MONTH = NOW.getUTCMonth() + 1;
+// Task #1069 — the anchor is refreshed per request (refreshPeriods) so the
+// list survives long-running servers rolling over a month boundary.
+let ANCHOR_YEAR = 0;
+let ANCHOR_MONTH = 0;
 
 function pad2(n: number): string { return n < 10 ? `0${n}` : `${n}`; }
 function periodIso(y: number, m: number): string { return `${y}-${pad2(m)}`; }
@@ -104,15 +112,28 @@ function monthLabel(y: number, m: number): string {
 }
 
 interface Period { id: string; year: number; month: number; label: string; endsOn: string }
-const PERIODS: Period[] = (() => {
+let PERIODS: Period[] = [];
+let CURRENT_PERIOD: Period = { id: "", year: 0, month: 0, label: "", endsOn: "" };
+
+/** Rebuild the trailing-12-month period list when the real current month
+ *  has moved past the anchor (or on first use). Called at the top of
+ *  every report request (Task #1069 — no stale module-load clock). */
+function refreshPeriods(): void {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth() + 1;
+  if (y === ANCHOR_YEAR && m === ANCHOR_MONTH && PERIODS.length > 0) return;
+  ANCHOR_YEAR = y;
+  ANCHOR_MONTH = m;
   const out: Period[] = [];
   for (let i = 11; i >= 0; i--) {
-    const { y, m } = addMonths(ANCHOR_YEAR, ANCHOR_MONTH, -i);
-    out.push({ id: periodIso(y, m), year: y, month: m, label: monthLabel(y, m), endsOn: endOfMonth(y, m) });
+    const { y: py, m: pm } = addMonths(ANCHOR_YEAR, ANCHOR_MONTH, -i);
+    out.push({ id: periodIso(py, pm), year: py, month: pm, label: monthLabel(py, pm), endsOn: endOfMonth(py, pm) });
   }
-  return out;
-})();
-const CURRENT_PERIOD = PERIODS[PERIODS.length - 1];
+  PERIODS = out;
+  CURRENT_PERIOD = PERIODS[PERIODS.length - 1];
+}
+refreshPeriods();
 const PRIOR_YEAR_OFFSET = 12;
 
 function periodById(id: string): Period | null {
@@ -202,6 +223,7 @@ async function loadCommittedBudget(): Promise<typeof BUDGET> {
 }
 
 async function ensureFacts(orgId: string): Promise<void> {
+  refreshPeriods();
   [FACTS, REG_ENTITIES] = await Promise.all([
     loadFinanceFacts(orgId),
     listFinanceEntities(orgId),
@@ -645,6 +667,7 @@ function buildCube(_scopePeriods: Period[]): CubeRow[] {
 router.get("/finance/reports/periods", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  refreshPeriods();
   res.json({ periods: PERIODS, current: CURRENT_PERIOD });
 });
 
@@ -777,10 +800,29 @@ router.get("/finance/reports/pnl", async (req, res) => {
   const v = headRow ? buildPnlVariance(headRow.actual, headRow.budget, headRow.forecast, headRow.priorYear) : null;
   const commentary = v ? buildPnlCommentary(v) : [];
 
+  // Task #1069 — never show an unexplained zero. When legal entities are
+  // registered the P&L is GL-only, so flag periods with no posted
+  // journals, and (on the consolidated view) surface the facts-derived
+  // figure as an unposted-activity hint. Submitted-but-unapproved
+  // expense spend is reported separately as pending approval.
+  const periodIds = periods.map((p) => p.id);
+  let glJournals: (GlPresence & { unpostedActivity: UnpostedActivity | null }) | null = null;
+  if (REG_ENTITIES.length > 0) {
+    const presence = computeGlPresence(GLSTMT?.byEntity ?? {}, ents.map((e) => e.id), periodIds);
+    // Facts-derived hint over exactly the GL-empty months, so a partly
+    // posted scope still explains what's missing from the unposted months.
+    const unposted = presence.missingPeriods.length > 0 && consolidated
+      ? sumUnpostedActivity(FACTS?.monthly ?? {}, presence.missingPeriods)
+      : null;
+    glJournals = { ...presence, unpostedActivity: unposted };
+  }
+  const pendingApprovalUsd = sumPendingApproval(FACTS?.pendingByMonth ?? {}, periodIds);
+
   res.json({
     period: period.id, scope, currency, entity: entity ?? null, periodsCovered: periods.map((p) => p.id),
     perEntity, consolidated: consolidatedRow, eliminations: elims ? convertElims(elims, currency, period) : null,
     variance: v, commentary,
+    glJournals, pendingApprovalUsd,
     ...preliminaryInfo(periods),
   });
 });

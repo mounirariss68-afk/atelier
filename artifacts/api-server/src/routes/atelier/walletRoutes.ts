@@ -58,6 +58,7 @@ import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-pol
 import { assertAuditAction } from "./auditContract.js";
 // Task #53 — Me-home notification cards on expense status changes.
 import { emitSelfNotification } from "./meRoutes";
+import { invalidateFinanceFacts } from "./financeRealFacts";
 import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
 import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
@@ -1254,6 +1255,9 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
   // Task #501 — every submitted claim lands in both founders' queues.
   await notifyFoundersOfSubmittedExpense(expense);
 
+  // Task #1069 — pending-approval totals on finance surfaces refresh promptly.
+  invalidateFinanceFacts();
+
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, expense.id));
   res.json({ expense: expenseToWire(final, me) });
 });
@@ -1356,6 +1360,7 @@ export async function autoApproveTimesheetExpenses(
   for (const engId of touchedEngagements) {
     await checkEngagementExpenseBudget(engId);
   }
+  if (approved > 0) invalidateFinanceFacts(); // Task #1069 — auto-approved spend surfaces promptly.
   return { approved, skipped };
 }
 
@@ -1485,6 +1490,10 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     href: "/me",
   });
 
+  // Task #1069 — newly approved spend must appear promptly on facts-driven
+  // finance surfaces (P&L, plan, reports).
+  invalidateFinanceFacts();
+
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });
 });
@@ -1542,6 +1551,8 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
     body: `${existing.merchant ?? existing.id} — ${existing.currency} ${existing.amount.toFixed(2)} was rejected: ${reason}`,
     href: "/me",
   });
+
+  invalidateFinanceFacts(); // Task #1069 — drop pending-approval totals promptly.
 
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });
@@ -1611,6 +1622,7 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
     body: `${existing.merchant ?? existing.id} — ${existing.currency} ${existing.amount.toFixed(2)} has been paid out.`,
     href: "/me",
   });
+  invalidateFinanceFacts(); // Task #1069 — refresh cash/AP facts promptly.
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });
 });

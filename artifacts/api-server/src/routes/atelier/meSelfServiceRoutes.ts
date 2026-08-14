@@ -130,6 +130,7 @@ import {
   loadHolidayOverrideRows,
   toHolidayOverrides,
 } from "../../lib/atelierHolidayOverrides.js";
+import { invalidateFinanceFacts } from "./financeRealFacts";
 
 const router: IRouter = Router();
 
@@ -2542,6 +2543,8 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
     });
     // Task #501 — every submitted claim lands in both founders' queues.
     await notifyFoundersOfSubmittedExpense(updated);
+    // Task #1069 — pending-approval totals on finance surfaces refresh promptly.
+    invalidateFinanceFacts();
     res.json({ expense: claimToWire(updated) });
   } catch (err) {
     next(err);
