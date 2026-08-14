@@ -6,7 +6,7 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import {
   db, atelierLegalEntities, atelierGlAccount, atelierGlJournalEntry,
-  atelierGlJournalLine, atelierInvoice, atelierVatRegister,
+  atelierGlJournalLine, atelierInvoice, atelierVatRegister, atelierExpenses,
 } from "@workspace/db";
 import { computeVat201, collectGlVat, monthsOfVatPeriod, resolveEmirateBox } from "../src/lib/atelier-vat201.js";
 
@@ -23,6 +23,7 @@ async function cleanup() {
   await db.delete(atelierGlAccount).where(like(atelierGlAccount.id, `${P}%`));
   await db.delete(atelierInvoice).where(like(atelierInvoice.id, `${P}%`));
   await db.delete(atelierVatRegister).where(like(atelierVatRegister.id, `${P}%`));
+  await db.delete(atelierExpenses).where(like(atelierExpenses.id, `${P}%`));
   await db.delete(atelierLegalEntities).where(eq(atelierLegalEntities.id, ENT));
 }
 
@@ -104,6 +105,51 @@ async function main() {
     id: `${P}_lman`, orgId: ORG, journalEntryId: `${P}_jman`, accountId: accOut, accountCode: "2300", accountName: "VAT payable (output)", debit: 0, credit: 40,
   } as typeof atelierGlJournalLine.$inferInsert);
 
+  // ── Task #1114 — classified reverse-charge / import / exempt fixtures ──
+  // Exempt supply: domestic 0% invoice explicitly classified → box 5 (not unclassified).
+  await db.insert(atelierInvoice).values({
+    id: `${P}_invex`, orgId: ORG, legalEntityId: ENT, jurisdiction: "AE", invoiceNumber: "INV-P-004",
+    currency: "AED", status: "issued", billTo: { name: "Exempt Co" },
+    subtotal: 1200, vatAmount: 0, vatRatePct: 0, total: 1200,
+    issuedAt: new Date("2026-07-19T00:00:00Z"),
+    vatClassification: "exempt_supply",
+  });
+  // Classified expenses (register rows tagged) allocated to this entity.
+  const clsFixtures: Array<[string, string, number]> = [
+    [`${P}_exprc`, "reverse_charge_import", 1000], // box 3
+    [`${P}_expgi`, "goods_import", 400],           // box 6
+    [`${P}_expadj`, "import_adjustment", -100],    // box 7 (correction-style)
+  ];
+  for (const [expId, cls, net] of clsFixtures) {
+    await db.insert(atelierExpenses).values({
+      id: expId, orgId: ORG, personId: "u_amina", expenseDate: "2026-07-21",
+      captureSource: "manual", merchant: `Foreign ${cls}`, category: "other",
+      amount: net, currency: "AED", usdAmount: net / 3.6725, status: "approved",
+      contextType: "internal", entityId: ENT,
+    } as typeof atelierExpenses.$inferInsert);
+    await db.insert(atelierVatRegister).values({
+      id: `${P}_reg_${cls}`, orgId: ORG, expenseId: expId, expenseDate: "2026-07-21",
+      country: "UAE", countryCode: "AE", treatment: "none", rate: 0,
+      netAmount: net, vatAmount: 0, grossAmount: net, currency: "AED",
+      usdNet: net / 3.6725, usdVat: 0, usdGross: net / 3.6725,
+      merchant: `Foreign ${cls}`, summary: cls, vatClassification: cls,
+    });
+  }
+  // Classified register row for an expense allocated to ANOTHER entity — must be excluded.
+  await db.insert(atelierExpenses).values({
+    id: `${P}_expother`, orgId: ORG, personId: "u_amina", expenseDate: "2026-07-21",
+    captureSource: "manual", merchant: "Other-entity import", category: "other",
+    amount: 999, currency: "AED", usdAmount: 999 / 3.6725, status: "approved",
+    contextType: "internal", entityId: "some_other_entity",
+  } as typeof atelierExpenses.$inferInsert);
+  await db.insert(atelierVatRegister).values({
+    id: `${P}_reg_other`, orgId: ORG, expenseId: `${P}_expother`, expenseDate: "2026-07-21",
+    country: "UAE", countryCode: "AE", treatment: "none", rate: 0,
+    netAmount: 999, vatAmount: 0, grossAmount: 999, currency: "AED",
+    usdNet: 999 / 3.6725, usdVat: 0, usdGross: 999 / 3.6725,
+    merchant: "Other-entity import", summary: "other entity", vatClassification: "goods_import",
+  });
+
   const months = monthsOfVatPeriod(PERIOD)!;
   const [ent] = await db.select().from(atelierLegalEntities).where(eq(atelierLegalEntities.id, ENT));
   const emirate = resolveEmirateBox(ent);
@@ -138,11 +184,25 @@ async function main() {
   if (sap.vatCurrency !== "USD" || !sap.vatFxChain.includes("USD → AED")) fail(`USD VAT mislabeled: ${JSON.stringify(sap)}`);
   // EUR 95.24 → USD ≈ 103.52 → AED ≈ 380.2 (fallbacks 0.92, 3.6725)
   if (Math.abs(sap.netAed - (95.24 / 0.92) * 3.6725) > 8) fail(`EUR net AED conversion off: ${sap.netAed}`);
+  // ── Task #1114 — classified reverse-charge / import / exempt boxes ──
+  const b3 = bx("3"), b5 = bx("5"), b6 = bx("6"), b7 = bx("7"), b10 = bx("10");
+  if (b3.lines.length !== 1 || b3.netAed !== 1000 || b3.vatAed !== 50) fail(`box 3 wrong: ${JSON.stringify(b3)}`);
+  if (b5.lines.length !== 1 || b5.netAed !== 1200 || b5.vatAed !== 0) fail(`box 5 wrong: ${JSON.stringify(b5)}`);
+  if (b6.lines.length !== 1 || b6.netAed !== 400 || b6.vatAed !== 20) fail(`box 6 wrong: ${JSON.stringify(b6)}`);
+  if (b7.lines.length !== 1 || b7.netAed !== -100 || b7.vatAed !== -5) fail(`box 7 wrong: ${JSON.stringify(b7)}`);
+  if (b10.lines.length !== 3 || Math.abs(b10.vatAed - 65) > 0.01) fail(`box 10 wrong: ${JSON.stringify(b10)}`);
+  if (b10.lines.some((l) => l.description.includes("Other-entity"))) fail("other-entity classified expense leaked in");
+  if (b3.note || b5.note || b6.note || b7.note || b10.note) fail("data-gap note still shown on populated classified boxes");
+  if (!bx("2").note) fail("box 2 lost its data-gap note");
+  if (rep.unclassified.some((l) => l.ref === "INV-P-004")) fail("classified exempt invoice still listed unclassified");
+  if (Math.abs(bx("11").vatAed - (rep.glTieBack.inputVatAed + 65)) > 0.01) fail("box 11 != box 9 + box 10");
   if (rep.totals.box12VatAed !== bx("8").vatAed) fail("box 12 != box 8 VAT");
   if (Math.abs(rep.totals.box14NetAed - (rep.totals.box12VatAed - rep.totals.box13VatAed)) > 0.01) fail("box 14 arithmetic");
-  if (rep.glTieBack.outputVatAed !== rep.totals.box12VatAed) fail("tie-back output != box 12");
+  // Self-assessed RC VAT (65) sits in boxes 12 AND 13 but not on the GL VAT accounts.
+  if (Math.abs(rep.glTieBack.outputVatAed + 65 - rep.totals.box12VatAed) > 0.01) fail("tie-back output + RC != box 12");
   if (Math.abs(rep.glTieBack.outputVatAed + rep.glTieBack.unclassifiedOutputVatAed - 540) > 0.01) fail("classified + unclassified != GL output VAT");
-  if (Math.abs(rep.glTieBack.inputVatAed - rep.totals.box13VatAed) > 0.01) fail("tie-back input != box 13");
+  if (Math.abs(rep.glTieBack.inputVatAed + 65 - rep.totals.box13VatAed) > 0.01) fail("tie-back input + RC != box 13");
+  if (!rep.notes.some((n) => /self-assessed/.test(n))) fail("reverse-charge note missing");
   if (rep.trn !== "100123456700003") fail("TRN not picked up");
 
   // Quarterly period also works.

@@ -29,10 +29,25 @@ import {
   atelierGlJournalLine,
   atelierInvoice,
   atelierVatRegister,
+  atelierExpenses,
 } from "@workspace/db";
 import { convertToUsd, convertUsdTo } from "./atelier-fx.js";
 
 export function round2(n: number): number { return Math.round(n * 100) / 100; }
+
+// ── Task #1114 — explicit VAT classifications ────────────────────────────
+// Invoices (AR / output side): "exempt_supply" → box 5.
+// Expense VAT-register rows (AP / input side):
+//   "reverse_charge_import" → box 3 (+ recoverable in box 10)
+//   "goods_import"          → box 6 (+ recoverable in box 10)
+//   "import_adjustment"     → box 7 (+ recoverable in box 10)
+export const INVOICE_VAT_CLASSIFICATIONS = ["exempt_supply"] as const;
+export const EXPENSE_VAT_CLASSIFICATIONS = ["reverse_charge_import", "goods_import", "import_adjustment"] as const;
+export type InvoiceVatClassification = (typeof INVOICE_VAT_CLASSIFICATIONS)[number];
+export type ExpenseVatClassification = (typeof EXPENSE_VAT_CLASSIFICATIONS)[number];
+
+/** UAE standard rate used to self-assess reverse-charge / import VAT. */
+const UAE_STANDARD_RATE = 0.05;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const QUARTER_RE = /^\d{4}-Q[1-4]$/;
@@ -326,10 +341,22 @@ export async function computeVat201(
   //    (could be exempt, out of scope, or zero-rated domestic) and are a
   //    blocking data gap instead. ──
   const box4Lines: Vat201Line[] = [];
+  const box5Lines: Vat201Line[] = [];
   for (const inv of zeroRated) {
     const d = inv.issuedAt!.toISOString().slice(0, 10);
     const netFx = await toAed(inv.subtotal, inv.currency, d);
-    if (inv.jurisdiction !== "AE") {
+    if (inv.vatClassification === "exempt_supply") {
+      // Task #1114 — explicitly classified exempt supply → box 5.
+      box5Lines.push({
+        date: d,
+        ref: inv.invoiceNumber || inv.id,
+        description: `Invoice ${inv.invoiceNumber ?? inv.id}${inv.billTo?.name ? ` — ${inv.billTo.name}` : ""} (classified: exempt supply)`,
+        sourceKind: "invoice",
+        netCurrency: inv.currency, netSource: inv.subtotal, netFxChain: netFx.chain,
+        vatCurrency: inv.currency, vatSource: 0, vatFxChain: "—",
+        netAed: netFx.aed, vatAed: 0,
+      });
+    } else if (inv.jurisdiction !== "AE") {
       box4Lines.push({
         date: d,
         ref: inv.invoiceNumber || inv.id,
@@ -382,6 +409,58 @@ export async function computeVat201(
     });
   }
 
+  // ── Task #1114 — classified reverse-charge / import expenses.
+  //    Expense VAT-register rows explicitly tagged reverse_charge_import /
+  //    goods_import / import_adjustment feed boxes 3/6/7. Their output VAT
+  //    is self-assessed at the UAE standard rate on the net (the foreign
+  //    supplier charged none), and the same amount is recoverable in box
+  //    10 — net effect on box 14 is nil, as reverse charge should be.
+  //    Rows are scoped to this entity via their expense's allocated legal
+  //    entity, and to the period via the expense date. Correction rows
+  //    (negative amounts) flow through with their sign.
+  const classifiedRegs = (await db.select().from(atelierVatRegister).where(and(
+    eq(atelierVatRegister.orgId, orgId),
+    inArray(atelierVatRegister.vatClassification, [...EXPENSE_VAT_CLASSIFICATIONS]),
+  ))).filter((r) => monthSet.has(r.expenseDate.slice(0, 7)));
+  const clsExpenseIds = [...new Set(classifiedRegs.map((r) => r.expenseId))];
+  const expEntity = new Map<string, string | null>();
+  if (clsExpenseIds.length) {
+    const exps = await db.select().from(atelierExpenses).where(and(
+      eq(atelierExpenses.orgId, orgId), inArray(atelierExpenses.id, clsExpenseIds),
+    ));
+    for (const e of exps) expEntity.set(e.id, e.entityId ?? null);
+  }
+  const box3Lines: Vat201Line[] = [];
+  const box6Lines: Vat201Line[] = [];
+  const box7Lines: Vat201Line[] = [];
+  const box10Lines: Vat201Line[] = [];
+  const CLS_LABEL: Record<string, string> = {
+    reverse_charge_import: "reverse-charge import of services",
+    goods_import: "goods imported into the UAE",
+    import_adjustment: "adjustment to goods imported",
+  };
+  for (const r of classifiedRegs) {
+    if (expEntity.get(r.expenseId) !== ent.id) continue;
+    const cls = r.vatClassification as ExpenseVatClassification;
+    const target = cls === "reverse_charge_import" ? box3Lines : cls === "goods_import" ? box6Lines : box7Lines;
+    const vatSrc = round2(r.netAmount * UAE_STANDARD_RATE);
+    const netFx = await toAed(r.netAmount, r.currency, r.expenseDate);
+    const vatFx = await toAed(vatSrc, r.currency, r.expenseDate);
+    const line: Vat201Line = {
+      date: r.expenseDate,
+      ref: r.expenseId,
+      description: `${r.merchant ?? "Expense"}${r.summary ? ` — ${r.summary}` : ""} (classified: ${CLS_LABEL[cls]})`,
+      sourceKind: "expense",
+      netCurrency: r.currency, netSource: r.netAmount, netFxChain: netFx.chain,
+      vatCurrency: r.currency, vatSource: vatSrc, vatFxChain: vatFx.chain,
+      netAed: netFx.aed, vatAed: vatFx.aed,
+      note: `output VAT self-assessed at ${UAE_STANDARD_RATE * 100}% under the reverse charge`,
+    };
+    target.push(line);
+    box10Lines.push({ ...line, note: "recoverable input tax matching the self-assessed reverse-charge output VAT" });
+  }
+  for (const ls of [box3Lines, box6Lines, box7Lines, box10Lines]) ls.sort((a, b) => a.date.localeCompare(b.date));
+
   const sumNet = (ls: Vat201Line[]) => round2(ls.reduce((s, l) => s + l.netAed, 0));
   const sumVat = (ls: Vat201Line[]) => round2(ls.reduce((s, l) => s + l.vatAed, 0));
 
@@ -395,19 +474,19 @@ export async function computeVat201(
       note: box === emirate.box ? `All supplies attributed to this emirate — entity's fixed establishment resolved from ${emirate.basis}.` : undefined,
     })),
     { box: "2", label: "Tax refunds provided to tourists", netAed: 0, vatAed: 0, lines: [], note: emptyNote },
-    { box: "3", label: "Supplies subject to the reverse charge provisions", netAed: 0, vatAed: 0, lines: [], note: emptyNote },
+    { box: "3", label: "Supplies subject to the reverse charge provisions", netAed: sumNet(box3Lines), vatAed: sumVat(box3Lines), lines: box3Lines, note: box3Lines.length ? undefined : emptyNote },
     { box: "4", label: "Zero rated supplies", netAed: sumNet(box4Lines), vatAed: 0, lines: box4Lines },
-    { box: "5", label: "Exempt supplies", netAed: 0, vatAed: 0, lines: [], note: emptyNote },
-    { box: "6", label: "Goods imported into the UAE", netAed: 0, vatAed: 0, lines: [], note: emptyNote },
-    { box: "7", label: "Adjustments to goods imported into the UAE", netAed: 0, vatAed: 0, lines: [], note: emptyNote },
+    { box: "5", label: "Exempt supplies", netAed: sumNet(box5Lines), vatAed: 0, lines: box5Lines, note: box5Lines.length ? undefined : emptyNote },
+    { box: "6", label: "Goods imported into the UAE", netAed: sumNet(box6Lines), vatAed: sumVat(box6Lines), lines: box6Lines, note: box6Lines.length ? undefined : emptyNote },
+    { box: "7", label: "Adjustments to goods imported into the UAE", netAed: sumNet(box7Lines), vatAed: sumVat(box7Lines), lines: box7Lines, note: box7Lines.length ? undefined : emptyNote },
   ];
   const box8Net = round2(boxes.reduce((s, b) => s + b.netAed, 0));
   const box8Vat = round2(boxes.reduce((s, b) => s + b.vatAed, 0));
   boxes.push({ box: "8", label: "Totals (outputs)", netAed: box8Net, vatAed: box8Vat, lines: [] });
   boxes.push({ box: "9", label: "Standard rated expenses", netAed: sumNet(box9Lines), vatAed: sumVat(box9Lines), lines: box9Lines });
-  boxes.push({ box: "10", label: "Supplies subject to the reverse charge provisions (recoverable)", netAed: 0, vatAed: 0, lines: [], note: emptyNote });
-  const box11Net = round2(sumNet(box9Lines));
-  const box11Vat = round2(sumVat(box9Lines));
+  boxes.push({ box: "10", label: "Supplies subject to the reverse charge provisions (recoverable)", netAed: sumNet(box10Lines), vatAed: sumVat(box10Lines), lines: box10Lines, note: box10Lines.length ? undefined : emptyNote });
+  const box11Net = round2(sumNet(box9Lines) + sumNet(box10Lines));
+  const box11Vat = round2(sumVat(box9Lines) + sumVat(box10Lines));
   boxes.push({ box: "11", label: "Totals (inputs)", netAed: box11Net, vatAed: box11Vat, lines: [] });
   const box12 = box8Vat;
   const box13 = box11Vat;
@@ -417,11 +496,20 @@ export async function computeVat201(
   boxes.push({ box: "14", label: box14 >= 0 ? "Net VAT payable to the FTA" : "Net VAT refundable / carried forward", netAed: 0, vatAed: box14, lines: [] });
 
   notes.push("Box VAT figures are built from the same GL VAT-account journal lines (2300 output / 1400 input) as the internal VAT return calculator; boxes 12/13 tie to it exactly after AED conversion once all output transactions are classified.");
+  const rcCount = box3Lines.length + box6Lines.length + box7Lines.length;
+  if (rcCount)
+    notes.push(`${rcCount} expense(s) classified as reverse-charge/import: their output VAT is self-assessed at ${UAE_STANDARD_RATE * 100}% (boxes 3/6/7) with the matching recoverable amount in box 10 — these self-assessed amounts do not appear on the GL VAT accounts, so boxes 12/13 exceed the GL tie-back by the same amount on both sides (box 14 unaffected).`);
+  if (box5Lines.length)
+    notes.push(`${box5Lines.length} invoice(s) explicitly classified as exempt supplies are reported in box 5.`);
   if (unclassifiedLines.length)
     notes.push(`${unclassifiedLines.length} output-side transaction(s) lack VAT classification evidence and are EXCLUDED from the boxes — the statutory export is blocked until they are reclassified (see the unclassified schedule).`);
   if (box1Lines.some((l) => l.note) || box9Lines.some((l) => l.note))
     notes.push("Lines marked 'base derived at 5%' have no linked source document; their taxable base is imputed from the GL VAT amount at the UAE standard rate.");
-  notes.push("Boxes 2, 3, 5, 6, 7 and 10 (tourist refunds, reverse charge, exempt supplies, imports) have no classified source data in this build and default to zero.");
+  {
+    const zeroBoxes = boxes.filter((b) => ["2", "3", "5", "6", "7", "10"].includes(b.box) && !b.lines.length).map((b) => b.box);
+    if (zeroBoxes.length)
+      notes.push(`Box(es) ${zeroBoxes.join(", ")} have no classified source data for this period and default to zero. Tag reverse-charge/import expenses and exempt-supply invoices via the VAT classification action if such transactions occurred.`);
+  }
   notes.push("Amounts converted to AED via the firm FX table (source currency → USD → AED); the conversion applied is shown on each schedule line.");
 
   const outAed = sumVat(box1Lines);

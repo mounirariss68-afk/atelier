@@ -23,10 +23,12 @@ import {
   atelierGlJournalEntry,
   atelierGlJournalLine,
   atelierAuditEvents,
+  atelierInvoice,
+  atelierVatRegister,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
-import { computeVat201, collectGlVat, monthsOfVatPeriod, resolveEmirateBox, type Vat201Report } from "../../lib/atelier-vat201.js";
+import { computeVat201, collectGlVat, monthsOfVatPeriod, resolveEmirateBox, INVOICE_VAT_CLASSIFICATIONS, EXPENSE_VAT_CLASSIFICATIONS, type Vat201Report } from "../../lib/atelier-vat201.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
   createBrandDoc, addBrandPage, brandTable, glassSection, writeBrandFooters, block,
@@ -250,6 +252,74 @@ router.get("/vat/return/vat201", async (req, res) => {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${base}.pdf`));
   return vat201Pdf(rep, res);
+});
+
+// ─────────────── Task #1114 — VAT classification tagging ───────────────
+// Tag AR invoices ("exempt_supply" → box 5) and expense VAT-register rows
+// ("reverse_charge_import" | "goods_import" | "import_adjustment" → boxes
+// 3/6/7 + recoverable box 10) so the VAT 201 picks them up. Classification
+// is metadata only — register amounts stay append-only. Null clears a tag.
+const ClassifySchema = z.object({
+  kind: z.enum(["invoice", "expense"]),
+  id: z.string().min(1),
+  classification: z.string().min(1).nullable(),
+});
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/vat/classification", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const parsed = ClassifySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+  const { kind, id, classification } = parsed.data;
+  const allowed: readonly string[] = kind === "invoice" ? INVOICE_VAT_CLASSIFICATIONS : EXPENSE_VAT_CLASSIFICATIONS;
+  if (classification !== null && !allowed.includes(classification))
+    return res.status(400).json({
+      error: "invalid_classification",
+      message: `For kind "${kind}" classification must be one of: ${allowed.join(", ")} (or null to clear).`,
+    });
+
+  if (kind === "invoice") {
+    const [inv] = await db.select().from(atelierInvoice).where(and(
+      eq(atelierInvoice.id, id), eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt),
+    ));
+    if (!inv) return res.status(404).json({ error: "not_found", message: "Invoice not found." });
+    // Exempt supplies carry no VAT — a positive-rated invoice is standard/
+    // zero-rated by construction and must not be tagged exempt.
+    if (classification === "exempt_supply" && inv.vatRatePct !== 0)
+      return res.status(400).json({ error: "invalid_classification", message: `Invoice is rated at ${inv.vatRatePct}% — only 0%-rated invoices can be classified as exempt supplies.` });
+    const from = inv.vatClassification ?? null;
+    await db.update(atelierInvoice)
+      .set({ vatClassification: classification, updatedAt: new Date() })
+      .where(eq(atelierInvoice.id, inv.id));
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"), entityType: "invoice", entityId: inv.id,
+      actorType: "human", actorId: me.id, actorLabel: me.name,
+      action: "vat.classification_set",
+      payload: { kind, from, to: classification },
+      payloadSummary: `VAT classification on invoice ${inv.invoiceNumber ?? inv.id}: ${from ?? "unclassified"} → ${classification ?? "unclassified"}`,
+    });
+    return res.json({ ok: true, data: { kind, id: inv.id, classification } });
+  }
+
+  // kind === "expense": tag every VAT-register row of the expense (incl.
+  // correction rows) so corrections keep netting inside the same box.
+  const regs = await db.select().from(atelierVatRegister).where(and(
+    eq(atelierVatRegister.orgId, me.orgId), eq(atelierVatRegister.expenseId, id),
+  ));
+  if (!regs.length)
+    return res.status(404).json({ error: "not_found", message: "No VAT register rows for this expense — it may not be approved yet." });
+  const from = regs[0].vatClassification ?? null;
+  await db.update(atelierVatRegister)
+    .set({ vatClassification: classification })
+    .where(and(eq(atelierVatRegister.orgId, me.orgId), eq(atelierVatRegister.expenseId, id)));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"), entityType: "expense", entityId: id,
+    actorType: "human", actorId: me.id, actorLabel: me.name,
+    action: "vat.classification_set",
+    payload: { kind, from, to: classification, registerRows: regs.length },
+    payloadSummary: `VAT classification on expense ${id} (${regs.length} register row(s)): ${from ?? "unclassified"} → ${classification ?? "unclassified"}`,
+  });
+  return res.json({ ok: true, data: { kind, id, classification, registerRows: regs.length } });
 });
 
 const FileSchema = z.object({

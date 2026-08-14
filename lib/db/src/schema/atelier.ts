@@ -4067,6 +4067,12 @@ export const atelierVatRegister = pgTable(
     usdGross: doublePrecision("usd_gross").notNull().default(0),
     merchant: text("merchant"),
     summary: text("summary"),
+    // Task #1114 — explicit VAT classification for the FTA VAT 201 boxes:
+    // "reverse_charge_import" (box 3 + 10) | "goods_import" (box 6 + 10) |
+    // "import_adjustment" (box 7 + 10). Metadata only (amounts stay
+    // append-only); set via the finance-gated POST /vat/classification
+    // route on all register rows of an expense. Null = unclassified.
+    vatClassification: text("vat_classification"),
     recordedAt: timestamp("recorded_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -4776,6 +4782,11 @@ export const atelierInvoice = pgTable(
     voidedAt: timestamp("voided_at"),
     voidedReason: text("voided_reason"),
     pdfRef: text("pdf_ref"),
+    // Task #1114 — explicit VAT classification for the FTA VAT 201 boxes.
+    // Only "exempt_supply" is valid on AR invoices today (box 5); set via
+    // the finance-gated POST /vat/classification route. Null = unclassified
+    // (0%-rated AE invoices stay a blocking data gap on the VAT 201).
+    vatClassification: text("vat_classification"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
