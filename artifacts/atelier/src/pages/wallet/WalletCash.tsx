@@ -67,7 +67,25 @@ interface BankAccount {
   currency: string;
 }
 
-/** Task #1071 — statement file upload (CSV / Xero export) against a bank account. */
+interface PdfPreviewRow {
+  postedDate: string;
+  amount: number;
+  currency: string;
+  counterparty: string | null;
+  reference: string | null;
+  kind: string;
+  confidence: number;
+}
+
+interface PdfPreview {
+  rowsExtracted: number;
+  flaggedRows: number;
+  confidence: number;
+  rows: PdfPreviewRow[];
+  flagged: Array<{ dateToken: string; snippet: string; reason: string }>;
+}
+
+/** Task #1071 / #1111 — statement file upload (CSV / Xero export / PDF with guarded preview). */
 function StatementUploadCard({ onImported }: { onImported: (msg: string) => void }) {
   const [accounts, setAccounts] = React.useState<BankAccount[]>([]);
   const [accountId, setAccountId] = React.useState("");
@@ -76,7 +94,9 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = React.useState<PdfPreview | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const isPdfFile = Boolean(file && (/\.pdf$/i.test(file.name) || file.type === "application/pdf"));
 
   React.useEffect(() => {
     void (async () => {
@@ -88,7 +108,7 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
     })();
   }, []);
 
-  const upload = async () => {
+  const upload = async (confirm: boolean) => {
     if (!file || !accountId || !statementDate) return;
     setBusy(true);
     setErr(null);
@@ -98,19 +118,30 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
       form.append("bankAccountId", accountId);
       form.append("statementDate", statementDate);
       if (source !== "auto") form.append("source", source);
+      if (confirm) form.append("confirm", "true");
       const r = await fetch("/api/atelier/wallet/bank/import-file", {
         method: "POST", credentials: "include", body: form,
       });
       const j = await r.json().catch(() => null);
       if (r.status === 409) {
         setErr("This statement file was already imported — no rows were duplicated.");
+        setPdfPreview(null);
       } else if (!r.ok) {
-        setErr(`Import failed: ${j?.message ?? j?.error ?? r.status}`);
+        setErr(j?.error === "pdf_low_confidence"
+          ? (j?.message ?? "We couldn't confidently read this PDF — export a CSV from your bank instead.")
+          : `Import failed: ${j?.message ?? j?.error ?? r.status}`);
+        setPdfPreview(null);
+      } else if (j?.data?.preview) {
+        // PDF phase 1 — nothing imported yet; show extracted rows for review.
+        setPdfPreview(j.data.preview as PdfPreview);
       } else {
         const d = j?.data;
         const parseErrs = Array.isArray(d?.errors) && d.errors.length > 0 ? ` (${d.errors.length} rows skipped)` : "";
-        onImported(`Statement imported — ${d?.rowsImported ?? 0} rows${parseErrs}. Auto-matcher ${d?.matcher?.status === "ok" ? "ran" : "reported issues"}.`);
+        const skipped = pdfPreview && pdfPreview.flaggedRows > 0
+          ? ` ${pdfPreview.flaggedRows} low-confidence PDF row(s) were skipped, not guessed.` : "";
+        onImported(`Statement imported — ${d?.rowsImported ?? 0} rows${parseErrs}.${skipped} Auto-matcher ${d?.matcher?.status === "ok" ? "ran" : "reported issues"}.`);
         setFile(null);
+        setPdfPreview(null);
         if (fileRef.current) fileRef.current.value = "";
       }
     } finally { setBusy(false); }
@@ -135,16 +166,78 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
           <option value="csv">Generic CSV</option>
           <option value="xero">Xero export</option>
         </select>
-        <input ref={fileRef} type="file" accept=".csv,.txt,text/csv" className="text-text-mute"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)} data-testid="input-statement-file" />
-        <PillButton variant="primary" disabled={busy || !file || !accountId || !statementDate}
-          data-testid="btn-statement-upload" onClick={() => void upload()}>
-          {busy ? "Importing…" : "Upload & reconcile"}
-        </PillButton>
+        <input ref={fileRef} type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" className="text-text-mute"
+          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPdfPreview(null); setErr(null); }}
+          data-testid="input-statement-file" />
+        {!pdfPreview && (
+          <PillButton variant="primary" disabled={busy || !file || !accountId || !statementDate}
+            data-testid="btn-statement-upload" onClick={() => void upload(!isPdfFile)}>
+            {busy ? (isPdfFile ? "Extracting…" : "Importing…") : (isPdfFile ? "Extract & preview" : "Upload & reconcile")}
+          </PillButton>
+        )}
       </div>
       <div className="text-[11px] text-text-faint">
-        CSV columns: date, amount, counterparty, reference. Xero bank-statement exports are detected automatically. Re-uploading the same file never duplicates rows.
+        CSV columns: date, amount, counterparty, reference. Xero bank-statement exports are detected automatically. PDF statements are extracted with guarded parsing — you review the rows before anything imports. Re-uploading the same file never duplicates rows.
       </div>
+      {pdfPreview && (
+        <div className="space-y-2" data-testid="pdf-preview">
+          <div className="text-xs font-mono text-text">
+            Extracted {pdfPreview.rowsExtracted} transaction row(s) from the PDF
+            {pdfPreview.flaggedRows > 0 && (
+              <> — <span className="text-warning">{pdfPreview.flaggedRows} ambiguous row(s) flagged and will be skipped, never guessed</span></>
+            )}
+            . Review before importing.
+          </div>
+          <div className="max-h-64 overflow-auto border border-border-soft rounded">
+            <table className="w-full text-[11px] font-mono">
+              <thead>
+                <tr className="text-text-faint text-left">
+                  <th className="px-2 py-1">Date</th>
+                  <th className="px-2 py-1 text-right">Amount</th>
+                  <th className="px-2 py-1">Counterparty</th>
+                  <th className="px-2 py-1">Reference</th>
+                  <th className="px-2 py-1">Kind</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pdfPreview.rows.map((r, i) => (
+                  <tr key={i} className="border-t border-border-soft" data-testid={`pdf-preview-row-${i}`}>
+                    <td className="px-2 py-1 whitespace-nowrap">{r.postedDate}</td>
+                    <td className={`px-2 py-1 text-right whitespace-nowrap ${r.amount < 0 ? "text-danger" : "text-success"}`}>
+                      {r.amount.toFixed(2)} {r.currency}
+                    </td>
+                    <td className="px-2 py-1">{r.counterparty ?? "—"}</td>
+                    <td className="px-2 py-1">{r.reference ?? "—"}</td>
+                    <td className="px-2 py-1">{r.kind}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {pdfPreview.flagged.length > 0 && (
+            <div className="space-y-1" data-testid="pdf-preview-flagged">
+              <div className="text-[11px] font-mono text-warning uppercase">Skipped rows (too ambiguous to trust)</div>
+              {pdfPreview.flagged.map((f, i) => (
+                <div key={i} className="text-[11px] text-text-faint">
+                  <span className="font-mono">{f.dateToken}</span> — {f.reason}
+                  <span className="block truncate opacity-70">{f.snippet}</span>
+                </div>
+              ))}
+              <div className="text-[11px] text-text-faint">Add skipped rows manually after import, or upload a CSV export for full coverage.</div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <PillButton variant="primary" disabled={busy}
+              data-testid="btn-pdf-confirm-import" onClick={() => void upload(true)}>
+              {busy ? "Importing…" : `Import ${pdfPreview.rowsExtracted} row(s) & reconcile`}
+            </PillButton>
+            <PillButton variant="ghost" disabled={busy} data-testid="btn-pdf-cancel"
+              onClick={() => { setPdfPreview(null); setFile(null); if (fileRef.current) fileRef.current.value = ""; }}>
+              Cancel
+            </PillButton>
+          </div>
+        </div>
+      )}
       {err && <div className="text-xs font-mono text-danger" data-testid="statement-upload-error">{err}</div>}
     </Card>
   );

@@ -95,6 +95,7 @@ async function main(): Promise<void> {
   }
 
   const bankId = `bank_test_br_${STAMP}`;
+  const pdfBankId = `bank_test_brpdf_${STAMP}`;
   const invId = `inv_test_br_${STAMP}`;
   const importIds: string[] = [];
 
@@ -300,11 +301,73 @@ async function main(): Promise<void> {
       rationale: "probe", varianceAccepted: true, exceptionsAcknowledged: true,
     });
     check("finance (non-partner) cannot finalise", finGate.status === 403 || finGate.status === 409, `got ${finGate.status}`);
+
+    // -------------------------------------------------------------- 8. PDF import (Task #1111)
+    group("8. PDF statement upload: guarded extraction, preview + confirm");
+    await db.insert(atelierBankAccount).values({
+      id: pdfBankId, orgId: ORG, bankName: "PDF Bank", accountLabel: `Pdf ${STAMP}`,
+      accountNumberLast4: "7722", currency: "USD", openingBalance: 0, createdByUserId: FP_ID,
+    });
+    // A text-layer "PDF" (unpdf falls back to printable-text extraction for
+    // non-binary bytes) with 3 unambiguous rows and 1 ambiguous multi-amount
+    // row that must be flagged, never guessed.
+    const PDF_TEXT = [
+      "Acme Bank — Account Activity",
+      `2026-08-03 Payment to Vendor Alpha ref: PDFA-${STAMP} -120.00`,
+      `2026-08-05 Deposit received Client Beta ref: PDFB-${STAMP} 300.00 CR`,
+      "2026-08-07 Direct debit Utilities Co 55.25 DR",
+      "2026-08-09 Card settlement 50.00 60.00 110.00",
+    ].join("\n");
+    const uploadPdf = (fields: Record<string, string>, text: string, name = "statement.pdf") =>
+      uploadStatement(FIN_ID, fields, text, name);
+    // Phase 1 — preview: nothing imported.
+    const prev = await fetch(`${API}/wallet/bank/import-file`, {
+      method: "POST", headers: { cookie: `atelier_persona=${FIN_ID}` },
+      body: (() => {
+        const f = new FormData();
+        f.append("file", new Blob([PDF_TEXT], { type: "application/pdf" }), "statement.pdf");
+        f.append("bankAccountId", pdfBankId);
+        f.append("statementDate", "2026-08-31");
+        return f;
+      })(),
+    }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+    check("PDF preview responds 200", prev.status === 200, JSON.stringify(prev.body));
+    const pv = prev.body?.data?.preview;
+    check("preview extracts 3 rows", pv?.rowsExtracted === 3, JSON.stringify(pv));
+    check("preview flags 1 ambiguous row", pv?.flaggedRows === 1 && /ambiguous/.test(pv?.flagged?.[0]?.reason ?? ""), JSON.stringify(pv?.flagged));
+    check("preview rows carry signed amounts", pv?.rows?.some((r: any) => r.amount === -120) && pv?.rows?.some((r: any) => r.amount === 300), JSON.stringify(pv?.rows));
+    const pdfTxns0 = await db.select().from(atelierBankTransaction).where(eq(atelierBankTransaction.bankAccountId, pdfBankId));
+    check("preview imports nothing", pdfTxns0.length === 0, `got ${pdfTxns0.length}`);
+    // Phase 2 — confirm imports through the shared core (storage + dedupe + audit).
+    const conf = await uploadPdf({ bankAccountId: pdfBankId, statementDate: "2026-08-31", confirm: "true" }, PDF_TEXT);
+    check("PDF confirm imports (200)", conf.status === 200, JSON.stringify(conf.body));
+    check("3 rows imported from PDF", conf.body?.data?.rowsImported === 3, JSON.stringify(conf.body?.data));
+    if (conf.body?.data?.importId) importIds.push(conf.body.data.importId);
+    const [pdfImp] = await db.select().from(atelierBankStatementImport)
+      .where(eq(atelierBankStatementImport.id, conf.body?.data?.importId ?? "none"));
+    check("original PDF stored as audit evidence", typeof pdfImp?.fileUrl === "string" && pdfImp.fileUrl.includes("bank-statements/"), String(pdfImp?.fileUrl));
+    const pdfTxns = await db.select().from(atelierBankTransaction).where(eq(atelierBankTransaction.bankAccountId, pdfBankId));
+    check("outflow direction preserved (DR row negative)", pdfTxns.some((t: any) => t.amount === -55.25), JSON.stringify(pdfTxns.map((t: any) => t.amount)));
+    // Re-confirm of the same PDF is a duplicate (canonical-CSV hash dedupe).
+    const dupPdf = await uploadPdf({ bankAccountId: pdfBankId, statementDate: "2026-08-31", confirm: "true" }, PDF_TEXT);
+    check("duplicate PDF confirm → 409", dupPdf.status === 409, `got ${dupPdf.status}`);
+    // Low-confidence PDF refuses with CSV guidance, imports nothing.
+    const LOWCONF = [
+      "2026-08-11 Card settlement 10.00 20.00 30.00",
+      "2026-08-12 Transfer 40.00 50.00 90.00",
+    ].join("\n");
+    const low = await uploadPdf({ bankAccountId: pdfBankId, statementDate: "2026-08-31" }, LOWCONF, "lowconf.pdf");
+    check("low-confidence PDF refused with CSV guidance",
+      low.status === 400 && low.body?.error === "pdf_low_confidence" && /export a CSV/i.test(low.body?.message ?? ""),
+      `${low.status} ${JSON.stringify(low.body)}`);
+    // Role gate applies to PDFs too.
+    const pdfDenied = await uploadStatement(CONS_ID, { bankAccountId: pdfBankId, statementDate: "2026-08-31" }, PDF_TEXT, "statement.pdf");
+    check("consultant denied PDF upload (403)", pdfDenied.status === 403, `got ${pdfDenied.status}`);
   } finally {
     // -------------------------------------------------------------- cleanup
     try {
       const txnIds = (await db.select({ id: atelierBankTransaction.id }).from(atelierBankTransaction)
-        .where(eq(atelierBankTransaction.bankAccountId, bankId))).map((r: any) => r.id);
+        .where(inArray(atelierBankTransaction.bankAccountId, [bankId, pdfBankId]))).map((r: any) => r.id);
       if (txnIds.length > 0) {
         const rcpts = (await db.select({ id: atelierCashReceipt.id }).from(atelierCashReceipt)
           .where(inArray(atelierCashReceipt.bankTransactionId, txnIds))).map((r: any) => r.id);
@@ -320,7 +383,7 @@ async function main(): Promise<void> {
       await db.delete(atelierBankReconPeriod).where(eq(atelierBankReconPeriod.bankAccountId, bankId));
       await db.delete(atelierInvoiceLine).where(eq(atelierInvoiceLine.invoiceId, invId));
       await db.delete(atelierInvoice).where(eq(atelierInvoice.id, invId));
-      await db.delete(atelierBankAccount).where(eq(atelierBankAccount.id, bankId));
+      await db.delete(atelierBankAccount).where(inArray(atelierBankAccount.id, [bankId, pdfBankId]));
       await db.delete(atelierAuditEvents).where(like(atelierAuditEvents.actorId, `p_test_br_%_${STAMP}`));
       await db.delete(atelierUsers).where(inArray(atelierUsers.id, [FIN_ID, FP_ID, CONS_ID]));
     } catch (err) {

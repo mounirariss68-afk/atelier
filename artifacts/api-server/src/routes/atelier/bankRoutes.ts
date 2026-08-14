@@ -28,6 +28,11 @@ import {
 } from "@workspace/db";
 import { parseBankStatement } from "../../lib/bank-parsers/index.js";
 import {
+  parsePdfStatementText,
+  pdfRowsToCanonicalCsv,
+  PDF_STATEMENT_CONFIDENCE_FLOOR,
+} from "../../lib/bank-parsers/pdf-statement.js";
+import {
   autoMatchImport,
   deriveStatementExceptions,
   summarizeReconTxns,
@@ -405,17 +410,71 @@ router.post("/import-file", (req, res) => {
     if (denyAll(req, res)) return;
     const me = ensure(req, res); if (!me) return;
     if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-    const b = req.body as { bankAccountId?: string; statementDate?: string; source?: string; notes?: string };
+    const b = req.body as { bankAccountId?: string; statementDate?: string; source?: string; notes?: string; confirm?: string };
     const file = req.file;
     if (!file || !b.bankAccountId || !b.statementDate)
       return res.status(400).json({ error: "invalid_input", message: "file, bankAccountId and statementDate are required." });
     const name = (file.originalname ?? "").toLowerCase();
-    if (name.endsWith(".pdf") || file.mimetype === "application/pdf")
-      return res.status(400).json({ error: "unsupported_format", message: "PDF statements are not supported — export a CSV from your bank." });
-    const raw = file.buffer.toString("utf8");
-    if (!raw.trim()) return res.status(400).json({ error: "invalid_input", message: "Uploaded file is empty." });
-    const source: "csv" | "xero" =
-      b.source === "csv" || b.source === "xero" ? b.source : detectStatementSource(raw);
+    const isPdf =
+      name.endsWith(".pdf") || file.mimetype === "application/pdf" ||
+      file.buffer.subarray(0, 5).toString("latin1") === "%PDF-";
+    let raw: string;
+    let source: "csv" | "xero";
+    if (isPdf) {
+      // Task #1111 — PDF statements go through the same GUARDED extraction
+      // as the chat import (Task #1094): date-anchored rows with per-row
+      // confidence; ambiguous rows are flagged and SKIPPED, never guessed;
+      // low overall confidence refuses with CSV-export guidance. The web
+      // flow is two-phase: without confirm=true the route returns a preview
+      // of extracted + flagged rows and imports nothing.
+      const [acct] = await db.select().from(atelierBankAccount)
+        .where(and(eq(atelierBankAccount.id, b.bankAccountId), eq(atelierBankAccount.orgId, me.orgId)));
+      if (!acct) return res.status(404).json({ error: "not_found", message: "Bank account not found." });
+      const { extractAttachment } = await import("../../lib/atelier-cli/attachments/extractors.js");
+      const extracted = await extractAttachment({
+        fileName: file.originalname ?? "statement.pdf",
+        mime: file.mimetype || "application/pdf",
+        bytes: file.buffer,
+      });
+      const pdfText = (extracted.normalizedText ?? "").trim();
+      const parsed = parsePdfStatementText(pdfText, acct.currency);
+      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+        return res.status(400).json({
+          error: "pdf_low_confidence",
+          message: `We couldn't confidently extract transaction rows from this PDF${parsed.flagged.length > 0 ? ` (${parsed.flagged.length} candidate row(s) were too ambiguous to trust — amounts are never guessed)` : ""} — export a CSV from your bank and upload that instead.`,
+        });
+      }
+      // Deterministic parser: the confirm phase re-parses the same bytes and
+      // must see identical rows, so the canonical CSV (and therefore the
+      // dedupe hash) is stable across preview + confirm.
+      raw = pdfRowsToCanonicalCsv(parsed.rows);
+      source = "csv";
+      if (b.confirm !== "true") {
+        return res.json({
+          ok: true,
+          data: {
+            preview: {
+              source: "pdf",
+              rowsExtracted: parsed.rows.length,
+              flaggedRows: parsed.flagged.length,
+              confidence: parsed.confidence,
+              rows: parsed.rows.slice(0, 200).map((r) => ({
+                postedDate: r.postedDate, amount: r.amount, currency: r.currency,
+                counterparty: r.counterpartyNameRaw, reference: r.referenceRaw,
+                kind: r.kind, confidence: r.confidence,
+              })),
+              flagged: parsed.flagged.slice(0, 25).map((f) => ({
+                dateToken: f.dateToken, snippet: f.snippet, reason: f.reason,
+              })),
+            },
+          },
+        });
+      }
+    } else {
+      raw = file.buffer.toString("utf8");
+      if (!raw.trim()) return res.status(400).json({ error: "invalid_input", message: "Uploaded file is empty." });
+      source = b.source === "csv" || b.source === "xero" ? b.source : detectStatementSource(raw);
+    }
     // Idempotency pre-check BEFORE touching storage, so a duplicate upload
     // never leaves an orphaned object behind.
     const preHash = createHash("sha256").update(raw).digest("hex").slice(0, 16);
