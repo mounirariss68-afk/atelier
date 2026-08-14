@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPovDepth } from "./atelierPovDepth";
 import type { AtelierPovOutlineSection } from "./atelierPovOutlineSection";
 import type { AtelierPovStatus } from "./atelierPovStatus";
 
@@ -16,6 +17,7 @@ export interface AtelierPov {
   audience?: string | null;
   /** @nullable */
   objective?: string | null;
+  depth?: AtelierPovDepth;
   status: AtelierPovStatus;
   outline: AtelierPovOutlineSection[];
   /** @nullable */

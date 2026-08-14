@@ -11363,6 +11363,9 @@ components:
         title: { type: string }
         audience: { type: string }
         objective: { type: string }
+        # Task #1053 — how deep the document should go: a tight memo or the
+        # full client-facing document (default).
+        depth: { type: string, enum: [memo, full], default: full }
 
     AtelierUpdatePovInput:
       type: object
@@ -11410,6 +11413,8 @@ components:
         title: { type: string }
         audience: { type: ["string", "null"] }
         objective: { type: ["string", "null"] }
+        # Task #1053 — per-POV depth choice recorded at create time.
+        depth: { type: string, enum: [memo, full] }
         status: { type: string, enum: [outline, drafting, drafted, approved] }
         outline:
           type: array

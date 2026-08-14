@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierStartPovInputDepth } from "./atelierStartPovInputDepth";
 
 export interface AtelierStartPovInput {
   title: string;
   audience: string;
   objective: string;
+  depth?: AtelierStartPovInputDepth;
 }

@@ -1607,6 +1607,9 @@ export const atelierPovs = pgTable(
     title: text("title").notNull(),
     audience: text("audience"),
     objective: text("objective"),
+    // Task #1053 — per-POV depth knob: "memo" (tight 4–6 section memo) vs
+    // "full" (the rich 8–12 section client document, the default).
+    depth: text("depth").notNull().default("full"),
     status: text("status").notNull().default("outline"),
     outline: jsonb("outline").notNull().default([]),
     // Task #1022 — evidence snapshot. The promoted-fact set the CURRENT

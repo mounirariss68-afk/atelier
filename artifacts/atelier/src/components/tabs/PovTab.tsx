@@ -49,7 +49,7 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
   const decideMut = useAtelierRecordAgentDecision();
   const [showStart, setShowStart] = React.useState(false);
   const [activePovId, setActivePovId] = React.useState<string | null>(null);
-  const [form, setForm] = React.useState({ title: "", audience: "CIO", objective: "" });
+  const [form, setForm] = React.useState<{ title: string; audience: string; objective: string; depth: "memo" | "full" }>({ title: "", audience: "CIO", objective: "", depth: "full" });
 
   React.useEffect(() => {
     if (!activePovId && data && data.length > 0) setActivePovId(data[0].id);
@@ -70,7 +70,7 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
       qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
       setActivePovId(created.id);
       setShowStart(false);
-      setForm({ title: "", audience: "CIO", objective: "" });
+      setForm({ title: "", audience: "CIO", objective: "", depth: "full" });
       toast({ title: "Outline ready", description: "Approve to generate full draft." });
     } catch (e) {
       toast({
@@ -124,6 +124,30 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
             <div>
               <Label htmlFor="pov-aud">Audience</Label>
               <Input id="pov-aud" value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })} className="bg-bg-deep border-border text-text" />
+            </div>
+            <div>
+              <Label>Depth</Label>
+              <div className="flex gap-2 mt-1">
+                {([
+                  { value: "memo", label: "Short memo", hint: "4–6 sections · tight" },
+                  { value: "full", label: "Full document", hint: "8–12 sections · client-facing" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, depth: opt.value })}
+                    className={`flex-1 text-left rounded-lg border px-3 py-2 transition-colors ${
+                      form.depth === opt.value
+                        ? "border-gold text-text bg-bg-deep"
+                        : "border-border text-text-mute hover:text-text"
+                    }`}
+                    data-testid={`button-pov-depth-${opt.value}`}
+                  >
+                    <div className="text-sm font-medium">{opt.label}</div>
+                    <div className="text-[10px] font-mono text-text-faint">{opt.hint}</div>
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <Label htmlFor="pov-obj">Objective</Label>
@@ -342,7 +366,9 @@ function ActivePov({
             <h3 className="text-lg font-semibold text-text">{pov.title}</h3>
           )}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-mono text-text-mute">{pov.audience} · {pov.status}</span>
+            <span className="text-xs font-mono text-text-mute">
+              {pov.audience} · {pov.depth === "memo" ? "memo" : "full doc"} · {pov.status}
+            </span>
             {!editMeta && (
               <button
                 onClick={() => setEditMeta(true)}

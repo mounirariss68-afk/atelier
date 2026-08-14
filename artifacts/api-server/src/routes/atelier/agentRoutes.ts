@@ -1465,6 +1465,8 @@ function povWire(p: typeof atelierPovs.$inferSelect) {
     title: p.title,
     audience: p.audience,
     objective: p.objective,
+    // Task #1053 — depth choice recorded at create time (memo | full).
+    depth: (p.depth ?? "full") as "memo" | "full",
     status: p.status as "outline" | "drafting" | "drafted" | "approved",
     outline: (p.outline as PovOutline["sections"]) ?? [],
     currentVersionId: p.currentVersionId,
@@ -1521,6 +1523,9 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
     res.status(400).json({ error: "no-promoted-facts" });
     return;
   }
+  // Task #1053 — per-POV depth knob, chosen on the create form and frozen on
+  // the row: "memo" (tight 4–6 sections) vs "full" (8–12, default).
+  const depth = parsed.data.depth === "memo" ? "memo" : "full";
   const { runId, outline } = await runPovOutline({
     opportunityId: opp.id,
     opportunityName: opp.name,
@@ -1529,6 +1534,7 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
     promotedFacts: promoted,
     triggeredByUserId: me.id,
     actorLabel: "POV Author · Outliner",
+    depth,
   });
   const id = rid("pov");
   const [pov] = await db
@@ -1539,6 +1545,7 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
       title: parsed.data.title,
       audience: parsed.data.audience,
       objective: parsed.data.objective,
+      depth,
       status: "outline",
       outline: outline.sections as never,
       // Task #1022 — the evidence snapshot is frozen at outline APPROVAL time
@@ -1926,6 +1933,7 @@ router.post("/povs/:povId/draft", async (req, res) => {
         triggeredByUserId: meId,
         actorLabel: "POV Author · Sections+Critic+Stylist",
         backgroundContext: grounding.context || undefined,
+        depth: pov.depth === "memo" ? "memo" : "full",
       });
       // Task #1022 — deterministic citation gate on the FINAL stylist HTML.
       // The server parses every citation marker / data-fact attribute itself,
@@ -2146,6 +2154,7 @@ router.post("/povs/:povId/outline/regenerate", async (req, res) => {
     actorLabel: "POV Author · Outliner (revision)",
     revisionFeedback: parsed.data.feedback?.trim() || undefined,
     priorOutline: (pov.outline as PovOutline["sections"]) ?? [],
+    depth: pov.depth === "memo" ? "memo" : "full",
   });
   const [updated] = await db
     .update(atelierPovs)
@@ -2289,6 +2298,7 @@ router.post("/povs/:povId/revise", async (req, res) => {
         revisionFeedback: feedback,
         priorDraftHtml: base.body ?? "",
         backgroundContext: grounding.context || undefined,
+        depth: pov.depth === "memo" ? "memo" : "full",
       });
       // Task #1022 — deterministic citation gate on the final stylist HTML
       // (see the /draft route for the contract; same single threshold).

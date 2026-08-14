@@ -1110,6 +1110,19 @@ export async function runPursuitScout(args: {
 
 // ------- POV Author (3-step chain) -------
 
+// Task #1053 — per-POV depth knob. The prompt's Phase A/B numbers describe
+// the "full" document; the run-time directive below overrides section counts
+// and word budgets for the "memo" depth. Gate semantics (citation coverage
+// over evidence sections) are untouched — only size changes.
+export type PovDepth = "memo" | "full";
+
+export function povDepthDirective(depth: PovDepth | undefined, phase: "outline" | "sections"): string {
+  if (depth !== "memo") return "";
+  return phase === "outline"
+    ? "\nDEPTH OVERRIDE — MEMO: this POV is a tight executive memo, not the full client document. Produce 4–6 sections total (roughly 3–4 evidence and 1–2 positioning). Keep `about-firm` as the final section; `why-now` and `roadmap` are optional — include them only if they earn their place. All other Phase A rules apply unchanged."
+    : "\nDEPTH OVERRIDE — MEMO: this POV is a tight executive memo. Write 140–240 words per section (total document target 700–1,300 words). All other Phase B rules — citations, implications, positioning discipline — apply unchanged.";
+}
+
 
 export async function runPovOutline(args: {
   opportunityId: string;
@@ -1123,6 +1136,11 @@ export async function runPovOutline(args: {
   revisionFeedback?: string;
   /** The prior outline being revised (headings/intents), for context. */
   priorOutline?: PovOutline["sections"];
+  /**
+   * Task #1053 — per-POV depth knob. "memo" produces a tight 4–6-section
+   * memo; "full" (default) keeps the rich 8–12-section client document.
+   */
+  depth?: PovDepth;
 }): Promise<{ runId: string; outline: PovOutline; costUsd: number }> {
   const result = await runAgent(
     {
@@ -1142,9 +1160,11 @@ export async function runPovOutline(args: {
     async (ctx) => {
       const system = loadPrompt("pov_author");
       await ctx.progress(30, args.revisionFeedback ? "Revising outline" : "Drafting outline");
-      const directive = args.revisionFeedback
-        ? "\n\n## Run-time directive\nRevise the PRIOR outline to address the reviewer feedback below, then return ONLY the Phase A outline JSON."
-        : "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.";
+      const directive =
+        (args.revisionFeedback
+          ? "\n\n## Run-time directive\nRevise the PRIOR outline to address the reviewer feedback below, then return ONLY the Phase A outline JSON."
+          : "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.") +
+        povDepthDirective(args.depth, "outline");
       const { value, costUsd } = await callClaudeJson<PovOutline>(
         "claude-haiku-4-5",
         system + directive,
@@ -1209,6 +1229,8 @@ export async function runPovDraft(args: {
    * instructs the model this adds perspective but can never be cited.
    */
   backgroundContext?: string;
+  /** Task #1053 — per-POV depth; "memo" shrinks the Phase B word budgets. */
+  depth?: PovDepth;
 }): Promise<{ runId: string; draft: PovDraft; critic: PovCriticReport | null; costUsd: number }> {
   let criticOut: PovCriticReport | null = null;
   const result = await runAgent(
@@ -1250,9 +1272,11 @@ export async function runPovDraft(args: {
 
       // ── Pass 1: Phase B (sections) ────────────────────────────────────
       await ctx.progress(20, args.revisionFeedback ? "Revising sections" : "Writing sections");
-      const bDirective = args.revisionFeedback
-        ? "\n\n## Run-time directive\nRevise the PRIOR draft to address the reviewer feedback below. Execute Phase B (sections) ONLY and return { \"sections\": [...] }."
-        : "\n\n## Run-time directive\nExecute Phase B (sections) ONLY and return { \"sections\": [...] }.";
+      const bDirective =
+        (args.revisionFeedback
+          ? "\n\n## Run-time directive\nRevise the PRIOR draft to address the reviewer feedback below. Execute Phase B (sections) ONLY and return { \"sections\": [...] }."
+          : "\n\n## Run-time directive\nExecute Phase B (sections) ONLY and return { \"sections\": [...] }.") +
+        povDepthDirective(args.depth, "sections");
       const b = await callClaudeJson<{ sections: PovDraft["sections"] }>(
         "claude-sonnet-4-5",
         system + bDirective,

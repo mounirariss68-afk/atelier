@@ -253,11 +253,13 @@ async function main() {
   // run-time directive marker. Streaming calls (deep-research synthesis) get
   // SSE; the rest get plain JSON messages.
   let lastPhaseBBody = ""; // Task #1051 — captured to assert firm-profile grounding
+  let lastOutlineBody = ""; // Task #1053 — captured to assert the depth directive
   const stub = createServer((req, res) => {
     let body = "";
     req.on("data", (ch) => (body += ch));
     req.on("end", () => {
       if (body.includes("Phase B (sections)")) lastPhaseBBody = body;
+      if (body.includes("Phase A outline JSON")) lastOutlineBody = body;
       const out = body.includes("Phase C (critic)")
         ? CRITIC_OUTPUT
         : body.includes("Phase D (stylist)")
@@ -428,6 +430,12 @@ async function main() {
     const outlineS3 = (rStart.body?.outline ?? []).find((s: any) => s.id === "s3");
     check("start: positioning type + archetype on outline wire", outlineS3?.type === "positioning" && outlineS3?.archetype === "value-map", outlineS3);
     check("start: evidence type on outline wire", (rStart.body?.outline ?? []).find((s: any) => s.id === "s1")?.type === "evidence", rStart.body?.outline);
+    // Task #1053 — depth defaults to "full" and the outline directive carries
+    // NO depth override for the full document.
+    check("depth: defaults to 'full' on the wire", rStart.body?.depth === "full", rStart.body?.depth);
+    // (the prompt text itself mentions "DEPTH OVERRIDE"; the injected memo
+    // directive is identified by its full "DEPTH OVERRIDE — MEMO" marker)
+    check("depth: no memo DEPTH OVERRIDE directive for full depth", !lastOutlineBody.includes("DEPTH OVERRIDE — MEMO"), null);
     const outlineRunId = rStart.body?.runId as string;
 
     // 2. PATCH title/objective
@@ -747,6 +755,30 @@ async function main() {
     check("legacy: coverage 1.0 across all (evidence) sections", v8Row?.citationCoverage === 1, v8Row?.citationCoverage);
     fixture.typed = true;
     fixture.mode = "good";
+
+    // 10l. Task #1053 — per-POV depth knob. "memo" is stored on the row,
+    // returned on the wire, and injects the DEPTH OVERRIDE directive into the
+    // Phase A outline call, outline regeneration, and the Phase B section
+    // writer. Gate semantics are unchanged — the memo draft still passes.
+    const rStartMemo = await call("POST", `/opportunities/${oppId}/povs`, { title: "Memo Depth POV", audience: "CIO", objective: "Test the memo depth", depth: "memo" });
+    check("depth-memo: POV created", rStartMemo.status === 201, rStartMemo.body);
+    const povMemoId = rStartMemo.body?.id as string;
+    check("depth-memo: 'memo' on the wire", rStartMemo.body?.depth === "memo", rStartMemo.body?.depth);
+    const [memoRow] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, povMemoId));
+    check("depth-memo: 'memo' persisted on the row", memoRow?.depth === "memo", memoRow?.depth);
+    check("depth-memo: outline call carries DEPTH OVERRIDE — MEMO", lastOutlineBody.includes("DEPTH OVERRIDE") && lastOutlineBody.includes("MEMO") && lastOutlineBody.includes("4–6 sections"), null);
+    // Regeneration re-applies the stored depth.
+    lastOutlineBody = "";
+    const rRegenMemo = await call("POST", `/povs/${povMemoId}/outline/regenerate`, { feedback: "Tighter still." });
+    check("depth-memo: regenerate 200", rRegenMemo.status === 200, rRegenMemo.body);
+    check("depth-memo: regenerated outline call keeps DEPTH OVERRIDE", lastOutlineBody.includes("DEPTH OVERRIDE") && lastOutlineBody.includes("MEMO"), null);
+    // Draft forwards the depth into the Phase B section writer.
+    await call("POST", `/agent-runs/${rRegenMemo.body?.runId}/decision`, { decision: "approve", rationale: "ok" });
+    const rDraftMemo = await call("POST", `/povs/${povMemoId}/draft`);
+    check("depth-memo: draft 202 started", rDraftMemo.status === 202, rDraftMemo.body);
+    const dMemo = await pollLaunch(povMemoId);
+    check("depth-memo: memo draft passes the unchanged gate", dMemo.status === "done", dMemo);
+    check("depth-memo: Phase B call carries DEPTH OVERRIDE word budgets", lastPhaseBBody.includes("DEPTH OVERRIDE") && lastPhaseBBody.includes("140–240 words"), null);
 
     // 11. POV deep-research pass (stub Perplexity + stream synthesis).
     const rResearchStatus0 = await call("GET", `/opportunities/${oppId}/pov-research-status`);

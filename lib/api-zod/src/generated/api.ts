@@ -9222,6 +9222,7 @@ export const AtelierListPovsResponseItem = zod.object({
   title: zod.string(),
   audience: zod.string().nullish(),
   objective: zod.string().nullish(),
+  depth: zod.enum(["memo", "full"]).optional(),
   status: zod.enum(["outline", "drafting", "drafted", "approved"]),
   outline: zod.array(
     zod.object({
@@ -9246,10 +9247,13 @@ export const AtelierStartPovParams = zod.object({
   oppId: zod.coerce.string(),
 });
 
+export const atelierStartPovBodyDepthDefault = `full`;
+
 export const AtelierStartPovBody = zod.object({
   title: zod.string(),
   audience: zod.string(),
   objective: zod.string(),
+  depth: zod.enum(["memo", "full"]).default(atelierStartPovBodyDepthDefault),
 });
 
 /**
@@ -9327,6 +9331,7 @@ export const AtelierUpdatePovResponse = zod.object({
   title: zod.string(),
   audience: zod.string().nullish(),
   objective: zod.string().nullish(),
+  depth: zod.enum(["memo", "full"]).optional(),
   status: zod.enum(["outline", "drafting", "drafted", "approved"]),
   outline: zod.array(
     zod.object({
@@ -9360,6 +9365,7 @@ export const AtelierRegeneratePovOutlineResponse = zod.object({
   title: zod.string(),
   audience: zod.string().nullish(),
   objective: zod.string().nullish(),
+  depth: zod.enum(["memo", "full"]).optional(),
   status: zod.enum(["outline", "drafting", "drafted", "approved"]),
   outline: zod.array(
     zod.object({

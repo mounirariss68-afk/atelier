@@ -6173,10 +6173,19 @@ export interface AtelierPromoteFactInput {
   promote: boolean;
 }
 
+export type AtelierStartPovInputDepth =
+  (typeof AtelierStartPovInputDepth)[keyof typeof AtelierStartPovInputDepth];
+
+export const AtelierStartPovInputDepth = {
+  memo: "memo",
+  full: "full",
+} as const;
+
 export interface AtelierStartPovInput {
   title: string;
   audience: string;
   objective: string;
+  depth?: AtelierStartPovInputDepth;
 }
 
 export type AtelierPovOutlineSectionType =
@@ -6211,6 +6220,14 @@ export interface AtelierRevisePovInput {
   baseVersionId?: string;
 }
 
+export type AtelierPovDepth =
+  (typeof AtelierPovDepth)[keyof typeof AtelierPovDepth];
+
+export const AtelierPovDepth = {
+  memo: "memo",
+  full: "full",
+} as const;
+
 export type AtelierPovStatus =
   (typeof AtelierPovStatus)[keyof typeof AtelierPovStatus];
 
@@ -6229,6 +6246,7 @@ export interface AtelierPov {
   audience?: string | null;
   /** @nullable */
   objective?: string | null;
+  depth?: AtelierPovDepth;
   status: AtelierPovStatus;
   outline: AtelierPovOutlineSection[];
   /** @nullable */
