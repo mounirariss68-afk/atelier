@@ -61,16 +61,31 @@ import {
  * Task #1073 — drill-through: resolve a journal/exception source to the
  * app route where that document lives. Kinds without a destination
  * return null and render as plain text (never guess a URL).
+ *
+ * Task #1082 — list-page destinations now deep-link to the exact row via
+ * a `?focus=` / `?txn=` query param the target page reads to scroll and
+ * highlight. Revrec lines carry the source period so the page loads the
+ * right month's schedules (posting-line ids aren't rendered client-side).
+ * Contractor payments stay on the list page: paid contractor-payment rows
+ * have no per-row UI (they surface as self-billed invoices downstream).
  */
-export function glSourceHref(sourceKind: string, sourceRef: string): string | null {
+export function glSourceHref(
+  sourceKind: string,
+  sourceRef: string,
+  ctx?: { periodLabel?: string | null },
+): string | null {
+  const ref = encodeURIComponent(sourceRef);
   switch (sourceKind) {
-    case "invoice": return `/wallet/invoices/${encodeURIComponent(sourceRef)}`;
-    case "expense": return `/wallet/expenses/${encodeURIComponent(sourceRef)}`;
-    case "revrec_line": return "/wallet/revrec";
-    case "self_billed_invoice": return "/finance/payables/self-billing";
-    case "partner_firm_invoice": return "/finance/payables/partner-invoices";
+    case "invoice": return `/wallet/invoices/${ref}`;
+    case "expense": return `/wallet/expenses/${ref}`;
+    case "revrec_line":
+      return ctx?.periodLabel
+        ? `/wallet/revrec?period=${encodeURIComponent(ctx.periodLabel)}&line=${ref}`
+        : "/wallet/revrec";
+    case "self_billed_invoice": return `/finance/payables/self-billing?focus=${ref}`;
+    case "partner_firm_invoice": return `/finance/payables/partner-invoices?focus=${ref}`;
     case "contractor_payment": return "/finance/payables/subcontractors";
-    case "bank_transaction": return "/wallet/cash";
+    case "bank_transaction": return `/wallet/cash?txn=${ref}`;
     default: return null; // manual, unknown kinds
   }
 }
@@ -346,7 +361,7 @@ router.get("/gl/journal", async (req, res) => {
         ...e,
         lines: linesByEntry.get(e.id) ?? [],
         // Task #1073 — drill-through to the source document (null = no page).
-        sourceHref: glSourceHref(e.sourceKind, e.sourceRef),
+        sourceHref: glSourceHref(e.sourceKind, e.sourceRef, { periodLabel: e.periodLabel }),
       })),
     },
   });
@@ -464,7 +479,7 @@ router.get("/gl/exceptions", async (req, res) => {
   res.json({
     ok: true,
     data: {
-      rows: rows.map((r) => ({ ...r, sourceHref: glSourceHref(r.sourceKind, r.sourceRef) })),
+      rows: rows.map((r) => ({ ...r, sourceHref: glSourceHref(r.sourceKind, r.sourceRef, { periodLabel: r.periodLabel }) })),
     },
   });
 });

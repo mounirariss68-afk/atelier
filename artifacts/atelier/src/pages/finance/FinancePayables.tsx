@@ -18,12 +18,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView } from "@/lib/useDeepLinkFocus";
 import {
   usePayablesVendors,
   usePayablesPos,
   usePayablesInvoices,
   usePayablesRuns,
-  usePayablesSelfBilling,
+  usePayablesSelfBillingState,
   usePayablesBankAccounts,
   useWhtRegister,
   useSubcontractors,
@@ -403,9 +404,14 @@ function sbTone(s: SelfBilledInvoiceRow["status"]): "default" | "amber" | "green
 }
 
 export function FinancePayablesSelfBilling() {
-  const invoices = usePayablesSelfBilling();
+  const { items: invoices, loaded } = usePayablesSelfBillingState();
   const { busy, error, run } = useMutate();
   const [info, setInfo] = React.useState<string | null>(null);
+  // Task #1082 — `?focus=<id>` deep-link from GL ledger rows.
+  const { focusId, missing, reportMissing, dismissMissing } = useDeepLinkFocus("focus");
+  React.useEffect(() => {
+    if (focusId && loaded && !invoices.some((i) => i.id === focusId)) reportMissing();
+  }, [focusId, loaded, invoices, reportMissing]);
   const onRunClerk = () =>
     run("clerk", async () => {
       const r = await postJson<{ summary: { invoicesCreated: number; invoicesUpdated: number; invoicesSkipped: number; reconciliationMismatches: number } }>(
@@ -436,6 +442,12 @@ export function FinancePayablesSelfBilling() {
         </div>
       </div>
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      {missing && (
+        <div className="flex items-center justify-between text-xs font-mono text-text-mute border border-border-soft rounded px-3 py-2" data-testid="sbi-focus-missing">
+          <span>The linked self-billed invoice is not in this list (it may have been removed).</span>
+          <button className="text-gold hover:text-gold/80 ml-3" onClick={dismissMissing}>dismiss</button>
+        </div>
+      )}
       <div className="grid gap-3" data-testid="selfbilling-list">
         {invoices.length === 0 && (
           <EmptyCard testId="selfbilling-empty">
@@ -443,7 +455,7 @@ export function FinancePayablesSelfBilling() {
           </EmptyCard>
         )}
         {invoices.map((inv) => (
-          <SelfBilledInvoiceCard key={inv.id} inv={inv} />
+          <SelfBilledInvoiceCard key={inv.id} inv={inv} highlighted={inv.id === focusId} />
         ))}
       </div>
     </PayablesShell>
@@ -458,7 +470,11 @@ function emailChip(e: NonNullable<SelfBilledInvoiceRow["emailDelivery"]>[number]
   return { tone: "amber" as const, text: `${label}: not delivered (email not configured)` };
 }
 
-function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
+function SelfBilledInvoiceCard({ inv, highlighted }: { inv: SelfBilledInvoiceRow; highlighted?: boolean }) {
+  const cardRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (highlighted) scrollFocusIntoView(cardRef.current);
+  }, [highlighted]);
   const { busy, error, run } = useMutate();
   const onApprove = () => run(`ap:${inv.id}`, () => postJson(`/finance/payables/self-billing/${inv.id}/approve`, {}));
   const onReject = () => {
@@ -473,6 +489,7 @@ function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
   };
   const recon = inv.reconciliation;
   return (
+    <div ref={cardRef} className={highlighted ? deepLinkFocusClass : undefined}>
     <Card className="p-4" data-testid={`sbi-${inv.id}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -561,6 +578,7 @@ function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
       </div>
       {error && <div className="text-xs text-danger mt-2">⚠ {error}</div>}
     </Card>
+    </div>
   );
 }
 
@@ -598,18 +616,19 @@ type PartnerInvoiceRow = {
   hasBankDetails: boolean;
 };
 
-function usePartnerInvoices(): { items: PartnerInvoiceRow[]; refetch: () => void } {
+function usePartnerInvoices(): { items: PartnerInvoiceRow[]; loaded: boolean; refetch: () => void } {
   const [items, setItems] = React.useState<PartnerInvoiceRow[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     let alive = true;
     void fetch(`${API_BASE}/finance/payables/partner-invoices`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => { if (alive) setItems(d.items ?? []); })
+      .then((d) => { if (alive) { setItems(d.items ?? []); setLoaded(true); } })
       .catch(() => undefined);
     return () => { alive = false; };
   }, [tick]);
-  return { items, refetch: () => setTick((t) => t + 1) };
+  return { items, loaded, refetch: () => setTick((t) => t + 1) };
 }
 
 function partnerInvoiceTone(s: string): "default" | "amber" | "red" | "green" {
@@ -620,8 +639,16 @@ function partnerInvoiceTone(s: string): "default" | "amber" | "red" | "green" {
 }
 
 export function FinancePayablesPartnerInvoices() {
-  const { items, refetch } = usePartnerInvoices();
+  const { items, loaded, refetch } = usePartnerInvoices();
   const { busy, error, run } = useMutate();
+  // Task #1082 — `?focus=<id>` deep-link from GL ledger rows.
+  const { focusId, missing, reportMissing, dismissMissing } = useDeepLinkFocus("focus");
+  const focusRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!focusId || !loaded) return;
+    if (items.some((i) => i.id === focusId)) scrollFocusIntoView(focusRef.current);
+    else reportMissing();
+  }, [focusId, loaded, items, reportMissing]);
   const act = (id: string, decision: string, reason?: string) =>
     run(`${decision}:${id}`, async () => {
       await postJson(`/finance/payables/partner-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}) });
@@ -639,6 +666,12 @@ export function FinancePayablesPartnerInvoices() {
         <MonoChip tone={pending.length > 0 ? "amber" : "default"}>{pending.length} awaiting review</MonoChip>
       </div>
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      {missing && (
+        <div className="flex items-center justify-between text-xs font-mono text-text-mute border border-border-soft rounded px-3 py-2" data-testid="partner-invoice-focus-missing">
+          <span>The linked partner invoice is not in this list (it may have been removed).</span>
+          <button className="text-gold hover:text-gold/80 ml-3" onClick={dismissMissing}>dismiss</button>
+        </div>
+      )}
       <div className="grid gap-3" data-testid="partner-invoices-list">
         {items.length === 0 && (
           <EmptyCard testId="partner-invoices-empty">
@@ -646,7 +679,8 @@ export function FinancePayablesPartnerInvoices() {
           </EmptyCard>
         )}
         {items.map((inv) => (
-          <Card key={inv.id} className="p-4" data-testid={`partner-invoice-${inv.id}`}>
+          <div key={inv.id} ref={inv.id === focusId ? focusRef : undefined} className={inv.id === focusId ? deepLinkFocusClass : undefined}>
+          <Card className="p-4" data-testid={`partner-invoice-${inv.id}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <Eyebrow>{inv.partnerFirmName}</Eyebrow>
@@ -703,6 +737,7 @@ export function FinancePayablesPartnerInvoices() {
               </div>
             )}
           </Card>
+          </div>
         ))}
       </div>
     </PayablesShell>

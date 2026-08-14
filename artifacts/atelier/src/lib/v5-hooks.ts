@@ -43,6 +43,21 @@ function listHook<T>(key: string, path: string) {
   };
 }
 
+// Task #1082 — like listHook but also exposes whether the fetch has
+// completed, so deep-link consumers can tell "empty list" from "still
+// loading" before reporting a missing focus target. Shares the query key
+// (and thus the cache) with the plain hook.
+function listStateHook<T>(key: string, path: string) {
+  return function useListState(): { items: T[]; loaded: boolean } {
+    const q = useQuery<{ items: T[] }>({
+      queryKey: ["atelier-v5", key],
+      queryFn: () => get<{ items: T[] }>(path),
+      staleTime: 30_000,
+    });
+    return { items: q.data?.items ?? [], loaded: q.isFetched };
+  };
+}
+
 // ============================================================
 // Finance — Legal-entity registry (Task #249)
 // ============================================================
@@ -1719,6 +1734,7 @@ export interface SelfBilledInvoiceRow {
   updatedAt: string;
 }
 export const usePayablesSelfBilling = listHook<SelfBilledInvoiceRow>("pay-selfbilling", "/finance/payables/self-billing");
+export const usePayablesSelfBillingState = listStateHook<SelfBilledInvoiceRow>("pay-selfbilling", "/finance/payables/self-billing");
 
 export interface PayablesBankAccountRow {
   id: string;

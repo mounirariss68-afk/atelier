@@ -269,6 +269,23 @@ router.get("/triage", async (req, res) => {
   return res.json({ ok: true, data: { rows } });
 });
 
+// Task #1082 — targeted single-transaction lookup for GL drill-through
+// deep-links: resolved (matched/journaled) txns fall out of the default
+// triage queue, and the list endpoints are windowed, so the cash page needs
+// an id-based lookup that works regardless of state or age.
+// @cli-skip: internal deep-link resolver, no standalone CLI value
+router.get("/triage/:id", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  const [txn] = await db.select().from(atelierBankTransaction).where(and(
+    eq(atelierBankTransaction.id, req.params.id),
+    eq(atelierBankTransaction.orgId, me.orgId),
+    isNull(atelierBankTransaction.deletedAt),
+  ));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  return res.json({ ok: true, data: { txn } });
+});
+
 // Re-run matching for a single txn (after correcting counterparty data etc).
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/triage/:id/rematch", async (req, res) => {

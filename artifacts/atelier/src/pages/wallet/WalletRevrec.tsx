@@ -4,6 +4,8 @@ import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView } from "@/lib/useDeepLinkFocus";
+import { scheduleIdForPostingLine } from "@/lib/revrecFocus";
 
 interface ScheduleRow {
   id: string;
@@ -45,10 +47,29 @@ function thisMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Task #1082 — `?period=YYYY-MM` deep-link from GL revrec_line rows: open
+// the page on the source line's period instead of the current month.
+function initialPeriod(): { period: string; fromDeepLink: boolean } {
+  const p = new URLSearchParams(window.location.search).get("period");
+  if (p && /^\d{4}-\d{2}$/.test(p)) return { period: p, fromDeepLink: true };
+  return { period: thisMonth(), fromDeepLink: false };
+}
+
 export default function WalletRevrec() {
   const { toast } = useToast();
   const [me, setMe] = React.useState<MeResp["user"] | null>(null);
-  const [period, setPeriod] = React.useState(thisMonth());
+  const [{ period: initPeriod, fromDeepLink }] = React.useState(initialPeriod);
+  const [period, setPeriod] = React.useState(initPeriod);
+  // Highlight the deep-linked period's schedules until the user changes period.
+  const focusPeriod = fromDeepLink && period === initPeriod ? initPeriod : null;
+  const focusRef = React.useRef<HTMLTableElement | null>(null);
+  const rowRef = React.useRef<HTMLTableRowElement | null>(null);
+  const scrolled = React.useRef(false);
+  // `?line=<posting line id>` — resolve to the schedule row it recognises.
+  const { focusId: lineId, missing, reportMissing, dismissMissing } = useDeepLinkFocus("line");
+  const [focusScheduleId, setFocusScheduleId] = React.useState<string | null>(null);
+  // Which period the currently-rendered schedules belong to (null = loading).
+  const [loadedPeriod, setLoadedPeriod] = React.useState<string | null>(null);
   const [schedules, setSchedules] = React.useState<ScheduleRow[]>([]);
   const [postings, setPostings] = React.useState<PostingRow[]>([]);
   const [locks, setLocks] = React.useState<PeriodLock[]>([]);
@@ -66,6 +87,7 @@ export default function WalletRevrec() {
     setSchedules(sched.schedules ?? []);
     setPostings(post.postings ?? []);
     setLocks(lk.locks ?? []);
+    setLoadedPeriod(period);
   }, [period]);
 
   React.useEffect(() => { void refresh(); }, [refresh]);
@@ -140,6 +162,46 @@ export default function WalletRevrec() {
 
   const pendingPosting = postings.find((p) => p.periodLabel === period && !p.postedAt);
 
+  React.useEffect(() => {
+    if (!focusPeriod || scrolled.current || schedules.length === 0) return;
+    scrolled.current = true;
+    scrollFocusIntoView(rowRef.current ?? focusRef.current);
+  }, [focusPeriod, schedules.length, focusScheduleId]);
+
+  // Resolve `?line=` → schedule row via the targeted posting-line lookup
+  // (works for any period, no list cap). Missing line (deleted posting,
+  // adjustment line with no schedule) surfaces a dismissible notice.
+  const lineResolved = React.useRef(false);
+  React.useEffect(() => {
+    if (!lineId || lineResolved.current) return;
+    lineResolved.current = true;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/atelier/revrec/posting-lines/${encodeURIComponent(lineId)}`, { credentials: "include" });
+        if (r.ok) {
+          const j = await r.json();
+          const sid = scheduleIdForPostingLine(j.line ? [j.line] : [], lineId);
+          if (sid) {
+            // Follow the line's real period if it differs from the URL param.
+            if (j.line.periodLabel && j.line.periodLabel !== initPeriod) setPeriod(j.line.periodLabel);
+            setFocusScheduleId(sid);
+            return;
+          }
+        }
+      } catch { /* fall through to missing notice */ }
+      reportMissing();
+    })();
+  }, [lineId, fromDeepLink, initPeriod, reportMissing]);
+
+  // Once the resolved schedule row renders, scroll again to the exact row —
+  // or report missing if the schedule itself is no longer in this period.
+  // Only judge after the schedules for the CURRENT period have loaded.
+  React.useEffect(() => {
+    if (!focusScheduleId || loadedPeriod !== period) return;
+    if (schedules.some((s) => s.id === focusScheduleId)) scrollFocusIntoView(rowRef.current);
+    else reportMissing();
+  }, [focusScheduleId, schedules, loadedPeriod, period, reportMissing]);
+
   return (
     <div className="min-h-screen text-text">
       <PageHero>
@@ -159,6 +221,12 @@ export default function WalletRevrec() {
       />
 
       <div className="px-6 py-4 max-w-7xl mx-auto">
+      {missing && (
+        <div className="flex items-center justify-between text-xs font-mono text-text-mute border border-border-soft rounded px-3 py-2 mb-3" data-testid="revrec-focus-missing">
+          <span>The linked revenue-recognition line is not available for {initPeriod} (it may have been re-computed or removed).</span>
+          <button className="text-gold hover:text-gold/80 ml-3" onClick={dismissMissing} data-testid="btn-dismiss-revrec-focus">dismiss</button>
+        </div>
+      )}
       <div className="flex items-end gap-3">
         <div>
           <label className="text-xs text-text-mute uppercase block mb-1">Period</label>
@@ -182,13 +250,18 @@ export default function WalletRevrec() {
         {schedules.length === 0 ? (
           <p className="text-text-mute text-sm">No schedule rows. Click "Compute schedules" to generate them from the Recognizer agent.</p>
         ) : (
-          <table className="w-full text-sm" data-testid="revrec-schedule-table">
+          <table ref={focusRef} className={`w-full text-sm ${focusPeriod && !focusScheduleId ? deepLinkFocusClass : ""}`} data-testid="revrec-schedule-table">
             <thead className="text-text-mute text-left">
               <tr><th className="py-2">Engagement</th><th>Method</th><th>Basis %</th><th>Recognised</th><th>Deferred</th><th>State</th><th></th></tr>
             </thead>
             <tbody>
               {schedules.map((s) => (
-                <tr key={s.id} className="border-t border-border/40">
+                <tr
+                  key={s.id}
+                  ref={s.id === focusScheduleId ? rowRef : undefined}
+                  className={`border-t border-border/40 ${s.id === focusScheduleId ? "bg-gold/10 " + deepLinkFocusClass : ""}`}
+                  data-testid={`revrec-schedule-row-${s.id}`}
+                >
                   <td className="py-2 font-mono text-xs">{s.engagementId}</td>
                   <td>{s.method}</td>
                   <td>{fmtPct(s.basisPct)}</td>

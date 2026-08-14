@@ -21,7 +21,8 @@
     "test:slash-composer": "tsx src/components/cli/slashComposer.test.ts",
     "test:me-lens-gating": "tsx --tsconfig tsconfig.json src/lib/meLensGating.test.ts",
     "generate:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts",
-    "test:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts --check"
+    "test:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts --check",
+    "test:deeplink-focus": "tsx src/lib/useDeepLinkFocus.test.ts"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

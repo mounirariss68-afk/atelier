@@ -17,7 +17,7 @@
 - [Atelier API types are codegen'd](atelier-api-types-codegen.md) — types are orval-generated from lib/api-spec/openapi.yaml; edit spec + codegen, never hand-edit.
 - [Cartographer entity-scope](cartographer-entity-scope.md) — guardCartographerEntityScope() is the safety net; Exec Mapper reuses queue/guard/applier (atelier-executive-mapper.md).
 - [Research priority-refs & recency](atelier-research-priority-refs-shape.md) — strategicPriorityRefs is {text,sourceUrls}; recency layer in [atelier-research-recency.md](atelier-research-recency.md).
-- [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; drafts in partial.input.__researchedDraft; multi-field: cli-multifield-clarification.md.
+- [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; multi-field in [cli-multifield-clarification.md](cli-multifield-clarification.md); slash-menu UX quirks in [cli-slash-command-ux.md](cli-slash-command-ux.md).
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` has many PRE-EXISTING errors, diff vs HEAD; rebuild gitignored lib dists first (stale-lib-dist-review.md).
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — "Recent changes" projects audit payload.changes; revert re-PATCHes old value; render in BOTH card branches.
 - [Running the CRM test harness](crm-harness-run.md) — isolated crm_test DB, >120s one-shot; never a workflow; flake/cleanup notes in crm-harness-*.md topic files.
@@ -62,10 +62,9 @@
 - [Atelier legal-entity registry](atelier-legal-entity-registry.md) — ENTITIES_SEED removed; plan/reports read registry via listFinanceEntities + setFpaEntities, firm pseudo-entity fallback; extract data under proposal.fields.
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
-- [CLI slash-command UX](cli-slash-command-ux.md) — aliases carry leading "/"; slash menu must close once args typed or Enter re-picks and resets; parse-rejoin controlled inputs eat commas.
 - [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).
 - [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
-- [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external; async watchdog in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md); enrichment in [atelier-receipt-enrichment.md](atelier-receipt-enrichment.md).
+- [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external; watchdog in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md); enrichment in [atelier-receipt-enrichment.md](atelier-receipt-enrichment.md); vision OCR in [chat-receipt-vision.md](chat-receipt-vision.md).
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (alias→memory→fuzzy→keyword→AI); org aliases learned from corrections apply pre-memory; wallet routes raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
 - [Chat person cross-domain fallback](atelier-person-crossdomain.md) — person detail tools auto-fallback CRM↔roster (ACL-filter BEFORE capping candidates); "final:" markers stripped server-side; card meta keys never render.
@@ -83,6 +82,7 @@
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock semantics; Collections Agent reads ONLY isDefault dunning ladders per jurisdiction.
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
 - [Atelier GL statements](atelier-gl-statements.md) — entity P&L/BS/CF from GL journals; BS/CF identities by construction (new stock buckets must wire into CF); IC tagged by account name; budget firm-level only.
+- [Ledger drill-through deep-links](atelier-gl-drill-through.md) — server resolver is sole URL builder; pages consume via shared focus hook, missing notice only AFTER load; contractor payments deliberately list-only.
 - [Partner NDA → firm linkage](atelier-partner-nda-linkage.md) — no FK between contracts and partner-firm registry; /partners/agreements joins by normalized name → partnerFirmId; UI keys on that, never counterpartyId.
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design; invitations source-restricted; login only via onboarding create-login; People nav derives from peopleLifecycle.STAGES.
 - [Partner capability profiles & RAG](atelier-partner-capability-rag.md) — 2-D stage model (agreed⇔agreementStage), profile via approval queue only, org-scoped chunks; PROD re-run of the 7-partner ingest at go-live.
@@ -98,7 +98,6 @@
 - [Chat write-capability contract](chat-write-capability-contract.md) — isWrite tools must return navigateTo on commit-success (validator throws); self-only writes are selector-free + attachment.userId ownership; refusals scrubbed.
 - [Atelier leave OOO & holidays](atelier-leave-ooo.md) — revoke/shorten share one route (clears Outlook OOF); on-leave-today is leadership-gated; calendar `kind` needs a cast (not in orval type).
 - [Holiday override review layer](atelier-holiday-overrides.md) — tentative holiday dates confirmed/adjusted via org override rows merged at read time; new consumers must pass overrides through, filter ranges AFTER adjustment.
-- [Chat receipt image OCR](chat-receipt-vision.md) — vision only ≥4KB images (tests offline); unreadable → needsReview, never filename+0; arithmetic total/tax cross-check rules in [receipt-amount-validation.md](receipt-amount-validation.md).
 - [Chat typed-name guard](chat-typed-name-guard.md) — typed-name confirm is risk-based (destructive verbs/irreversible/outbound), not blanket-attachment; web reads top-level typedNameRequired string, mobile the boolean.
 - [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
 - [Chat email recipient resolution](atelier-email-recipient-resolution.md) — chat `to` names resolve via shared resolver (roster+contacts, ACL before capping); resolved email pinned in pending input; company docs use separate non-me.* capability.
@@ -147,8 +146,7 @@
 - [Stale lib dist fails typecheck/review](stale-lib-dist-review.md) — gitignored lib dists lag schema edits AND merged commits; `tsc -b --force` after Drizzle edits, before markTaskComplete.
 - [Expo Liquid Glass gating](expo-liquid-glass.md) — isLiquidGlassAvailable() THROWS without the native module (Expo Go/old builds); try/catch fail-closed; cards use translucent wash, not per-card blur.
 - [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); EXPO_PUSH_BASE_URL stub; tap deep-link stash rules in [atelier-push-tap-deeplink.md](atelier-push-tap-deeplink.md).
-- [Task delegation accept/decline](atelier-task-delegation.md) — assignee owns the row; declined filtered via shared notDeclinedAssignment on EVERY read surface; chat cap tasks.assign is non-me.* by design.
-- [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic `selfnotif_ptask_<id>_<epoch>` reminder cards; every mutation must dismiss stale cards.
+- [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic reminder cards, every mutation dismisses stale ones; delegation accept/decline rules in [atelier-task-delegation.md](atelier-task-delegation.md).
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.

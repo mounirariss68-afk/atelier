@@ -1,6 +1,7 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
+import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView } from "@/lib/useDeepLinkFocus";
 
 interface CashReceipt {
   id: string;
@@ -161,6 +162,41 @@ export default function WalletCash() {
   const [journalAcct, setJournalAcct] = React.useState("6000");
   const [parkFor, setParkFor] = React.useState<string | null>(null);
   const [parkReason, setParkReason] = React.useState("");
+  const [loaded, setLoaded] = React.useState(false);
+
+  // Task #1082 — `?txn=<id>` deep-link from GL ledger rows: scroll to and
+  // highlight the exact bank transaction in the triage queue.
+  const { focusId, missing, reportMissing, dismissMissing } = useDeepLinkFocus("txn", "focus");
+  const focusRef = React.useRef<HTMLTableRowElement | null>(null);
+  // Resolved (matched/journaled) txns aren't in the default triage queue —
+  // look them up across all states so GL drill-through still lands on the
+  // exact transaction (rendered as a highlighted resolved-transaction card).
+  const [resolvedFocus, setResolvedFocus] = React.useState<TriageTxn | null>(null);
+  React.useEffect(() => {
+    if (!loaded || !focusId) return;
+    if (txns.some((t) => t.id === focusId)) {
+      scrollFocusIntoView(focusRef.current);
+      return;
+    }
+    void (async () => {
+      try {
+        const r = await fetch(`/api/atelier/wallet/cash/triage/${encodeURIComponent(focusId)}`, { credentials: "include" });
+        if (r.ok) {
+          const j = await r.json();
+          if (j?.data?.txn) {
+            setResolvedFocus(j.data.txn as TriageTxn);
+            return;
+          }
+        }
+      } catch { /* fall through to missing notice */ }
+      reportMissing();
+    })();
+    // Run once after first load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, focusId]);
+  React.useEffect(() => {
+    if (resolvedFocus) scrollFocusIntoView(focusRef.current);
+  }, [resolvedFocus]);
 
   const load = React.useCallback(async () => {
     const [tr, rr] = await Promise.all([
@@ -171,6 +207,7 @@ export default function WalletCash() {
     const rj = await rr.json();
     setTxns(tj?.data?.rows ?? []);
     setReceipts(rj?.data?.rows ?? []);
+    setLoaded(true);
   }, []);
   React.useEffect(() => { void load(); }, [load]);
 
@@ -268,6 +305,30 @@ export default function WalletCash() {
         {note && (
           <div className="text-xs font-mono text-gold" data-testid="cash-action-note">{note}</div>
         )}
+        {missing && (
+          <div className="flex items-center justify-between text-xs font-mono text-text-mute border border-border-soft rounded px-3 py-2" data-testid="cash-focus-missing">
+            <span>The linked bank transaction is not in the current triage queue (it may have been removed).</span>
+            <button className="text-gold hover:text-gold/80 ml-3" onClick={dismissMissing} data-testid="btn-dismiss-focus-missing">dismiss</button>
+          </div>
+        )}
+
+        {resolvedFocus && (
+          <Card className={`p-3 bg-gold/10 ${deepLinkFocusClass}`} data-testid="cash-focus-resolved">
+            <div ref={focusRef} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <div className="font-mono text-[11px] uppercase text-text-faint">Linked bank transaction · already resolved</div>
+                <div className="truncate">
+                  {resolvedFocus.postedDate} · {resolvedFocus.counterpartyNameRaw ?? "(no counterparty)"}
+                  {resolvedFocus.referenceRaw ? ` · ${resolvedFocus.referenceRaw}` : ""}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="font-mono">{resolvedFocus.currency} {resolvedFocus.amount.toFixed(2)}</span>
+                <MonoChip tone={stateTone[resolvedFocus.matchedState] ?? "default"}>{resolvedFocus.matchedState}</MonoChip>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <StatementUploadCard onImported={(msg) => { setNote(msg); void load(); }} />
 
@@ -295,7 +356,11 @@ export default function WalletCash() {
                 const cands = (p?.candidates ?? []) as Array<MatchCandidate & OutflowCandidate>;
                 return (
                   <React.Fragment key={t.id}>
-                    <tr className="border-t border-border-soft" data-testid={`triage-row-${t.id}`}>
+                    <tr
+                      ref={t.id === focusId ? focusRef : undefined}
+                      className={`border-t border-border-soft ${t.id === focusId ? "bg-gold/10 " + deepLinkFocusClass : ""}`}
+                      data-testid={`triage-row-${t.id}`}
+                    >
                       <td className="px-3 py-2 font-mono text-xs">{t.postedDate}</td>
                       <td className="px-3 py-2 text-xs">
                         <div>{t.counterpartyNameRaw ?? "—"}</div>

@@ -956,6 +956,46 @@ router.get("/revrec/period-postings/:id/lines", async (req, res) => {
   res.json({ lines });
 });
 
+// Task #1082 — targeted posting-line lookup for GL drill-through deep-links.
+// Resolves a line id to its posting/period/schedule without the 50-posting
+// list cap, so old-period GL sources still focus the exact schedule row.
+// @cli-skip: internal deep-link resolver, no standalone CLI value
+router.get("/revrec/posting-lines/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canRead(me.role)) {
+    res.status(403).json({ error: "revrec-read-denied" });
+    return;
+  }
+  const row = await withRls(req, async (tx) => {
+    const [r] = await tx
+      .select({
+        id: atelierRevenuePeriodPostingLine.id,
+        postingId: atelierRevenuePeriodPostingLine.postingId,
+        scheduleId: atelierRevenuePeriodPostingLine.scheduleId,
+        periodLabel: atelierRevenuePeriodPosting.periodLabel,
+      })
+      .from(atelierRevenuePeriodPostingLine)
+      .innerJoin(
+        atelierRevenuePeriodPosting,
+        eq(atelierRevenuePeriodPosting.id, atelierRevenuePeriodPostingLine.postingId),
+      )
+      .where(
+        and(
+          eq(atelierRevenuePeriodPostingLine.id, req.params.id),
+          isNull(atelierRevenuePeriodPostingLine.deletedAt),
+          isNull(atelierRevenuePeriodPosting.deletedAt),
+        ),
+      );
+    return r ?? null;
+  });
+  if (!row) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  res.json({ line: row });
+});
+
 // ===========================================================================
 // REVENUE ADJUSTMENT — founding_partner only
 // ===========================================================================
