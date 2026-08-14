@@ -14,12 +14,17 @@
  */
 
 import * as React from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
-import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView } from "@/lib/useDeepLinkFocus";
+import {
+  useAtelierGetFinanceApprovalsInbox,
+  type AtelierApprovalInboxItem,
+} from "@workspace/api-client-react";
+import { ArrowRight, Clock, Inbox } from "lucide-react";
+import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView, focusOutcome } from "@/lib/useDeepLinkFocus";
 import {
   usePayablesInvoices,
   usePayablesRuns,
@@ -56,16 +61,7 @@ function useMutate() {
   return { busy, error, run };
 }
 
-const TABS = [
-  { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing" },
-  { id: "partner-invoices", label: "Partner invoices", href: "/finance/payables/partner-invoices" },
-  { id: "supplier-invoices", label: "Supplier invoices", href: "/finance/payables/supplier-invoices" },
-  { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
-  { id: "run-history", label: "Run history", href: "/finance/payables/run-history" },
-  { id: "wht", label: "WHT register", href: "/finance/payables/wht" },
-  { id: "subcontractors", label: "Subcontractors", href: "/finance/payables/subcontractors" },
-];
-
+export type PayablesTab = { id: string; label: string; href: string; blurb: string };
 function fmtUsd(n: number): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
@@ -94,7 +90,7 @@ function PayablesShell({
       <PageHero>
         <SectionHead eyebrow={eyebrow} headline={headline} lede={lede} />
         <div className="mt-6">
-          <SubSectionTabs tabs={TABS} data-testid="finance-payables-tabs" />
+          <PayablesTabStrip />
         </div>
       </PageHero>
       <div className="container-atelier py-10 space-y-6">{children}</div>
@@ -102,9 +98,9 @@ function PayablesShell({
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Self-billed invoices (RCTI) — Task #430
-// ============================================================
+// ------------------------------------------------------------
 function sbTone(s: SelfBilledInvoiceRow["status"]): "default" | "amber" | "green" | "red" {
   if (s === "paid" || s === "approved") return "green";
   if (s === "disputed" || s === "rejected") return "red";
@@ -291,9 +287,9 @@ function SelfBilledInvoiceCard({ inv, highlighted }: { inv: SelfBilledInvoiceRow
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Payment runs (dual bank signatories) — Task #430
-// ============================================================
+// ------------------------------------------------------------
 function runStatusTone(s: PaymentRunRow["status"]): "default" | "amber" | "green" | "red" {
   if (s === "paid" || s === "exported" || s === "approved") return "green";
   if (s === "cancelled") return "red";
@@ -301,9 +297,9 @@ function runStatusTone(s: PaymentRunRow["status"]): "default" | "amber" | "green
   return "default";
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Task #875 — Partner-submitted invoices (AP review)
-// ============================================================
+// ------------------------------------------------------------
 
 type PartnerInvoiceRow = {
   id: string;
@@ -453,9 +449,9 @@ export function FinancePayablesPartnerInvoices() {
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Task #1070 — Internally-uploaded supplier invoices
-// ============================================================
+// ------------------------------------------------------------
 
 type SupplierInvoiceRow = {
   id: string;
@@ -510,18 +506,19 @@ function useAllocEntities(): AllocEntityOption[] {
   return entities;
 }
 
-function useSupplierInvoices(): { items: SupplierInvoiceRow[]; refetch: () => void } {
+function useSupplierInvoices(): { items: SupplierInvoiceRow[]; loaded: boolean; refetch: () => void } {
   const [items, setItems] = React.useState<SupplierInvoiceRow[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     let alive = true;
     void fetch(`${API_BASE}/finance/payables/supplier-invoices`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => { if (alive) setItems(d.items ?? []); })
-      .catch(() => undefined);
+      .then((d) => { if (alive) { setItems(d.items ?? []); setLoaded(true); } })
+      .catch(() => { if (alive) setLoaded(true); });
     return () => { alive = false; };
   }, [tick]);
-  return { items, refetch: () => setTick((t) => t + 1) };
+  return { items, loaded, refetch: () => setTick((t) => t + 1) };
 }
 
 const SUPPLIER_STATUS_FILTERS = ["all", "submitted", "under_review", "approved", "scheduled", "paid", "rejected"] as const;
@@ -657,9 +654,17 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
 }
 
 export function FinancePayablesSupplierInvoices() {
-  const { items, refetch } = useSupplierInvoices();
+  const { items, loaded, refetch } = useSupplierInvoices();
   const { busy, error, run } = useMutate();
   const [filter, setFilter] = React.useState<(typeof SUPPLIER_STATUS_FILTERS)[number]>("all");
+  // Task #1103 — `?focus=<id>` deep-link from the payables action inbox.
+  const { focusId, missing, reportMissing, dismissMissing } = useDeepLinkFocus("focus");
+  const focusRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const outcome = focusOutcome(loaded, items.map((i) => i.id), focusId);
+    if (outcome === "scroll") scrollFocusIntoView(focusRef.current);
+    else if (outcome === "missing") reportMissing();
+  }, [focusId, loaded, items, reportMissing]);
   const entities = useAllocEntities();
   // Task #1095 — per-invoice entity override pick ("" = keep proposal).
   const [allocPick, setAllocPick] = React.useState<Record<string, string>>({});
@@ -696,6 +701,12 @@ export function FinancePayablesSupplierInvoices() {
         </div>
       </div>
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      {missing && (
+        <div className="flex items-center justify-between text-xs font-mono text-text-mute border border-border-soft rounded px-3 py-2" data-testid="supplier-invoice-focus-missing">
+          <span>The linked supplier invoice is not in this list (it may have been removed).</span>
+          <button className="text-gold hover:text-gold/80 ml-3" onClick={dismissMissing}>dismiss</button>
+        </div>
+      )}
       <div className="grid gap-3" data-testid="supplier-invoices-list">
         {shown.length === 0 && (
           <EmptyCard testId="supplier-invoices-empty">
@@ -705,7 +716,8 @@ export function FinancePayablesSupplierInvoices() {
           </EmptyCard>
         )}
         {shown.map((inv) => (
-          <Card key={inv.id} className="p-4" data-testid={`supplier-invoice-${inv.id}`}>
+          <div key={inv.id} ref={inv.id === focusId ? focusRef : undefined} className={inv.id === focusId ? deepLinkFocusClass : undefined}>
+          <Card className="p-4" data-testid={`supplier-invoice-${inv.id}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <Eyebrow>{inv.supplierName}{inv.partnerFirmId ? " · partner firm" : ""}</Eyebrow>
@@ -804,6 +816,7 @@ export function FinancePayablesSupplierInvoices() {
               </div>
             )}
           </Card>
+          </div>
         ))}
       </div>
     </PayablesShell>
@@ -993,9 +1006,9 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Payment-run history (paid / cancelled) — audit trail view
-// ============================================================
+// ------------------------------------------------------------
 interface RunAuditEvent {
   id: string;
   action: string;
@@ -1173,9 +1186,9 @@ function RunHistoryCard({ runRow }: { runRow: PaymentRunRow }) {
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // WHT register
-// ============================================================
+// ------------------------------------------------------------
 function whtTone(s: string): "default" | "amber" | "green" | "red" {
   if (s === "acknowledged") return "green";
   if (s === "pending") return "amber";
@@ -1252,9 +1265,9 @@ export function FinancePayablesWht() {
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Subcontractors (pay-when-paid)
-// ============================================================
+// ------------------------------------------------------------
 function invStatusTone(s: VendorInvoiceRow["status"]): "default" | "amber" | "green" | "red" {
   if (s === "paid" || s === "approved_for_payment") return "green";
   if (s === "exception" || s === "rejected") return "red";
@@ -1370,3 +1383,253 @@ function AuditTrailPanel() {
     </Card>
   );
 }
+
+/** Inbox kinds that belong to procure-to-pay (subset of the unified
+ *  /finance/approvals inbox from Task #1091). */
+const PAYABLES_INBOX_KINDS: Record<string, string> = {
+  supplier_invoice: "Invoices to review",
+  self_billing_draft: "Self-billing checkpoints",
+  payment_run: "Runs awaiting signature",
+};
+
+export const PAYABLES_TAB_GROUPS: ReadonlyArray<{
+  id: string;
+  label: string;
+  href: string;
+  tabs: PayablesTab[];
+}> = [
+  { id: "overview", label: "Overview", href: "/finance/payables", tabs: [] },
+  {
+    id: "invoices-in",
+    label: "Invoices in",
+    href: "/finance/payables/partner-invoices",
+    tabs: [
+      { id: "partner-invoices", label: "Partner invoices", href: "/finance/payables/partner-invoices", blurb: "Invoices partner firms submit through their portal — review, approve or reject." },
+      { id: "supplier-invoices", label: "Supplier invoices", href: "/finance/payables/supplier-invoices", blurb: "Internally-uploaded supplier invoices with entity allocation and review." },
+      { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing", blurb: "Self-billed (RCTI) invoices drafted by the clerk from approved hours; partner checkpoint before payment." },
+    ],
+  },
+  {
+    id: "pay",
+    label: "Pay",
+    href: "/finance/payables/payment-runs",
+    tabs: [
+      { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs", blurb: "Maker-checker + dual-signatory payment runs with bank-file output." },
+    ],
+  },
+  {
+    id: "registers",
+    label: "Registers",
+    href: "/finance/payables/run-history",
+    tabs: [
+      { id: "run-history", label: "Run history", href: "/finance/payables/run-history", blurb: "Settled and cancelled runs with signatures, remittance references, and audit trail." },
+      { id: "wht", label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance." },
+      { id: "subcontractors", label: "Subcontractors", href: "/finance/payables/subcontractors", blurb: "Pay-when-paid links between subcontractor invoices and client AR receipts." },
+    ],
+  },
+];
+
+function NeedsActionRow({
+  title,
+  subtitle,
+  href,
+  when,
+  amount,
+  actionable,
+  testId,
+}: {
+  title: string;
+  subtitle?: string | null;
+  href: string;
+  when?: string | null;
+  amount?: string | null;
+  actionable: boolean;
+  testId: string;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 py-2 px-1 border-b border-border-soft/60 last:border-b-0 ${actionable ? "" : "opacity-60"}`}
+      data-testid={testId}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="truncate text-sm text-text">{title}</span>
+          {!actionable && <MonoChip tone="amber">Partner approval</MonoChip>}
+        </div>
+        {subtitle && <div className="text-[11px] text-text-mute truncate">{subtitle}</div>}
+      </div>
+      <div className="shrink-0 flex items-center gap-3">
+        {amount && <span className="font-mono text-xs text-text whitespace-nowrap">{amount}</span>}
+        {when !== undefined && (
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-faint">
+            <Clock className="w-3 h-3" /> {inboxTimeAgo(when)}
+          </span>
+        )}
+        <Link href={href} className={`text-xs whitespace-nowrap ${actionable ? "text-gold hover:underline" : "text-text-faint hover:text-text-mute"}`}>
+          {actionable ? "Review →" : "View →"}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function FinancePayablesOverview() {
+  const stageGroups = PAYABLES_TAB_GROUPS.filter((g) => g.id === "invoices-in" || g.id === "pay");
+  const registers = PAYABLES_TAB_GROUPS.find((g) => g.id === "registers")!;
+  return (
+    <PayablesShell
+      eyebrow="Manage · Finance · Pay"
+      headline="Procure-to-pay"
+      lede="Invoices in (partner, supplier, self-billed), payment runs with maker-checker and dual signatures, and the supporting registers. Everything waiting on you is at the top."
+    >
+      <NeedsYourActionPanel />
+      {stageGroups.map((g) => (
+        <div key={g.id} className="space-y-3">
+          <SectionHead headline={g.id === "invoices-in" ? "Invoices in" : "Pay"} />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid={`payables-group-${g.id}`}>
+            {g.tabs.map((t) => (
+              <LandingLinkCard key={t.id} tab={t} testId={`payables-landing-${t.id}`} />
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="space-y-3">
+        <SectionHead headline="Registers & related" />
+        <p className="text-xs text-text-mute -mt-2">Reference registers and the Wallet expense surfaces (expense approvals stay in Wallet).</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="payables-group-registers">
+          {[...registers.tabs, ...RELATED_WALLET_LINKS].map((t) => (
+            <LandingLinkCard key={t.id} tab={t} testId={`payables-landing-${t.id}`} />
+          ))}
+        </div>
+      </div>
+    </PayablesShell>
+  );
+}
+
+function activePayablesGroupId(pathname: string): string {
+  for (const g of PAYABLES_TAB_GROUPS) {
+    if (g.tabs.some((t) => pathname === t.href || pathname.startsWith(t.href + "/"))) return g.id;
+  }
+  return "overview";
+}
+
+/** "Needs your action" — pending payables actions for the current user,
+ *  aggregated from the unified approvals inbox (payables kinds only).
+ *  3-way-match exceptions are NOT listed: the PO / 3-way-match surfaces
+ *  (and their data) were retired in the Task #1091 stub sweep, so there
+ *  is no live match-exception source to aggregate. */
+function NeedsYourActionPanel() {
+  const { data, isLoading, isError } = useAtelierGetFinanceApprovalsInbox();
+  const inbox = data?.data;
+  const items = (inbox?.items ?? []).filter((it) => it.kind in PAYABLES_INBOX_KINDS);
+  // The inbox read is finance-leadership only; if this viewer can't see it
+  // (403) just skip the panel rather than showing an error.
+  if (isError) return null;
+  const groups: Array<{ label: string; items: AtelierApprovalInboxItem[] }> = [];
+  for (const [kind, label] of Object.entries(PAYABLES_INBOX_KINDS)) {
+    const ofKind = items.filter((i) => i.kind === kind);
+    if (ofKind.length > 0) groups.push({ label, items: ofKind });
+  }
+  const total = items.length;
+  return (
+    <Card className="p-5" data-testid="payables-needs-action">
+      <div className="flex items-center justify-between gap-2">
+        <SectionHead headline="Needs your action" />
+        <MonoChip tone={total > 0 ? "amber" : "default"} data-testid="payables-needs-action-count">
+          {total} pending
+        </MonoChip>
+      </div>
+      {isLoading && <p className="text-sm text-text-mute mt-3">Loading pending actions…</p>}
+      {!isLoading && total === 0 && (
+        <div className="mt-4 text-center py-4" data-testid="payables-needs-action-empty">
+          <Inbox className="w-6 h-6 mx-auto text-text-faint" />
+          <p className="mt-2 text-sm text-text-mute">Nothing in payables is waiting on you.</p>
+        </div>
+      )}
+      <div className="mt-2 space-y-4">
+        {groups.map((g) => (
+          <div key={g.label}>
+            <Eyebrow>{g.label}</Eyebrow>
+            <div className="mt-1">
+              {g.items.map((it) => (
+                <NeedsActionRow
+                  key={`${it.kind}-${it.id}`}
+                  title={it.title}
+                  subtitle={it.subtitle}
+                  href={it.href}
+                  when={it.submittedAt}
+                  amount={it.amount ? `${it.amount.currency} ${it.amount.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null}
+                  actionable={it.actionable}
+                  testId={`payables-action-${it.id}`}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 pt-3 border-t border-border-soft/60 text-xs">
+        <Link href="/finance/approvals" className="text-gold hover:underline">
+          Full approvals inbox (all of finance) →
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+function LandingLinkCard({ tab, testId }: { tab: PayablesTab; testId: string }) {
+  return (
+    <Link href={tab.href}>
+      <Card className="p-4 h-full flex flex-col gap-2 hover:border-gold/40 cursor-pointer transition-colors" data-testid={testId}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>{tab.label}</Eyebrow>
+          <ArrowRight className="w-3.5 h-3.5 text-text-faint" />
+        </div>
+        <p className="text-sm text-text-mute leading-snug">{tab.blurb}</p>
+      </Card>
+    </Link>
+  );
+}
+
+function PayablesTabStrip() {
+  const [loc] = useLocation();
+  const activeGroup = activePayablesGroupId(loc);
+  const group = PAYABLES_TAB_GROUPS.find((g) => g.id === activeGroup);
+  return (
+    <div className="space-y-1.5">
+      <SubSectionTabs
+        tabs={PAYABLES_TAB_GROUPS.map((g) => ({
+          id: g.id,
+          label: g.label,
+          href: g.href,
+          isActive: () => g.id === activeGroup,
+        }))}
+        data-testid="finance-payables-tabs"
+      />
+      {group && group.tabs.length > 1 && (
+        <SubSectionTabs
+          className="border-b-0"
+          tabs={group.tabs.map((t) => ({ id: t.id, label: t.label, href: t.href }))}
+          data-testid="finance-payables-subtabs"
+        />
+      )}
+    </div>
+  );
+}
+
+function inboxTimeAgo(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+}
+
+const RELATED_WALLET_LINKS: PayablesTab[] = [
+  { id: "expenses", label: "Expenses", href: "/wallet/expenses", blurb: "Submitted, approved, and paid expense reports." },
+  { id: "policy", label: "Expense policy", href: "/wallet/policy", blurb: "Per-diem caps, receipt thresholds, VAT recovery rules." },
+  { id: "approvals", label: "Approvals queue", href: "/wallet/approvals", blurb: "Manager / partner expense approvals." },
+  { id: "cards", label: "Corporate cards", href: "/wallet/cards", blurb: "Card register, statements, dispute tracker." },
+  { id: "vat", label: "VAT / WHT (legacy)", href: "/wallet/vat", blurb: "Input VAT recovery and legacy WHT view." },
+  { id: "treasury", label: "Treasury", href: "/wallet/treasury", blurb: "Cash position, FX exposure, payment runs." },
+];

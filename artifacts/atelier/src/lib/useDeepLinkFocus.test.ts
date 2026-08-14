@@ -8,7 +8,7 @@
  * Run: pnpm --filter @workspace/atelier run test:deeplink-focus
  */
 import assert from "node:assert/strict";
-import { pickFocusParam } from "./useDeepLinkFocus";
+import { pickFocusParam, focusOutcome } from "./useDeepLinkFocus";
 import { scheduleIdForPostingLine } from "./revrecFocus";
 
 // ── pickFocusParam ──────────────────────────────────────────
@@ -22,6 +22,18 @@ assert.equal(
   "a b/c",
   "URI-encoded refs decode back to the raw id",
 );
+
+// ── focusOutcome (shared list-page decision; supplier-invoices regression) ──
+assert.equal(focusOutcome(true, ["a", "b"], "b"), "scroll", "present target → scroll");
+assert.equal(focusOutcome(true, ["a", "b"], "gone"), "missing", "absent target → missing notice");
+assert.equal(
+  focusOutcome(true, [], "gone"),
+  "missing",
+  "EMPTY loaded list still reports missing (supplier ?focus= regression)",
+);
+assert.equal(focusOutcome(false, [], "gone"), null, "not loaded yet → no decision");
+assert.equal(focusOutcome(false, ["gone"], "gone"), null, "not loaded beats present");
+assert.equal(focusOutcome(true, ["a"], null), null, "no focus param → nothing");
 
 // ── scheduleIdForPostingLine ────────────────────────────────
 const lines = [

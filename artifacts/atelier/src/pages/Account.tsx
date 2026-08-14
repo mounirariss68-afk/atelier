@@ -153,8 +153,10 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "account_ai", label: "Account AI", icon: <Bot className="w-3.5 h-3.5" /> },
-  // Task #722 — vendor/procurement registration intelligence.
-  { key: "procurement", label: "Procurement", icon: <Landmark className="w-3.5 h-3.5" /> },
+  // Task #722 — vendor/procurement registration intelligence. Task #1103
+  // relabelled "Supplier registration" to distinguish it from Finance
+  // AP / procure-to-pay (same key so deep links keep working).
+  { key: "procurement", label: "Supplier registration", icon: <Landmark className="w-3.5 h-3.5" /> },
   { key: "documents", label: "Documents", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
 ];

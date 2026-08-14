@@ -64,6 +64,7 @@
     "test:partner-billing": "tsx ./tests/partner-billing/run.ts",
     "test:bank-recon": "tsx ./tests/bank-recon/run.ts",
     "test:supplier-invoices": "tsx ./tests/supplier-invoices/run.ts",
+    "test:payables-inbox-links": "tsx ./tests/payables-inbox-links/run.ts",
     "test:entity-allocation": "tsx ./tests/entity-allocation/run.ts",
     "test:autopilot-policy": "tsx ./tests/finance-autopilot-policy/run.ts",
     "test:supplier-invoice-autopost": "tsx ./tests/supplier-invoice-autopost/run.ts",

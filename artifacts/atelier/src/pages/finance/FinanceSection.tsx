@@ -64,25 +64,10 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Margin", href: "/wallet/margin", blurb: "Realised margin vs target by engagement.", status: "live" },
     ],
   },
-  payables: {
-    id: "payables",
-    eyebrow: "Finance · Pay",
-    headline: "Procure-to-pay",
-    lede:
-      "Vendors, PO / non-PO invoices and 3-way match, employee expenses (policy, VAT recovery, approvals, cards), VAT / WHT, payment runs and treasury.",
-    subPages: [
-      { label: "Payment runs", href: "/finance/payables/payment-runs", blurb: "Maker-checker + dual-signatory payment runs with bank-file output.", status: "live" },
-      { label: "Run history", href: "/finance/payables/run-history", blurb: "Settled and cancelled runs with signatures, remittance references, and audit trail.", status: "live" },
-      { label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance.", status: "live" },
-      { label: "Subcontractors", href: "/finance/payables/subcontractors", blurb: "Pay-when-paid links between subcontractor invoices and client AR receipts.", status: "live" },
-      { label: "Expenses", href: "/wallet/expenses", blurb: "Submitted, approved, and paid expense reports.", status: "live" },
-      { label: "Expense policy", href: "/wallet/policy", blurb: "Per-diem caps, receipt thresholds, VAT recovery rules.", status: "live" },
-      { label: "Approvals queue", href: "/wallet/approvals", blurb: "Manager / partner expense approvals.", status: "live" },
-      { label: "Corporate cards", href: "/wallet/cards", blurb: "Card register, statements, dispute tracker.", status: "live" },
-      { label: "VAT / WHT (legacy)", href: "/wallet/vat", blurb: "Input VAT recovery and legacy WHT view.", status: "live" },
-      { label: "Treasury", href: "/wallet/treasury", blurb: "Cash position, FX exposure, payment runs.", status: "live" },
-    ],
-  },
+  // Task #1103 — the payables landing is now the dedicated
+  // FinancePayablesOverview page (action inbox + staged groups) in
+  // FinancePayables.tsx; the generic section entry was removed so the
+  // landing and the payables tab strip can't drift apart.
   close: {
     id: "close",
     eyebrow: "Finance · Close",

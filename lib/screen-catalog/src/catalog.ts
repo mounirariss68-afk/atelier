@@ -741,6 +741,30 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
+    "id": "finance.approvals",
+    "title": "Approvals",
+    "description": "Approvals — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
+    "path": "/finance/approvals",
+    "breadcrumb": [
+      "Finance",
+      "Approvals"
+    ],
+    "keywords": [],
+    "roles": [
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer"
+    ],
+    "parameterized": false
+  },
+  {
     "id": "finance.billing",
     "title": "Bill & Collect",
     "description": "Bill & Collect — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",

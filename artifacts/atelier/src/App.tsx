@@ -116,6 +116,7 @@ import {
   FinancePayablesSupplierInvoices,
   FinancePayablesWht,
   FinancePayablesSubcontractors,
+  FinancePayablesOverview,
 } from "@/pages/finance/FinancePayables";
 // Task #419 — Wave 7: Finance Comply sub-pages.
 import FinanceComplyControls from "@/pages/finance/FinanceComplyControls";
@@ -763,7 +764,9 @@ function Router() {
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/billing/worklist" component={BillingWorklist} />
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
-        <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
+        {/* Task #1103 — dedicated payables landing (action inbox + staged
+            groups) replaces the generic FinanceSection landing. */}
+        <Route path="/finance/payables" component={FinancePayablesOverview} />
         <Route path="/finance/payables/self-billing" component={FinancePayablesSelfBilling} />
         <Route path="/finance/payables/partner-invoices" component={FinancePayablesPartnerInvoices} />
         {/* Task #1070 — internal supplier-invoice upload + review. */}

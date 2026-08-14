@@ -46,6 +46,19 @@ export function useDeepLinkFocus(...paramNames: string[]): {
 }
 
 /** Class string for a highlighted (deep-linked) row/card. */
+/** Pure focus-outcome decision shared by list pages — exported for tests.
+ *  Returns what a list page should do once its data request has settled:
+ *  "scroll" when the focused row is present, "missing" when the target is
+ *  absent (INCLUDING an empty list), and null while not loaded / no focus. */
+export function focusOutcome(
+  loaded: boolean,
+  ids: readonly string[],
+  focusId: string | null,
+): "scroll" | "missing" | null {
+  if (!focusId || !loaded) return null;
+  return ids.includes(focusId) ? "scroll" : "missing";
+}
+
 export const deepLinkFocusClass =
   "ring-2 ring-gold/70 ring-offset-1 ring-offset-bg rounded";
 

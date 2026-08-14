@@ -257,15 +257,19 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
   )).orderBy(desc(atelierPartnerFirmInvoices.submittedAt)).limit(200);
   for (const r of pfInvoices) {
     const needsAlloc = r.allocStatus === "needs_input";
+    // Task #1103 — source-specific deep link: the supplier-invoices page
+    // lists only internal uploads; partner-submitted invoices live on the
+    // partner-invoices page (both support ?focus= deep links).
+    const isPartnerSubmitted = r.source === "partner_submitted";
     items.push({
       id: r.id, kind: "supplier_invoice",
-      title: `Supplier invoice ${r.reference ?? r.id}`,
+      title: `${isPartnerSubmitted ? "Partner invoice" : "Supplier invoice"} ${r.reference ?? r.id}`,
       subtitle: `${r.partnerFirmName}` + (needsAlloc ? " · allocation needs input" : "") +
         ` · ${r.status}`,
       amount: { currency: r.costCurrency, value: round2(r.costAmount) },
       submittedAt: iso(r.submittedAt ?? r.createdAt),
       requiredRole: "finance",
-      href: `/finance/payables/supplier-invoices?focus=${encodeURIComponent(r.id)}`,
+      href: `/finance/payables/${isPartnerSubmitted ? "partner-invoices" : "supplier-invoices"}?focus=${encodeURIComponent(r.id)}`,
       actionable: true,
     });
   }
