@@ -83,6 +83,43 @@ const CURRENCY_TOKEN =
 const NON_TXN_SEGMENT =
   /(opening|closing)\s+balance|balance\s+(brought|carried)\s+forward|statement\s+(date|period)|total\s+(debits|credits|withdrawals|deposits)/i;
 
+// Task #1112 — statements laid out with separate Debit / Credit columns and a
+// trailing Balance column. We cannot see x-coordinates in the flat text
+// layer, so column-position guessing is off the table. Instead:
+//   1. The HEADER must explicitly declare debit-ish and credit-ish columns
+//     followed by a balance column (balance last). That tells us a
+//     two-amount row is [transaction amount, running balance].
+//   2. The transaction's direction is derived by ARITHMETIC, never by
+//     position: previous balance ± amount must equal this row's balance
+//     exactly (to the cent). One exact match → sign is proven; no match or
+//     an ambiguous zero amount → the row is flagged as before.
+// This keeps the "never guess" contract: every imported sign is verified
+// against the bank's own running balance.
+const DEBIT_CREDIT_BALANCE_HEADER = new RegExp(
+  [
+    String.raw`\b(?:debits?|withdrawals?|money\s+out|paid\s+out)\b[^\n]{0,60}?\b(?:credits?|deposits?|money\s+in|paid\s+in)\b`,
+    String.raw`\b(?:credits?|deposits?|money\s+in|paid\s+in)\b[^\n]{0,60}?\b(?:debits?|withdrawals?|money\s+out|paid\s+out)\b`,
+  ]
+    .map((pair) => `(?:${pair})[^\n]{0,60}?\\b(?:running\\s+)?balance\\b`)
+    .join("|"),
+  "i",
+);
+
+const OPENING_BALANCE_LINE =
+  /(?:opening\s+balance|balance\s+(?:brought|b\/?)\s*(?:forward|fwd))[^0-9(+-]{0,40}(\()?([-+])?\s?(\d{1,3}(?:,\d{3})*\.\d{2})(\))?/i;
+
+/** Find an explicitly labelled opening balance anywhere in `text`. */
+function findOpeningBalance(text: string): number | null {
+  const m = text.match(OPENING_BALANCE_LINE);
+  if (!m) return null;
+  const abs = Number(m[3].replace(/,/g, ""));
+  if (!Number.isFinite(abs)) return null;
+  const negative = Boolean(m[1] && m[4]) || m[2] === "-";
+  return negative ? -abs : abs;
+}
+
+const toCents = (v: number): number => Math.round(v * 100);
+
 interface AmountHit {
   value: number;
   signed: boolean;
@@ -146,6 +183,19 @@ export function parsePdfStatementText(
   const flagged: FlaggedPdfRow[] = [];
   if (!text.trim()) return { rows, flagged, confidence: 0 };
 
+  // Task #1112 — debit/credit-column layout support (see header comment).
+  const hasDebitCreditBalanceHeader = DEBIT_CREDIT_BALANCE_HEADER.test(text);
+  // Running balance in cents; null whenever the chain of custody is broken
+  // (unknown starting point, or a row whose effect on the balance we could
+  // not verify). A two-amount row re-anchors the chain from its own printed
+  // balance even when the row itself is flagged.
+  let prevBalanceCents: number | null = hasDebitCreditBalanceHeader
+    ? (() => {
+        const opening = findOpeningBalance(text);
+        return opening == null ? null : toCents(opening);
+      })()
+    : null;
+
   // Collect date anchors.
   const anchors: Array<{ date: string; token: string; start: number; end: number }> = [];
   DATE_TOKEN.lastIndex = 0;
@@ -170,25 +220,81 @@ export function parsePdfStatementText(
       // row-like (then it's a real row we failed to read).
       if (seg.trim().length > 0 && seg.trim().length <= 80) {
         flagged.push({ dateToken: a.token, snippet, reason: "no readable amount", confidence: 0.2 });
+        prevBalanceCents = null; // possibly a real row we failed to read
       }
       continue;
     }
+    let resolvedFromBalance = false;
+    let amt = amounts[0];
     if (amounts.length > 1) {
-      // Debit/credit/balance columns we cannot tell apart — never guess.
-      flagged.push({
-        dateToken: a.token,
-        snippet,
-        reason: `ambiguous — ${amounts.length} amounts in one row (debit/credit/balance columns?)`,
-        confidence: 0.4,
-      });
-      continue;
+      // Task #1112 — with a recognised Debit|Credit|Balance header, a
+      // two-amount row is [transaction, running balance]. The direction is
+      // taken ONLY from exact balance arithmetic — never from position.
+      if (hasDebitCreditBalanceHeader && amounts.length === 2) {
+        const txn = amounts[0];
+        const bal = amounts[1];
+        const balCents = toCents(bal.value);
+        const txnCents = toCents(Math.abs(txn.value));
+        const prev = prevBalanceCents;
+        // Re-anchor the chain on this row's printed balance either way.
+        prevBalanceCents = balCents;
+        if (prev == null) {
+          flagged.push({
+            dateToken: a.token,
+            snippet,
+            reason:
+              "debit/credit columns detected but no prior balance to verify this row's direction against",
+            confidence: 0.4,
+          });
+          continue;
+        }
+        const isDebit = prev - txnCents === balCents;
+        const isCredit = prev + txnCents === balCents;
+        if (txnCents === 0 || isDebit === isCredit) {
+          // No match (mis-read row) or ambiguous zero — never guess.
+          flagged.push({
+            dateToken: a.token,
+            snippet,
+            reason:
+              "balance arithmetic does not confirm this row's direction — flagged, not guessed",
+            confidence: 0.4,
+          });
+          continue;
+        }
+        const derived = isDebit ? -Math.abs(txn.value) : Math.abs(txn.value);
+        if (txn.signed && toCents(txn.value) !== toCents(derived)) {
+          // Printed sign marker contradicts the balance arithmetic.
+          flagged.push({
+            dateToken: a.token,
+            snippet,
+            reason: "printed sign marker contradicts the running balance — flagged, not guessed",
+            confidence: 0.3,
+          });
+          continue;
+        }
+        amt = { value: derived, signed: true, index: txn.index };
+        resolvedFromBalance = true;
+      } else {
+        // Columns we cannot tell apart — never guess.
+        flagged.push({
+          dateToken: a.token,
+          snippet,
+          reason: `ambiguous — ${amounts.length} amounts in one row (debit/credit/balance columns?)`,
+          confidence: 0.4,
+        });
+        continue;
+      }
     }
-    const amt = amounts[0];
     const counterparty = cleanCounterparty(seg.slice(0, amt.index));
     const reference = extractReference(seg);
     const ccyMatch = seg.match(CURRENCY_TOKEN);
     let confidence = 0.95;
     let value = amt.value;
+    if (resolvedFromBalance) {
+      // Direction proven by exact running-balance arithmetic — strong, but
+      // not a printed sign marker on the amount itself.
+      confidence = 0.9;
+    }
     if (!amt.signed) {
       // No printed sign marker — direction must come from an unmistakable
       // direction word; both/neither is ambiguous → flag, NEVER default a
@@ -202,6 +308,7 @@ export function parsePdfStatementText(
           reason: "direction unclear — amount has no sign marker or unmistakable debit/credit wording",
           confidence: 0.4,
         });
+        prevBalanceCents = null; // unknown effect on the running balance
         continue;
       }
       value = out ? -Math.abs(amt.value) : Math.abs(amt.value);
@@ -219,8 +326,18 @@ export function parsePdfStatementText(
       kind: classifyKind(value, reference ?? counterparty),
       confidence: Math.max(0, Math.min(1, confidence)),
     };
-    if (row.confidence >= PDF_ROW_CONFIDENCE_FLOOR) rows.push(row);
-    else flagged.push({ dateToken: a.token, snippet, reason: "low row confidence", confidence: row.confidence });
+    if (row.confidence >= PDF_ROW_CONFIDENCE_FLOOR) {
+      rows.push(row);
+      // Single-amount rows have no printed balance; propagate their known,
+      // signed effect through the running-balance chain so a following
+      // two-amount row can still verify itself.
+      if (!resolvedFromBalance && prevBalanceCents != null) {
+        prevBalanceCents += toCents(value);
+      }
+    } else {
+      flagged.push({ dateToken: a.token, snippet, reason: "low row confidence", confidence: row.confidence });
+      if (!resolvedFromBalance) prevBalanceCents = null; // unknown effect on balance
+    }
   }
 
   const total = rows.length + flagged.length;

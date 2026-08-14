@@ -423,6 +423,90 @@ async function main() {
     check("statement PDF: repeat confirm → alreadyImported (same dedupe as CSV)",
       q3.ok === true && q3.data?.alreadyImported === true, q3);
 
+    // Task #1112 — debit/credit-column layout: with a recognised
+    // Debit|Credit|Balance header, two-amount rows resolve their direction
+    // by exact running-balance arithmetic (trailing Balance column is used
+    // for verification only, never imported); a row whose arithmetic does
+    // not check out stays flagged, never guessed.
+    const dcPdf = await makePdf([
+      `ACME BANK — Statement of Account ${TAG}`,
+      "Currency AED",
+      "Date Description Debit Credit Balance",
+      "Opening Balance 10,000.00",
+      "Transaction details for the period",
+      `01/08/2026 Client payment ref ${TAG}-DC-1 2,500.00 12,500.00`, // credit
+      "02/08/2026 Office rent 8,000.00 4,500.00", // debit (despite no wording sign)
+      "03/08/2026 Misc entry 100.00 4,600.00", // credit despite neutral wording
+      "04/08/2026 Odd row 500.00 9,999.99", // arithmetic mismatch → flagged
+      "05/08/2026 Bank fee 99.99 9,900.00", // re-anchored on 9,999.99 → debit
+    ]);
+    const dcAtt = await ingest(`statement-dc-${TAG}.pdf`, "application/pdf", dcPdf);
+    const d1: any = await importStmt.run(
+      { attachmentId: dcAtt, statementDate: "2026-08-12", bankAccountId: acctId },
+      mkCtx() as any,
+    );
+    const dcRows = (d1.data?.preview?.pdf?.rows ?? []) as any[];
+    const dcFlagged = (d1.data?.preview?.pdf?.flagged ?? []) as any[];
+    check(
+      "statement PDF (debit/credit columns): phase 1 previews 4 balance-verified rows",
+      !!d1.confirmation && d1.data?.preview?.pdf?.rowsExtracted === 4 && dcRows.length === 4,
+      d1.data?.preview?.pdf,
+    );
+    const dcCredit = dcRows.find((r) => /client payment/i.test(r.counterparty ?? ""));
+    const dcRent = dcRows.find((r) => /office rent/i.test(r.counterparty ?? ""));
+    const dcMisc = dcRows.find((r) => /misc entry/i.test(r.counterparty ?? ""));
+    const dcFee = dcRows.find((r) => /bank fee/i.test(r.counterparty ?? ""));
+    check(
+      "statement PDF (debit/credit columns): signs derived from balance arithmetic, balance column ignored",
+      dcCredit?.amount === 2500 && dcRent?.amount === -8000 && dcRent?.kind === "payment" &&
+        dcMisc?.amount === 100 && dcFee?.amount === -99.99 &&
+        // balance figures must never be imported as amounts
+        !dcRows.some((r) => [10000, 12500, 4500, 4600, 9999.99, 9900].includes(Math.abs(r.amount))),
+      dcRows,
+    );
+    check(
+      "statement PDF (debit/credit columns): arithmetic-mismatch row is flagged, never guessed",
+      d1.data?.preview?.pdf?.flaggedRows === 1 &&
+        dcFlagged.some((f) => /odd row/i.test(f.snippet ?? "") && /balance arithmetic/i.test(f.reason ?? "")),
+      dcFlagged,
+    );
+    const d2: any = await importStmt.run(d1.confirmation.pending.input, mkCtx() as any);
+    check(
+      "statement PDF (debit/credit columns): confirm imports the 4 verified rows",
+      d2.ok === true && d2.data?.rowsImported === 4,
+      d2,
+    );
+    const dcTxns = await db.select().from(atelierBankTransaction).where(and(
+      eq(atelierBankTransaction.orgId, ORG),
+      eq(atelierBankTransaction.statementImportId, d2.data?.importId ?? ""),
+    ));
+    check(
+      "statement PDF (debit/credit columns): stored signs match the balance-verified directions",
+      dcTxns.length === 4 &&
+        dcTxns.filter((t: any) => Number(t.amount) < 0).length === 2 &&
+        dcTxns.some((t: any) => Number(t.amount) === -8000) &&
+        dcTxns.some((t: any) => Number(t.amount) === 2500),
+      dcTxns.map((t: any) => ({ amount: t.amount, kind: t.kind })),
+    );
+
+    // Same layout but NO recognisable header → two-amount rows stay
+    // ambiguous and the whole PDF refuses with CSV guidance (never guesses).
+    const noHdrPdf = await makePdf([
+      `ACME BANK — Statement of Account ${TAG} NOHDR`,
+      "01/08/2026 Client payment 2,500.00 12,500.00",
+      "02/08/2026 Office rent 8,000.00 4,500.00",
+    ]);
+    const noHdrAtt = await ingest(`statement-nohdr-${TAG}.pdf`, "application/pdf", noHdrPdf);
+    const dNo: any = await importStmt.run(
+      { attachmentId: noHdrAtt, statementDate: "2026-08-12", bankAccountId: acctId },
+      mkCtx() as any,
+    );
+    check(
+      "statement PDF (no column header): multi-amount rows still refuse with CSV guidance",
+      dNo.ok === false && dNo.errorCode === "pdf_low_confidence" && /csv/i.test(dNo.errorMessage ?? ""),
+      dNo,
+    );
+
     // Unknown account id must be rejected, never silently re-picked.
     const pBad: any = await importStmt.run(
       { attachmentId: stmtAtt, bankAccountId: "bank_nope" },
