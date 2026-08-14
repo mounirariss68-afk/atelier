@@ -5634,6 +5634,40 @@ export async function runTurn(
         break;
       }
 
+      // Task #1093 — global unforgeable-confirm guard. The two-phase
+      // confirm protocol's real gate used to be model behavior: any
+      // tool_use in THIS loop whose input carried `confirm:true`
+      // committed immediately, so injected instructions (attached
+      // documents, emails) could steer the model into skipping the
+      // approval card entirely. Model-originated `confirm:true` on a
+      // twoPhaseConfirm capability is therefore stripped here — the tool
+      // re-runs its phase-1 preview and the turn pauses
+      // `awaiting_confirmation`. Commits happen ONLY via the /confirm
+      // endpoint's verified replay of the server-persisted pendingWrite
+      // (`confirmPendingWrite`), the clarification/disambiguation
+      // continuations, and the async runner — all of which call
+      // `tool.run` directly and never pass through this loop, so they
+      // are untouched. Legacy non-catalog writes (add_raid_item) default
+      // to two-phase, matching their in-file confirm handling; catalog
+      // writes with twoPhaseConfirm:false (single-phase commits like
+      // complete_my_task) are left alone. `commitToken` (the Task #1090
+      // finance HMAC) is stripped alongside so a replayed token can
+      // never ride a fresh model call.
+      if (tool.isWrite && (tc.input as { confirm?: unknown }).confirm === true) {
+        const catGuard = findByToolName(tc.name);
+        if (!catGuard || catGuard.twoPhaseConfirm === true) {
+          const stripped: Record<string, unknown> = {
+            ...(tc.input as Record<string, unknown>),
+          };
+          delete stripped.confirm;
+          delete stripped.commitToken;
+          tc.input = stripped;
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({ evt: "model_confirm_stripped", turnId, tool: tc.name, step })}`,
+          );
+        }
+      }
+
       record({
         type: "tool_call",
         data: { step, tool: tc.name, input: tc.input },
