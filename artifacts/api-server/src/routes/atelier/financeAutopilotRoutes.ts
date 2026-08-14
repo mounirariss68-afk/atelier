@@ -462,6 +462,11 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
 router.get("/finance/approvals/inbox", async (req, res) => {
   const me = ensure(req, res); if (!me) return;
   // Role gate: founding_partner | partner | finance only; everyone else 403.
+  // Deliberately NOT widened for other viewers of /finance/payables (Task
+  // #1108 decision): the payables decide/approve writes are leadership-tier
+  // too, so a kind-filtered wider read would only list items the viewer
+  // cannot act on. The payables "Needs your action" panel renders an
+  // explicit role-limited notice on this 403 instead of hiding silently.
   if (!isFinanceLeadership(me))
     return res.status(403).json({ error: "forbidden", message: "The approvals inbox is limited to finance leadership (founding_partner | partner | finance)." });
   const data = await loadFinanceApprovalsInbox(me);

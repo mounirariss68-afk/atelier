@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import {
   useAtelierGetFinanceApprovalsInbox,
+  getAtelierGetFinanceApprovalsInboxQueryKey,
+  ApiError,
   type AtelierApprovalInboxItem,
 } from "@workspace/api-client-react";
 import { ArrowRight, Clock, Inbox } from "lucide-react";
@@ -1517,14 +1519,56 @@ function activePayablesGroupId(pathname: string): string {
  *  aggregated from the unified approvals inbox (payables kinds only).
  *  3-way-match exceptions are NOT listed: the PO / 3-way-match surfaces
  *  (and their data) were retired in the Task #1091 stub sweep, so there
- *  is no live match-exception source to aggregate. */
+ *  is no live match-exception source to aggregate.
+ *
+ *  Visibility (deliberate, mirrors the server): GET /finance/approvals/inbox
+ *  is gated to finance leadership (founding_partner | partner | finance) and
+ *  we intentionally do NOT widen that read — payables approve/decide writes
+ *  are leadership-tier too, so a wider read would only surface items the
+ *  viewer can't act on. Non-leadership viewers of this landing get an
+ *  explicit "not visible for your role" card instead of a silently hidden
+ *  panel; genuine load failures render a separate error state. */
 function NeedsYourActionPanel() {
-  const { data, isLoading, isError } = useAtelierGetFinanceApprovalsInbox();
+  const { data, isLoading, isError, error } = useAtelierGetFinanceApprovalsInbox({
+    query: {
+      queryKey: getAtelierGetFinanceApprovalsInboxQueryKey(),
+      // A 403 is a stable role verdict, not a transient failure — don't retry.
+      retry: (failureCount, err) =>
+        !(err instanceof ApiError && err.status === 403) && failureCount < 2,
+    },
+  });
   const inbox = data?.data;
   const items = (inbox?.items ?? []).filter((it) => it.kind in PAYABLES_INBOX_KINDS);
-  // The inbox read is finance-leadership only; if this viewer can't see it
-  // (403) just skip the panel rather than showing an error.
-  if (isError) return null;
+  const forbidden = isError && error instanceof ApiError && error.status === 403;
+  if (forbidden) {
+    return (
+      <Card className="p-5" data-testid="payables-needs-action-forbidden">
+        <SectionHead headline="Needs your action" />
+        <p className="mt-3 text-sm text-text-mute">
+          No pending actions are visible for your role. The payables approvals
+          inbox (invoice approvals, payment-run checks and match exceptions) is
+          limited to finance leadership — founding partners, partners and
+          finance. If you take on payables duties, ask a founding partner to
+          update your role.
+        </p>
+      </Card>
+    );
+  }
+  if (isError) {
+    return (
+      <Card className="p-5" data-testid="payables-needs-action-error">
+        <SectionHead headline="Needs your action" />
+        <p className="mt-3 text-sm text-text-mute">
+          Couldn&apos;t load pending payables actions. Reload the page to try
+          again, or open the{" "}
+          <Link href="/finance/approvals" className="text-gold hover:underline">
+            full approvals inbox
+          </Link>
+          .
+        </p>
+      </Card>
+    );
+  }
   const groups: Array<{ label: string; items: AtelierApprovalInboxItem[] }> = [];
   for (const [kind, label] of Object.entries(PAYABLES_INBOX_KINDS)) {
     const ofKind = items.filter((i) => i.kind === kind);
