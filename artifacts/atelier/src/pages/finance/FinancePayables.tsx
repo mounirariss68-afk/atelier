@@ -25,7 +25,7 @@ import {
   ApiError,
   type AtelierApprovalInboxItem,
 } from "@workspace/api-client-react";
-import { ArrowRight, Clock, Inbox } from "lucide-react";
+import { ArrowRight, Bot, Clock, Inbox } from "lucide-react";
 import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView, focusOutcome } from "@/lib/useDeepLinkFocus";
 import {
   usePayablesInvoices,
@@ -482,6 +482,8 @@ type SupplierInvoiceRow = {
   allocConfidence: number | null;
   allocDecidedBy: string | null;
   allocOverrideReason: string | null;
+  // Task #1104 — set when the live approval was made by the autopilot.
+  autopilot: { agentName: string; agentRunId: string | null; at: string | null } | null;
 };
 
 // Task #1095 — entity options for the allocation override select.
@@ -748,6 +750,12 @@ export function FinancePayablesSupplierInvoices() {
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <MonoChip tone={partnerInvoiceTone(inv.status)} data-testid={`supplier-invoice-status-${inv.id}`}>{inv.status.replace(/_/g, " ")}</MonoChip>
+                {/* Task #1104 — autopilot attribution so founders spot auto-approvals */}
+                {inv.autopilot && (
+                  <MonoChip tone="amber" data-testid={`supplier-invoice-autopilot-${inv.id}`}>
+                    auto-approved · {inv.autopilot.agentName}
+                  </MonoChip>
+                )}
                 {inv.partnerFirmId && !inv.hasBankDetails && <MonoChip tone="amber">no bank details</MonoChip>}
                 {inv.fileName && (
                   <a
@@ -815,6 +823,33 @@ export function FinancePayablesSupplierInvoices() {
                 >
                   Reject
                 </Button>
+              </div>
+            )}
+            {/* Task #1104 — pull an approved (autopilot) invoice back to
+                review before a payment run picks it up. Once scheduled the
+                server blocks it — the run must be cancelled instead. */}
+            {inv.status === "approved" && !inv.paymentRunId && (
+              <div className="flex gap-2 mt-4 items-center flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!busy}
+                  onClick={() => {
+                    if (!window.confirm(`Un-approve invoice ${inv.reference ?? inv.id} and return it to review? It will drop out of the next payment run until re-approved.`)) return;
+                    act(inv.id, "unapprove");
+                  }}
+                  data-testid={`btn-supplier-unapprove-${inv.id}`}
+                >
+                  Un-approve
+                </Button>
+                <span className="text-[11px] text-text-mute">
+                  {inv.autopilot ? "Auto-approved — returns it to review before the next payment run." : "Returns it to review before the next payment run."}
+                </span>
+              </div>
+            )}
+            {inv.status === "scheduled" && inv.autopilot && (
+              <div className="text-[11px] text-text-mute mt-3" data-testid={`supplier-invoice-in-run-note-${inv.id}`}>
+                In a payment run — un-approve is no longer available; cancel the run to pull it back.
               </div>
             )}
           </Card>
@@ -1438,6 +1473,7 @@ function NeedsActionRow({
   when,
   amount,
   actionable,
+  agent,
   testId,
 }: {
   title: string;
@@ -1446,6 +1482,8 @@ function NeedsActionRow({
   when?: string | null;
   amount?: string | null;
   actionable: boolean;
+  /** Task #1104 — agent/autopilot attribution badge. */
+  agent?: { name: string } | null;
   testId: string;
 }) {
   return (
@@ -1456,6 +1494,15 @@ function NeedsActionRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="truncate text-sm text-text">{title}</span>
+          {agent && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] text-gold"
+              title={`Posted by ${agent.name}`}
+              data-testid={`${testId}-agent`}
+            >
+              <Bot className="w-3 h-3" /> {agent.name}
+            </span>
+          )}
           {!actionable && <MonoChip tone="amber">Partner approval</MonoChip>}
         </div>
         {subtitle && <div className="text-[11px] text-text-mute truncate">{subtitle}</div>}
@@ -1604,6 +1651,7 @@ function NeedsYourActionPanel() {
                   when={it.submittedAt}
                   amount={it.amount ? `${it.amount.currency} ${it.amount.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null}
                   actionable={it.actionable}
+                  agent={it.agent}
                   testId={`payables-action-${it.id}`}
                 />
               ))}

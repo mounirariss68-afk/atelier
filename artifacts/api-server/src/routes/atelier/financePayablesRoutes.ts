@@ -1121,9 +1121,54 @@ function bodyStr(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
 
+/** Task #1104 — autopilot attribution surfaced on approved invoices.
+ * The attribution is stored on the approve AUDIT event (payload.autopilot,
+ * Task #1091), never as invoice columns — this reads the latest approve
+ * event per invoice and keeps only autopilot-attributed ones. Rows whose
+ * status has since left approved/scheduled simply won't be asked about. */
+export type SupplierAutopilotAttribution = {
+  agentName: string;
+  agentRunId: string | null;
+  at: string | null;
+};
+export async function loadSupplierAutopilotAttribution(
+  orgId: string,
+  invoiceIds: string[],
+): Promise<Map<string, SupplierAutopilotAttribution>> {
+  const out = new Map<string, SupplierAutopilotAttribution>();
+  if (invoiceIds.length === 0) return out;
+  const events = await db.select({
+    entityId: atelierAuditEvents.entityId,
+    payload: atelierAuditEvents.payload,
+    createdAt: atelierAuditEvents.createdAt,
+  }).from(atelierAuditEvents).where(and(
+    eq(atelierAuditEvents.orgId, orgId),
+    eq(atelierAuditEvents.entityType, "partner_firm_invoice"),
+    eq(atelierAuditEvents.action, "finance.supplier_invoice.approve"),
+    inArray(atelierAuditEvents.entityId, invoiceIds),
+  )).orderBy(desc(atelierAuditEvents.createdAt));
+  // Latest approve event wins per invoice: if the newest approve was a
+  // human click, an OLDER autopilot approve (since un-approved) must not
+  // resurface — so track "seen" separately from "attributed".
+  const seen = new Set<string>();
+  for (const ev of events) {
+    if (seen.has(ev.entityId)) continue;
+    seen.add(ev.entityId);
+    const autopilot = (ev.payload as { autopilot?: { agentName?: unknown; agentRunId?: unknown } | null })?.autopilot;
+    if (!autopilot || typeof autopilot !== "object") continue;
+    out.set(ev.entityId, {
+      agentName: typeof autopilot.agentName === "string" && autopilot.agentName ? autopilot.agentName : "Finance Autopilot",
+      agentRunId: typeof autopilot.agentRunId === "string" ? autopilot.agentRunId : null,
+      at: ev.createdAt?.toISOString() ?? null,
+    });
+  }
+  return out;
+}
+
 function supplierInvoiceWire(
   row: typeof atelierPartnerFirmInvoices.$inferSelect,
   hasBankDetails?: boolean,
+  autopilot?: SupplierAutopilotAttribution | null,
 ) {
   return {
     id: row.id,
@@ -1156,6 +1201,9 @@ function supplierInvoiceWire(
     allocOverrideReason: row.allocOverrideReason,
     // Unlinked suppliers have no firm bank registry — no hold applies.
     hasBankDetails: hasBankDetails ?? !row.partnerFirmId,
+    // Task #1104 — autopilot attribution (from the approve audit event)
+    // so founders can spot auto-approved invoices and pull them back.
+    autopilot: autopilot ?? null,
   };
 }
 
@@ -1181,9 +1229,19 @@ router.get("/finance/payables/supplier-invoices", async (req, res, next) => {
           .where(and(eq(atelierPartnerFirms.orgId, me.orgId), inArray(atelierPartnerFirms.id, firmIds)))
       : [];
     const bankById = new Map(firms.map((f) => [f.id, Boolean((f.bankIban ?? "").trim())]));
+    // Task #1104 — attribution only matters while the approval is live
+    // (approved / scheduled); rejected or re-reviewed rows drop the badge.
+    const autopilotById = await loadSupplierAutopilotAttribution(
+      me.orgId,
+      rows.filter((r) => r.status === "approved" || r.status === "scheduled" || r.status === "paid").map((r) => r.id),
+    );
     res.json({
       items: rows.map((r) =>
-        supplierInvoiceWire(r, r.partnerFirmId ? (bankById.get(r.partnerFirmId) ?? false) : undefined),
+        supplierInvoiceWire(
+          r,
+          r.partnerFirmId ? (bankById.get(r.partnerFirmId) ?? false) : undefined,
+          autopilotById.get(r.id) ?? null,
+        ),
       ),
     });
   } catch (err) { next(err); }
@@ -1522,6 +1580,10 @@ const SUPPLIER_INVOICE_REVIEW: Record<string, string[]> = {
   start_review: ["submitted"],
   approve: ["submitted", "under_review"],
   reject: ["submitted", "under_review"],
+  // Task #1104 — pull an approved (typically autopilot-approved) invoice
+  // back to review BEFORE a payment run claims it. Once scheduled/paid the
+  // reversal is a run cancellation / credit note, never a status rewind.
+  unapprove: ["approved"],
 };
 
 /**
@@ -1554,6 +1616,17 @@ export async function reviewSupplierInvoiceCore(args: {
   if (!allowedFrom) return { status: 400, body: { error: "invalid-decision" } };
   const row = await loadSupplierInvoice(me.orgId, args.id);
   if (!row) return { status: 404, body: { error: "not-found" } };
+  // Task #1104 — un-approve has a hard reversibility boundary: once a
+  // payment run has picked the invoice up, say so explicitly instead of
+  // a generic invalid-status.
+  if (decision === "unapprove" && (row.paymentRunId || row.status === "scheduled" || row.status === "paid")) {
+    return { status: 409, body: {
+      error: "in-payment-run",
+      message: row.status === "paid"
+        ? "This invoice has already been paid — reversal now needs a credit note, not an un-approve."
+        : "This invoice is already in a payment run — remove it by cancelling the run; it can no longer be un-approved directly.",
+    } };
+  }
   if (!allowedFrom.includes(row.status))
     return { status: 409, body: { error: "invalid-status", status: row.status } };
   const reason = typeof args.reason === "string" ? args.reason.slice(0, 2000).trim() : "";
@@ -1600,6 +1673,21 @@ export async function reviewSupplierInvoiceCore(args: {
     await db.update(atelierPartnerFirmInvoices).set({
       status: "approved", reviewedByUserId: me.id, reviewedAt: now, updatedAt: now,
     }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+  } else if (decision === "unapprove") {
+    // Race-safe against payment-run pickup: the run builder claims rows
+    // conditionally on status='approved' AND paymentRunId IS NULL, so this
+    // update carries the same predicate — whichever transaction lands
+    // second sees zero rows and backs off.
+    const pulled = await db.update(atelierPartnerFirmInvoices).set({
+      status: "under_review", reviewedByUserId: me.id, reviewedAt: null, updatedAt: now,
+    }).where(and(
+      eq(atelierPartnerFirmInvoices.id, row.id),
+      eq(atelierPartnerFirmInvoices.status, "approved"),
+      isNull(atelierPartnerFirmInvoices.paymentRunId),
+    )).returning({ id: atelierPartnerFirmInvoices.id });
+    if (pulled.length === 0) {
+      return { status: 409, body: { error: "in-payment-run", message: "This invoice was just picked up by a payment run — remove it by cancelling the run; it can no longer be un-approved directly." } };
+    }
   } else {
     if (!reason) return { status: 400, body: { error: "reason-required", message: "A rejection reason is required." } };
     await db.update(atelierPartnerFirmInvoices).set({
@@ -1615,7 +1703,7 @@ export async function reviewSupplierInvoiceCore(args: {
       ...(reason ? { reason } : {}),
       ...(args.autopilot ? { autopilot: { agentRunId: args.autopilot.agentRunId, agentName: args.autopilot.agentName, reasons: args.autopilot.reasons } } : {}),
     },
-    summary: `${args.autopilot ? `${args.autopilot.agentName} auto-approved` : decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : "Rejected"} supplier invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
+    summary: `${args.autopilot ? `${args.autopilot.agentName} auto-approved` : decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : decision === "unapprove" ? "Un-approved (returned to review)" : "Rejected"} supplier invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
   });
   const updated = await loadSupplierInvoice(me.orgId, row.id);
   return { status: 200, body: { ok: true, invoice: updated ? supplierInvoiceWire(updated) : null } };

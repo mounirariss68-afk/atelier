@@ -47,6 +47,7 @@ import {
   loadFinanceAutopilotThresholds,
 } from "../../lib/atelier-finance-autopilot-settings.js";
 import { evaluateAutoPost } from "../../lib/atelier-finance-autopolicy.js";
+import { loadSupplierAutopilotAttribution } from "./financePayablesRoutes.js";
 
 const router: IRouter = Router();
 
@@ -270,6 +271,36 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
       submittedAt: iso(r.submittedAt ?? r.createdAt),
       requiredRole: "finance",
       href: `/finance/payables/${isPartnerSubmitted ? "partner-invoices" : "supplier-invoices"}?focus=${encodeURIComponent(r.id)}`,
+      actionable: true,
+    });
+  }
+
+  // (b2) Task #1104 — autopilot-approved AP invoices not yet in a payment
+  // run. Founders get a window to pull these back to review (un-approve)
+  // before a run claims them, so they surface in the inbox with agent
+  // attribution instead of silently sliding into the next run.
+  const autoApproved = await db.select().from(atelierPartnerFirmInvoices).where(and(
+    eq(atelierPartnerFirmInvoices.orgId, orgId),
+    eq(atelierPartnerFirmInvoices.status, "approved"),
+    isNull(atelierPartnerFirmInvoices.paymentRunId),
+    inArray(atelierPartnerFirmInvoices.source, ["partner_submitted", "internal_upload"]),
+    isNull(atelierPartnerFirmInvoices.deletedAt),
+  )).orderBy(desc(atelierPartnerFirmInvoices.reviewedAt)).limit(200);
+  const autopilotById = await loadSupplierAutopilotAttribution(orgId, autoApproved.map((r) => r.id));
+  for (const r of autoApproved) {
+    const attr = autopilotById.get(r.id);
+    if (!attr) continue; // human-approved — nothing to flag
+    if (attr.agentRunId) agentRunIds.add(attr.agentRunId);
+    const isPartnerSubmitted = r.source === "partner_submitted";
+    items.push({
+      id: r.id, kind: "supplier_invoice",
+      title: `${isPartnerSubmitted ? "Partner invoice" : "Supplier invoice"} ${r.reference ?? r.id}`,
+      subtitle: `${r.partnerFirmName} · auto-approved — can be un-approved until a payment run picks it up`,
+      amount: { currency: r.costCurrency, value: round2(r.costAmount) },
+      submittedAt: iso(r.reviewedAt ?? r.submittedAt ?? r.createdAt),
+      requiredRole: "finance",
+      href: `/finance/payables/${isPartnerSubmitted ? "partner-invoices" : "supplier-invoices"}?focus=${encodeURIComponent(r.id)}`,
+      agent: { name: attr.agentName, runId: attr.agentRunId ?? "" },
       actionable: true,
     });
   }

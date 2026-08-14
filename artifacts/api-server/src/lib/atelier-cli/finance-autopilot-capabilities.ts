@@ -407,13 +407,13 @@ defineCapability({
   module: "ledger",
   toolName: "review_supplier_invoice",
   description:
-    "Review a supplier invoice from the approvals inbox: start_review, approve or reject. Approving also decides the invoice's entity allocation — if the allocation still needs input you must name the entity (legalEntityId); overriding a proposed entity needs allocationOverrideReason. Rejection needs a reason. Same payables review core (incl. bank-details hold) as the Finance UI.",
+    "Review a supplier invoice from the approvals inbox: start_review, approve, reject, or unapprove (pull an approved — e.g. autopilot-approved — invoice back to review before a payment run picks it up; blocked once it is in a run). Approving also decides the invoice's entity allocation — if the allocation still needs input you must name the entity (legalEntityId); overriding a proposed entity needs allocationOverrideReason. Rejection needs a reason. Same payables review core (incl. bank-details hold) as the Finance UI.",
   slashAliases: { en: ["/review-supplier-invoice"] },
   inputSchema: {
     type: "object",
     properties: {
       id: { type: "string" },
-      decision: { type: "string", enum: ["start_review", "approve", "reject"] },
+      decision: { type: "string", enum: ["start_review", "approve", "reject", "unapprove"] },
       reason: { type: "string" },
       legalEntityId: { type: "string" },
       allocationOverrideReason: { type: "string" },
@@ -428,15 +428,15 @@ defineCapability({
   resultCard: null,
   requiredRoles: [...FINANCE_ROLES],
   surfaceOn: ["global"],
-  examplePhrases: { en: ["approve supplier invoice si_123", "reject supplier invoice si_123 — reason: wrong amount"] },
+  examplePhrases: { en: ["approve supplier invoice si_123", "reject supplier invoice si_123 — reason: wrong amount", "un-approve supplier invoice si_123 — pull it back before the payment run"] },
   async run(input, ctx) {
     const gate = await requireFinanceLeadership(ctx.persona);
     if ("deny" in gate) return gate.deny;
     const id = String(input.id ?? "").trim();
     if (!id) return denyInvalid("Which supplier invoice? Give its id from the inbox.");
     const decision = String(input.decision ?? "").trim();
-    if (!["start_review", "approve", "reject"].includes(decision))
-      return denyInvalid("decision must be start_review, approve or reject.");
+    if (!["start_review", "approve", "reject", "unapprove"].includes(decision))
+      return denyInvalid("decision must be start_review, approve, reject or unapprove.");
     const reason = typeof input.reason === "string" ? input.reason.trim() : "";
     const legalEntityId = typeof input.legalEntityId === "string" ? input.legalEntityId.trim() : "";
     const allocationOverrideReason = typeof input.allocationOverrideReason === "string" ? input.allocationOverrideReason.trim() : "";
@@ -444,7 +444,7 @@ defineCapability({
       return denyInvalid("A rejection reason is required to reject a supplier invoice.");
 
     if (!isVerifiedCommit("review_supplier_invoice", input)) {
-      const verb = decision === "start_review" ? "Start review of" : decision === "approve" ? "Approve" : "Reject";
+      const verb = decision === "start_review" ? "Start review of" : decision === "approve" ? "Approve" : decision === "unapprove" ? "Un-approve (return to review)" : "Reject";
       const allocNote =
         decision === "approve"
           ? legalEntityId
@@ -480,7 +480,7 @@ defineCapability({
       legalEntityId: legalEntityId || null,
       allocationOverrideReason: allocationOverrideReason || null,
     });
-    const outcome = decision === "start_review" ? "under review" : decision === "approve" ? "approved" : "rejected";
+    const outcome = decision === "start_review" ? "under review" : decision === "approve" ? "approved" : decision === "unapprove" ? "returned to review" : "rejected";
     return coreToResult(out, (body) => ({
       invoice: body.invoice,
       message: `Supplier invoice ${id} ⇒ ${outcome}.`,

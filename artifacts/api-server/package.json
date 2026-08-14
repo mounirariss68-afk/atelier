@@ -70,6 +70,7 @@
     "test:entity-allocation": "tsx ./tests/entity-allocation/run.ts",
     "test:autopilot-policy": "tsx ./tests/finance-autopilot-policy/run.ts",
     "test:supplier-invoice-autopost": "tsx ./tests/supplier-invoice-autopost/run.ts",
+    "test:supplier-invoice-unapprove": "tsx ./tests/supplier-invoice-unapprove/run.ts",
     "test:autopilot-concurrency": "tsx ./tests/autopilot-concurrency/run.ts",
     "test:partner-registration": "tsx ./tests/partner-registration/run.ts",
     "test:entity-detail": "tsx ./tests/entity-detail/run.ts",
