@@ -114,6 +114,11 @@ import {
   buildScoutBriefPdf,
   buildPovPdf,
 } from "../../lib/atelier-brief-pdf.js";
+import {
+  isPovVersionEmpty,
+  buildPovPptx,
+  renderPovHtml,
+} from "../../lib/atelier-pov-export.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -3132,18 +3137,34 @@ router.get("/opportunities/:oppId/brief.pdf", async (req, res) => {
 });
 
 // -------------------------------------------------------------------
-// Opportunity POV (current version) — PDF download
+// Opportunity POV — export downloads (PDF / PPTX / HTML)
 // -------------------------------------------------------------------
-// @cli-skip: binary PDF export; no CLI tool shape
-router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
+
+/**
+ * Shared loader for the POV export routes. Resolves the opportunity (with
+ * the same 404-not-403 IDOR-oracle guard as the account route), the POV
+ * (`?povId=` or most-recently-created) and the version (`?versionId=` or
+ * the current pointer). Writes the error response and returns null when
+ * anything is missing or out of the persona's perimeter.
+ */
+async function resolvePovExportTarget(
+  req: Request,
+  res: Response,
+): Promise<{
+  opp: NonNullable<Awaited<ReturnType<typeof loadOpp>>>;
+  pov: typeof atelierPovs.$inferSelect;
+  version: typeof atelierPovVersions.$inferSelect;
+  input: Parameters<typeof buildPovPdf>[1];
+  filenameBase: string;
+} | null> {
   const me = ensurePersona(req, res);
-  if (!me) return;
-  const { oppId } = req.params;
+  if (!me) return null;
+  const oppId = String(req.params.oppId ?? "");
 
   const opp = await loadOpp(oppId);
   if (!opp) {
     res.status(404).json({ error: "opportunity-not-found" });
-    return;
+    return null;
   }
 
   // Gate: persona must be able to see the account that owns this opportunity.
@@ -3151,7 +3172,7 @@ router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
   const access = await accessibleEngagementIds(me);
   if (!(await canSeeAccount(access, me, opp.accountId))) {
     res.status(404).json({ error: "opportunity-not-found" });
-    return;
+    return null;
   }
 
   // Export the POV the user is looking at when `?povId=` is supplied; fall back
@@ -3185,13 +3206,13 @@ router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
 
   if (!pov) {
     res.status(404).json({ error: "no-pov-version" });
-    return;
+    return null;
   }
 
   const targetVersionId = reqVersionId ?? pov.currentVersionId;
   if (!targetVersionId) {
     res.status(404).json({ error: "no-pov-version" });
-    return;
+    return null;
   }
 
   const [version] = await db
@@ -3207,35 +3228,91 @@ router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
 
   if (!version) {
     res.status(404).json({ error: "no-pov-version" });
-    return;
+    return null;
   }
 
   const titleSlug = pov.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "pov";
-  const filename = `pov-${titleSlug}.pdf`;
+
+  return {
+    opp,
+    pov,
+    version,
+    filenameBase: `pov-${titleSlug}`,
+    input: {
+      oppName: opp.name,
+      pov: {
+        title: pov.title,
+        audience: pov.audience ?? null,
+        objective: pov.objective ?? null,
+      },
+      version: {
+        versionNumber: version.versionNumber,
+        body: version.body ?? "",
+        sections: (version.sections as Parameters<typeof buildPovPdf>[1]["version"]["sections"]) ?? [],
+        citations: (version.citations as AgentFact[]) ?? [],
+        citationCoverage: version.citationCoverage ?? null,
+        notes: version.notes ?? null,
+      },
+      generatedAt: new Date(),
+    },
+  };
+}
+
+// @cli-skip: binary PDF export; no CLI tool shape
+router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
+  const target = await resolvePovExportTarget(req, res);
+  if (!target) return;
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${target.filenameBase}.pdf`));
 
   const doc = createBriefDoc();
   doc.pipe(res);
-  buildPovPdf(doc, {
-    oppName: opp.name,
-    pov: {
-      title: pov.title,
-      audience: pov.audience ?? null,
-      objective: pov.objective ?? null,
-    },
-    version: {
-      versionNumber: version.versionNumber,
-      body: version.body ?? "",
-      sections: (version.sections as Parameters<typeof buildPovPdf>[1]["version"]["sections"]) ?? [],
-      citations: (version.citations as AgentFact[]) ?? [],
-      citationCoverage: version.citationCoverage ?? null,
-      notes: version.notes ?? null,
-    },
-    generatedAt: new Date(),
-  });
+  buildPovPdf(doc, target.input);
   doc.end();
+});
+
+// @cli-skip: binary PPTX export; no CLI tool shape
+router.get("/opportunities/:oppId/pov.pptx", async (req, res) => {
+  const target = await resolvePovExportTarget(req, res);
+  if (!target) return;
+
+  // Refuse empty/"Not yet available" drafts — no point shipping a deck of
+  // blank slides to a client.
+  if (isPovVersionEmpty(target.input.version)) {
+    res.status(409).json({
+      error: "pov-empty",
+      reason: "This POV draft has no content yet — generate the full draft before exporting.",
+    });
+    return;
+  }
+
+  const buf = await buildPovPptx(target.input);
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  );
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${target.filenameBase}.pptx`));
+  res.send(buf);
+});
+
+// @cli-skip: binary HTML-file export; no CLI tool shape
+router.get("/opportunities/:oppId/pov.html", async (req, res) => {
+  const target = await resolvePovExportTarget(req, res);
+  if (!target) return;
+
+  if (isPovVersionEmpty(target.input.version)) {
+    res.status(409).json({
+      error: "pov-empty",
+      reason: "This POV draft has no content yet — generate the full draft before exporting.",
+    });
+    return;
+  }
+
+  const html = renderPovHtml(target.input);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${target.filenameBase}.html`));
+  res.send(html);
 });
 
 export default router;

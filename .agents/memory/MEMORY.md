@@ -156,4 +156,5 @@
 - [Task delegation accept/decline](atelier-task-delegation.md) — assignee owns the row; declined filtered via shared notDeclinedAssignment on EVERY read surface; chat cap tasks.assign is non-me.* by design.
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic `selfnotif_ptask_<id>_<epoch>` reminder cards; every mutation must dismiss stale cards.
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.
+- [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Expo-module mock probes](expo-module-mock-probes.md) — tsx probes map expo/RN to tests/mocks/ via probe tsconfig; push has remote|local modes — check remotePushUnavailableReason() before any token call.

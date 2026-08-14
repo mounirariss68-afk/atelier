@@ -22,7 +22,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { ApproveEditReject } from "../ApproveEditReject";
 
 /** Pull the most human-readable error message off a failed mutation response. */
@@ -316,9 +322,10 @@ function ActivePov({
     [selected],
   );
 
-  const pdfHref = selected
-    ? `/api/atelier/opportunities/${oppId}/pov.pdf?povId=${encodeURIComponent(pov.id)}&versionId=${encodeURIComponent(selected.id)}`
-    : `/api/atelier/opportunities/${oppId}/pov.pdf?povId=${encodeURIComponent(pov.id)}`;
+  const exportHref = (ext: "pdf" | "pptx" | "html") =>
+    selected
+      ? `/api/atelier/opportunities/${oppId}/pov.${ext}?povId=${encodeURIComponent(pov.id)}&versionId=${encodeURIComponent(selected.id)}`
+      : `/api/atelier/opportunities/${oppId}/pov.${ext}?povId=${encodeURIComponent(pov.id)}`;
 
   return (
     <div className="space-y-5">
@@ -346,14 +353,33 @@ function ActivePov({
               </button>
             )}
             {pov.currentVersionId && (
-              <a
-                href={pdfHref}
-                download
-                className="pill-btn pill-btn-ghost text-xs inline-flex items-center gap-1"
-                data-testid="button-download-pov-pdf"
-              >
-                <Download className="w-3.5 h-3.5" /> Download PDF
-              </a>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="pill-btn pill-btn-ghost text-xs inline-flex items-center gap-1"
+                    data-testid="button-download-pov"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download <ChevronDown className="w-3 h-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <a href={exportHref("pdf")} download data-testid="button-download-pov-pdf">
+                      PDF document
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={exportHref("pptx")} download data-testid="button-download-pov-pptx">
+                      PowerPoint deck
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={exportHref("html")} download data-testid="button-download-pov-html">
+                      Web page (HTML)
+                    </a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>

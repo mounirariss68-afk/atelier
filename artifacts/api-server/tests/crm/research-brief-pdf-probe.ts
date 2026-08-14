@@ -122,6 +122,19 @@ async function main() {
     return { status: res.status, headers: res.headers, pdf: null as Buffer | null, body };
   }
 
+  /** Raw-bytes variant for the PPTX/HTML export routes. */
+  async function reqBin(userId: string | null, path: string) {
+    const headers: Record<string, string> = {};
+    if (userId) headers["cookie"] = `atelier_persona=${userId}`;
+    const res = await fetch(`${BASE}${path}`, { headers });
+    const buf = Buffer.from(await res.arrayBuffer());
+    let body: any = null;
+    if ((res.headers.get("content-type") ?? "").includes("application/json")) {
+      try { body = JSON.parse(buf.toString("utf8")); } catch { /* keep null */ }
+    }
+    return { status: res.status, headers: res.headers, buf, body };
+  }
+
   try {
     // Seed ephemeral users
     await db.insert(atelierUsers).values([
@@ -303,6 +316,96 @@ async function main() {
     check("pov: attachment disposition", dispPov.startsWith("attachment"), dispPov);
     check("pov: filename contains 'pov-'", dispPov.includes("pov-"), dispPov);
     check("pov: filename ends with .pdf", dispPov.includes(".pdf"), dispPov);
+
+    // ── POV PPTX / HTML exports ───────────────────────────────────────────────
+    // Access parity: the new routes share the PDF route's resolver, so any
+    // persona must get the SAME status from all three formats. (Partners have
+    // firm-wide account visibility, so the "stranger" partner legitimately
+    // sees this POV — the guarantee under test is that the new formats never
+    // widen or narrow access relative to the PDF.)
+    const rPdfStrangerNow = await req(strangerId, `/opportunities/${oppId}/pov.pdf`);
+    const rPptxStranger = await reqBin(strangerId, `/opportunities/${oppId}/pov.pptx`);
+    check("pov-pptx: same access as pdf for second partner", rPptxStranger.status === rPdfStrangerNow.status, `${rPptxStranger.status} vs ${rPdfStrangerNow.status}`);
+    const rHtmlStranger = await reqBin(strangerId, `/opportunities/${oppId}/pov.html`);
+    check("pov-html: same access as pdf for second partner", rHtmlStranger.status === rPdfStrangerNow.status, `${rHtmlStranger.status} vs ${rPdfStrangerNow.status}`);
+    // Self-only contractor + anonymous are denied like the PDF route.
+    const rPptxContractor = await reqBin(contractorId, `/opportunities/${oppId}/pov.pptx`);
+    check("pov-pptx: denied for contractor (self-only role)", rPptxContractor.status === 403 || rPptxContractor.status === 404, rPptxContractor.status);
+    const rPptx401 = await reqBin(null, `/opportunities/${oppId}/pov.pptx`);
+    check("pov-pptx: 401 without cookie", rPptx401.status === 401, rPptx401.body);
+    const rHtml401 = await reqBin(null, `/opportunities/${oppId}/pov.html`);
+    check("pov-html: 401 without cookie", rHtml401.status === 401, rHtml401.body);
+
+    // Happy path — PPTX magic bytes (PK zip), content-type, filename.
+    const rPptx = await reqBin(partnerId, `/opportunities/${oppId}/pov.pptx`);
+    check("pov-pptx: 200 with version", rPptx.status === 200, rPptx.body ?? rPptx.status);
+    check("pov-pptx: PK zip magic bytes", rPptx.buf.subarray(0, 2).toString() === "PK", rPptx.buf.subarray(0, 4).toString("hex"));
+    check(
+      "pov-pptx: content-type presentationml",
+      (rPptx.headers.get("content-type") ?? "").includes("presentationml.presentation"),
+      rPptx.headers.get("content-type"),
+    );
+    const dispPptx = rPptx.headers.get("content-disposition") ?? "";
+    check("pov-pptx: attachment .pptx filename", dispPptx.startsWith("attachment") && dispPptx.includes(".pptx"), dispPptx);
+    check("pov-pptx: non-trivial size", rPptx.buf.length > 10_000, rPptx.buf.length);
+
+    // Happy path — HTML self-contained document.
+    const rHtml = await reqBin(partnerId, `/opportunities/${oppId}/pov.html`);
+    check("pov-html: 200 with version", rHtml.status === 200, rHtml.body ?? rHtml.status);
+    const htmlText = rHtml.buf.toString("utf8");
+    check("pov-html: doctype html", htmlText.trimStart().toLowerCase().startsWith("<!doctype html"), htmlText.slice(0, 30));
+    check("pov-html: contains POV title", htmlText.includes(`AI Ops POV ${runTag}`), null);
+    check("pov-html: sections rendered", htmlText.includes("The Opportunity") && htmlText.includes("Our Approach"), null);
+    check("pov-html: no external stylesheet/script (self-contained)", !/<link\s|<script\s/i.test(htmlText), null);
+    const dispHtml = rHtml.headers.get("content-disposition") ?? "";
+    check("pov-html: attachment .html filename", dispHtml.startsWith("attachment") && dispHtml.includes(".html"), dispHtml);
+
+    // Empty draft refusal — a version with no drafted text is refused with a
+    // clear 409, while the PDF route keeps its existing behavior (200).
+    const povEmptyVersionId = `povv_${runTag}_empty`;
+    await db.insert(atelierPovVersions as any).values([
+      {
+        id: povEmptyVersionId, orgId: "aico", povId,
+        versionNumber: 2, body: "",
+        sections: [{ id: "s1", heading: "The Opportunity", intent: "Frame the mandate", factIds: [] }],
+        citations: [], citationCoverage: null, notes: null, createdByUserId: partnerId,
+      },
+    ]);
+    const rPptxEmpty = await reqBin(partnerId, `/opportunities/${oppId}/pov.pptx?povId=${povId}&versionId=${povEmptyVersionId}`);
+    check("pov-pptx: 409 pov-empty for blank draft", rPptxEmpty.status === 409 && rPptxEmpty.body?.error === "pov-empty", rPptxEmpty.body);
+    const rHtmlEmpty = await reqBin(partnerId, `/opportunities/${oppId}/pov.html?povId=${povId}&versionId=${povEmptyVersionId}`);
+    check("pov-html: 409 pov-empty for blank draft", rHtmlEmpty.status === 409 && rHtmlEmpty.body?.error === "pov-empty", rHtmlEmpty.body);
+    const rPdfEmpty = await req(partnerId, `/opportunities/${oppId}/pov.pdf?povId=${povId}&versionId=${povEmptyVersionId}`);
+    check("pov-pdf: empty draft still exports (unchanged behavior)", rPdfEmpty.status === 200 && !!rPdfEmpty.pdf, rPdfEmpty.status);
+
+    // Placeholder-only drafts ("Not yet available.") are refused too, and a
+    // poisoned javascript: citation URL must never become a clickable link.
+    const povPlaceholderVersionId = `povv_${runTag}_ph`;
+    await db.insert(atelierPovVersions as any).values([
+      {
+        id: povPlaceholderVersionId, orgId: "aico", povId,
+        versionNumber: 3, body: "<p>Not yet available.</p>",
+        sections: [{ id: "s1", heading: "The Opportunity", content: "Not yet available.", factIds: [] }],
+        citations: [], citationCoverage: null, notes: null, createdByUserId: partnerId,
+      },
+    ]);
+    const rPptxPh = await reqBin(partnerId, `/opportunities/${oppId}/pov.pptx?povId=${povId}&versionId=${povPlaceholderVersionId}`);
+    check("pov-pptx: 409 for placeholder-only draft", rPptxPh.status === 409 && rPptxPh.body?.error === "pov-empty", rPptxPh.body);
+
+    const povEvilVersionId = `povv_${runTag}_evil`;
+    await db.insert(atelierPovVersions as any).values([
+      {
+        id: povEvilVersionId, orgId: "aico", povId,
+        versionNumber: 4, body: "",
+        sections: [{ id: "s1", heading: "The Opportunity", content: "Real content here.", citationIds: ["fx"] }],
+        citations: [{ id: "fx", topic: "x", statement: "poisoned", sourceUrl: "javascript:alert(1)", confidence: "green" }],
+        citationCoverage: null, notes: null, createdByUserId: partnerId,
+      },
+    ]);
+    const rHtmlEvil = await reqBin(partnerId, `/opportunities/${oppId}/pov.html?povId=${povId}&versionId=${povEvilVersionId}`);
+    const evilText = rHtmlEvil.buf.toString("utf8");
+    check("pov-html: javascript: citation URL never linkified", rHtmlEvil.status === 200 && !/href="javascript:/i.test(evilText), null);
+    check("pov-html: poisoned URL still listed as escaped text", evilText.includes("javascript:alert(1)"), null);
 
   } finally {
     // Cleanup — delete in dependency order

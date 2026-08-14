@@ -75,7 +75,7 @@ function cogGradRule(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h
 // next to the bundle); the deeper candidates cover the source tree in dev.
 const BG_CANDIDATE_DIRS = ["./assets/", "../assets/", "../../assets/", "../../../assets/"] as const;
 const bgPathCache = new Map<string, string | null>();
-function loadBgAsset(file: string): string | null {
+export function loadBgAsset(file: string): string | null {
   const hit = bgPathCache.get(file);
   if (hit !== undefined) return hit;
   let found: string | null = null;
