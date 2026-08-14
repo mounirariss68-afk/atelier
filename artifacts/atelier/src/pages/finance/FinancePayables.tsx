@@ -61,6 +61,7 @@ function useMutate() {
 const TABS = [
   { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing" },
   { id: "partner-invoices", label: "Partner invoices", href: "/finance/payables/partner-invoices" },
+  { id: "supplier-invoices", label: "Supplier invoices", href: "/finance/payables/supplier-invoices" },
   { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
   { id: "run-history", label: "Run history", href: "/finance/payables/run-history" },
   { id: "vendors", label: "Vendors", href: "/finance/payables/vendors" },
@@ -696,6 +697,285 @@ export function FinancePayablesPartnerInvoices() {
                     act(inv.id, "reject", reason.trim());
                   }}
                   data-testid={`btn-reject-${inv.id}`}
+                >
+                  Reject
+                </Button>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    </PayablesShell>
+  );
+}
+
+// ============================================================
+// Task #1070 — Internally-uploaded supplier invoices
+// ============================================================
+
+type SupplierInvoiceRow = {
+  id: string;
+  supplierName: string;
+  partnerFirmId: string | null;
+  reference: string | null;
+  periodLabel: string | null;
+  invoiceDate: string | null;
+  amount: number;
+  currency: string;
+  usdAmount: number;
+  status: string;
+  notes: string | null;
+  fileName: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  rejectedReason: string | null;
+  paymentRunId: string | null;
+  paidAt: string | null;
+  hasBankDetails: boolean;
+};
+
+function useSupplierInvoices(): { items: SupplierInvoiceRow[]; refetch: () => void } {
+  const [items, setItems] = React.useState<SupplierInvoiceRow[]>([]);
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    let alive = true;
+    void fetch(`${API_BASE}/finance/payables/supplier-invoices`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setItems(d.items ?? []); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [tick]);
+  return { items, refetch: () => setTick((t) => t + 1) };
+}
+
+const SUPPLIER_STATUS_FILTERS = ["all", "submitted", "under_review", "approved", "scheduled", "paid", "rejected"] as const;
+
+type SupplierFirmOption = { id: string; name: string; hasBankDetails: boolean };
+
+function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
+  const [file, setFile] = React.useState<File | null>(null);
+  const [supplierName, setSupplierName] = React.useState("");
+  const [firms, setFirms] = React.useState<SupplierFirmOption[]>([]);
+  const [firmId, setFirmId] = React.useState("");
+  React.useEffect(() => {
+    let alive = true;
+    void fetch(`${API_BASE}/finance/payables/supplier-invoices/firms`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setFirms(d.items ?? []); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const selectedFirm = firms.find((f) => f.id === firmId) ?? null;
+  const [amount, setAmount] = React.useState("");
+  const [currency, setCurrency] = React.useState("USD");
+  const [reference, setReference] = React.useState("");
+  const [periodLabel, setPeriodLabel] = React.useState("");
+  const [notes, setNotes] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [info, setInfo] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const canSubmit = !!file && (selectedFirm || supplierName.trim()) && reference.trim() && Number(amount) > 0 && /^[A-Za-z]{3}$/.test(currency);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit || !file) return;
+    setBusy(true); setError(null); setInfo(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("supplierName", selectedFirm ? selectedFirm.name : supplierName.trim());
+      if (selectedFirm) form.append("partnerFirmId", selectedFirm.id);
+      form.append("amount", amount);
+      form.append("currency", currency.toUpperCase());
+      form.append("reference", reference.trim());
+      if (periodLabel.trim()) form.append("periodLabel", periodLabel.trim());
+      if (notes.trim()) form.append("notes", notes.trim());
+      const res = await fetch(`${API_BASE}/finance/payables/supplier-invoices`, {
+        method: "POST", credentials: "include", body: form,
+      });
+      const body = await res.json().catch(() => null);
+      if (res.status === 409 && body?.error === "duplicate-invoice") {
+        setError(body.message ?? "Duplicate invoice — an identical file or reference already exists.");
+        return;
+      }
+      if (!res.ok) {
+        setError(body?.message ?? body?.error ?? `Upload failed (${res.status})`);
+        return;
+      }
+      setInfo(`Uploaded ${reference.trim()} — awaiting review.`);
+      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes("");
+      if (fileRef.current) fileRef.current.value = "";
+      onUploaded();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  const input = "border border-border-soft rounded bg-surface px-2 py-1.5 text-xs w-full";
+  return (
+    <Card className="p-4" data-testid="supplier-invoice-upload">
+      <Eyebrow>Upload a supplier invoice</Eyebrow>
+      <form onSubmit={onSubmit} className="mt-3 grid sm:grid-cols-2 gap-3 text-xs">
+        <label className="space-y-1">
+          <span className="text-text-mute">Invoice PDF</span>
+          <input ref={fileRef} type="file" accept="application/pdf,.pdf" className={input} data-testid="input-supplier-file"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Registered partner firm (optional)</span>
+          <select className={input} value={firmId} onChange={(e) => setFirmId(e.target.value)} data-testid="select-supplier-firm">
+            <option value="">Not a registered partner firm</option>
+            {firms.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}{f.hasBankDetails ? "" : " (no bank details)"}</option>
+            ))}
+          </select>
+          {selectedFirm && !selectedFirm.hasBankDetails && (
+            <span className="text-warn block" data-testid="supplier-firm-bank-warning">
+              ⚠ This firm has no finance-approved bank details — approval will be held until onboarding records them.
+            </span>
+          )}
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Supplier name</span>
+          <input
+            className={input}
+            value={selectedFirm ? selectedFirm.name : supplierName}
+            onChange={(e) => setSupplierName(e.target.value)}
+            disabled={!!selectedFirm}
+            placeholder="Acme Cloud FZ-LLC"
+            data-testid="input-supplier-name"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Amount</span>
+          <input className={input} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="1250.00" data-testid="input-supplier-amount" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Currency (3-letter)</span>
+          <input className={input} value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} placeholder="USD" data-testid="input-supplier-currency" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Invoice reference</span>
+          <input className={input} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="INV-2026-014" data-testid="input-supplier-reference" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Billing period (optional)</span>
+          <input className={input} value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)} placeholder="July 2026" data-testid="input-supplier-period" />
+        </label>
+        <label className="space-y-1 sm:col-span-2">
+          <span className="text-text-mute">Notes (optional)</span>
+          <input className={input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What is this invoice for?" data-testid="input-supplier-notes" />
+        </label>
+        <div className="sm:col-span-2 flex items-center gap-3">
+          <Button size="sm" type="submit" disabled={busy || !canSubmit} data-testid="btn-upload-supplier-invoice">
+            {busy ? "Uploading…" : "Upload invoice"}
+          </Button>
+          {info && <span className="text-text-mute">{info}</span>}
+          {error && <span className="text-danger" data-testid="supplier-upload-error">⚠ {error}</span>}
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+export function FinancePayablesSupplierInvoices() {
+  const { items, refetch } = useSupplierInvoices();
+  const { busy, error, run } = useMutate();
+  const [filter, setFilter] = React.useState<(typeof SUPPLIER_STATUS_FILTERS)[number]>("all");
+  const act = (id: string, decision: string, reason?: string) =>
+    run(`${decision}:${id}`, async () => {
+      await postJson(`/finance/payables/supplier-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}) });
+      refetch();
+    });
+  const pending = items.filter((i) => i.status === "submitted" || i.status === "under_review");
+  const shown = filter === "all" ? items : items.filter((i) => i.status === filter);
+  return (
+    <PayablesShell
+      eyebrow="Manage · Finance · Pay · Supplier invoices"
+      headline="Supplier invoices"
+      lede="Upload supplier invoices you receive as PDFs so they enter payables. Uploads are reviewed and approved or rejected with a reason; approved invoices join the next payment run. Duplicate files or references are flagged instead of creating a second payable."
+    >
+      <SupplierInvoiceUploadForm onUploaded={refetch} />
+      <div className="flex flex-wrap gap-2 text-xs font-mono items-center">
+        <MonoChip>{items.length} invoice(s)</MonoChip>
+        <MonoChip tone={pending.length > 0 ? "amber" : "default"}>{pending.length} awaiting review</MonoChip>
+        <div className="ml-auto flex gap-1">
+          {SUPPLIER_STATUS_FILTERS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`px-2 py-1 rounded border text-[11px] ${filter === f ? "border-gold text-gold" : "border-border-soft text-text-mute hover:text-text"}`}
+              data-testid={`filter-supplier-${f}`}
+            >
+              {f.replace(/_/g, " ")}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      <div className="grid gap-3" data-testid="supplier-invoices-list">
+        {shown.length === 0 && (
+          <EmptyCard testId="supplier-invoices-empty">
+            {items.length === 0
+              ? "No supplier invoices yet. Upload one above to enter it into payables."
+              : "No supplier invoices match this filter."}
+          </EmptyCard>
+        )}
+        {shown.map((inv) => (
+          <Card key={inv.id} className="p-4" data-testid={`supplier-invoice-${inv.id}`}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <Eyebrow>{inv.supplierName}{inv.partnerFirmId ? " · partner firm" : ""}</Eyebrow>
+                <div className="text-base font-medium mt-1">
+                  {inv.reference ?? inv.id} · {inv.currency} {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-text-mute mt-1">
+                  {inv.periodLabel ? `Period ${inv.periodLabel} · ` : ""}
+                  {inv.submittedAt ? `Uploaded ${inv.submittedAt.slice(0, 10)} · ` : ""}
+                  ≈ {fmtUsd(inv.usdAmount)}
+                </div>
+                {inv.notes && <div className="text-xs text-text-mute mt-1">{inv.notes}</div>}
+                {inv.status === "rejected" && inv.rejectedReason && (
+                  <div className="text-xs text-danger mt-1">Rejected: {inv.rejectedReason}</div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <MonoChip tone={partnerInvoiceTone(inv.status)} data-testid={`supplier-invoice-status-${inv.id}`}>{inv.status.replace(/_/g, " ")}</MonoChip>
+                {inv.partnerFirmId && !inv.hasBankDetails && <MonoChip tone="amber">no bank details</MonoChip>}
+                {inv.fileName && (
+                  <a
+                    href={`${API_BASE}/finance/payables/supplier-invoices/${inv.id}/file`}
+                    className="text-xs text-gold hover:text-gold/80"
+                    data-testid={`link-supplier-invoice-file-${inv.id}`}
+                  >
+                    download PDF
+                  </a>
+                )}
+              </div>
+            </div>
+            {(inv.status === "submitted" || inv.status === "under_review") && (
+              <div className="flex gap-2 mt-4">
+                {inv.status === "submitted" && (
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => act(inv.id, "start_review")} data-testid={`btn-supplier-start-review-${inv.id}`}>
+                    Start review
+                  </Button>
+                )}
+                <Button size="sm" disabled={!!busy || (!!inv.partnerFirmId && !inv.hasBankDetails)} onClick={() => act(inv.id, "approve")} data-testid={`btn-supplier-approve-${inv.id}`}>
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={!!busy}
+                  onClick={() => {
+                    const reason = window.prompt(`Reject invoice ${inv.reference ?? inv.id}. Reason?`);
+                    if (reason === null || !reason.trim()) return;
+                    act(inv.id, "reject", reason.trim());
+                  }}
+                  data-testid={`btn-supplier-reject-${inv.id}`}
                 >
                   Reject
                 </Button>

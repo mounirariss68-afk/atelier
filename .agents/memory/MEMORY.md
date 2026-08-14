@@ -1,9 +1,9 @@
-- [Bank-credential exposure rule](atelier-entity-bank-accounts.md) — IBAN/SWIFT/holder only for fp/partner/finance on ANY surface; others get empty/redacted rows even where the host surface reads looser.
-- [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps for the 7-equals marker as a substring; decorative `// ====` comment rules trip it — convert to dashes.
+- [Bank-credential exposure rule](atelier-entity-bank-accounts.md) — IBAN/SWIFT/holder only for fp/partner/finance on ANY surface; others get empty/redacted rows.
+- [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps the 7-equals marker as a substring; decorative `// ====` comments trip it — use dashes.
 - [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip onnxruntime CUDA bins for 8GiB image cap.
 - [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
 - [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; navy logo only fits server PDFs.
-- [Atelier account-scope auth split](atelier-account-auth-split.md) — account read endpoints gate on shared `canSeeAccount`; financial blocks gate separately on account-wide authority. Don't over-restrict the whole route.
+- [Atelier account-scope auth split](atelier-account-auth-split.md) — reads gate on shared `canSeeAccount`; financial blocks gate separately; don't over-restrict the whole route.
 - [Atelier org chart invariants](atelier-org-chart-invariants.md) — reports_to allows multi-manager (BFS all edges); user lookups must be orgId-scoped.
 - [Cognirise rebrand keeps](cognirise-rebrand-keeps.md) — tenant key "aico" + opaque IDs deliberately KEPT; founder titles are data-only ([founder-titles.md](founder-titles.md)).
 - [Atelier RLS test scoping](atelier-rls-test-scoping.md) — DATABASE_URL is BYPASSRLS; assert scoping via RLS helpers + app ACL; restricted personas get 403.
@@ -21,7 +21,7 @@
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` has many PRE-EXISTING errors, diff vs HEAD to attribute; also rebuild gitignored lib dists first ([stale-lib-dist-review.md](stale-lib-dist-review.md)).
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — "Recent changes" projects audit payload.changes; revert re-PATCHes old value; render in BOTH card branches.
 - [Running the CRM test harness](crm-harness-run.md) — isolated crm_test DB, >120s one-shot; never a workflow; flake/cleanup notes in crm-harness-*.md topic files.
-- [Atelier expense taxonomy surfaces](atelier-expense-taxonomy.md) — new non-/me endpoints for Me-lens UIs must be allowlisted in EVERY persona branch of the central gate; fresh scratch DBs need `CREATE EXTENSION vector` before drizzle push.
+- [Atelier expense taxonomy surfaces](atelier-expense-taxonomy.md) — non-/me endpoints for Me-lens UIs must be allowlisted in EVERY persona branch of the central gate; scratch DBs need pgvector before push.
 - [Account-revenue write surfaces](atelier-revenue-write-surfaces.md) — annualRevenue is written ONLY by POST /accounts + PATCH /accounts/:id; financials gate must cover BOTH (create gate uses would-be partnerOwnerId).
 - [No demo seeding — production policy](atelier-crm-wipe.md) — ALL dummy data deleted + every seeder removed (2026-07-16); only the boot auth seed remains. Never reintroduce seeding.
 - [Account deletion lifecycle](atelier-account-lifecycle.md) — Archive = reversible cascade, prior state in audit; Permanent delete = founding_partner only, financial-gated, idempotent; seed cascade test rows via db.insert.
@@ -33,7 +33,7 @@
 - [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.
 - [Contract templates ingested](atelier-contract-templates-ingested.md) — task-agent DB data never merges; templates/signing entities re-ingested via live API on main (2026-07-19); repeat in prod before go-live.
 - [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
-- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project (cognirise.ai), never re-add its production block; deck/render quirks in launch-*.md ([launch-deck-graphics.md](launch-deck-graphics.md)).
+- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project, never re-add its block; deck quirks in launch-*.md.
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete; polymorphic pane hrefs filter deleted targets; delete/close paths resolve pane items org-scoped.
@@ -47,7 +47,7 @@
 - [Atelier performance & learning](atelier-perf-learning.md) — hrNotes never in self shape; contractors 403 on reviews/goals but DO get audience-filtered /me/learning; name inline orval bodies.
 - [Prod DB replace path](prod-db-replace.md) — prod DB is read-only to the agent; only Publish "Overwrite data" can replace it; chunked read-only exports for backups; pre-replace snapshot in backups/.
 - [Atelier tsx UI tests of page modules](atelier-tsx-ui-tests.md) — need --tsconfig jsx react-jsx + guard import.meta.env at module level.
-- [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF is server-side pdf-lib from real 90×50mm template EMUs; rasterize checks via pdftoppm (no gs).
+- [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF server-side pdf-lib; rasterize checks via pdftoppm.
 - [Atelier DocuSeal e-sign](atelier-esign.md) — webhook trigger-only (authoritative re-fetch); terminal statuses never regress; see also docuseal-live-quirks.md, atelier-esign-extra-fields.md.
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
 - [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
@@ -123,7 +123,7 @@
 - [Chat verbatim replay window](atelier-chat-replay.md) — rollover keeps lineage; facts from tool successes only, every new commit path needs its own ingest; replay/facts beat summaries (atelier-session-facts.md).
 - [Atelier clarification resolver](atelier-clarification-resolver.md) — shared reply classifier; opener sets stay in sync; option picks resume via `id <optionId>` with exact tool-input ids (chat-disambiguation-resume.md).
 - [Chat live text streaming](atelier-chat-text-streaming.md) — text_delta frames are live-only (never persisted); test-env default OFF; every prose-suppression path must retract via reset.
-- [Chat reliability harness](chat-reliability-harness.md) — run validation step `chat-reliability` (test:chat-suite) before merging orchestrator/resolver/chat-core changes; assertAlive = dead-end guard; employee chat is 200+me.*-clamped, not 403.
+- [Chat reliability harness](chat-reliability-harness.md) — run `chat-reliability` validation before merging orchestrator/resolver/chat-core changes; employee chat is 200+me.*-clamped, not 403.
 - [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
 - [Roster quick-add & login provisioning](atelier-roster-quick-add.md) — direct roster create bypasses the hiring pipeline (same isPartnerOrOps gate); portal logins ONLY via the shared provisionPortalLogin helper.
 - [Entity embeddings backfill](atelier-entity-embeddings-backfill.md) — dev backfill done; MUST re-run script on prod at go-live; orphan rows for deleted entities are expected.
@@ -144,6 +144,7 @@
 - [Mechanical className sweeps over tsx](tsx-classname-sweeps.md) — never regex all string literals (apostrophes in comments corrupt code); line-based + tag-aware; skip form controls.
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass; fixed Tailwind-alpha surfaces need explicit fallback selectors; rail now LEFT-anchored.
 - [Screen catalog & find_screen](atelier-screen-catalog.md) — catalog.ts is GENERATED from web nav (regenerate, never hand-edit); nav/role-gate changes must re-run generator; find_screen widening is role-sliced.
+- [Internal supplier invoices](atelier-supplier-invoices.md) — AP upload dedupe AND payment-run builds must be advisory-lock atomic (review-rejected otherwise); auth before multer; bank hold only when firm-linked.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — partner_firm_invoices has dual lifecycles keyed on `source`; portal keys on partnerFirmId; bank-IBAN gate at approve+run-build; all raw-fetch @cli-skip.
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
 - [NEP agreement flow](nep-agreement-flow.md) — roster auto-add NEP-only; v3 template ships via idempotent BOOT seed (no credentials), prod live on next publish.
