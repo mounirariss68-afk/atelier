@@ -75,6 +75,7 @@
     "test:supplier-invoice-unapprove": "tsx ./tests/supplier-invoice-unapprove/run.ts",
     "test:autopilot-concurrency": "tsx ./tests/autopilot-concurrency/run.ts",
     "test:partner-registration": "tsx ./tests/partner-registration/run.ts",
+    "test:partner-portal-foundations": "tsx ./tests/crm/partner-portal-foundations-probe.ts",
     "test:entity-detail": "tsx ./tests/entity-detail/run.ts",
     "test:who-works": "tsx ./tests/cli-catalog/who-works.ts",
     "test:workload-scope": "tsx ./tests/cli-catalog/workload-scope.ts",

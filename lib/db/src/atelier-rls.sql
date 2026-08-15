@@ -77,7 +77,9 @@ DECLARE
     -- contact-update suggestions. Org-scoped (deny-all by default);
     -- per-firm / per-role ACL is enforced in the route layer. Document
     -- bytes live in object storage and are only served via ACL'd routes.
-    'atelier_partner_firm_documents','atelier_partner_contact_suggestions'
+    'atelier_partner_firm_documents','atelier_partner_contact_suggestions',
+    -- Task #1173 — partner-portal in-app notification center.
+    'atelier_partner_notifications'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

@@ -13,3 +13,11 @@ description: Security model for external alliance_partner logins (grant-scoped o
 - Partner-portal routes are raw-fetch, not in openapi (account-agent precedent). But /me and /personas responses ARE zod-validated against the api-spec role enum — any NEW role must be added to the openapi role enum + codegen rerun or /me 500s for that role.
 - Chat clamp is FOUR layers, all required: (1) capabilitiesForPersona slice, (2) getToolsForPersona early return (no legacy registry append), (3) findToolByName returns undefined outside the surface + meta allowlist (otherwise the catalog fallthrough runs hallucinated tools), (4) dispatch-time surface-membership refusal in the turn loop (shared RESTRICTED_META_ALLOW with self-only roles).
 - The alliance /cli gate is a sub-path allowlist (turn/confirm/cancel, sessions, events, capabilities, pending-clarification, recent, feedback); help/admin/recordings/attachments stay 403.
+
+## Preview & multi-login invariants
+- Every portal route in EVERY router must resolve the firm through the one shared preview-aware resolver — a local partner-only resolver breaks leadership preview. Partners can never preview another firm (their own firm always wins). Preview refuses all mutations BEFORE multipart parsing, never sends emails, and audits entry reads.
+- Multi-login per firm is allowed (old one-active-login unique index removed on purpose — never reintroduce); offboarding deactivates all firm logins + revokes sessions; partner sessions are short-TTL.
+- The web-only mobile restriction is NOT the body `client` flag (model/caller-trusted UX only) — the durable boundary is the central gate locking partners out of /me/* mobile surfaces; keep push/device routes rejecting partners.
+- Reset-link supersede must invalidate BOTH activation and partner_registration tokens, or fresh partners keep two live links.
+- Partner notification hooks for contract/invoice events are deliberately deferred — firm linkage is ambiguous name-join, don't notify on unverified matches.
+- The portal per-user throttle must mount once on the common parent router or separately-mounted portal routers bypass it.

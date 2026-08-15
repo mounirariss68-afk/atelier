@@ -332,9 +332,16 @@ async function main(): Promise<void> {
       const caps = cat.capabilitiesForPersona(persona as any);
       const ids = caps.map((c: any) => c.id).sort();
       check(
-        "alliance_partner catalog slice is exactly the partnerportal.* reads",
+        // Task #939 — the alliance_partner slice is the partnerportal.* reads
+        // PLUS meta.find_screen, a deliberate widening: find_screen answers
+        // navigation questions from the role-sliced screen catalog, and that
+        // slice for alliance_partner is only partner-safe screens (the
+        // partner portal + the chat screen itself — verified against
+        // @workspace/screen-catalog screensForRole("alliance_partner")).
+        "alliance_partner catalog slice is exactly the partnerportal.* reads + meta.find_screen",
         JSON.stringify(ids) ===
           JSON.stringify([
+            "meta.find_screen",
             "partnerportal.account_overview",
             "partnerportal.opportunities",
             "partnerportal.opportunity_detail",
@@ -419,8 +426,13 @@ async function main(): Promise<void> {
       } as any);
       const names = tools.map((t: any) => t.name).sort();
       check(
-        "getToolsForPersona = exactly the 3 partnerportal tools (no legacy fallthrough)",
-        names.length === 3 && names.every((n: string) => n.startsWith("partner_")),
+        // Task #939 — the 3 partnerportal tools PLUS find_screen (a
+        // navigation read whose screen slice for this role is partner-safe
+        // only); no legacy TOOL_REGISTRY fallthrough beyond that.
+        "getToolsForPersona = the 3 partnerportal tools + find_screen (no legacy fallthrough)",
+        names.length === 4 &&
+          names.filter((n: string) => n.startsWith("partner_")).length === 3 &&
+          names.includes("find_screen"),
         names.join(","),
       );
       // Dispatch-time clamp: hallucinated tool names must NOT resolve via
@@ -474,21 +486,32 @@ async function main(): Promise<void> {
         .map((c: any) => c.id)
         .sort();
       // (a) The alliance_partner slice must be EXACTLY the registered
-      // partnerportal.* set — nothing extra in the slice, and no
-      // registered partnerportal.* entry silently excluded (a registered
-      // partnerportal WRITE would diverge here and fail).
+      // partnerportal.* set PLUS meta.find_screen — nothing else extra in
+      // the slice, and no registered partnerportal.* entry silently excluded
+      // (a registered partnerportal WRITE would diverge here and fail).
+      // Task #939 — find_screen is the one deliberate meta widening; its
+      // screen slice for alliance_partner is partner-safe only (partner
+      // portal + the chat screen), so it never surfaces a forbidden route.
+      const expectedSlice = [...registeredPortalIds, "meta.find_screen"].sort();
       check(
-        "ratchet: slice ids === all registered partnerportal.* ids",
-        JSON.stringify(sliceIds) === JSON.stringify(registeredPortalIds),
-        `slice=${sliceIds.join(",")} registered=${registeredPortalIds.join(",")}`,
+        "ratchet: slice ids === all registered partnerportal.* ids + meta.find_screen",
+        JSON.stringify(sliceIds) === JSON.stringify(expectedSlice),
+        `slice=${sliceIds.join(",")} expected=${expectedSlice.join(",")}`,
       );
       check(
         "ratchet: every registered partnerportal.* capability is a read",
         all.filter((c: any) => c.id.startsWith("partnerportal.")).every((c: any) => !c.isWrite),
       );
+      // find_screen must be read-only too (it may return navigateTo, but
+      // never mutates) — the widening is only safe for a read.
+      check(
+        "ratchet: meta.find_screen is a read (never a write)",
+        all.filter((c: any) => c.id === "meta.find_screen").every((c: any) => !c.isWrite),
+      );
       // Pinned snapshot: widening the partner chat surface requires a
       // conscious update of this list (the ratchet).
       const PINNED = [
+        "meta.find_screen",
         "partnerportal.account_overview",
         "partnerportal.opportunities",
         "partnerportal.opportunity_detail",
@@ -499,9 +522,11 @@ async function main(): Promise<void> {
         sliceIds.join(","),
       );
       // Dispatch clamp sweep: NO catalog tool outside partnerportal.*
-      // resolves for the role, and the meta allow-set is pinned.
+      // resolves for the role, EXCEPT the pinned meta allow-set and the
+      // deliberately-widened find_screen navigation read.
       const META_ALLOW = [
         "explain_last",
+        "find_screen",
         "present_choices",
         "recap",
         "refine_last",
@@ -518,7 +543,7 @@ async function main(): Promise<void> {
         }
       }
       check(
-        "ratchet: findToolByName resolves NO non-partnerportal catalog tool",
+        "ratchet: findToolByName resolves NO non-partnerportal catalog tool (beyond meta allow + find_screen)",
         leaked.length === 0,
         leaked.slice(0, 10).join(","),
       );
@@ -627,18 +652,19 @@ async function main(): Promise<void> {
       check("race leaves exactly one user row", raceRows.length === 1, `rows=${raceRows.length}`);
       raceUserId = raceRows[0]?.id ?? null;
 
-      // Task #874 review fix — DISTINCT-email race against one firm: the
-      // credential-email uniqueness can't save us here; the partial unique
-      // index uq_atelier_users_active_partner_firm must. Exactly one 201,
-      // one 409, and one active login for the firm.
+      // Task #1173 — multi-login per firm: the one-active-login-per-firm
+      // partial unique index (uq_atelier_users_active_partner_firm) was
+      // dropped so a firm can staff several portal seats. DISTINCT-email
+      // concurrent provisioning against one firm now succeeds twice; only
+      // credential-email uniqueness still serializes a duplicate email.
       const [ea, eb] = await Promise.all([
         call("POST", `/partners/firms/${firmEId}/logins`, FP_ID, { name: "Race E1", email: `pp_race_e1_${STAMP}@example.com` }),
         call("POST", `/partners/firms/${firmEId}/logins`, FP_ID, { name: "Race E2", email: `pp_race_e2_${STAMP}@example.com` }),
       ]);
       const eStatuses = [ea.status, eb.status].sort();
       check(
-        "concurrent DISTINCT-email provisioning \u2192 one 201, one 409",
-        JSON.stringify(eStatuses) === JSON.stringify([201, 409]),
+        "concurrent DISTINCT-email provisioning \u2192 both 201 (multi-login)",
+        JSON.stringify(eStatuses) === JSON.stringify([201, 201]),
         eStatuses.join(","),
       );
       const firmELogins = await db
@@ -652,8 +678,8 @@ async function main(): Promise<void> {
           ),
         );
       check(
-        "distinct-email race leaves exactly ONE active login on the firm",
-        firmELogins.length === 1,
+        "distinct-email race leaves TWO active logins on the firm (multi-login)",
+        firmELogins.length === 2,
         `rows=${firmELogins.length}`,
       );
       raceUserEIds = firmELogins.map((u) => u.id);
@@ -737,10 +763,13 @@ async function main(): Promise<void> {
           listLogins.status === 200 &&
             listLogins.body?.logins?.some((l: any) => l.id === provisionedUserId && l.active),
         );
-        // Task #885 — leadership regenerates an activation link.
+        // Task #885 — leadership regenerates an activation link. The login
+        // lives on firmD (provisioned above); the reset-link route filters
+        // on the firm-in-path, so these MUST target the login's own firm —
+        // a firm mismatch is (correctly) a 404 and is exercised separately.
         const rlCons = await call(
           "POST",
-          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          `/partners/firms/${firmDId}/logins/${provisionedUserId}/reset-link`,
           CONS_ID,
         );
         check("consultant reset-link \u2192 403", rlCons.status === 403, `status=${rlCons.status}`);
@@ -753,7 +782,7 @@ async function main(): Promise<void> {
         // Hostile cross-site Origin must be rejected — never answered with
         // a credential-bearing activation URL.
         const rlHostile = await fetch(
-          `${API}/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          `${API}/partners/firms/${firmDId}/logins/${provisionedUserId}/reset-link`,
           {
             method: "POST",
             headers: {
@@ -771,7 +800,7 @@ async function main(): Promise<void> {
         );
         const rl = await call(
           "POST",
-          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          `/partners/firms/${firmDId}/logins/${provisionedUserId}/reset-link`,
           FP_ID,
         );
         check(
@@ -806,7 +835,7 @@ async function main(): Promise<void> {
         );
         const rlDeact = await call(
           "POST",
-          `/partners/firms/${firmBId}/logins/${provisionedUserId}/reset-link`,
+          `/partners/firms/${firmDId}/logins/${provisionedUserId}/reset-link`,
           FP_ID,
         );
         check(

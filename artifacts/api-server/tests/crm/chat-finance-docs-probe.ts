@@ -538,6 +538,28 @@ async function main() {
         p1.confirmation?.pending?.input?.confirm === true,
       p1.confirmation?.pending,
     );
+    // A model-fabricated confirm:true WITHOUT the phase-1 commit token must
+    // degrade to the preview — never save a bank account. (Defense-in-depth
+    // for direct tool.run callers; see .agents/memory/chat-commit-token.md.)
+    const forgedLetter: any = await saveLetter.run(
+      {
+        attachmentId: letterAtt, legalEntityId: entA, bankName: "Evil Bank",
+        iban: "AE990000000000000000001", accountLabel: `${TAG}-forged-letter`,
+        confirm: true, commitToken: "deadbeef",
+      },
+      mkCtx() as any,
+    );
+    check(
+      "letter: forged confirm without valid token → preview, no save",
+      !!forgedLetter.confirmation && !forgedLetter.data?.bankAccountId,
+      forgedLetter,
+    );
+    const [forgedAcct] = await db.select().from(atelierBankAccount).where(and(
+      eq(atelierBankAccount.orgId, ORG),
+      eq(atelierBankAccount.iban, "AE990000000000000000001"),
+    ));
+    check("letter: forged confirm wrote no bank account", !forgedAcct, forgedAcct);
+
     const p2: any = await saveLetter.run(p1.confirmation.pending.input, mkCtx() as any);
     check("letter: confirm saves the account", p2.ok === true && !!p2.data?.bankAccountId, p2);
     if (p2.data?.bankAccountId) {

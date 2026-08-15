@@ -128,11 +128,10 @@ export const atelierUsers = pgTable(
   (t) => [
     index("idx_atelier_users_org").on(t.orgId),
     index("idx_atelier_users_role").on(t.role),
-    // Task #874 — one ACTIVE alliance-partner login per firm (v1), enforced
-    // at the DB so concurrent invites can't both win; routes map 23505 → 409.
-    uniqueIndex("uq_atelier_users_active_partner_firm")
-      .on(t.orgId, t.partnerFirmId)
-      .where(sql`${t.partnerFirmId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    // Task #1173 — the v1 one-active-login-per-firm partial unique index
+    // (uq_atelier_users_active_partner_firm) was DROPPED: firms may now have
+    // multiple concurrent active alliance-partner logins. Duplicate emails
+    // are still refused by provisionPortalLogin's collision check.
   ],
 );
 
@@ -3193,6 +3192,41 @@ export const atelierPartnerContactSuggestions = pgTable(
     index("idx_atelier_pf_contact_sug_org").on(t.orgId),
     index("idx_atelier_pf_contact_sug_firm").on(t.partnerFirmId),
     index("idx_atelier_pf_contact_sug_status").on(t.status),
+  ],
+);
+
+// ============================================================
+// PARTNER NOTIFICATION CENTER (Task #1173)
+// ============================================================
+// In-portal notifications for alliance-partner firms. A row with a null
+// userId targets the WHOLE firm (every active login sees it); a non-null
+// userId targets one login. `emailedAt` is stamped after the (fire-after-
+// commit) branded email fan-out. `href` is a portal-relative deep link
+// (e.g. "/partner/billing"). Deny-all RLS; org-isolated like every table.
+export const atelierPartnerNotifications = pgTable(
+  "atelier_partner_notifications",
+  {
+    id: text("id").primaryKey(), // pnotif_...
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    // null = whole firm; set = a single login within the firm.
+    userId: text("user_id"),
+    // grant_shared | grant_revoked | contract_shared | contract_renewal |
+    // contract_signature | bank_change_decided | invoice_status
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    readAt: timestamp("read_at"),
+    emailedAt: timestamp("emailed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pnotif_org").on(t.orgId),
+    index("idx_atelier_pnotif_firm").on(t.partnerFirmId),
+    index("idx_atelier_pnotif_firm_read").on(t.partnerFirmId, t.readAt),
   ],
 );
 

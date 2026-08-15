@@ -47,6 +47,49 @@ import {
   importStatementCore,
   storeStatementObject,
 } from "../../routes/atelier/bankRoutes.js";
+import {
+  parsePdfStatementText,
+  pdfRowsToCanonicalCsv,
+  PDF_STATEMENT_CONFIDENCE_FLOOR,
+} from "../bank-parsers/pdf-statement.js";
+
+// ---------------------------------------------------------------------
+// Commit-token defense (see .agents/memory/chat-commit-token.md). The
+// orchestrator's tool loop executes ANY tool call whose input carries
+// `confirm:true`, including one the MODEL fabricates in the first turn —
+// the platform two-phase confirm relies on the model returning the
+// confirmation envelope. There is now a GLOBAL forged-confirm strip in the
+// dispatch loop, but for these founder-sensitive finance writes we ALSO
+// keep this HMAC gate as defense-in-depth for callers that reach tool.run
+// directly. Phase 1 stamps an HMAC token into the server-persisted
+// `pending.input` (the needs_confirmation frame shows only summary+diff,
+// never pending.input, so the model never sees the token). Phase 2 commits
+// ONLY when the token verifies against the committed fields; a fabricated
+// `confirm:true` without the token degrades to the phase-1 preview instead
+// of writing. `/confirm` replays the persisted pending.input verbatim, so
+// the token survives that path untouched.
+// ---------------------------------------------------------------------
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+const COMMIT_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+function commitTokenFor(tool: string, input: Record<string, unknown>): string {
+  const keys = Object.keys(input)
+    .filter((k) => k !== "confirm" && k !== "commitToken")
+    .sort();
+  const canonical = JSON.stringify(keys.map((k) => [k, input[k]]));
+  return createHmac("sha256", COMMIT_SECRET).update(`${tool}\n${canonical}`).digest("hex");
+}
+/** True only when `confirm:true` arrives with the phase-1-issued token. */
+function isVerifiedCommit(tool: string, input: Record<string, unknown>): boolean {
+  if (input.confirm !== true) return false;
+  const got = typeof input.commitToken === "string" ? input.commitToken : "";
+  const want = commitTokenFor(tool, input);
+  if (got.length !== want.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(got, "utf8"), Buffer.from(want, "utf8"));
+  } catch {
+    return false;
+  }
+}
 
 /** Org finance documents are a finance-leadership surface (Task #1090
  * scope: role clamps unchanged — self-only roles keep receipt-only). */
@@ -217,7 +260,10 @@ defineCapability({
     // clarification asking for the fields, never a dead end and never
     // a guessed value.
     let parseConfidence: number | null = null;
-    if (input.confirm !== true) {
+    // Defense-in-depth: only a `confirm:true` carrying the phase-1 HMAC
+    // token commits; anything else (incl. a model-forged confirm) degrades
+    // to the phase-1 preview below.
+    if (!isVerifiedCommit("ingest_supplier_invoice", input)) {
       const needParse = !supplierName || amount == null || !currency || !reference;
       const text = (loaded.extracted?.normalizedText ?? "").trim();
       if (needParse && text.length >= 40) {
@@ -309,13 +355,17 @@ defineCapability({
           },
           pending: {
             tool: "ingest_supplier_invoice",
-            input: {
-              attachmentId, supplierName, amount, currency, reference,
-              ...(invoiceDate ? { invoiceDate } : {}),
-              ...(periodLabel ? { periodLabel } : {}),
-              ...(notes ? { notes } : {}),
-              confirm: true,
-            },
+            input: (() => {
+              const pin: Record<string, unknown> = {
+                attachmentId, supplierName, amount, currency, reference,
+                ...(invoiceDate ? { invoiceDate } : {}),
+                ...(periodLabel ? { periodLabel } : {}),
+                ...(notes ? { notes } : {}),
+                confirm: true,
+              };
+              pin.commitToken = commitTokenFor("ingest_supplier_invoice", pin);
+              return pin;
+            })(),
           },
         },
       };
@@ -390,7 +440,7 @@ defineCapability({
   module: "bank",
   toolName: "import_bank_statement",
   description:
-    "Import an attached bank-statement CSV (or Xero export) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDFs are not supported (ask for a CSV export). Reconciliation sign-off stays with founders.",
+    "Import an attached bank statement (CSV, Xero export, or PDF) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDF statements go through guarded table extraction with per-row confidence: the parsed rows are always previewed before import, and a low-confidence PDF is refused with CSV-export guidance instead of guessed. Reconciliation sign-off stays with founders.",
   slashAliases: { en: ["/import-statement", "/bank-statement"] },
   inputSchema: {
     type: "object",
@@ -423,20 +473,33 @@ defineCapability({
     if (!bytes || bytes.length === 0) {
       return { ok: false, errorCode: "file_missing", errorMessage: "The attachment bytes could not be loaded." };
     }
-    if (
+    // Task #1094 — PDF statements are accepted through GUARDED extraction:
+    // date-anchored row segmentation with per-row confidence; rows with
+    // ambiguous amounts or unclear direction are flagged (never guessed); a
+    // low overall confidence refuses with the CSV-export fallback. The
+    // extraction gate runs BEFORE the bank-account clarification so an
+    // unparseable PDF gets the CSV guidance immediately instead of a
+    // pointless account question.
+    const isPdf =
       looksLikePdf(bytes) ||
       loaded.attachment.mime === "application/pdf" ||
-      /\.pdf$/i.test(loaded.attachment.fileName)
-    ) {
-      return {
-        ok: false,
-        errorCode: "unsupported_format",
-        errorMessage: "PDF statements are not supported — export a CSV from your bank and attach that instead.",
-      };
-    }
-    const raw = bytes.toString("utf8");
-    if (!raw.trim()) {
-      return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
+      /\.pdf$/i.test(loaded.attachment.fileName);
+    const pdfText = isPdf ? (loaded.extracted?.normalizedText ?? "").trim() : "";
+    let raw = "";
+    if (isPdf) {
+      const gate = parsePdfStatementText(pdfText);
+      if (gate.rows.length === 0 || gate.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+        return {
+          ok: false,
+          errorCode: "pdf_low_confidence",
+          errorMessage: `I couldn't confidently extract transaction rows from this PDF${gate.flagged.length > 0 ? ` (${gate.flagged.length} candidate row(s) were too ambiguous to trust — I never guess amounts)` : ""} — export a CSV from your bank and attach that instead.`,
+        };
+      }
+    } else {
+      raw = bytes.toString("utf8");
+      if (!raw.trim()) {
+        return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
+      }
     }
 
     const accounts = await db
@@ -486,15 +549,75 @@ defineCapability({
       typeof input.statementDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.statementDate)
         ? input.statementDate
         : new Date().toISOString().slice(0, 10);
-    const source = detectStatementSource(raw);
+
+    // PDF path: re-parse with the account's currency as default (the parser
+    // is deterministic, so phase 1 and phase 2 see identical rows and the
+    // canonical-CSV dedupe hash is stable), then serialise the importable
+    // rows into the canonical CSV the SHARED importStatementCore consumes —
+    // identical dedupe and audit behavior to a CSV upload.
+    let pdfMeta: {
+      rowsExtracted: number;
+      flaggedRows: number;
+      confidence: number;
+      rows: Array<Record<string, unknown>>;
+      flagged: Array<Record<string, unknown>>;
+    } | null = null;
+    let source: "csv" | "xero";
+    if (isPdf) {
+      const parsed = parsePdfStatementText(pdfText, acct.currency);
+      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+        // Currency default cannot raise confidence, but keep the guard.
+        return {
+          ok: false,
+          errorCode: "pdf_low_confidence",
+          errorMessage:
+            "I couldn't confidently extract transaction rows from this PDF — export a CSV from your bank and attach that instead.",
+        };
+      }
+      raw = pdfRowsToCanonicalCsv(parsed.rows);
+      source = "csv";
+      pdfMeta = {
+        rowsExtracted: parsed.rows.length,
+        flaggedRows: parsed.flagged.length,
+        confidence: parsed.confidence,
+        rows: parsed.rows.slice(0, 25).map((r) => ({
+          postedDate: r.postedDate,
+          amount: r.amount,
+          currency: r.currency,
+          counterparty: r.counterpartyNameRaw,
+          reference: r.referenceRaw,
+          kind: r.kind,
+          confidence: r.confidence,
+        })),
+        flagged: parsed.flagged.slice(0, 10).map((f) => ({
+          snippet: f.snippet,
+          reason: f.reason,
+        })),
+      };
+    } else {
+      source = detectStatementSource(raw);
+    }
     const lineCount = raw.split(/\r?\n/).filter((l) => l.trim()).length;
 
-    if (input.confirm !== true) {
+    // Defense-in-depth: only a token-verified commit writes (see the
+    // commit-token helper above); a forged confirm degrades to preview.
+    if (!isVerifiedCommit("import_bank_statement", input)) {
+      const summary = pdfMeta
+        ? `Import ${loaded.attachment.fileName} (PDF — ${pdfMeta.rowsExtracted} extracted transaction row(s) shown in the preview${pdfMeta.flaggedRows > 0 ? `; ${pdfMeta.flaggedRows} low-confidence row(s) flagged and SKIPPED, not guessed` : ""}) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Review the parsed rows before confirming — reconciliation sign-off stays with you.`
+        : `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`;
       return {
         ok: true,
-        data: { preview: { bankAccountId, statementDate, source, lineCount } },
+        data: {
+          preview: {
+            bankAccountId,
+            statementDate,
+            source: isPdf ? "pdf" : source,
+            lineCount,
+            ...(pdfMeta ? { pdf: pdfMeta } : {}),
+          },
+        },
         confirmation: {
-          summary: `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`,
+          summary,
           diff: {
             create: {
               table: "atelier_bank_statement_import",
@@ -503,11 +626,15 @@ defineCapability({
           },
           pending: {
             tool: "import_bank_statement",
-            input: {
-              attachmentId, bankAccountId, statementDate,
-              ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
-              confirm: true,
-            },
+            input: (() => {
+              const pin: Record<string, unknown> = {
+                attachmentId, bankAccountId, statementDate,
+                ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
+                confirm: true,
+              };
+              pin.commitToken = commitTokenFor("import_bank_statement", pin);
+              return pin;
+            })(),
           },
         },
       };
@@ -521,8 +648,8 @@ defineCapability({
     try {
       stored = await storeStatementObject(
         bytes,
-        loaded.attachment.fileName || "statement.csv",
-        loaded.attachment.mime || "text/csv",
+        loaded.attachment.fileName || (isPdf ? "statement.pdf" : "statement.csv"),
+        loaded.attachment.mime || (isPdf ? "application/pdf" : "text/csv"),
       );
     } catch (err) {
       return {
@@ -554,7 +681,7 @@ defineCapability({
           rowsImported: data.rowsImported ?? 0,
           parseErrors: data.errors ?? [],
           matcher: matcher ?? null,
-          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}. Review and reconcile when ready.`,
+          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}.${pdfMeta && pdfMeta.flaggedRows > 0 ? ` ${pdfMeta.flaggedRows} low-confidence PDF row(s) were skipped, not guessed — add them manually or import a CSV export.` : ""} Review and reconcile when ready.`,
           navigateTo,
         },
       };
@@ -635,7 +762,9 @@ defineCapability({
     const str = (v: unknown, max: number): string | null =>
       typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
 
-    if (input.confirm !== true) {
+    // Defense-in-depth: only a token-verified commit writes (see the
+    // commit-token helper above); a forged confirm degrades to preview.
+    if (!isVerifiedCommit("save_bank_letter_account", input)) {
       // Entity disambiguation BEFORE the (slow) extraction call.
       if (!legalEntityId) {
         if (entities.length === 1) {
@@ -728,18 +857,22 @@ defineCapability({
           },
           pending: {
             tool: "save_bank_letter_account",
-            input: {
-              attachmentId,
-              ...(legalEntityId ? { legalEntityId } : {}),
-              bankName,
-              ...(accountHolderName ? { accountHolderName } : {}),
-              ...(iban ? { iban } : {}),
-              ...(accountNumber ? { accountNumber } : {}),
-              ...(swift ? { swift } : {}),
-              ...(currency ? { currency } : {}),
-              accountLabel,
-              confirm: true,
-            },
+            input: (() => {
+              const pin: Record<string, unknown> = {
+                attachmentId,
+                ...(legalEntityId ? { legalEntityId } : {}),
+                bankName,
+                ...(accountHolderName ? { accountHolderName } : {}),
+                ...(iban ? { iban } : {}),
+                ...(accountNumber ? { accountNumber } : {}),
+                ...(swift ? { swift } : {}),
+                ...(currency ? { currency } : {}),
+                accountLabel,
+                confirm: true,
+              };
+              pin.commitToken = commitTokenFor("save_bank_letter_account", pin);
+              return pin;
+            })(),
           },
         },
       };

@@ -20,9 +20,14 @@
  * retained (soft revoke) for internal history.
  */
 
-import { Router, type IRouter, type Request, type Response } from "express";
+import {
+  Router,
+  type IRouter,
+  type Request,
+  type Response,
+} from "express";
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, isNull, desc, inArray } from "drizzle-orm";
+import { and, eq, isNull, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -35,9 +40,11 @@ import {
   atelierPartnerFirmBankChangeRequests,
   atelierPartnerFirmDocuments,
   atelierPartnerContactSuggestions,
+  atelierPartnerNotifications,
 } from "@workspace/db";
+import { notifyPartnerFirm } from "../../lib/partnerNotify.js";
 import { audit } from "./engagementRoutes";
-import { isLeadership, isAlliancePartner, canEditPartnersLens } from "./personaRoles";
+import { isLeadership, canEditPartnersLens } from "./personaRoles";
 import { revokeAllSessions } from "../../lib/auth/session.js";
 import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { provisionPortalLogin } from "./rosterLifecycleRoutes";
@@ -77,32 +84,20 @@ function ensurePersona(req: Request, res: Response): Me | null {
 // source of truth for what an alliance-partner login may see).
 // ---------------------------------------------------------------------
 
-/**
- * The firm an alliance-partner login belongs to, or null when the link
- * is missing OR the firm has been archived (soft-deleted). Archiving the
- * firm therefore revokes portal visibility immediately.
- */
-export async function resolveAlliancePartnerFirm(me: {
-  id: string;
-  orgId: string;
-  role: string;
-  partnerFirmId?: string | null;
-}): Promise<typeof atelierPartnerFirms.$inferSelect | null> {
-  if (!isAlliancePartner(me.role)) return null;
-  const firmId = me.partnerFirmId ?? null;
-  if (!firmId) return null;
-  const [firm] = await db
-    .select()
-    .from(atelierPartnerFirms)
-    .where(
-      and(
-        eq(atelierPartnerFirms.id, firmId),
-        eq(atelierPartnerFirms.orgId, me.orgId),
-        isNull(atelierPartnerFirms.deletedAt),
-      ),
-    );
-  return firm ?? null;
-}
+// The firm an alliance-partner login belongs to (null when the link is
+// missing OR the firm is archived) plus the preview-aware portal resolver
+// and preview guard now live in the shared portalFirmResolver module so the
+// contracts/billing portal and this router scope requests identically.
+export {
+  resolveAlliancePartnerFirm,
+  resolvePortalFirm,
+  refuseIfPreview,
+} from "./portalFirmResolver";
+import {
+  resolveAlliancePartnerFirm,
+  resolvePortalFirm,
+  refuseIfPreview,
+} from "./portalFirmResolver";
 
 /** Active (unrevoked) granted opportunity ids for a firm, org-scoped. */
 export async function activeGrantedOppIds(
@@ -232,15 +227,61 @@ export async function grantedOpportunitiesForPartner(me: {
   return { firm, opps, sharedAtByOppId };
 }
 
-function requireAlliancePartner(req: Request, res: Response): Me | null {
-  const me = ensurePersona(req, res);
-  if (!me) return null;
-  if (!isAlliancePartner(me.role)) {
-    res.status(403).json({ error: "partner-portal-only" });
-    return null;
+/**
+ * Task #1173 — granted-opportunity scope for an arbitrary (already-loaded,
+ * live) firm. Shared by partner reads AND leadership preview reads. Same
+ * projection as grantedOpportunitiesForPartner, minus the firm resolution.
+ */
+export async function grantedOppScopeForFirm(
+  orgId: string,
+  firm: typeof atelierPartnerFirms.$inferSelect,
+): Promise<{
+  opps: Array<typeof atelierOpportunities.$inferSelect>;
+  sharedAtByOppId: Map<string, Date>;
+}> {
+  const grantRows = await db
+    .select({
+      opportunityId: atelierPartnerOppGrants.opportunityId,
+      createdAt: atelierPartnerOppGrants.createdAt,
+    })
+    .from(atelierPartnerOppGrants)
+    .where(
+      and(
+        eq(atelierPartnerOppGrants.orgId, orgId),
+        eq(atelierPartnerOppGrants.partnerFirmId, firm.id),
+        isNull(atelierPartnerOppGrants.revokedAt),
+      ),
+    );
+  const sharedAtByOppId = new Map<string, Date>();
+  for (const r of grantRows) {
+    const prev = sharedAtByOppId.get(r.opportunityId);
+    if (!prev || r.createdAt < prev) sharedAtByOppId.set(r.opportunityId, r.createdAt);
   }
-  return me;
+  const oppIds = [...sharedAtByOppId.keys()];
+  if (oppIds.length === 0) return { opps: [], sharedAtByOppId };
+  const opps = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.orgId, orgId),
+        inArray(atelierOpportunities.id, oppIds),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  return { opps, sharedAtByOppId };
 }
+
+// resolvePortalFirm / refuseIfPreview + the Express.Request.portalPreview
+// declaration now live in ./portalFirmResolver (imported above) and are
+// re-exported so existing importers keep working.
+//
+// The per-user /partner-portal/* throttle also lives there
+// (partnerPortalThrottle) and is mounted ONCE on the common atelier parent
+// router in routes/atelier/index.ts — so it covers BOTH this router and the
+// separately-mounted partnerBillingRoutes without double-counting.
+// __resetPortalRateLimit is re-exported for existing test importers.
+export { __resetPortalRateLimit } from "./portalFirmResolver";
 
 // ---------------------------------------------------------------------
 // Partner-facing reads (/partner-portal/*)
@@ -249,16 +290,24 @@ function requireAlliancePartner(req: Request, res: Response): Me | null {
 // @cli-skip: partner-portal read — external alliance-partner surface; chat parity provided by partnerportal.opportunities capability
 router.get("/partner-portal/opportunities", async (req, res, next) => {
   try {
-    const me = requireAlliancePartner(req, res);
-    if (!me) return;
-    const scope = await grantedOpportunitiesForPartner(me);
-    if (!scope) {
-      // Firm link missing or firm archived — nothing is visible.
-      res.status(403).json({ error: "partner-firm-unavailable" });
-      return;
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    // Task #1173 — audit each preview-mode entry read (kept simple: fires
+    // on every opportunities GET while previewing).
+    if (req.portalPreview) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_portal.previewed",
+        payload: { firmId: firm.id, firmName: firm.name, surface: "opportunities" },
+        summary: `${me.name} previewed ${firm.name}'s partner portal (opportunities).`,
+      });
     }
+    const scope = await grantedOppScopeForFirm(me.orgId, firm);
     res.json({
-      firm: { id: scope.firm.id, name: scope.firm.name },
+      firm: { id: firm.id, name: firm.name },
       opportunities: scope.opps
         .map((o) => partnerOppWire(o, scope.sharedAtByOppId.get(o.id) ?? null))
         .sort((a, b) => a.name.localeCompare(b.name)),
@@ -271,13 +320,10 @@ router.get("/partner-portal/opportunities", async (req, res, next) => {
 // @cli-skip: partner-portal read — external surface; chat parity via partnerportal.opportunity_detail
 router.get("/partner-portal/opportunities/:oppId", async (req, res, next) => {
   try {
-    const me = requireAlliancePartner(req, res);
-    if (!me) return;
-    const scope = await grantedOpportunitiesForPartner(me);
-    if (!scope) {
-      res.status(403).json({ error: "partner-firm-unavailable" });
-      return;
-    }
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    const scope = await grantedOppScopeForFirm(me.orgId, firm);
     const opp = scope.opps.find((o) => o.id === req.params.oppId);
     // Foreign-firm / revoked / unknown ids are indistinguishable: 404.
     if (!opp) {
@@ -285,7 +331,7 @@ router.get("/partner-portal/opportunities/:oppId", async (req, res, next) => {
       return;
     }
     res.json({
-      firm: { id: scope.firm.id, name: scope.firm.name },
+      firm: { id: firm.id, name: firm.name },
       opportunity: partnerOppWire(opp, scope.sharedAtByOppId.get(opp.id) ?? null),
     });
   } catch (err) {
@@ -298,13 +344,10 @@ router.get(
   "/partner-portal/opportunities/:oppId/account",
   async (req, res, next) => {
     try {
-      const me = requireAlliancePartner(req, res);
-      if (!me) return;
-      const scope = await grantedOpportunitiesForPartner(me);
-      if (!scope) {
-        res.status(403).json({ error: "partner-firm-unavailable" });
-        return;
-      }
+      const resolved = await resolvePortalFirm(req, res);
+      if (!resolved) return;
+      const { me, firm } = resolved;
+      const scope = await grantedOppScopeForFirm(me.orgId, firm);
       const opp = scope.opps.find((o) => o.id === req.params.oppId);
       if (!opp) {
         res.status(404).json({ error: "not-found" });
@@ -465,6 +508,22 @@ router.post("/opportunities/:oppId/partner-grants", async (req, res, next) => {
       payload: { grantId: id, partnerFirmId: firm.id, firmName: firm.name },
       summary: `${me.name} granted ${firm.name} portal access to opportunity "${opp.name}".`,
     });
+    // Task #1173 — notify the firm (in-app + email) after commit.
+    await notifyPartnerFirm({
+      orgId: me.orgId,
+      partnerFirmId: firm.id,
+      kind: "grant_shared",
+      title: "A new opportunity was shared with you",
+      body: `"${opp.name}" is now visible in your partner portal.`,
+      href: "/partner/opportunities",
+      email: {
+        subject: "A new opportunity was shared with you — Cognirise",
+        paragraphs: [
+          `Cognirise has shared the opportunity "${opp.name}" with ${firm.name}.`,
+          "Sign in to your partner portal to view the details.",
+        ],
+      },
+    });
     res.status(201).json({ ok: true, grantId: id });
   } catch (err) {
     next(err);
@@ -507,6 +566,15 @@ router.post(
         action: "partner_grant.revoked",
         payload: { grantId: grant.id, partnerFirmId: grant.partnerFirmId },
         summary: `${me.name} revoked a partner firm's portal access to this opportunity.`,
+      });
+      // Task #1173 — notify the firm (in-app only; no email for revokes).
+      await notifyPartnerFirm({
+        orgId: me.orgId,
+        partnerFirmId: grant.partnerFirmId,
+        kind: "grant_revoked",
+        title: "An opportunity is no longer shared with you",
+        body: "One of the opportunities previously shared with your firm has been removed from your portal.",
+        href: "/partner/opportunities",
       });
       res.json({ ok: true });
     } catch (err) {
@@ -584,59 +652,27 @@ router.post("/partners/firms/:firmId/logins", async (req, res, next) => {
       });
       return;
     }
-    // Task #874 — one active user per firm in v1.
-    const [activeLogin] = await db
-      .select({ id: atelierUsers.id, email: atelierUsers.email })
-      .from(atelierUsers)
-      .where(
-        and(
-          eq(atelierUsers.orgId, me.orgId),
-          eq(atelierUsers.role, "alliance_partner"),
-          eq(atelierUsers.partnerFirmId, firm.id),
-          isNull(atelierUsers.deletedAt),
-        ),
-      );
-    if (activeLogin) {
-      res.status(409).json({
-        error: "firm-login-exists",
-        message: `This firm already has an active portal user (${activeLogin.email}). Deactivate it first — one user per firm in v1.`,
-      });
-      return;
-    }
-    let result;
-    try {
-      result = await provisionPortalLogin({
-        me,
-        person: {
-          id: firm.id,
-          workerType: "partner_firm_resource",
-          fullName,
-          email,
-          personId: null,
-        },
-        onboarding: null,
-        skipMsProvisioning: true,
-        origin: req.headers.origin ? String(req.headers.origin) : null,
-        // Task #873 — role override: the login is an external
-        // alliance-partner portal account linked to the firm.
-        alliancePartnerFirmId: firm.id,
-        partnerFirmName: firm.name,
-      });
-    } catch (err: unknown) {
-      // Task #874 — the partial unique index uq_atelier_users_active_partner_firm
-      // is the race-safe enforcement of one-active-login-per-firm: concurrent
-      // invites (even with distinct emails) collide here; the loser gets 409.
-      const code = (err as { code?: string; cause?: { code?: string } })?.code
-        ?? (err as { cause?: { code?: string } })?.cause?.code;
-      if (code === "23505") {
-        res.status(409).json({
-          error: "firm-login-exists",
-          message: "This firm already has an active portal user — one user per firm in v1.",
-        });
-        return;
-      }
-      throw err;
-    }
+    // Task #1173 — firms may now have MULTIPLE active portal logins. The v1
+    // one-active-login-per-firm gate (and its 23505 → 409 mapping) is gone;
+    // provisionPortalLogin still refuses a duplicate email via its own
+    // credential-collision check.
+    const result = await provisionPortalLogin({
+      me,
+      person: {
+        id: firm.id,
+        workerType: "partner_firm_resource",
+        fullName,
+        email,
+        personId: null,
+      },
+      onboarding: null,
+      skipMsProvisioning: true,
+      origin: req.headers.origin ? String(req.headers.origin) : null,
+      // Task #873 — role override: the login is an external
+      // alliance-partner portal account linked to the firm.
+      alliancePartnerFirmId: firm.id,
+      partnerFirmName: firm.name,
+    });
     if (!result.ok) {
       res.status(result.status).json(result.body);
       return;
@@ -650,6 +686,66 @@ router.post("/partners/firms/:firmId/logins", async (req, res, next) => {
       summary: `${me.name} provisioned a partner-portal login for ${fullName} (${firm.name}).`,
     });
     res.status(201).json(result.body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #1173 — offboard a partner firm: deactivate ALL active
+// alliance-partner logins (soft-delete + revoke sessions each). Idempotent
+// — re-running after every login is already down is a no-op. Leadership-only,
+// audited partner_firm.offboarded.
+// @cli-skip: security-sensitive external offboarding — deliberate UI-only write
+router.post("/partners/firms/:firmId/offboard", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const [firm] = await db
+      .select()
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          eq(atelierPartnerFirms.id, req.params.firmId),
+          eq(atelierPartnerFirms.orgId, me.orgId),
+        ),
+      );
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const logins = await db
+      .select()
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.orgId, me.orgId),
+          eq(atelierUsers.role, "alliance_partner"),
+          eq(atelierUsers.partnerFirmId, firm.id),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    const now = new Date();
+    for (const u of logins) {
+      await db
+        .update(atelierUsers)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(eq(atelierUsers.id, u.id));
+      // Always revoke sessions so access ends NOW.
+      await revokeAllSessions(u.id);
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.offboarded",
+      payload: {
+        firmName: firm.name,
+        deactivatedUserIds: logins.map((u) => u.id),
+        deactivatedCount: logins.length,
+      },
+      summary: `${me.name} offboarded ${firm.name} — ${logins.length} portal login(s) deactivated.`,
+    });
+    res.json({ ok: true, deactivated: logins.length });
   } catch (err) {
     next(err);
   }
@@ -726,13 +822,24 @@ router.post(
       const tokenHash = createHash("sha256").update(rawToken).digest("hex");
       const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
       await db.transaction(async (tx) => {
+        // Supersede EVERY prior live link for THIS login so only the newest
+        // one works. Scope by userId (not email alone) and include BOTH the
+        // first-time `partner_registration` link the provisioning flow mints
+        // AND any earlier `activation` reset link — otherwise a freshly
+        // provisioned partner (whose only live token has purpose
+        // "partner_registration") would keep a second working link after a
+        // reset. (Task #1173 — multi-login provisioning mints
+        // partner_registration; Task #885 reset mints activation.)
         await tx
           .update(atelierLoginActivationTokens)
           .set({ usedAt: new Date() })
           .where(
             and(
-              eq(atelierLoginActivationTokens.email, cred.email),
-              eq(atelierLoginActivationTokens.purpose, "activation"),
+              eq(atelierLoginActivationTokens.userId, user.id),
+              inArray(atelierLoginActivationTokens.purpose, [
+                "activation",
+                "partner_registration",
+              ]),
               isNull(atelierLoginActivationTokens.usedAt),
             ),
           );
@@ -1093,6 +1200,21 @@ router.post("/partners/bank-changes/:id/approve", async (req, res, next) => {
       },
       summary: `${me.name} approved the bank details for ${firm.name} — they are now payable.`,
     });
+    // Task #1173 — notify the firm of the bank-change decision.
+    await notifyPartnerFirm({
+      orgId: me.orgId,
+      partnerFirmId: firm.id,
+      kind: "bank_change_decided",
+      title: "Your bank details were approved",
+      body: "The bank details you submitted have been approved and are now on file for payments.",
+      href: "/partner/company",
+      email: {
+        subject: "Your bank details were approved — Cognirise",
+        paragraphs: [
+          `The bank details submitted for ${firm.name} have been approved and are now on file for payments.`,
+        ],
+      },
+    });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -1144,6 +1266,24 @@ router.post("/partners/bank-changes/:id/reject", async (req, res, next) => {
       action: "partner_firm.bank_change.rejected",
       payload: { bankChangeRequestId: reqRow.id },
       summary: `${me.name} rejected a partner-firm bank-details submission.`,
+    });
+    // Task #1173 — notify the firm of the bank-change decision.
+    await notifyPartnerFirm({
+      orgId: me.orgId,
+      partnerFirmId: reqRow.partnerFirmId,
+      kind: "bank_change_decided",
+      title: "Your bank details were not accepted",
+      body: note
+        ? `Your bank-details submission was not accepted. Note: ${note}`
+        : "Your bank-details submission was not accepted. Please review and resubmit.",
+      href: "/partner/company",
+      email: {
+        subject: "Action needed: your bank details — Cognirise",
+        paragraphs: [
+          "The bank details you submitted were not accepted.",
+          note ? `Reviewer note: ${note}` : "Please sign in to your portal to review and resubmit.",
+        ],
+      },
     });
     res.json({ ok: true });
   } catch (err) {
@@ -1224,13 +1364,9 @@ const isoDate = (v: unknown): string | null => {
 // @cli-skip: partner-portal read — external surface (Task #1172)
 router.get("/partner-portal/company-profile", async (req, res, next) => {
   try {
-    const me = requireAlliancePartner(req, res);
-    if (!me) return;
-    const firm = await resolveAlliancePartnerFirm(me);
-    if (!firm) {
-      res.status(403).json({ error: "partner-firm-unavailable" });
-      return;
-    }
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
     const docs = await db
       .select()
       .from(atelierPartnerFirmDocuments)
@@ -1290,13 +1426,10 @@ router.post(
   // app.ts (BEFORE the default 100KB express.json), so no per-route parser.
   async (req, res, next) => {
     try {
-      const me = requireAlliancePartner(req, res);
-      if (!me) return;
-      const firm = await resolveAlliancePartnerFirm(me);
-      if (!firm) {
-        res.status(403).json({ error: "partner-firm-unavailable" });
-        return;
-      }
+      const resolved = await resolvePortalFirm(req, res);
+      if (!resolved) return;
+      if (refuseIfPreview(req, res)) return;
+      const { me, firm } = resolved;
       const kind = String(req.body?.kind ?? "");
       if (!PARTNER_DOC_KINDS.has(kind)) {
         res.status(400).json({ error: "invalid-kind", allowed: [...PARTNER_DOC_KINDS] });
@@ -1369,13 +1502,9 @@ router.post(
 // @cli-skip: partner-portal download — external surface, own-firm only (Task #1172)
 router.get("/partner-portal/company-documents/:id/download", async (req, res, next) => {
   try {
-    const me = requireAlliancePartner(req, res);
-    if (!me) return;
-    const firm = await resolveAlliancePartnerFirm(me);
-    if (!firm) {
-      res.status(403).json({ error: "partner-firm-unavailable" });
-      return;
-    }
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
     const [doc] = await db
       .select()
       .from(atelierPartnerFirmDocuments)
@@ -1409,13 +1538,10 @@ router.get("/partner-portal/company-documents/:id/download", async (req, res, ne
 // @cli-skip: partner-portal write — external surface (Task #1172)
 router.post("/partner-portal/contact-suggestions", async (req, res, next) => {
   try {
-    const me = requireAlliancePartner(req, res);
-    if (!me) return;
-    const firm = await resolveAlliancePartnerFirm(me);
-    if (!firm) {
-      res.status(403).json({ error: "partner-firm-unavailable" });
-      return;
-    }
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    if (refuseIfPreview(req, res)) return;
+    const { me, firm } = resolved;
     const rawContacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
     if (rawContacts.length === 0 || rawContacts.length > 25) {
       res.status(400).json({ error: "invalid-body", message: "Provide between 1 and 25 contacts." });
@@ -1778,6 +1904,134 @@ router.post("/partners/contact-suggestions/:id/decide", async (req, res, next) =
           ? `${me.name} approved ${(sug.proposedContacts ?? []).length} contact update(s) for ${firm.name}.`
           : `${me.name} rejected a contact-update suggestion for ${firm.name}.`,
     });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================================
+// Task #1173 — Partner notification center (portal reads + mark-read).
+// Scoped via resolvePortalFirm: alliance_partner sees own firm; leadership
+// may preview (read-only — marking read is refused in preview).
+// =====================================================================
+
+function notificationWire(n: typeof atelierPartnerNotifications.$inferSelect) {
+  return {
+    id: n.id,
+    kind: n.kind,
+    title: n.title,
+    body: n.body ?? null,
+    href: n.href ?? null,
+    readAt: n.readAt ? n.readAt.toISOString() : null,
+    createdAt: n.createdAt.toISOString(),
+  };
+}
+
+// @cli-skip: partner-portal read — external notification center (Task #1173)
+router.get("/partner-portal/notifications", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    // Task #1173 — audit preview entry reads on the notifications surface too.
+    if (req.portalPreview) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_portal.previewed",
+        payload: { firmId: firm.id, firmName: firm.name, surface: "notifications" },
+        summary: `${me.name} previewed ${firm.name}'s partner portal (notifications).`,
+      });
+    }
+    const rows = await db
+      .select()
+      .from(atelierPartnerNotifications)
+      .where(
+        and(
+          eq(atelierPartnerNotifications.orgId, me.orgId),
+          eq(atelierPartnerNotifications.partnerFirmId, firm.id),
+          isNull(atelierPartnerNotifications.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPartnerNotifications.createdAt))
+      .limit(50);
+    const [{ count } = { count: 0 }] = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(atelierPartnerNotifications)
+      .where(
+        and(
+          eq(atelierPartnerNotifications.orgId, me.orgId),
+          eq(atelierPartnerNotifications.partnerFirmId, firm.id),
+          isNull(atelierPartnerNotifications.deletedAt),
+          isNull(atelierPartnerNotifications.readAt),
+        ),
+      );
+    const wire = rows.map(notificationWire);
+    res.json({
+      unreadCount: Number(count ?? 0),
+      notifications: wire,
+      // Alias consumed by the web bell (PartnerPortal.tsx).
+      items: wire,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal write — external notification mark-read (Task #1173)
+router.post("/partner-portal/notifications/:id/read", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    if (refuseIfPreview(req, res)) return;
+    const { me, firm } = resolved;
+    const [row] = await db
+      .select()
+      .from(atelierPartnerNotifications)
+      .where(
+        and(
+          eq(atelierPartnerNotifications.id, req.params.id),
+          eq(atelierPartnerNotifications.orgId, me.orgId),
+          eq(atelierPartnerNotifications.partnerFirmId, firm.id),
+          isNull(atelierPartnerNotifications.deletedAt),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "notification-not-found" });
+      return;
+    }
+    if (!row.readAt) {
+      await db
+        .update(atelierPartnerNotifications)
+        .set({ readAt: new Date(), updatedAt: new Date() })
+        .where(eq(atelierPartnerNotifications.id, row.id));
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal write — external notification mark-all-read (Task #1173)
+router.post("/partner-portal/notifications/read-all", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    if (refuseIfPreview(req, res)) return;
+    const { me, firm } = resolved;
+    await db
+      .update(atelierPartnerNotifications)
+      .set({ readAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierPartnerNotifications.orgId, me.orgId),
+          eq(atelierPartnerNotifications.partnerFirmId, firm.id),
+          isNull(atelierPartnerNotifications.deletedAt),
+          isNull(atelierPartnerNotifications.readAt),
+        ),
+      );
     res.json({ ok: true });
   } catch (err) {
     next(err);

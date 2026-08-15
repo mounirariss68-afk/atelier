@@ -50,6 +50,8 @@ const en: Dict = {
   "login.twoFactorBack": "Back to sign in",
   "login.invalidCode": "That code is incorrect or already used.",
   "login.challengeExpired": "Sign-in expired. Enter your email and password again.",
+  "login.portalWebOnly":
+    "Partner accounts are web-only. Sign in to the Atelier partner portal in your browser to view your opportunities, contracts and billing.",
   "login.enrollNudgeTitle": "Set up two-factor authentication",
   "login.enrollNudgeBody": "Your firm requires two-factor authentication for your role. Set it up from your profile menu in the Atelier web portal.",
   "password.twoFactorCode": "Two-factor code",
@@ -434,6 +436,8 @@ const tr: Dict = {
   "login.twoFactorBack": "Girişe geri dön",
   "login.invalidCode": "Bu kod hatalı veya daha önce kullanılmış.",
   "login.challengeExpired": "Oturum süresi doldu. E-posta ve şifrenizi yeniden girin.",
+  "login.portalWebOnly":
+    "Ortak hesapları yalnızca web üzerinden kullanılır. Fırsatlarınızı, sözleşmelerinizi ve faturalarınızı görmek için tarayıcınızdan Atelier ortak portalına giriş yapın.",
   "login.enrollNudgeTitle": "İki adımlı doğrulamayı kurun",
   "login.enrollNudgeBody": "Şirketiniz rolünüz için iki adımlı doğrulama gerektiriyor. Atelier web portalındaki profil menünüzden kurabilirsiniz.",
   "password.twoFactorCode": "İki adımlı doğrulama kodu",
@@ -806,6 +810,8 @@ const ar: Dict = {
   "login.twoFactorBack": "العودة إلى تسجيل الدخول",
   "login.invalidCode": "هذا الرمز غير صحيح أو تم استخدامه من قبل.",
   "login.challengeExpired": "انتهت صلاحية تسجيل الدخول. أدخل بريدك الإلكتروني وكلمة المرور مجددًا.",
+  "login.portalWebOnly":
+    "حسابات الشركاء متاحة عبر الويب فقط. سجّل الدخول إلى بوابة شركاء Atelier من متصفحك لعرض الفرص والعقود والفواتير الخاصة بك.",
   "login.enrollNudgeTitle": "قم بإعداد التحقق بخطوتين",
   "login.enrollNudgeBody": "تتطلب شركتك التحقق بخطوتين لدورك. يمكنك إعداده من قائمة ملفك الشخصي في بوابة Atelier على الويب.",
   "password.twoFactorCode": "رمز التحقق بخطوتين",

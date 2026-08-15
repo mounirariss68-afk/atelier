@@ -107,6 +107,7 @@ import v5Routes from "./v5Routes";
 import partnersRoutes from "./partnersRoutes";
 import partnerPortalRoutes from "./partnerPortalRoutes";
 import partnerBillingRoutes from "./partnerBillingRoutes";
+import { partnerPortalThrottle } from "./portalFirmResolver";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import preformationRoutes from "./preformationRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
@@ -433,6 +434,11 @@ router.use(v5Routes);
 // Task #513 — Partners lens CRUD (unified registry, co-sell, certs,
 // conflicts, e-sign/RCTI projections). Central Partners gate above applies.
 router.use(partnersRoutes);
+// Task #1173 — per-user throttle on ALL /partner-portal/* traffic, mounted
+// ONCE here before BOTH portal routers so partnerBillingRoutes (contracts,
+// inbox, invoices, issued, multipart uploads) is covered too and a request
+// is counted exactly once. Preview (internal staff) is exempt.
+router.use("/partner-portal", partnerPortalThrottle);
 // Task #873 — alliance-partner portal: grant-scoped partner reads
 // (/partner-portal/*) + leadership grant/login admin surfaces.
 router.use(partnerPortalRoutes);

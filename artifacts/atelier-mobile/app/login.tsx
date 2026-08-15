@@ -47,7 +47,8 @@ const logoDark = require("@/assets/images/cognirise-logo-dark-bg.png");
 export default function LoginScreen() {
   const c = useColors();
   const { t } = useI18n();
-  const { login, loginTwoFactor } = useAuth();
+  const { login, loginTwoFactor, forcedLogoutKey, clearForcedLogout } =
+    useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState("");
@@ -83,6 +84,15 @@ export default function LoginScreen() {
       setForgotBusy(false);
     }
   };
+
+  // Task #1173 — if a restored session was force-terminated (e.g. an
+  // alliance_partner account, which is web-portal only) show that message.
+  useEffect(() => {
+    if (forcedLogoutKey) {
+      setError(t(forcedLogoutKey));
+      clearForcedLogout();
+    }
+  }, [forcedLogoutKey, clearForcedLogout, t]);
 
   useEffect(() => {
     apiJson<{ minSupportedAppVersion: string }>("/api/auth/app-meta", {

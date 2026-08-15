@@ -12,6 +12,7 @@ import { runMsMeetingAutolog } from "./msMeetingAutolog";
 import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
 import { runMsLicenseSeatForecast } from "./msLicenseForecast";
 import { runProcurementRenewalScan } from "./atelier-procurement-renewal";
+import { runPartnerContractRenewalScan } from "./partnerNotify";
 import { runSelfBillingClerk } from "./atelier-agents/selfBillingClerk";
 import { runPayrollClerk } from "./atelier-agents/payrollClerk";
 import { runCollectionsAgent } from "./atelier-agents/collections";
@@ -46,6 +47,10 @@ const MS_LICENSE_FORECAST_CRON = process.env.MS_LICENSE_FORECAST_CRON ?? "15 5 *
 // (procurement.status renewal_due, or approaching per the researched guide's
 // renewal cadence) on the responsible partner's Pane A + one-time email nudge.
 const PROCUREMENT_RENEWAL_CRON = process.env.PROCUREMENT_RENEWAL_CRON ?? "45 5 * * *";
+// Task #1173 — daily 05:50 UTC: notify partner firms whose master agreement
+// (atelier_compliance_records kind master_agreement) expires within 30 days.
+// One notification per firm, deduped by an existing row within 35 days.
+const PARTNER_RENEWAL_CRON = process.env.PARTNER_RENEWAL_CRON ?? "50 5 * * *";
 
 // Task #1091 — finance autopilot cadences. All rerun-safe: each agent is
 // idempotent (drafts key off period/week, revrec skips frozen schedules)
@@ -77,6 +82,7 @@ let cashForecasterTask: ScheduledTask | null = null;
 let msCalSyncTask: ScheduledTask | null = null;
 let msLicenseForecastTask: ScheduledTask | null = null;
 let procurementRenewalTask: ScheduledTask | null = null;
+let partnerRenewalTask: ScheduledTask | null = null;
 let selfBillingTask: ScheduledTask | null = null;
 let collectionsAgentTask: ScheduledTask | null = null;
 let revenueRecognizerTask: ScheduledTask | null = null;
@@ -431,6 +437,30 @@ export function startScheduler(): void {
     );
   }
 
+  // Partner contract-renewal reminders (Task #1173) — daily scan of
+  // partner-firm master agreements expiring within 30 days; one in-app
+  // notification + branded email per firm, deduped within 35 days.
+  if (cron.validate(PARTNER_RENEWAL_CRON)) {
+    partnerRenewalTask = cron.schedule(
+      PARTNER_RENEWAL_CRON,
+      async () => {
+        try {
+          const out = await runPartnerContractRenewalScan({ orgId: AUTOPILOT_ORG_ID });
+          logger.info(out, "Partner contract-renewal scan finished");
+        } catch (err) {
+          logger.error({ err }, "Partner contract-renewal scan encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: PARTNER_RENEWAL_CRON }, "Partner contract-renewal scheduler started");
+  } else {
+    logger.error(
+      { cron: PARTNER_RENEWAL_CRON },
+      "Invalid PARTNER_RENEWAL_CRON expression, partner contract-renewal scan not scheduled",
+    );
+  }
+
   // ── Task #1091 — finance autopilot agents ──────────────────────────
   // Each block guards concurrency with the background-jobs registry: a
   // running row keyed by lockKey is inserted first; if one already exists
@@ -601,6 +631,11 @@ export function stopScheduler(): void {
   if (procurementRenewalTask) {
     procurementRenewalTask.stop();
     procurementRenewalTask = null;
+  }
+  if (partnerRenewalTask) {
+    partnerRenewalTask.stop();
+    partnerRenewalTask = null;
+    logger.info("Partner contract-renewal scheduler stopped");
   }
   if (msLicenseForecastTask) {
     msLicenseForecastTask.stop();

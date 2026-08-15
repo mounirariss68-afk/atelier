@@ -115,7 +115,10 @@ async function audit(
     | "twofa_backup_code_used"
     | "twofa_reset_by_partner"
     | "twofa_policy_updated"
-    | "security_log_viewed",
+    | "security_log_viewed"
+    // Task #1173 — an alliance_partner login was attempted from the mobile
+    // app; partner accounts are web-portal-only, so the session is refused.
+    | "portal_login_mobile_blocked",
   opts: {
     actorId?: string | null;
     actorLabel: string;
@@ -332,6 +335,38 @@ router.post("/login", async (req: Request, res: Response) => {
     res.status(401).json(GENERIC_FAIL);
     return;
   }
+  // Task #1173 — partner (alliance_partner) accounts are web-portal only.
+  // Reject mobile sign-in outright BEFORE minting any session / 2FA
+  // challenge, and log a distinguishable security event.
+  //
+  // IMPORTANT — this body-flag check is official-app UX, NOT the security
+  // boundary. `req.body.client` is client-supplied and a partner could lie
+  // ("client":"web") to skip this branch. The DURABLE, server-verifiable
+  // restriction is the central atelier gate (routes/atelier/index.ts): an
+  // alliance_partner session may reach ONLY `/me` (exact), `/personas`,
+  // `/partner-portal*` and the `/cli` sub-path allowlist — every mobile-only
+  // API surface (e.g. `/me/push-tokens` device registration, `/me/msauth/
+  // mobile/*`) sits under `/me/…` and is therefore 403'd for this role
+  // regardless of any client flag. So no mobile-only privilege is reachable
+  // by faking the client field; this branch only returns a friendlier
+  // "use the web portal" message + audit event to the official app.
+  const loginIsMobileClient = String(req.body?.client ?? "") === "mobile";
+  if (loginIsMobileClient && persona.role === "alliance_partner") {
+    await audit("portal_login_mobile_blocked", {
+      actorId: persona.id,
+      actorLabel: persona.name,
+      ip,
+      targetEmail: email,
+      targetUserId: persona.id,
+      orgId: persona.orgId,
+    });
+    res.status(403).json({
+      error: "portal-web-only",
+      message:
+        "Partner accounts use the web portal. Sign in at your Cognirise portal link in a browser.",
+    });
+    return;
+  }
   // Task #821 — two-step login: password OK but 2FA is enabled, so no
   // session yet. Mint a short-lived single-use challenge token; the client
   // finishes at POST /login/2fa with a TOTP or backup code.
@@ -351,12 +386,16 @@ router.post("/login", async (req: Request, res: Response) => {
   }
   const { token, expiresAt } = await createSession(persona.id, email, {
     mustChangePassword: cred.mustChangePassword,
+    // Task #1173 — external partner sessions expire faster (24h vs 7d).
+    ...(persona.role === "alliance_partner"
+      ? { ttlMs: 24 * 60 * 60 * 1000 }
+      : {}),
   });
   setSessionCookie(res, token, expiresAt);
   await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
   // Task #328 — the mobile app cannot use httpOnly cookies; it asks for the
   // session token in the response body and sends it back as a Bearer header.
-  const isMobileClient = String(req.body?.client ?? "") === "mobile";
+  const isMobileClient = loginIsMobileClient;
   res.json({
     user: personaToWire(persona),
     mustChangePassword: cred.mustChangePassword,
@@ -1901,6 +1940,25 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
     res.status(401).json(GENERIC_FAIL);
     return;
   }
+  // Task #1173 — partner accounts are web-portal only; refuse the mobile
+  // client even after a valid 2FA code (no session minted).
+  const twofaIsMobileClient = String(req.body?.client ?? "") === "mobile";
+  if (twofaIsMobileClient && persona.role === "alliance_partner") {
+    await audit("portal_login_mobile_blocked", {
+      actorId: persona.id,
+      actorLabel: persona.name,
+      ip,
+      targetEmail: row.email,
+      targetUserId: persona.id,
+      orgId: persona.orgId,
+    });
+    res.status(403).json({
+      error: "portal-web-only",
+      message:
+        "Partner accounts use the web portal. Sign in at your Cognirise portal link in a browser.",
+    });
+    return;
+  }
   if (cred.failedLoginCount > 0 || cred.lockedUntil) {
     await db
       .update(atelierAuthCredentials)
@@ -1910,6 +1968,10 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
   const { token, expiresAt } = await createSession(persona.id, row.email, {
     mustChangePassword: cred.mustChangePassword,
     totpVerifiedAt: new Date(),
+    // Task #1173 — external partner sessions expire faster (24h vs 7d).
+    ...(persona.role === "alliance_partner"
+      ? { ttlMs: 24 * 60 * 60 * 1000 }
+      : {}),
   });
   setSessionCookie(res, token, expiresAt);
   if (result.method === "backup") {
@@ -1917,7 +1979,7 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
   }
   await audit("twofa_challenge_success", { actorId: persona.id, actorLabel: persona.name, ip });
   await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
-  const isMobileClient = String(req.body?.client ?? "") === "mobile";
+  const isMobileClient = twofaIsMobileClient;
   res.json({
     user: personaToWire(persona),
     mustChangePassword: cred.mustChangePassword,

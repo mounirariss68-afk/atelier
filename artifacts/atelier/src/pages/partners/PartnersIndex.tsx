@@ -16,7 +16,7 @@
  *   Renew      — firm status lifecycle + tier-change history on the registry record
  */
 import * as React from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { RecordCard, RecordCardAction } from "@/components/ui/record-card";
@@ -740,6 +740,7 @@ function IdentifyView() {
                   <div onClick={(e) => e.stopPropagation()}>
                     <PortalLoginsPanel
                       firmId={f.id}
+                      firmName={f.name}
                       signed={f.partnershipStage === "agreed" && f.agreementStage === "signed"}
                     />
                   </div>
@@ -764,7 +765,15 @@ function IdentifyView() {
 // Leadership-only management of a firm's external Atelier logins
 // (role = alliance_partner, locked to /partner-portal + chat). Raw fetch:
 // these bespoke routes are not in the OpenAPI spec.
-function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean }) {
+function PortalLoginsPanel({
+  firmId,
+  firmName,
+  signed,
+}: {
+  firmId: string;
+  firmName: string;
+  signed: boolean;
+}) {
   type LoginRow = {
     id: string;
     name: string;
@@ -772,12 +781,16 @@ function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean
     active: boolean;
     createdAt: string;
   };
+  const [, setLocation] = useLocation();
   const [rows, setRows] = React.useState<LoginRow[] | null>(null);
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [activationUrl, setActivationUrl] = React.useState<string | null>(null);
+  // Task #1173 — firm-wide offboard (deactivates ALL logins) is destructive,
+  // so it's a two-step confirm rather than a single click.
+  const [confirmOffboard, setConfirmOffboard] = React.useState(false);
 
   const load = React.useCallback(() => {
     void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins`, { credentials: "include" })
@@ -864,6 +877,31 @@ function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean
       .finally(() => setBusy(false));
   };
 
+  // Task #1173 — firm-wide offboard: deactivates every active login for the
+  // firm in one call and revokes all their sessions.
+  const offboard = () => {
+    setBusy(true);
+    setMsg(null);
+    setActivationUrl(null);
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/offboard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({}),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : "Offboarding failed.");
+        setConfirmOffboard(false);
+        setMsg("Portal access offboarded; all logins were deactivated and their sessions revoked.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const hasActiveLogin = (rows ?? []).some((r) => r.active);
+
   return (
     <div className="mt-3 border-t border-border-soft pt-3 space-y-2" data-testid={`panel-portal-logins-${firmId}`}>
       <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
@@ -871,7 +909,8 @@ function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean
       </div>
       <p className="text-xs text-text-mute">
         External logins see ONLY the opportunities granted to this firm plus a
-        redacted client overview — nothing else.
+        redacted client overview — nothing else. A firm can have several active
+        logins at once; add more whenever you need to.
       </p>
       {rows == null ? (
         <p className="text-xs text-text-faint">Loading…</p>
@@ -953,6 +992,58 @@ function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean
       {activationUrl && (
         <p className="text-xs text-text-mute break-all">Registration link: {activationUrl}</p>
       )}
+
+      {/* Task #1173 — leadership tools: preview the firm's portal read-only,
+          and offboard (deactivate every active login at once). */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-border-soft pt-2">
+        <button
+          type="button"
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80"
+          onClick={() => setLocation(`/partners/preview/${firmId}`)}
+          data-testid={`button-preview-portal-${firmId}`}
+        >
+          preview portal as this firm
+        </button>
+        {!confirmOffboard ? (
+          <button
+            type="button"
+            className="text-xs font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+            disabled={busy || !hasActiveLogin}
+            onClick={() => {
+              setMsg(null);
+              setConfirmOffboard(true);
+            }}
+            data-testid={`button-offboard-portal-${firmId}`}
+          >
+            offboard portal access
+          </button>
+        ) : (
+          <span className="flex items-center gap-2 text-xs">
+            <span className="text-danger">
+              Deactivate all portal logins for {firmName}?
+            </span>
+            <button
+              type="button"
+              className="font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+              disabled={busy}
+              onClick={offboard}
+              data-testid={`button-offboard-portal-confirm-${firmId}`}
+            >
+              confirm
+            </button>
+            <button
+              type="button"
+              className="text-text-faint hover:underline"
+              disabled={busy}
+              onClick={() => setConfirmOffboard(false)}
+              data-testid={`button-offboard-portal-cancel-${firmId}`}
+            >
+              cancel
+            </button>
+          </span>
+        )}
+      </div>
+
       {msg && <p className="text-xs text-text-faint">{msg}</p>}
     </div>
   );

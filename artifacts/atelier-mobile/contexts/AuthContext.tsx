@@ -36,7 +36,10 @@ interface LoginResult {
     | "login.rateLimited"
     | "login.failed"
     | "login.invalidCode"
-    | "login.challengeExpired";
+    | "login.challengeExpired"
+    // Task #1173 — alliance_partner accounts are web-portal only; the server
+    // rejects mobile logins for that role with 403 {error:"portal-web-only"}.
+    | "login.portalWebOnly";
 }
 
 interface AuthCtx {
@@ -44,6 +47,11 @@ interface AuthCtx {
   user: AuthUser | null;
   token: string | null;
   mustChangePassword: boolean;
+  // Task #1173 — set when a restored session was force-terminated (e.g. an
+  // alliance_partner account, which is web-portal only). The login screen
+  // surfaces this i18n key so the user understands why they were signed out.
+  forcedLogoutKey: "login.portalWebOnly" | null;
+  clearForcedLogout: () => void;
   login: (email: string, password: string) => Promise<LoginResult>;
   loginTwoFactor: (challenge: string, code: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
@@ -59,6 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [forcedLogoutKey, setForcedLogoutKey] = useState<
+    "login.portalWebOnly" | null
+  >(null);
 
   const doLocalClear = useCallback(async () => {
     await persistToken(null);
@@ -86,9 +97,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             user: AuthUser;
             mustChangePassword: boolean;
           }>("/api/auth/session");
-          setToken(stored);
-          setUser(s.user);
-          setMustChangePassword(!!s.mustChangePassword);
+          // Task #1173 — defense-in-depth: alliance_partner accounts are
+          // web-portal only. If such a session is somehow restored on mobile,
+          // force a logout and surface the web-only message on the login screen.
+          if (s.user?.role === "alliance_partner") {
+            await persistToken(null);
+            setForcedLogoutKey("login.portalWebOnly");
+          } else {
+            setToken(stored);
+            setUser(s.user);
+            setMustChangePassword(!!s.mustChangePassword);
+          }
         } catch {
           await persistToken(null);
         }
@@ -120,9 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(r.token);
         setUser(r.user);
         setMustChangePassword(!!r.mustChangePassword);
+        setForcedLogoutKey(null);
         return { ok: true, twoFactorEnrollRequired: !!r.twoFactorEnrollRequired };
       } catch (e) {
         if (e instanceof HttpError) {
+          // Task #1173 — partner accounts are web-only; server returns
+          // 403 {error:"portal-web-only"} for alliance_partner on mobile.
+          const err = (e.data as { error?: string } | null)?.error;
+          if (e.status === 403 && err === "portal-web-only")
+            return { ok: false, errorKey: "login.portalWebOnly" };
           if (e.status === 401) return { ok: false, errorKey: "login.invalid" };
           if (e.status === 429)
             return { ok: false, errorKey: "login.rateLimited" };
@@ -201,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearForced = useCallback(() => setMustChangePassword(false), []);
+  const clearForcedLogout = useCallback(() => setForcedLogoutKey(null), []);
 
   return (
     <Ctx.Provider
@@ -209,6 +235,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         mustChangePassword,
+        forcedLogoutKey,
+        clearForcedLogout,
         login,
         loginTwoFactor,
         logout,

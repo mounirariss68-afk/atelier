@@ -19,36 +19,109 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const API = `${import.meta.env.BASE_URL}api/atelier/partner-portal`;
 
-async function getJson<T>(path: string): Promise<T> {
-  const r = await fetch(`${API}${path}`, { credentials: "include" });
-  if (!r.ok) throw new Error(`request-failed:${r.status}`);
-  return (await r.json()) as T;
+/**
+ * Task #1173 — preview-as-partner. Internal leadership can open a firm's
+ * portal read-only via /partners/preview/:firmId. When rendered inside a
+ * PreviewFirmContext, every portal read sends the `x-partner-preview-firm`
+ * header so the server scopes responses to that firm; every mutation is
+ * blocked client-side too (belt-and-braces; the server also 403s writes in
+ * preview) and mutation-only UI is hidden.
+ *
+ * Real partners render the SAME components with NO provider (firmId = null),
+ * so their behaviour is completely unchanged.
+ */
+export type PreviewFirm = { firmId: string; firmName?: string } | null;
+const PreviewFirmContext = React.createContext<PreviewFirm>(null);
+export function PreviewFirmProvider({
+  value,
+  children,
+}: {
+  value: PreviewFirm;
+  children: React.ReactNode;
+}) {
+  return <PreviewFirmContext.Provider value={value}>{children}</PreviewFirmContext.Provider>;
+}
+export function usePreviewFirm(): PreviewFirm {
+  return React.useContext(PreviewFirmContext);
 }
 
-async function postForm<T>(path: string, form: FormData): Promise<T> {
-  const r = await fetch(`${API}${path}`, {
-    method: "POST",
-    credentials: "include",
-    body: form,
-  });
-  const body = (await r.json().catch(() => null)) as
-    | (T & { error?: string; message?: string })
-    | null;
-  if (!r.ok) throw new Error(body?.message ?? body?.error ?? `request-failed:${r.status}`);
-  return body as T;
+const PREVIEW_HEADER = "x-partner-preview-firm";
+/** Sentinel error thrown by mutating helpers while in read-only preview. */
+const PREVIEW_DISABLED_MSG = "disabled in preview";
+
+/**
+ * Portal fetch helpers, preview-aware. In preview mode reads inject the
+ * `x-partner-preview-firm` header; mutations throw before touching the
+ * network so a stray form submit can never write as the previewed firm.
+ */
+function usePortalApi() {
+  const preview = usePreviewFirm();
+  const previewFirmId = preview?.firmId ?? null;
+  return React.useMemo(() => {
+    const readHeaders: HeadersInit | undefined = previewFirmId
+      ? { [PREVIEW_HEADER]: previewFirmId }
+      : undefined;
+
+    async function getJson<T>(path: string): Promise<T> {
+      const r = await fetch(`${API}${path}`, {
+        credentials: "include",
+        headers: readHeaders,
+      });
+      if (!r.ok) throw new Error(`request-failed:${r.status}`);
+      return (await r.json()) as T;
+    }
+
+    async function postForm<T>(path: string, form: FormData): Promise<T> {
+      if (previewFirmId) throw new Error(PREVIEW_DISABLED_MSG);
+      const r = await fetch(`${API}${path}`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      const body = (await r.json().catch(() => null)) as
+        | (T & { error?: string; message?: string })
+        | null;
+      if (!r.ok) throw new Error(body?.message ?? body?.error ?? `request-failed:${r.status}`);
+      return body as T;
+    }
+
+    async function postJson<T>(path: string, payload: unknown): Promise<T> {
+      if (previewFirmId) throw new Error(PREVIEW_DISABLED_MSG);
+      const r = await fetch(`${API}${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await r.json().catch(() => null)) as
+        | (T & { error?: string; message?: string })
+        | null;
+      if (!r.ok) throw new Error(body?.message ?? body?.error ?? `request-failed:${r.status}`);
+      return body as T;
+    }
+
+    return { getJson, postForm, postJson, previewFirmId, isPreview: !!previewFirmId };
+  }, [previewFirmId]);
 }
 
 /** Task #875 — top-level portal navigation (Opportunities / Contracts / Billing). */
 function PortalNav() {
   const [location] = useLocation();
+  const api = usePortalApi();
+  // In preview, tabs live under /partners/preview/:firmId/* so navigation
+  // stays inside the read-only preview shell.
+  const base = api.isPreview ? `/partners/preview/${api.previewFirmId}` : "/partner";
   const tabs = [
-    { href: "/partner", label: "Opportunities", active: location === "/partner" || location.startsWith("/partner/opportunities") },
-    { href: "/partner/contracts", label: "Contracts", active: location.startsWith("/partner/contracts") },
-    { href: "/partner/billing", label: "Billing", active: location.startsWith("/partner/billing") },
-    { href: "/partner/company", label: "Company", active: location.startsWith("/partner/company") },
+    { href: base, label: "Opportunities", active: location === base || location.startsWith(`${base}/opportunities`) },
+    { href: `${base}/contracts`, label: "Contracts", active: location.startsWith(`${base}/contracts`) },
+    { href: `${base}/billing`, label: "Billing", active: location.startsWith(`${base}/billing`) },
+    { href: `${base}/company`, label: "Company", active: location.startsWith(`${base}/company`) },
   ];
   return (
-    <div className="mb-6 flex gap-2 border-b border-border" data-testid="partner-portal-nav">
+    <div
+      className="mb-6 flex items-center gap-2 border-b border-border"
+      data-testid="partner-portal-nav"
+    >
       {tabs.map((t) => (
         <Link
           key={t.href}
@@ -59,6 +132,209 @@ function PortalNav() {
           {t.label}
         </Link>
       ))}
+      <div className="ml-auto">
+        <NotificationBell />
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Task #1173 — partner-portal notifications (bell + dropdown panel).
+// Raw-fetch backed; server contract may not exist yet, so a 404 (or any
+// non-OK) is treated as an empty inbox rather than an error surface.
+// ===========================================================================
+
+type PortalNotification = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+type NotificationsResponse = { items: PortalNotification[]; unreadCount: number };
+
+const EMPTY_NOTIFICATIONS: NotificationsResponse = { items: [], unreadCount: 0 };
+
+function fmtRelative(iso: string): string {
+  try {
+    const then = new Date(iso).getTime();
+    const secs = Math.round((Date.now() - then) / 1000);
+    if (secs < 60) return "just now";
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return fmtDate(iso);
+  } catch {
+    return fmtDate(iso);
+  }
+}
+
+function NotificationBell() {
+  const api = usePortalApi();
+  const [, setLocation] = useLocation();
+  const [open, setOpen] = React.useState(false);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
+  const q = useQuery({
+    queryKey: ["partner-portal", api.previewFirmId, "notifications"],
+    // Treat a missing/404 endpoint as an empty inbox — the server half of
+    // this feature ships in parallel and may not be live yet.
+    queryFn: () =>
+      api
+        .getJson<NotificationsResponse>("/notifications")
+        .catch(() => EMPTY_NOTIFICATIONS),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const data = q.data ?? EMPTY_NOTIFICATIONS;
+  const unread = data.unreadCount ?? 0;
+
+  // Close the panel on outside click.
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const markRead = async (id: string) => {
+    // Read-marking is a mutation — blocked in preview (client + server).
+    if (api.isPreview) return;
+    try {
+      await api.postJson(`/notifications/${id}/read`, {});
+    } catch {
+      // best-effort; keep the UI responsive even if the endpoint 404s
+    }
+    void q.refetch();
+  };
+
+  const markAllRead = async () => {
+    if (api.isPreview) return;
+    try {
+      await api.postJson("/notifications/read-all", {});
+    } catch {
+      // best-effort
+    }
+    void q.refetch();
+  };
+
+  const onClickItem = (n: PortalNotification) => {
+    setOpen(false);
+    if (!n.readAt) void markRead(n.id);
+    if (n.href) {
+      // Internal portal routes → wouter navigation; anything else → hard nav.
+      if (n.href.startsWith("/")) {
+        // In preview keep navigation inside the read-only preview shell by
+        // rewriting /partner/* hrefs onto /partners/preview/:firmId/*.
+        const href =
+          api.isPreview && n.href.startsWith("/partner")
+            ? `/partners/preview/${api.previewFirmId}${n.href.slice("/partner".length)}`
+            : n.href;
+        setLocation(href);
+      } else window.location.href = n.href;
+    }
+  };
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="relative rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+        aria-label="Notifications"
+        data-testid="button-notification-bell"
+      >
+        {/* Inline bell glyph — avoids pulling an icon dep into this raw page. */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
+        {unread > 0 && (
+          <span
+            className="absolute -right-0.5 -top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground"
+            data-testid="badge-notification-unread"
+          >
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-2 w-80 rounded-lg border border-border bg-background shadow-lg"
+          data-testid="notification-panel"
+        >
+          <div className="flex items-center justify-between border-b border-border px-4 py-2">
+            <span className="text-sm font-semibold">Notifications</span>
+            {unread > 0 && !api.isPreview && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="text-xs text-primary hover:underline"
+                data-testid="button-notification-mark-all"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {data.items.length === 0 ? (
+              <div
+                className="px-4 py-8 text-center text-sm text-muted-foreground"
+                data-testid="notification-empty"
+              >
+                You're all caught up.
+              </div>
+            ) : (
+              data.items.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => onClickItem(n)}
+                  className={`block w-full border-b border-border px-4 py-3 text-left last:border-b-0 hover:bg-muted/50 ${n.readAt ? "" : "bg-primary/5"}`}
+                  data-testid={`notification-item-${n.id}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.readAt && (
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{n.title}</div>
+                      {n.body && (
+                        <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                          {n.body}
+                        </div>
+                      )}
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {fmtRelative(n.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -114,9 +390,13 @@ function fmtDate(iso: string | null): string {
 }
 
 export function PartnerPortalHome() {
+  const api = usePortalApi();
+  const oppBase = api.isPreview
+    ? `/partners/preview/${api.previewFirmId}`
+    : "/partner";
   const q = useQuery({
-    queryKey: ["partner-portal", "opportunities"],
-    queryFn: () => getJson<OppListResponse>("/opportunities"),
+    queryKey: ["partner-portal", api.previewFirmId, "opportunities"],
+    queryFn: () => api.getJson<OppListResponse>("/opportunities"),
   });
 
   return (
@@ -162,7 +442,7 @@ export function PartnerPortalHome() {
         {q.data?.opportunities.map((o) => (
           <Link
             key={o.id}
-            href={`/partner/opportunities/${o.id}`}
+            href={`${oppBase}/opportunities/${o.id}`}
             className="block rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
             data-testid={`link-partner-opp-${o.id}`}
           >
@@ -240,17 +520,18 @@ function StatusChip({ value }: { value: string }) {
 }
 
 export function PartnerPortalContracts() {
+  const api = usePortalApi();
   const qc = useQueryClient();
   const q = useQuery({
-    queryKey: ["partner-portal", "contracts"],
+    queryKey: ["partner-portal", api.previewFirmId, "contracts"],
     queryFn: () =>
-      getJson<{ firm: { id: string; name: string }; agreements: PortalAgreement[]; shared: SharedContract[] }>(
+      api.getJson<{ firm: { id: string; name: string }; agreements: PortalAgreement[]; shared: SharedContract[] }>(
         "/contracts",
       ),
   });
   const inboxQ = useQuery({
-    queryKey: ["partner-portal", "inbox"],
-    queryFn: () => getJson<{ items: InboxItem[] }>("/inbox"),
+    queryKey: ["partner-portal", api.previewFirmId, "inbox"],
+    queryFn: () => api.getJson<{ items: InboxItem[] }>("/inbox"),
   });
   const [note, setNote] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
@@ -266,7 +547,7 @@ export function PartnerPortalContracts() {
       const form = new FormData();
       form.append("file", file);
       if (note.trim()) form.append("note", note.trim());
-      await postForm("/inbox", form);
+      await api.postForm("/inbox", form);
       setFile(null);
       setNote("");
       if (fileRef.current) fileRef.current.value = "";
@@ -324,7 +605,7 @@ export function PartnerPortalContracts() {
               <div className="font-medium">{c.title}</div>
               <div className="flex items-center gap-2">
                 <StatusChip value={c.status} />
-                {c.canDownload && (
+                {c.canDownload && !api.isPreview && (
                   <a
                     href={`${API}/contracts/${c.id}/download`}
                     className="text-sm text-primary hover:underline"
@@ -343,6 +624,8 @@ export function PartnerPortalContracts() {
         ))}
       </div>
 
+      {!api.isPreview && (
+        <>
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Send a document for review</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Upload a countersigned copy or other contract document. The Cognirise team reviews it before it is added to
@@ -375,6 +658,8 @@ export function PartnerPortalContracts() {
           {busy ? "Uploading…" : "Upload for review"}
         </button>
       </div>
+        </>
+      )}
       {(inboxQ.data?.items.length ?? 0) > 0 && (
         <div className="mt-4 space-y-2">
           {inboxQ.data?.items.map((it) => (
@@ -426,14 +711,15 @@ type IssuedRcti = {
 };
 
 export function PartnerPortalBilling() {
+  const api = usePortalApi();
   const qc = useQueryClient();
   const invQ = useQuery({
-    queryKey: ["partner-portal", "invoices"],
-    queryFn: () => getJson<{ items: PortalInvoice[] }>("/invoices"),
+    queryKey: ["partner-portal", api.previewFirmId, "invoices"],
+    queryFn: () => api.getJson<{ items: PortalInvoice[] }>("/invoices"),
   });
   const issuedQ = useQuery({
-    queryKey: ["partner-portal", "issued"],
-    queryFn: () => getJson<{ items: IssuedRcti[] }>("/issued"),
+    queryKey: ["partner-portal", api.previewFirmId, "issued"],
+    queryFn: () => api.getJson<{ items: IssuedRcti[] }>("/issued"),
   });
   const [file, setFile] = React.useState<File | null>(null);
   const [amount, setAmount] = React.useState("");
@@ -457,7 +743,7 @@ export function PartnerPortalBilling() {
       form.append("reference", reference);
       if (period.trim()) form.append("periodLabel", period.trim());
       if (notes.trim()) form.append("notes", notes.trim());
-      await postForm("/invoices", form);
+      await api.postForm("/invoices", form);
       setFile(null);
       setAmount("");
       setReference("");
@@ -480,6 +766,8 @@ export function PartnerPortalBilling() {
         Submit invoices to Cognirise and track their review, scheduling and payment.
       </p>
 
+      {!api.isPreview && (
+        <>
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Submit an invoice</h2>
       <div className="mt-3 rounded-lg border border-border p-4 space-y-3">
         <input
@@ -545,6 +833,8 @@ export function PartnerPortalBilling() {
           {busy ? "Submitting…" : "Submit invoice"}
         </button>
       </div>
+        </>
+      )}
 
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Your submitted invoices</h2>
       {invQ.data && invQ.data.items.length === 0 && (
@@ -561,7 +851,7 @@ export function PartnerPortalBilling() {
               </div>
               <div className="flex items-center gap-2">
                 <StatusChip value={i.status} />
-                {i.fileName && (
+                {i.fileName && !api.isPreview && (
                   <a
                     href={`${API}/invoices/${i.id}/file`}
                     className="text-sm text-primary hover:underline"
@@ -702,14 +992,11 @@ function ReviewChip({ status }: { status: FirmDoc["reviewStatus"] }) {
 }
 
 export function PartnerPortalCompany() {
+  const api = usePortalApi();
   const qc = useQueryClient();
   const q = useQuery({
-    queryKey: ["partner-portal", "company-profile"],
-    queryFn: async () => {
-      const r = await fetch(`${PARTNER_API}/company-profile`, { credentials: "include" });
-      if (!r.ok) throw new Error(`request-failed:${r.status}`);
-      return (await r.json()) as CompanyProfile;
-    },
+    queryKey: ["partner-portal", api.previewFirmId, "company-profile"],
+    queryFn: () => api.getJson<CompanyProfile>("/company-profile"),
   });
 
   // ---- document upload ----
@@ -730,11 +1017,9 @@ export function PartnerPortalCompany() {
     setUpBusy(true);
     try {
       const base64 = await fileToBase64(upFile);
-      const r = await fetch(`${PARTNER_API}/company-documents`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const j = await api.postJson<{ ok?: boolean; message?: string }>(
+        "/company-documents",
+        {
           kind: upKind,
           fileName: upFile.name,
           mime: upFile.type,
@@ -742,16 +1027,15 @@ export function PartnerPortalCompany() {
           title: upTitle.trim() || null,
           issuedDate: upIssued || null,
           expiryDate: upExpiry || null,
-        }),
-      });
-      const j = (await r.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
-      if (!r.ok || !j?.ok) throw new Error(j?.message ?? `upload-failed:${r.status}`);
+        },
+      );
+      if (!j?.ok) throw new Error(j?.message ?? "upload-failed");
       setUpTitle("");
       setUpIssued("");
       setUpExpiry("");
       setUpFile(null);
       if (upFileRef.current) upFileRef.current.value = "";
-      void qc.invalidateQueries({ queryKey: ["partner-portal", "company-profile"] });
+      void qc.invalidateQueries({ queryKey: ["partner-portal", api.previewFirmId, "company-profile"] });
     } catch (e) {
       setUpErr((e as Error).message);
     } finally {
@@ -784,16 +1068,13 @@ export function PartnerPortalCompany() {
     if (contacts.length === 0) return setSuggestErr("Add at least one contact.");
     setSuggestBusy(true);
     try {
-      const r = await fetch(`${PARTNER_API}/contact-suggestions`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contacts, note: suggestNote.trim() || null }),
-      });
-      const j = (await r.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
-      if (!r.ok || !j?.ok) throw new Error(j?.message ?? `request-failed:${r.status}`);
+      const j = await api.postJson<{ ok?: boolean; message?: string }>(
+        "/contact-suggestions",
+        { contacts, note: suggestNote.trim() || null },
+      );
+      if (!j?.ok) throw new Error(j?.message ?? "request-failed");
       setEditingContacts(false);
-      void qc.invalidateQueries({ queryKey: ["partner-portal", "company-profile"] });
+      void qc.invalidateQueries({ queryKey: ["partner-portal", api.previewFirmId, "company-profile"] });
     } catch (e) {
       setSuggestErr((e as Error).message);
     } finally {
@@ -873,13 +1154,15 @@ export function PartnerPortalCompany() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <ReviewChip status={d.reviewStatus} />
-                    <a
-                      href={`${PARTNER_API}/company-documents/${d.id}/download`}
-                      className="text-sm text-primary hover:underline"
-                      data-testid={`link-company-doc-download-${d.id}`}
-                    >
-                      Download
-                    </a>
+                    {!api.isPreview && (
+                      <a
+                        href={`${PARTNER_API}/company-documents/${d.id}/download`}
+                        className="text-sm text-primary hover:underline"
+                        data-testid={`link-company-doc-download-${d.id}`}
+                      >
+                        Download
+                      </a>
+                    )}
                   </div>
                 </div>
                 {d.reviewStatus === "rejected" && d.reviewNote && (
@@ -892,6 +1175,8 @@ export function PartnerPortalCompany() {
           </div>
 
           {/* Upload */}
+          {!api.isPreview && (
+          <>
           <h3 className="mt-6 text-sm font-semibold text-muted-foreground">Upload a document</h3>
           <div className="mt-3 space-y-3 rounded-lg border border-border p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -950,6 +1235,8 @@ export function PartnerPortalCompany() {
               {upBusy ? "Uploading…" : "Upload document"}
             </button>
           </div>
+          </>
+          )}
 
           {/* Contacts */}
           <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Contact people</h2>
@@ -979,7 +1266,7 @@ export function PartnerPortalCompany() {
             ))}
           </div>
 
-          {!editingContacts ? (
+          {api.isPreview ? null : !editingContacts ? (
             <button
               onClick={openContactEditor}
               disabled={!!pending}
@@ -1077,21 +1364,28 @@ export function PartnerPortalCompany() {
 }
 
 export function PartnerPortalOpportunity() {
-  const [, params] = useRoute("/partner/opportunities/:oppId");
-  const oppId = params?.oppId ?? "";
+  const api = usePortalApi();
+  // In preview the route is /partners/preview/:firmId/opportunities/:oppId;
+  // otherwise the real partner route /partner/opportunities/:oppId.
+  const [, realParams] = useRoute("/partner/opportunities/:oppId");
+  const [, previewParams] = useRoute("/partners/preview/:firmId/opportunities/:oppId");
+  const oppId = previewParams?.oppId ?? realParams?.oppId ?? "";
+  const oppBase = api.isPreview
+    ? `/partners/preview/${api.previewFirmId}`
+    : "/partner";
   const [tab, setTab] = React.useState<"opportunity" | "client">("opportunity");
 
   const oppQ = useQuery({
-    queryKey: ["partner-portal", "opportunity", oppId],
+    queryKey: ["partner-portal", api.previewFirmId, "opportunity", oppId],
     queryFn: () =>
-      getJson<{ firm?: { id: string; name: string }; opportunity: PartnerOpp }>(
+      api.getJson<{ firm?: { id: string; name: string }; opportunity: PartnerOpp }>(
         `/opportunities/${oppId}`,
       ),
     enabled: !!oppId,
   });
   const acctQ = useQuery({
-    queryKey: ["partner-portal", "opportunity", oppId, "account"],
-    queryFn: () => getJson<{ account: AccountOverview }>(`/opportunities/${oppId}/account`),
+    queryKey: ["partner-portal", api.previewFirmId, "opportunity", oppId, "account"],
+    queryFn: () => api.getJson<{ account: AccountOverview }>(`/opportunities/${oppId}/account`),
     enabled: !!oppId && tab === "client",
   });
 
@@ -1099,7 +1393,7 @@ export function PartnerPortalOpportunity() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-portal-opportunity">
-      <Link href="/partner" className="text-sm text-muted-foreground hover:underline">
+      <Link href={oppBase} className="text-sm text-muted-foreground hover:underline">
         ← All opportunities
       </Link>
       {oppQ.isLoading && (
@@ -1202,5 +1496,99 @@ export function PartnerPortalOpportunity() {
         </>
       )}
     </div>
+  );
+}
+
+// ===========================================================================
+// Task #1173 — Preview-as-partner shell (internal leadership only).
+// Renders the SAME portal pages inside a PreviewFirmProvider so every read
+// carries the x-partner-preview-firm header and every mutation is blocked.
+// Route: /partners/preview/:firmId(/contracts|/billing|/company|
+//        /opportunities/:oppId). Mounted under the INTERNAL shell (not the
+// external /partner routes), so SelfOnlyRouteGuard treats it as an org page.
+// ===========================================================================
+
+/** Fetches the previewed firm's display name for the banner (best-effort). */
+function usePreviewFirmName(firmId: string): string | null {
+  const [name, setName] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetch(`${API}/opportunities`, {
+      credentials: "include",
+      headers: { [PREVIEW_HEADER]: firmId },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: { firm?: { name?: string } }) => {
+        if (!cancelled && j?.firm?.name) setName(j.firm.name);
+      })
+      .catch(() => {
+        /* banner falls back to the firm id */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firmId]);
+  return name;
+}
+
+function PreviewBanner({ firmId }: { firmId: string }) {
+  const [, setLocation] = useLocation();
+  const name = usePreviewFirmName(firmId);
+  return (
+    <div
+      className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/15 px-6 py-2 text-sm text-amber-900 dark:text-amber-200"
+      data-testid="partner-preview-banner"
+    >
+      <span className="font-medium">
+        Read-only preview of {name ?? firmId} portal — actions disabled
+      </span>
+      <button
+        type="button"
+        onClick={() => setLocation("/partners/identify")}
+        className="rounded-md border border-amber-500/50 px-3 py-1 text-xs font-semibold hover:bg-amber-500/20"
+        data-testid="button-exit-preview"
+      >
+        Exit preview
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Preview host. Renders one portal page based on the sub-path, all wrapped in
+ * the PreviewFirmProvider + sticky banner. Leadership-gating lives in App.tsx
+ * (the route sits under the internal shell / SelfOnlyRouteGuard).
+ */
+export function PartnerPortalPreview() {
+  const [homeMatch, homeParams] = useRoute("/partners/preview/:firmId");
+  const [contractsMatch, contractsParams] = useRoute("/partners/preview/:firmId/contracts");
+  const [billingMatch, billingParams] = useRoute("/partners/preview/:firmId/billing");
+  const [companyMatch, companyParams] = useRoute("/partners/preview/:firmId/company");
+  const [oppMatch, oppParams] = useRoute("/partners/preview/:firmId/opportunities/:oppId");
+
+  const firmId =
+    homeParams?.firmId ??
+    contractsParams?.firmId ??
+    billingParams?.firmId ??
+    companyParams?.firmId ??
+    oppParams?.firmId ??
+    "";
+
+  if (!firmId) return null;
+
+  let page: React.ReactNode = null;
+  if (oppMatch) page = <PartnerPortalOpportunity />;
+  else if (contractsMatch) page = <PartnerPortalContracts />;
+  else if (billingMatch) page = <PartnerPortalBilling />;
+  else if (companyMatch) page = <PartnerPortalCompany />;
+  else if (homeMatch) page = <PartnerPortalHome />;
+
+  return (
+    <PreviewFirmProvider value={{ firmId }}>
+      <div data-testid="partner-portal-preview">
+        <PreviewBanner firmId={firmId} />
+        {page}
+      </div>
+    </PreviewFirmProvider>
   );
 }

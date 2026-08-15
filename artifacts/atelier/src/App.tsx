@@ -18,7 +18,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
-import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling, PartnerPortalCompany } from "@/pages/PartnerPortal";
+import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling, PartnerPortalCompany, PartnerPortalPreview } from "@/pages/PartnerPortal";
 import Activate from "@/pages/Activate";
 import PartnerRegister from "@/pages/PartnerRegister";
 import ResetPassword from "@/pages/ResetPassword";
@@ -747,6 +747,15 @@ function Router() {
             stage views all live in PartnersIndex, which keys off the
             :section param. */}
         <Route path="/partners" component={PartnersIndex} />
+        {/* Task #1173 — preview-as-partner (leadership only). Renders the
+            SAME portal pages read-only inside the internal shell. Declared
+            BEFORE /partners/:section so "preview" isn't swallowed as a
+            PartnersIndex section. */}
+        <Route path="/partners/preview/:firmId" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/contracts" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/billing" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/company" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/opportunities/:oppId" component={PartnerPortalPreview} />
         <Route path="/partners/:section" component={PartnersIndex} />
         <Route path="/agents" component={AgentsLensHome} />
         {/* Task #372 — Finance lens. Eight sections: Entities · Record ·

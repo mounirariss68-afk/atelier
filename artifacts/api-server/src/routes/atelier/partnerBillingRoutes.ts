@@ -43,7 +43,7 @@ import {
 } from "@workspace/db";
 import { audit } from "./engagementRoutes";
 import { canEditPartnersLens } from "./personaRoles";
-import { resolveAlliancePartnerFirm } from "./partnerPortalRoutes";
+import { resolvePortalFirm, refuseIfPreview } from "./portalFirmResolver";
 import { partnerAgreementItems } from "./partnersRoutes";
 import {
   CONTRACT_MAX_BYTES,
@@ -75,24 +75,9 @@ function ensurePersona(req: Request, res: Response): Me | null {
   return me;
 }
 
-/** Portal gate: alliance_partner persona resolved to its (signed) firm. */
-async function portalFirm(
-  req: Request,
-  res: Response,
-): Promise<{ me: Me; firm: typeof atelierPartnerFirms.$inferSelect } | null> {
-  const me = ensurePersona(req, res);
-  if (!me) return null;
-  if (me.role !== "alliance_partner") {
-    res.status(403).json({ error: "partner-portal-only" });
-    return null;
-  }
-  const firm = await resolveAlliancePartnerFirm(me);
-  if (!firm) {
-    res.status(403).json({ error: "no-partner-firm", message: "This login is not linked to an active partner firm." });
-    return null;
-  }
-  return { me, firm };
-}
+// Portal firm resolution (alliance_partner → own firm; leadership +
+// x-partner-preview-firm → read-only preview) is shared with the
+// opportunities portal via ./portalFirmResolver (resolvePortalFirm).
 
 /** Internal gate: partners-lens editor. */
 function internalEditor(req: Request, res: Response): Me | null {
@@ -208,7 +193,7 @@ async function downloadableDocs(contractIds: string[]) {
 // @cli-skip: Task #875 partner-portal raw-fetch surface
 router.get("/partner-portal/contracts", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     const { me, firm } = ctx;
     // Agreements from the e-sign registry, keyed on partnerFirmId via the
@@ -258,7 +243,7 @@ router.get("/partner-portal/contracts", async (req, res, next) => {
 // @cli-skip: Task #875 binary download; not CLI-exposable
 router.get("/partner-portal/contracts/:id/download", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     const { me, firm } = ctx;
     const shares = await activeSharesForFirm(me.orgId, firm.id);
@@ -279,7 +264,7 @@ router.get("/partner-portal/contracts/:id/download", async (req, res, next) => {
 // @cli-skip: Task #875 partner-portal raw-fetch surface
 router.get("/partner-portal/inbox", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     const rows = await db.select().from(atelierPartnerDocInbox).where(and(
       eq(atelierPartnerDocInbox.orgId, ctx.me.orgId),
@@ -291,13 +276,17 @@ router.get("/partner-portal/inbox", async (req, res, next) => {
 });
 
 // @cli-skip: Task #875 multipart upload; not CLI-exposable
-router.post("/partner-portal/inbox", (req, res, next) => {
-  uploadSingle(req, res, async () => {
-    try {
-      const ctx = await portalFirm(req, res);
-      if (!ctx) return;
-      const { me, firm } = ctx;
-      const file = req.file;
+router.post("/partner-portal/inbox", async (req, res, next) => {
+  try {
+    // Resolve the firm + reject preview BEFORE parsing/storing any upload:
+    // a leadership preview session is strictly read-only.
+    const ctx = await resolvePortalFirm(req, res);
+    if (!ctx) return;
+    if (refuseIfPreview(req, res)) return;
+    uploadSingle(req, res, async () => {
+      try {
+        const { me, firm } = ctx;
+        const file = req.file;
       if (!file || file.size === 0) { res.status(400).json({ error: "file-required" }); return; }
       const isPdf = looksLikePdf(file.buffer);
       const isDocx = file.originalname.toLowerCase().endsWith(".docx") && looksLikeDocx(file.buffer);
@@ -329,8 +318,9 @@ router.post("/partner-portal/inbox", (req, res, next) => {
       });
       const [row] = await db.select().from(atelierPartnerDocInbox).where(eq(atelierPartnerDocInbox.id, id));
       res.status(201).json({ ok: true, item: inboxWire(row) });
-    } catch (err) { next(err); }
-  });
+      } catch (err) { next(err); }
+    });
+  } catch (err) { next(err); }
 });
 
 // ===========================================================================
@@ -340,7 +330,7 @@ router.post("/partner-portal/inbox", (req, res, next) => {
 // @cli-skip: Task #875 partner-portal raw-fetch surface
 router.get("/partner-portal/invoices", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     const rows = await db.select().from(atelierPartnerFirmInvoices).where(and(
       eq(atelierPartnerFirmInvoices.orgId, ctx.me.orgId),
@@ -353,13 +343,17 @@ router.get("/partner-portal/invoices", async (req, res, next) => {
 });
 
 // @cli-skip: Task #875 multipart upload; not CLI-exposable
-router.post("/partner-portal/invoices", (req, res, next) => {
-  uploadSingle(req, res, async () => {
-    try {
-      const ctx = await portalFirm(req, res);
-      if (!ctx) return;
-      const { me, firm } = ctx;
-      const file = req.file;
+router.post("/partner-portal/invoices", async (req, res, next) => {
+  try {
+    // Resolve the firm + reject preview BEFORE parsing/storing any upload:
+    // a leadership preview session is strictly read-only.
+    const ctx = await resolvePortalFirm(req, res);
+    if (!ctx) return;
+    if (refuseIfPreview(req, res)) return;
+    uploadSingle(req, res, async () => {
+      try {
+        const { me, firm } = ctx;
+        const file = req.file;
       if (!file || file.size === 0) { res.status(400).json({ error: "file-required" }); return; }
       if (!looksLikePdf(file.buffer)) {
         res.status(400).json({ error: "pdf-required", message: "Invoice must be a PDF." });
@@ -418,14 +412,15 @@ router.post("/partner-portal/invoices", (req, res, next) => {
       });
       const [row] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
       res.status(201).json({ ok: true, item: portalInvoiceWire(row) });
-    } catch (err) { next(err); }
-  });
+      } catch (err) { next(err); }
+    });
+  } catch (err) { next(err); }
 });
 
 // @cli-skip: Task #875 binary download; not CLI-exposable
 router.get("/partner-portal/invoices/:id/file", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     const [row] = await db.select().from(atelierPartnerFirmInvoices).where(and(
       eq(atelierPartnerFirmInvoices.id, req.params.id),
@@ -446,7 +441,7 @@ router.get("/partner-portal/invoices/:id/file", async (req, res, next) => {
 // @cli-skip: Task #875 partner-portal raw-fetch surface
 router.get("/partner-portal/issued", async (req, res, next) => {
   try {
-    const ctx = await portalFirm(req, res);
+    const ctx = await resolvePortalFirm(req, res);
     if (!ctx) return;
     // Cognirise-issued RCTIs raised on this firm — read-only.
     const rows = await db.select().from(atelierSelfBilledInvoices).where(and(

@@ -54,10 +54,18 @@ function hashToken(token: string): string {
 export async function createSession(
   userId: string,
   email: string,
-  opts?: { mustChangePassword?: boolean; totpVerifiedAt?: Date | null },
+  opts?: {
+    mustChangePassword?: boolean;
+    totpVerifiedAt?: Date | null;
+    // Task #1173 — external (alliance_partner) sessions get a shorter TTL.
+    // Defaults to SESSION_TTL_MS (7d) when omitted.
+    ttlMs?: number;
+  },
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const ttlMs =
+    typeof opts?.ttlMs === "number" && opts.ttlMs > 0 ? opts.ttlMs : SESSION_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttlMs);
   await db.insert(atelierAuthSessions).values({
     tokenHash: hashToken(token),
     userId,

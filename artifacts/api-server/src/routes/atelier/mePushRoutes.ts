@@ -27,6 +27,20 @@ function ensurePersona(req: any, res: any): UserRow | null {
     res.status(401).json({ error: "unauthorized" });
     return null;
   }
+  // Task #1173 — push-token registration is a mobile-only device surface,
+  // and alliance_partner accounts are web-portal only. The central atelier
+  // gate already 403s this role from any `/me/…` sub-path (it allows only
+  // exact `/me`), so a partner can never reach here even by faking a "web"
+  // client flag at login. This is a defense-in-depth restatement of that
+  // boundary at the route itself: a mobile-only privilege must NEVER be
+  // grantable to a partner, regardless of how the gate evolves.
+  if (me.role === "alliance_partner") {
+    res.status(403).json({
+      error: "portal-web-only",
+      message: "Partner accounts use the web portal — mobile device features are not available.",
+    });
+    return null;
+  }
   return me;
 }
 
