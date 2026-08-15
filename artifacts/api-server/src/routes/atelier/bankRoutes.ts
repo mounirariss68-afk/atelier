@@ -508,6 +508,83 @@ router.post("/import-file", (req, res) => {
   });
 });
 
+// ─────────────── Task #1076 — statement import history + download ───────────────
+
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/imports", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  // Import history is an audit surface (who uploaded what) — finance-tier
+  // only, same as the download endpoint below.
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const acctId = req.query.bankAccountId as string | undefined;
+  const where = [eq(atelierBankStatementImport.orgId, me.orgId), isNull(atelierBankStatementImport.deletedAt)];
+  if (acctId) where.push(eq(atelierBankStatementImport.bankAccountId, acctId));
+  const rows = await db.select().from(atelierBankStatementImport).where(and(...where))
+    .orderBy(desc(atelierBankStatementImport.importedAt)).limit(200);
+  // Resolve uploader display names (importedBy is a user id).
+  const uploaderIds = [...new Set(rows.map((r) => r.importedBy).filter((v): v is string => !!v))];
+  const users = uploaderIds.length > 0
+    ? await db.select({ id: atelierUsers.id, name: atelierUsers.name }).from(atelierUsers)
+        .where(inArray(atelierUsers.id, uploaderIds))
+    : [];
+  const nameById = new Map(users.map((u) => [u.id, u.name]));
+  const data = rows.map((r) => ({
+    id: r.id,
+    bankAccountId: r.bankAccountId,
+    statementDate: r.statementDate,
+    source: r.source,
+    rowsCount: r.rowsCount,
+    importedAt: r.importedAt,
+    importedByName: (r.importedBy && nameById.get(r.importedBy)) || null,
+    notes: r.notes,
+    // Storage save is fail-soft historically — older rows may have no file.
+    hasFile: !!r.fileUrl,
+  }));
+  return res.json({ ok: true, data: { rows: data } });
+});
+
+// @cli-skip: binary file download; no CLI tool shape
+router.get("/imports/:id/file", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const [row] = await db.select().from(atelierBankStatementImport)
+    .where(and(eq(atelierBankStatementImport.id, req.params.id),
+      eq(atelierBankStatementImport.orgId, me.orgId),
+      isNull(atelierBankStatementImport.deletedAt)));
+  if (!row) return res.status(404).json({ error: "not_found" });
+  if (!row.fileUrl) {
+    return res.status(404).json({ error: "file_missing", message: "No original file is stored for this import." });
+  }
+  const { objectStorageClient } = await import("../../lib/objectStorage.js");
+  const slash = row.fileUrl.startsWith("/") ? row.fileUrl.slice(1) : row.fileUrl;
+  const bucketName = slash.split("/")[0];
+  const objectName = slash.split("/").slice(1).join("/");
+  const obj = objectStorageClient.bucket(bucketName).file(objectName);
+  const [exists] = await obj.exists().catch(() => [false] as [boolean]);
+  if (!exists) {
+    return res.status(404).json({ error: "file_missing", message: "The stored statement file could not be found in storage." });
+  }
+  // Original name is the key tail after the collision-resistant uuid_ prefix.
+  const tail = objectName.split("/").pop() ?? "statement.csv";
+  const filename = tail.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, "") || "statement.csv";
+  const [metadata] = await obj.getMetadata().catch(() => [{} as Record<string, unknown>]);
+  const { contentDispositionFilename } = await import("../../lib/httpFilename.js");
+  res.setHeader("Content-Type", (metadata?.contentType as string) || "application/octet-stream");
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+  await audit({ entityType: "bank_statement_import", entityId: row.id, actor: me,
+    action: "bank_import.file_downloaded", payload: { filename },
+    summary: `Downloaded original statement file ${filename}` });
+  const stream = obj.createReadStream();
+  stream.on("error", () => {
+    if (!res.headersSent) res.status(500).json({ error: "stream_failed" });
+    else res.end();
+  });
+  stream.pipe(res);
+  return;
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/transactions", async (req, res) => {
   if (denyAll(req, res)) return;

@@ -221,6 +221,37 @@ async function main(): Promise<void> {
       .where(eq(atelierBankTransaction.bankAccountId, bankId));
     check("txn count unchanged after re-upload", txnsAfter.length === 5, `got ${txnsAfter.length} (4 statement rows + 1 race probe)`);
 
+    // -------------------------------------------------------------- 3b. import history + original-file download (Task #1076)
+    group("3b. Import history list + original-file download");
+    const histDenied = await call("GET", `/wallet/bank/imports?bankAccountId=${bankId}`, CONS_ID);
+    check("consultant denied import history (403)", histDenied.status === 403, `got ${histDenied.status}`);
+    const hist = await call("GET", `/wallet/bank/imports?bankAccountId=${bankId}`, FIN_ID);
+    check("finance sees import history (200)", hist.status === 200, `got ${hist.status}`);
+    const histRows: any[] = hist.body?.data?.rows ?? [];
+    const histRow = histRows.find((r) => r.id === up.body?.data?.importId);
+    check("uploaded import appears in history", !!histRow, JSON.stringify(histRows.map((r) => r.id)));
+    check("history row has rowsCount + uploader + hasFile", histRow?.rowsCount === 4 && histRow?.importedByName === "BR Finance" && histRow?.hasFile === true,
+      JSON.stringify(histRow));
+    const dlDenied = await fetch(`${API}/wallet/bank/imports/${histRow?.id}/file`, {
+      headers: { cookie: `atelier_persona=${CONS_ID}` } });
+    check("consultant denied file download (403)", dlDenied.status === 403, `got ${dlDenied.status}`);
+    const dl = await fetch(`${API}/wallet/bank/imports/${histRow?.id}/file`, {
+      headers: { cookie: `atelier_persona=${FIN_ID}` } });
+    const dlText = await dl.text();
+    check("finance downloads original file (200)", dl.status === 200, `got ${dl.status}`);
+    check("downloaded bytes match the uploaded CSV", dlText === CSV, `len ${dlText.length} vs ${CSV.length}`);
+    check("download sets attachment filename", (dl.headers.get("content-disposition") ?? "").includes("statement.csv"),
+      dl.headers.get("content-disposition") ?? "none");
+    // Missing fileUrl handled gracefully (storage save was historically fail-soft).
+    await db.update(atelierBankStatementImport).set({ fileUrl: null })
+      .where(eq(atelierBankStatementImport.id, histRow?.id ?? "none"));
+    const dlMissing = await call("GET", `/wallet/bank/imports/${histRow?.id}/file`, FIN_ID);
+    check("missing fileUrl → 404 file_missing", dlMissing.status === 404 && dlMissing.body?.error === "file_missing",
+      JSON.stringify(dlMissing));
+    const hist2 = await call("GET", `/wallet/bank/imports?bankAccountId=${bankId}`, FIN_ID);
+    const histRow2 = (hist2.body?.data?.rows ?? []).find((r: any) => r.id === histRow?.id);
+    check("history reports hasFile=false after loss", histRow2?.hasFile === false, JSON.stringify(histRow2));
+
     // -------------------------------------------------------------- 4. recon period + exceptions
     group("4. Recon period shows totals + exceptions");
     const recon = await call("POST", "/wallet/bank/recon", FIN_ID, {

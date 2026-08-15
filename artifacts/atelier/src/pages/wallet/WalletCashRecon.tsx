@@ -45,6 +45,17 @@ interface BankAccount {
   accountNumberLast4: string;
 }
 
+interface ImportRow {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  source: string;
+  rowsCount: number;
+  importedAt: string;
+  importedByName: string | null;
+  hasFile: boolean;
+}
+
 const REASON_LABEL: Record<string, string> = {
   no_match: "no match",
   amount_mismatch: "amount differs",
@@ -76,14 +87,21 @@ export default function WalletCashRecon() {
   const [openBal, setOpenBal] = React.useState("");
   const [closeBal, setCloseBal] = React.useState("");
 
+  // Task #1076 — statement import history
+  const [imports, setImports] = React.useState<ImportRow[]>([]);
+  const [importsAcct, setImportsAcct] = React.useState<string>("");
+
   const load = React.useCallback(async () => {
-    const [rr, ar] = await Promise.all([
+    const [rr, ar, ir] = await Promise.all([
       fetch("/api/atelier/wallet/bank/recon", { credentials: "include" }),
       fetch("/api/atelier/wallet/bank/accounts", { credentials: "include" }),
+      fetch("/api/atelier/wallet/bank/imports", { credentials: "include" }),
     ]);
     const rj = await rr.json().catch(() => null);
     const aj = await ar.json().catch(() => null);
+    const ij = await ir.json().catch(() => null);
     setRows(rj?.data?.rows ?? []);
+    setImports(ij?.data?.rows ?? []);
     const accts: BankAccount[] = aj?.data ?? [];
     setAccounts(accts);
     if (accts.length > 0) setOpenAcct((prev) => prev || accts[0].id);
@@ -333,6 +351,66 @@ export default function WalletCashRecon() {
                       </tr>
                     )}
                   </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+
+        {/* Task #1076 — statement import history with original-file download */}
+        <Card className="overflow-hidden" data-testid="statement-imports-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+            <div className="font-mono text-xs text-text-faint uppercase">Statement imports</div>
+            <select className="bg-bg border border-border-soft rounded px-2 py-1 text-xs font-mono text-text"
+              value={importsAcct} onChange={(e) => setImportsAcct(e.target.value)} data-testid="select-imports-account">
+              <option value="">All accounts</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.bankName} · {a.accountLabel} ····{a.accountNumberLast4}</option>
+              ))}
+            </select>
+          </div>
+          <table className="w-full text-sm" data-testid="statement-imports-rows">
+            <thead className="bg-bg-elevate/50 text-[11px] font-mono uppercase text-text-faint">
+              <tr>
+                <th className="text-left px-3 py-2">Statement date</th>
+                <th className="text-left px-3 py-2">Account</th>
+                <th className="text-left px-3 py-2">Source</th>
+                <th className="text-right px-3 py-2">Rows</th>
+                <th className="text-left px-3 py-2">Imported</th>
+                <th className="text-left px-3 py-2">By</th>
+                <th className="text-right px-3 py-2">Original file</th>
+              </tr>
+            </thead>
+            <tbody>
+              {imports.filter((i) => !importsAcct || i.bankAccountId === importsAcct).length === 0 && (
+                <tr><td colSpan={7} className="px-3 py-6 text-center text-text-mute">No statement imports yet.</td></tr>
+              )}
+              {imports.filter((i) => !importsAcct || i.bankAccountId === importsAcct).map((i) => {
+                const acct = accounts.find((a) => a.id === i.bankAccountId);
+                return (
+                  <tr key={i.id} className="border-t border-border-soft" data-testid={`import-row-${i.id}`}>
+                    <td className="px-3 py-2 font-mono text-xs">{i.statementDate}</td>
+                    <td className="px-3 py-2 text-text-mute text-xs">
+                      {acct ? `${acct.accountLabel} ····${acct.accountNumberLast4}` : i.bankAccountId}
+                    </td>
+                    <td className="px-3 py-2"><MonoChip>{i.source}</MonoChip></td>
+                    <td className="px-3 py-2 text-right font-mono">{i.rowsCount}</td>
+                    <td className="px-3 py-2 text-text-mute font-mono text-xs">
+                      {i.importedAt ? new Date(i.importedAt).toLocaleString() : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-text-mute text-xs">{i.importedByName ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">
+                      {i.hasFile ? (
+                        <a className="underline text-text-mute hover:text-gold text-xs font-mono"
+                          href={`/api/atelier/wallet/bank/imports/${i.id}/file`}
+                          data-testid={`link-download-${i.id}`}>
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-text-faint text-xs font-mono" data-testid={`no-file-${i.id}`}>not stored</span>
+                      )}
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
