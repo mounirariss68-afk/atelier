@@ -720,12 +720,48 @@ router.post("/finance/payables/payment-runs/:id/export", async (req, res, next) 
     }
     const items = await db.select().from(atelierPaymentRunItems)
       .where(and(eq(atelierPaymentRunItems.runId, run.id), eq(atelierPaymentRunItems.status, "pending")));
+    // Task #1075 — the bank file carries verified payee bank details for
+    // AP invoice items: firm-linked invoices pay to the finance-approved
+    // registry IBAN; one-off suppliers pay to the details recorded on the
+    // invoice row. Blank cells mean finance still keys them manually
+    // (self-billed / reimbursement items, or nothing recorded).
+    // Exposure is safe: this route is writeGate'd to fp/partner/finance.
+    const apItemIds = items.filter((it) => it.itemType === "partner_firm_invoice").map((it) => it.refId);
+    const apRows = apItemIds.length
+      ? await db.select({
+          id: atelierPartnerFirmInvoices.id,
+          partnerFirmId: atelierPartnerFirmInvoices.partnerFirmId,
+          supplierBankIban: atelierPartnerFirmInvoices.supplierBankIban,
+          supplierBankHolder: atelierPartnerFirmInvoices.supplierBankHolder,
+        }).from(atelierPartnerFirmInvoices)
+          .where(and(eq(atelierPartnerFirmInvoices.orgId, me.orgId), inArray(atelierPartnerFirmInvoices.id, apItemIds)))
+      : [];
+    const apById = new Map(apRows.map((r) => [r.id, r]));
+    const firmIds = [...new Set(apRows.map((r) => r.partnerFirmId).filter((id) => id))];
+    const firmRows = firmIds.length
+      ? await db.select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name, bankIban: atelierPartnerFirms.bankIban })
+          .from(atelierPartnerFirms)
+          .where(and(eq(atelierPartnerFirms.orgId, me.orgId), inArray(atelierPartnerFirms.id, firmIds)))
+      : [];
+    const firmById = new Map(firmRows.map((f) => [f.id, f]));
+    const payeeBank = (it: typeof atelierPaymentRunItems.$inferSelect): { iban: string; holder: string } => {
+      if (it.itemType !== "partner_firm_invoice") return { iban: "", holder: "" };
+      const ap = apById.get(it.refId);
+      if (!ap) return { iban: "", holder: "" };
+      if (ap.partnerFirmId) {
+        const firm = firmById.get(ap.partnerFirmId);
+        return { iban: (firm?.bankIban ?? "").trim(), holder: firm?.name ?? it.payeeName };
+      }
+      const iban = (ap.supplierBankIban ?? "").trim();
+      return { iban, holder: iban ? (ap.supplierBankHolder ?? "").trim() : "" };
+    };
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = [
-      "run_number,item_type,payee,description,amount,currency,amount_usd",
-      ...items.map((it) =>
-        [run.runNumber, it.itemType, esc(it.payeeName), esc(it.description), it.amount.toFixed(2), it.currency, it.amountUsd.toFixed(2)].join(","),
-      ),
+      "run_number,item_type,payee,description,amount,currency,amount_usd,payee_iban,payee_account_holder",
+      ...items.map((it) => {
+        const bank = payeeBank(it);
+        return [run.runNumber, it.itemType, esc(it.payeeName), esc(it.description), it.amount.toFixed(2), it.currency, it.amountUsd.toFixed(2), esc(bank.iban), esc(bank.holder)].join(",");
+      }),
     ];
     if (run.status === "approved") {
       await db.update(atelierPaymentRuns).set({ status: "exported", exportedAt: new Date(), updatedAt: new Date() })
@@ -1101,6 +1137,29 @@ function bodyStr(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
 
+// ------------------------------------------------------------
+// Task #1075 — one-off supplier bank details (unlinked invoices).
+// Registered partner firms keep bank details on the firm registry
+// (maker-checker); unlinked suppliers record IBAN + holder on the
+// invoice row so payment-run exports carry verified payee details.
+// ------------------------------------------------------------
+
+/** Bank-credential exposure rule: IBAN/holder only for fp/partner/finance. */
+function canSeeBankDetails(me: Me): boolean {
+  return me.role === "founding_partner" || me.role === "partner" || me.role === "finance";
+}
+
+/** Normalize + shape-check an IBAN. Returns null when invalid. */
+function normalizeIban(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const iban = v.replace(/\s+/g, "").toUpperCase();
+  return /^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(iban) ? iban : null;
+}
+
+function maskIban(iban: string): string {
+  return iban.length > 8 ? `${iban.slice(0, 4)}····${iban.slice(-4)}` : "····";
+}
+
 /** Task #1104 — autopilot attribution surfaced on approved invoices.
  * The attribution is stored on the approve AUDIT event (payload.autopilot,
  * Task #1091), never as invoice columns — this reads the latest approve
@@ -1149,7 +1208,11 @@ function supplierInvoiceWire(
   row: typeof atelierPartnerFirmInvoices.$inferSelect,
   hasBankDetails?: boolean,
   autopilot?: SupplierAutopilotAttribution | null,
+  /** Task #1075 — bank-credential exposure rule: pass the viewer so the
+   * recorded supplier IBAN/holder are redacted outside fp/partner/finance. */
+  viewer?: Me,
 ) {
+  const exposeBank = viewer ? canSeeBankDetails(viewer) : false;
   return {
     id: row.id,
     supplierName: row.partnerFirmName,
@@ -1181,6 +1244,11 @@ function supplierInvoiceWire(
     allocOverrideReason: row.allocOverrideReason,
     // Unlinked suppliers have no firm bank registry — no hold applies.
     hasBankDetails: hasBankDetails ?? !row.partnerFirmId,
+    // Task #1075 — recorded one-off supplier bank details. Boolean is safe
+    // for everyone; the credentials themselves follow the exposure rule.
+    hasSupplierBankDetails: Boolean((row.supplierBankIban ?? "").trim()),
+    supplierBankIban: exposeBank ? row.supplierBankIban : null,
+    supplierBankHolder: exposeBank ? row.supplierBankHolder : null,
     // Task #1104 — autopilot attribution (from the approve audit event)
     // so founders can spot auto-approved invoices and pull them back.
     autopilot: autopilot ?? null,
@@ -1221,6 +1289,7 @@ router.get("/finance/payables/supplier-invoices", async (req, res, next) => {
           r,
           r.partnerFirmId ? (bankById.get(r.partnerFirmId) ?? false) : undefined,
           autopilotById.get(r.id) ?? null,
+          me,
         ),
       ),
     });
@@ -1271,6 +1340,10 @@ export async function createSupplierInvoiceCore(args: {
   invoiceDate?: string | null;
   notes?: string | null;
   partnerFirmId?: string | null;
+  /** Task #1075 — optional one-off supplier bank details (unlinked only).
+   * Registered partner firms keep bank details on the firm registry. */
+  supplierBankIban?: string | null;
+  supplierBankHolder?: string | null;
   /** Task #1095 — user picked the entity allocation up-front (chat card). */
   explicitLegalEntityId?: string | null;
   /** Audit provenance: "ui_upload" (default), "chat", or "parsed_doc"
@@ -1319,6 +1392,20 @@ export async function createSupplierInvoiceCore(args: {
       ));
     if (!f) return { status: 404, body: { error: "partner-firm-not-found" } };
     firm = f;
+  }
+  // Task #1075 — optional bank details for one-off (unlinked) suppliers.
+  // Rejected outright for firm-linked uploads: firm bank details flow only
+  // via the maker-checker registry, never per-invoice.
+  const rawIban = typeof args.supplierBankIban === "string" ? args.supplierBankIban.trim() : "";
+  const supplierBankHolder = bodyStr(args.supplierBankHolder ?? "", 200) || null;
+  let supplierBankIban: string | null = null;
+  if (rawIban || supplierBankHolder) {
+    if (firm) {
+      return { status: 400, body: { error: "firm-linked-bank-details", message: "Bank details for registered partner firms are managed on the firm registry, not per invoice." } };
+    }
+    supplierBankIban = normalizeIban(rawIban);
+    if (!supplierBankIban) return { status: 400, body: { error: "invalid-iban", message: "Supplier IBAN is not a valid IBAN." } };
+    if (!supplierBankHolder) return { status: 400, body: { error: "holder-required", message: "Account holder name is required with the IBAN." } };
   }
 
   const now = new Date();
@@ -1382,6 +1469,8 @@ export async function createSupplierInvoiceCore(args: {
       sha256,
       blobRef,
       notes,
+      supplierBankIban,
+      supplierBankHolder,
     });
     return { dupe: null } as const;
   });
@@ -1392,7 +1481,7 @@ export async function createSupplierInvoiceCore(args: {
       body: {
         error: "duplicate-invoice",
         matchedBy: dupe.sha256 === sha256 ? "file" : "reference",
-        existing: supplierInvoiceWire(dupe),
+        existing: supplierInvoiceWire(dupe, undefined, null, me),
         message: dupe.sha256 === sha256
           ? `This exact PDF was already uploaded (${dupe.reference ?? dupe.id}, status ${dupe.status}).`
           : `An invoice with reference ${reference} from ${dupe.partnerFirmName} already exists (status ${dupe.status}).`,
@@ -1466,11 +1555,12 @@ export async function createSupplierInvoiceCore(args: {
     payload: {
       supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null,
       reference, amount, currency, periodLabel, sha256, via,
+      ...(supplierBankIban ? { supplierBank: { ibanMasked: maskIban(supplierBankIban), holder: supplierBankHolder } } : {}),
       autopilot: { auto: policy.auto, autoAdvanced, finalStatus: row.status, reasons: autoReasons },
     },
     summary: `${me.name} uploaded supplier invoice ${reference} from ${firm?.name ?? supplierName} (${currency} ${amount.toFixed(2)})${autoAdvanced ? " — auto-approved by autopilot" : ""}.`,
   });
-  return { status: 201, body: { ok: true, item: supplierInvoiceWire(row), autoAdvanced } };
+  return { status: 201, body: { ok: true, item: supplierInvoiceWire(row, undefined, null, me), autoAdvanced } };
 }
 
 /** Task #1090 — chat firm-linking parity: org-scoped case-insensitive
@@ -1520,6 +1610,8 @@ router.post("/finance/payables/supplier-invoices", (req, res, next) => {
         invoiceDate: typeof req.body?.invoiceDate === "string" ? req.body.invoiceDate : null,
         notes: typeof req.body?.notes === "string" ? req.body.notes : null,
         partnerFirmId: typeof req.body?.partnerFirmId === "string" ? req.body.partnerFirmId : null,
+        supplierBankIban: typeof req.body?.supplierBankIban === "string" ? req.body.supplierBankIban : null,
+        supplierBankHolder: typeof req.body?.supplierBankHolder === "string" ? req.body.supplierBankHolder : null,
         via: "ui_upload",
       });
       res.status(out.status).json(out.body);
@@ -1586,6 +1678,10 @@ export async function reviewSupplierInvoiceCore(args: {
   reason?: string | null;
   legalEntityId?: string | null;
   allocationOverrideReason?: string | null;
+  /** Task #1075 — record one-off supplier bank details at approve time
+   * (unlinked invoices only). Both must be supplied together. */
+  supplierBankIban?: string | null;
+  supplierBankHolder?: string | null;
   /** Task #1091 — set when the auto-post engine authorised this approve
    * (never a human click). Records autopilot attribution in the audit. */
   autopilot?: { agentRunId: string | null; agentName: string; reasons: string[] } | null;
@@ -1626,6 +1722,27 @@ export async function reviewSupplierInvoiceCore(args: {
         .where(and(eq(atelierPartnerFirms.id, row.partnerFirmId), eq(atelierPartnerFirms.orgId, me.orgId)));
       if (!firm || !(firm.bankIban ?? "").trim())
         return { status: 409, body: { error: "bank-details-missing", message: "The linked partner firm has no finance-approved bank details yet; approve is blocked until onboarding records them." } };
+    }
+    // Task #1075 — optionally record one-off supplier bank details in the
+    // same act as approval (unlinked suppliers only; firm-linked invoices
+    // pay to registry details).
+    const rawIban = typeof args.supplierBankIban === "string" ? args.supplierBankIban.trim() : "";
+    const bankHolder = bodyStr(args.supplierBankHolder ?? "", 200) || null;
+    if (rawIban || bankHolder) {
+      if (row.partnerFirmId)
+        return { status: 400, body: { error: "firm-linked-bank-details", message: "Bank details for registered partner firms are managed on the firm registry, not per invoice." } };
+      const iban = normalizeIban(rawIban);
+      if (!iban) return { status: 400, body: { error: "invalid-iban", message: "Supplier IBAN is not a valid IBAN." } };
+      if (!bankHolder) return { status: 400, body: { error: "holder-required", message: "Account holder name is required with the IBAN." } };
+      await db.update(atelierPartnerFirmInvoices).set({
+        supplierBankIban: iban, supplierBankHolder: bankHolder, updatedAt: now,
+      }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+      await audit({
+        entityType: "partner_firm_invoice", entityId: row.id, actor: me,
+        action: "finance.supplier_invoice.bank_details",
+        payload: { supplierName: row.partnerFirmName, reference: row.reference, ibanMasked: maskIban(iban), holder: bankHolder },
+        summary: `${me.name} recorded bank details for one-off supplier ${row.partnerFirmName} (${maskIban(iban)}).`,
+      });
     }
     // Task #1095 — approving the invoice approves (or overrides) its
     // entity allocation in the same act. A different `legalEntityId`
@@ -1686,8 +1803,45 @@ export async function reviewSupplierInvoiceCore(args: {
     summary: `${args.autopilot ? `${args.autopilot.agentName} auto-approved` : decision === "start_review" ? "Started review of" : decision === "approve" ? "Approved" : decision === "unapprove" ? "Un-approved (returned to review)" : "Rejected"} supplier invoice ${row.reference ?? row.id} from ${row.partnerFirmName}.`,
   });
   const updated = await loadSupplierInvoice(me.orgId, row.id);
-  return { status: 200, body: { ok: true, invoice: updated ? supplierInvoiceWire(updated) : null } };
+  return { status: 200, body: { ok: true, invoice: updated ? supplierInvoiceWire(updated, undefined, null, me) : null } };
 }
+
+// Task #1075 — record/update bank details for a one-off (unlinked)
+// supplier invoice before it enters a payment run. Firm-linked invoices
+// are rejected (registry is authoritative); once scheduled/paid the
+// payee details are frozen with the run.
+// @cli-skip: Task #1075 audited finance write; UI-workflow only
+router.put("/finance/payables/supplier-invoices/:id/bank-details", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res);
+    if (!me) return;
+    const row = await loadSupplierInvoice(me.orgId, req.params.id);
+    if (!row) { res.status(404).json({ error: "not-found" }); return; }
+    if (row.partnerFirmId) {
+      res.status(400).json({ error: "firm-linked-bank-details", message: "Bank details for registered partner firms are managed on the firm registry, not per invoice." });
+      return;
+    }
+    if (row.status === "scheduled" || row.status === "paid" || row.paymentRunId) {
+      res.status(409).json({ error: "in-payment-run", message: "This invoice is already in a payment run — its payee details are frozen; cancel the run to change them." });
+      return;
+    }
+    const iban = normalizeIban(req.body?.iban);
+    if (!iban) { res.status(400).json({ error: "invalid-iban", message: "Supplier IBAN is not a valid IBAN." }); return; }
+    const holder = bodyStr(req.body?.holder, 200);
+    if (!holder) { res.status(400).json({ error: "holder-required", message: "Account holder name is required." }); return; }
+    await db.update(atelierPartnerFirmInvoices).set({
+      supplierBankIban: iban, supplierBankHolder: holder, updatedAt: new Date(),
+    }).where(eq(atelierPartnerFirmInvoices.id, row.id));
+    await audit({
+      entityType: "partner_firm_invoice", entityId: row.id, actor: me,
+      action: "finance.supplier_invoice.bank_details",
+      payload: { supplierName: row.partnerFirmName, reference: row.reference, ibanMasked: maskIban(iban), holder },
+      summary: `${me.name} recorded bank details for one-off supplier ${row.partnerFirmName} (${maskIban(iban)}).`,
+    });
+    const updated = await loadSupplierInvoice(me.orgId, row.id);
+    res.json({ ok: true, invoice: updated ? supplierInvoiceWire(updated, undefined, null, me) : null });
+  } catch (err) { next(err); }
+});
 
 // @cli-skip: chat parity via finance.review_supplier_invoice (financeApprovalsCapabilities, #1091); REST stays authoritative
 router.post("/finance/payables/supplier-invoices/:id/review", async (req, res, next) => {
@@ -1700,6 +1854,8 @@ router.post("/finance/payables/supplier-invoices/:id/review", async (req, res, n
       reason: req.body?.reason,
       legalEntityId: typeof req.body?.legalEntityId === "string" ? req.body.legalEntityId : null,
       allocationOverrideReason: typeof req.body?.allocationOverrideReason === "string" ? req.body.allocationOverrideReason : null,
+      supplierBankIban: typeof req.body?.supplierBankIban === "string" ? req.body.supplierBankIban : null,
+      supplierBankHolder: typeof req.body?.supplierBankHolder === "string" ? req.body.supplierBankHolder : null,
     });
     res.status(out.status).json(out.body);
   } catch (err) { next(err); }

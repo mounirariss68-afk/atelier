@@ -4181,6 +4181,14 @@ export const atelierPartnerFirmInvoices = pgTable(
     // proposal composed from partner-firm hours; "partner_submitted" =
     // AP invoice submitted by the firm through the partner portal.
     source: text("source").notNull().default("proposal"),
+    // Task #1075 — recorded payee bank details for UNLINKED suppliers
+    // (partnerFirmId = ""). Registered partner firms keep their bank
+    // details on the firm registry (maker-checker); these columns are the
+    // one-off supplier equivalent so payment-run exports carry verified
+    // details instead of finance keying IBANs into the bank file by hand.
+    // Exposure follows the bank-credential rule: fp/partner/finance only.
+    supplierBankIban: text("supplier_bank_iban"),
+    supplierBankHolder: text("supplier_bank_holder"),
     // Task #875 — partner-submitted invoice metadata + PDF blob.
     reference: text("reference"),
     periodLabel: text("period_label"),

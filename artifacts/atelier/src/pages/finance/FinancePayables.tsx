@@ -472,6 +472,11 @@ type SupplierInvoiceRow = {
   paymentRunId: string | null;
   paidAt: string | null;
   hasBankDetails: boolean;
+  // Task #1075 — recorded one-off supplier bank details (unlinked
+  // suppliers). IBAN/holder are server-redacted outside fp/partner/finance.
+  hasSupplierBankDetails: boolean;
+  supplierBankIban: string | null;
+  supplierBankHolder: string | null;
   // Task #1095 — entity allocation lifecycle.
   legalEntityId: string | null;
   allocStatus: string | null;
@@ -546,12 +551,17 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
   const [reference, setReference] = React.useState("");
   const [periodLabel, setPeriodLabel] = React.useState("");
   const [notes, setNotes] = React.useState("");
+  // Task #1075 — optional one-off supplier bank details (unlinked only).
+  const [bankIban, setBankIban] = React.useState("");
+  const [bankHolder, setBankHolder] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [info, setInfo] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const canSubmit = !!file && (selectedFirm || supplierName.trim()) && reference.trim() && Number(amount) > 0 && /^[A-Za-z]{3}$/.test(currency);
+  // Bank details are optional, but IBAN and holder come together.
+  const bankOk = selectedFirm ? true : (!bankIban.trim() && !bankHolder.trim()) || (!!bankIban.trim() && !!bankHolder.trim());
+  const canSubmit = !!file && (selectedFirm || supplierName.trim()) && reference.trim() && Number(amount) > 0 && /^[A-Za-z]{3}$/.test(currency) && bankOk;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -567,6 +577,10 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
       form.append("reference", reference.trim());
       if (periodLabel.trim()) form.append("periodLabel", periodLabel.trim());
       if (notes.trim()) form.append("notes", notes.trim());
+      if (!selectedFirm && bankIban.trim()) {
+        form.append("supplierBankIban", bankIban.trim());
+        form.append("supplierBankHolder", bankHolder.trim());
+      }
       const res = await fetch(`${API_BASE}/finance/payables/supplier-invoices`, {
         method: "POST", credentials: "include", body: form,
       });
@@ -580,7 +594,7 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
         return;
       }
       setInfo(`Uploaded ${reference.trim()} — awaiting review.`);
-      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes("");
+      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes(""); setBankIban(""); setBankHolder("");
       if (fileRef.current) fileRef.current.value = "";
       onUploaded();
     } catch (err) {
@@ -643,6 +657,21 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
           <span className="text-text-mute">Notes (optional)</span>
           <input className={input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What is this invoice for?" data-testid="input-supplier-notes" />
         </label>
+        {/* Task #1075 — one-off suppliers: record verified bank details so the
+            payment-run bank file carries them instead of manual keying. */}
+        {!selectedFirm && (
+          <>
+            <label className="space-y-1">
+              <span className="text-text-mute">Supplier IBAN (optional)</span>
+              <input className={input} value={bankIban} onChange={(e) => setBankIban(e.target.value)} placeholder="AE07 0331 2345 6789 0123 456" data-testid="input-supplier-bank-iban" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-text-mute">Account holder {bankIban.trim() ? "" : "(with IBAN)"}</span>
+              <input className={input} value={bankHolder} onChange={(e) => setBankHolder(e.target.value)} placeholder="Acme Cloud FZ-LLC" data-testid="input-supplier-bank-holder" />
+              {!bankOk && <span className="text-warn block">⚠ IBAN and account holder must be provided together.</span>}
+            </label>
+          </>
+        )}
         <div className="sm:col-span-2 flex items-center gap-3">
           <Button size="sm" type="submit" disabled={busy || !canSubmit} data-testid="btn-upload-supplier-invoice">
             {busy ? "Uploading…" : "Upload invoice"}
@@ -676,6 +705,26 @@ export function FinancePayablesSupplierInvoices() {
       await postJson(`/finance/payables/supplier-invoices/${id}/review`, { decision, ...(reason ? { reason } : {}), ...(extra ?? {}) });
       refetch();
     });
+  // Task #1075 — record/update one-off supplier bank details on the row.
+  const recordBank = (inv: SupplierInvoiceRow) => {
+    const iban = window.prompt(`Supplier IBAN for ${inv.supplierName} (payment runs pay to this account):`, inv.supplierBankIban ?? "");
+    if (iban === null || !iban.trim()) return;
+    const holder = window.prompt("Account holder name (as on the bank account):", inv.supplierBankHolder ?? inv.supplierName);
+    if (holder === null || !holder.trim()) return;
+    run(`bank:${inv.id}`, async () => {
+      const res = await fetch(`${API_BASE}/finance/payables/supplier-invoices/${inv.id}/bank-details`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ iban: iban.trim(), holder: holder.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message ?? body?.error ?? `Failed (${res.status})`);
+      }
+      refetch();
+    });
+  };
   const pending = items.filter((i) => i.status === "submitted" || i.status === "under_review");
   const shown = filter === "all" ? items : items.filter((i) => i.status === filter);
   return (
@@ -742,6 +791,13 @@ export function FinancePayablesSupplierInvoices() {
                     {inv.allocOverrideReason && <div className="italic text-text-mute mt-0.5">Override: {inv.allocOverrideReason}</div>}
                   </div>
                 )}
+                {/* Task #1075 — recorded one-off supplier bank details
+                    (server redacts IBAN/holder outside fp/partner/finance). */}
+                {!inv.partnerFirmId && inv.hasSupplierBankDetails && inv.supplierBankIban && (
+                  <div className="text-xs text-text-mute mt-1 font-mono" data-testid={`supplier-bank-details-${inv.id}`}>
+                    Pays to {inv.supplierBankHolder} · {inv.supplierBankIban}
+                  </div>
+                )}
                 {inv.status === "rejected" && inv.rejectedReason && (
                   <div className="text-xs text-danger mt-1">Rejected: {inv.rejectedReason}</div>
                 )}
@@ -755,6 +811,12 @@ export function FinancePayablesSupplierInvoices() {
                   </MonoChip>
                 )}
                 {inv.partnerFirmId && !inv.hasBankDetails && <MonoChip tone="amber">no bank details</MonoChip>}
+                {/* Task #1075 — one-off supplier bank details status */}
+                {!inv.partnerFirmId && (inv.hasSupplierBankDetails ? (
+                  <MonoChip tone="green" data-testid={`supplier-bank-chip-${inv.id}`}>bank details recorded</MonoChip>
+                ) : (
+                  <MonoChip tone="amber" data-testid={`supplier-bank-chip-${inv.id}`}>no supplier bank on file</MonoChip>
+                ))}
                 {inv.fileName && (
                   <a
                     href={`${API_BASE}/finance/payables/supplier-invoices/${inv.id}/file`}
@@ -821,6 +883,18 @@ export function FinancePayablesSupplierInvoices() {
                 >
                   Reject
                 </Button>
+                {/* Task #1075 — record/update one-off supplier bank details before approval */}
+                {!inv.partnerFirmId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!busy}
+                    onClick={() => recordBank(inv)}
+                    data-testid={`btn-supplier-bank-${inv.id}`}
+                  >
+                    {inv.hasSupplierBankDetails ? "Update bank details" : "Record bank details"}
+                  </Button>
+                )}
               </div>
             )}
             {/* Task #1104 — pull an approved (autopilot) invoice back to
@@ -840,6 +914,12 @@ export function FinancePayablesSupplierInvoices() {
                 >
                   Un-approve
                 </Button>
+                {/* Task #1075 — details stay editable until a run claims the invoice */}
+                {!inv.partnerFirmId && (
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => recordBank(inv)} data-testid={`btn-supplier-bank-${inv.id}`}>
+                    {inv.hasSupplierBankDetails ? "Update bank details" : "Record bank details"}
+                  </Button>
+                )}
                 <span className="text-[11px] text-text-mute">
                   {inv.autopilot ? "Auto-approved — returns it to review before the next payment run." : "Returns it to review before the next payment run."}
                 </span>
