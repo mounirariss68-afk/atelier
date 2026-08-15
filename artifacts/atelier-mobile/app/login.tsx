@@ -23,6 +23,7 @@ import {
   hapticError,
   softShadow,
 } from "@/components/ui";
+import { BUILD_STAMP } from "@/constants/buildInfo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
@@ -245,6 +246,16 @@ export default function LoginScreen() {
                   }}
                 >
                   {t("login.subtitle")}
+                </Text>
+                {/* Task #1176 — build stamp so the running bundle is identifiable. */}
+                <Text
+                  style={{
+                    color: "#5B6790",
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 11,
+                  }}
+                >
+                  {BUILD_STAMP}
                 </Text>
               </View>
             </FadeInView>

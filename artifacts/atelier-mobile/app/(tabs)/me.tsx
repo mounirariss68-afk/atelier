@@ -32,6 +32,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 
+import { BUILD_STAMP } from "@/constants/buildInfo";
+
 import {
   Button,
   Card,
@@ -1914,6 +1916,20 @@ export default function MeScreen() {
             );
           })}
         </View>
+
+        {/* Task #1176 — build stamp: identifies the bundle this device is running. */}
+        <Text
+          testID="me-build-stamp"
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 10,
+            textAlign: "center",
+            opacity: 0.7,
+          }}
+        >
+          {BUILD_STAMP}
+        </Text>
 
         {meTab === "documents" ? (
         <>
