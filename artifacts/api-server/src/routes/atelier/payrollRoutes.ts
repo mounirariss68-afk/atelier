@@ -43,6 +43,7 @@ import {
   atelierAuditEvents,
   atelierSalaryAdvances,
   atelierAdvanceRepayments,
+  atelierCompChanges,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
@@ -289,6 +290,24 @@ router.post("/finance/payroll/eosb/settlements/:id/settle", async (req, res) => 
 // ─────────────── Salary advances (Task #1135) ───────────────
 
 // @cli-skip: finance payroll read; REST-only surface (Task #1135)
+// Task #1146 — comp-change history for the payroll edit dialog.
+router.get("/finance/payroll/comp-changes", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const employeeId = String(req.query.employeeId ?? "");
+  if (!employeeId) { res.status(400).json({ error: "employeeId-required" }); return; }
+  const items = await db
+    .select()
+    .from(atelierCompChanges)
+    .where(and(
+      eq(atelierCompChanges.orgId, me.orgId),
+      eq(atelierCompChanges.employeeId, employeeId),
+      isNull(atelierCompChanges.deletedAt),
+    ))
+    .orderBy(desc(atelierCompChanges.effectiveFrom))
+    .limit(50);
+  res.json({ items });
+});
+
 router.get("/finance/payroll/advances", async (req, res) => {
   const me = ensureFinanceLeadership(req, res); if (!me) return;
   const conds = [eq(atelierSalaryAdvances.orgId, me.orgId), isNull(atelierSalaryAdvances.deletedAt)];

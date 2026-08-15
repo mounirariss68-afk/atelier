@@ -2,6 +2,10 @@
  * FinancePayroll — statutory payroll runs, EOSB liability and leaver
  * settlements per legal entity (Task #655).
  *
+ * Task #1146 — added salary-advance management panel (issue, list,
+ * pause/resume/payoff) and a comp-change dialog accessible from the run
+ * lines table (effectiveFrom + reason + history).
+ *
  * Raw fetch (finance-page convention, see FinanceClose.tsx) — the payroll
  * routes are bespoke and not in the OpenAPI spec. Country statutory rules
  * (GPSSA / GOSI / GRSIA / SGK, WPS, EOSB bands) live server-side as an
@@ -12,7 +16,11 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, MonoChip, PillButton, Eyebrow, BackLink } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
-import { PlayCircle, BookOpenCheck, RefreshCw, AlertTriangle, CheckCircle2, Undo2 } from "lucide-react";
+import {
+  PlayCircle, BookOpenCheck, RefreshCw, AlertTriangle, CheckCircle2,
+  Undo2, Plus, X, ChevronDown, ChevronUp, Pause, Play, DollarSign,
+  History,
+} from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -29,6 +37,8 @@ async function jfetch(path: string, init?: RequestInit): Promise<unknown> {
   }
   return body;
 }
+
+// ─── Data shapes ─────────────────────────────────────────────────────────────
 
 interface RunTotals {
   headcount: number;
@@ -51,6 +61,7 @@ interface RunRow {
 }
 interface LineRow {
   id: string;
+  employeeId: string;
   personName: string;
   nationality: string | null;
   monthlyGross: number;
@@ -108,7 +119,6 @@ interface SettlementRow {
   adjustmentFactor: number;
   finalAmount: number;
 }
-
 interface FilingItem {
   id: string;
   entityId: string;
@@ -123,8 +133,51 @@ interface FilingItem {
   sourceKey?: string | null;
 }
 
+// Task #1146
+interface SalaryAdvance {
+  id: string;
+  employeeId: string;
+  personName: string;
+  currency: string;
+  principal: number;
+  installmentAmount: number;
+  startPeriod: string;
+  outstanding: number;
+  status: "active" | "paused" | "repaid";
+  issuedOn: string;
+  note: string | null;
+}
+interface AdvanceRepayment {
+  id: string;
+  advanceId: string;
+  amount: number;
+  periodLabel: string;
+  createdAt: string;
+}
+interface CompChange {
+  id: string;
+  employeeId: string;
+  effectiveFrom: string;
+  baseCompensation: number;
+  baseCurrency: string;
+  basicWageMonthly: number | null;
+  housingAllowanceMonthly: number | null;
+  reason: string;
+  note: string | null;
+}
+interface RosterPerson {
+  id: string;
+  fullName: string;
+  workerType: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function fmt(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+function fmt2(n: number): string {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);
@@ -137,6 +190,560 @@ function fmtRel(d: number): string {
   if (d === 0) return "due today";
   return `due in ${d}d`;
 }
+
+// ─── Comp-change dialog ───────────────────────────────────────────────────────
+
+interface CompDialogProps {
+  personId: string;
+  personName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function CompChangeDialog({ personId, personName, onClose, onSaved }: CompDialogProps) {
+  const { toast } = useToast();
+  const [busy, setBusy] = React.useState(false);
+  const [form, setForm] = React.useState({
+    baseCompensation: "",
+    baseCurrency: "",
+    basicWageMonthly: "",
+    housingAllowanceMonthly: "",
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    reason: "adjustment" as "promotion" | "raise" | "adjustment" | "correction",
+    changeNote: "",
+  });
+
+  const historyQ = useQuery({
+    queryKey: ["comp-changes", personId],
+    queryFn: async () =>
+      (await jfetch(`/finance/payroll/comp-changes?employeeId=${encodeURIComponent(personId)}`)) as {
+        items: CompChange[];
+      },
+  });
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function save() {
+    const patch: Record<string, unknown> = {};
+    if (form.baseCompensation.trim()) {
+      const v = parseFloat(form.baseCompensation);
+      if (isNaN(v) || v <= 0) { toast({ title: "Invalid compensation amount", variant: "destructive" }); return; }
+      patch.baseCompensation = v;
+    }
+    if (form.baseCurrency.trim()) patch.baseCurrency = form.baseCurrency.trim().toUpperCase();
+    if (form.basicWageMonthly.trim()) {
+      const v = parseFloat(form.basicWageMonthly);
+      if (!isNaN(v) && v >= 0) patch.basicWageMonthly = v;
+    }
+    if (form.housingAllowanceMonthly.trim()) {
+      const v = parseFloat(form.housingAllowanceMonthly);
+      if (!isNaN(v) && v >= 0) patch.housingAllowanceMonthly = v;
+    }
+    if (Object.keys(patch).length === 0) {
+      toast({ title: "Enter at least one comp field to update", variant: "destructive" });
+      return;
+    }
+    patch.effectiveFrom = form.effectiveFrom;
+    patch.reason = form.reason;
+    if (form.changeNote.trim()) patch.changeNote = form.changeNote.trim();
+    setBusy(true);
+    try {
+      await jfetch(`/roster/people/${personId}/payroll`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      toast({ title: `Comp change recorded for ${personName}` });
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast({ title: "Comp change failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const history = historyQ.data?.items ?? [];
+  const reasonLabels: Record<string, string> = {
+    promotion: "Promotion",
+    raise: "Merit raise",
+    adjustment: "Adjustment",
+    correction: "Correction",
+    initial: "Initial",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-bg border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-text-mute">Comp change</p>
+            <h2 className="text-lg font-semibold mt-0.5">{personName}</h2>
+          </div>
+          <button onClick={onClose} className="text-text-mute hover:text-text p-1"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* ── New comp entry ── */}
+          <section>
+            <p className="text-xs font-mono uppercase tracking-widest text-text-mute mb-3">Record comp change</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Annual gross</span>
+                <input
+                  type="number" min="0" step="1"
+                  placeholder="e.g. 120000"
+                  value={form.baseCompensation}
+                  onChange={set("baseCompensation")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                  data-testid="comp-dialog-base"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Currency</span>
+                <input
+                  type="text" maxLength={3} placeholder="USD"
+                  value={form.baseCurrency}
+                  onChange={set("baseCurrency")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text uppercase"
+                  data-testid="comp-dialog-currency"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Basic wage / mo</span>
+                <input
+                  type="number" min="0" step="1"
+                  placeholder="Optional"
+                  value={form.basicWageMonthly}
+                  onChange={set("basicWageMonthly")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                  data-testid="comp-dialog-basic"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Housing / mo</span>
+                <input
+                  type="number" min="0" step="1"
+                  placeholder="Optional"
+                  value={form.housingAllowanceMonthly}
+                  onChange={set("housingAllowanceMonthly")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                  data-testid="comp-dialog-housing"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Effective from</span>
+                <input
+                  type="date"
+                  value={form.effectiveFrom}
+                  onChange={set("effectiveFrom")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                  data-testid="comp-dialog-effective"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Reason</span>
+                <select
+                  value={form.reason}
+                  onChange={set("reason")}
+                  className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                  data-testid="comp-dialog-reason"
+                >
+                  <option value="promotion">Promotion</option>
+                  <option value="raise">Merit raise</option>
+                  <option value="adjustment">Adjustment</option>
+                  <option value="correction">Correction</option>
+                </select>
+              </label>
+            </div>
+            <label className="flex flex-col gap-1 mt-3">
+              <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Note</span>
+              <textarea
+                rows={2}
+                maxLength={500}
+                placeholder="Optional — added to the audit trail"
+                value={form.changeNote}
+                onChange={set("changeNote")}
+                className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text resize-none"
+                data-testid="comp-dialog-note"
+              />
+            </label>
+            <div className="mt-3 flex justify-end">
+              <PillButton disabled={busy} onClick={save} data-testid="comp-dialog-save">
+                {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpenCheck className="w-4 h-4" />}
+                Save comp change
+              </PillButton>
+            </div>
+          </section>
+
+          {/* ── History ── */}
+          <section className="border-t border-border pt-4">
+            <p className="text-xs font-mono uppercase tracking-widest text-text-mute mb-3 flex items-center gap-2">
+              <History className="w-3.5 h-3.5" /> Comp-change history
+            </p>
+            {historyQ.isLoading && <p className="text-sm text-text-mute">Loading…</p>}
+            {history.length === 0 && !historyQ.isLoading && (
+              <p className="text-sm text-text-mute">No history yet — changes are recorded here after the first save.</p>
+            )}
+            {history.length > 0 && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+                    <th className="py-2 pr-3">Effective</th>
+                    <th className="py-2 pr-3">Reason</th>
+                    <th className="py-2 pr-3 text-right">Annual gross</th>
+                    <th className="py-2 pr-3 text-right">Basic / mo</th>
+                    <th className="py-2">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.id} className="border-b border-border/50">
+                      <td className="py-2 pr-3 font-mono">{h.effectiveFrom}</td>
+                      <td className="py-2 pr-3"><MonoChip>{reasonLabels[h.reason] ?? h.reason}</MonoChip></td>
+                      <td className="py-2 pr-3 text-right font-mono">{fmt(h.baseCompensation)} {h.baseCurrency}</td>
+                      <td className="py-2 pr-3 text-right font-mono">{h.basicWageMonthly != null ? fmt(h.basicWageMonthly) : "—"}</td>
+                      <td className="py-2 text-xs text-text-mute">{h.note ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Issue-advance dialog ─────────────────────────────────────────────────────
+
+interface IssueAdvanceDialogProps {
+  employees: RosterPerson[];
+  onClose: () => void;
+  onIssued: () => void;
+}
+
+function IssueAdvanceDialog({ employees, onClose, onIssued }: IssueAdvanceDialogProps) {
+  const { toast } = useToast();
+  const [busy, setBusy] = React.useState(false);
+  const [form, setForm] = React.useState({
+    employeeId: employees[0]?.id ?? "",
+    amount: "",
+    installmentAmount: "",
+    startPeriod: currentPeriod(),
+    note: "",
+  });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit() {
+    const amount = parseFloat(form.amount);
+    const installment = parseFloat(form.installmentAmount);
+    if (!form.employeeId) { toast({ title: "Select an employee", variant: "destructive" }); return; }
+    if (isNaN(amount) || amount <= 0) { toast({ title: "Enter a valid advance amount", variant: "destructive" }); return; }
+    if (isNaN(installment) || installment <= 0) { toast({ title: "Enter a valid monthly installment", variant: "destructive" }); return; }
+    if (installment > amount) { toast({ title: "Installment cannot exceed the advance amount", variant: "destructive" }); return; }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(form.startPeriod)) { toast({ title: "Enter a valid start period (YYYY-MM)", variant: "destructive" }); return; }
+    setBusy(true);
+    try {
+      await jfetch("/finance/payroll/advances", {
+        method: "POST",
+        body: JSON.stringify({
+          employeeId: form.employeeId,
+          amount,
+          installmentAmount: installment,
+          startPeriod: form.startPeriod,
+          note: form.note.trim() || null,
+        }),
+      });
+      const emp = employees.find((e) => e.id === form.employeeId);
+      toast({ title: `Advance issued to ${emp?.fullName ?? "employee"}` });
+      onIssued();
+      onClose();
+    } catch (e) {
+      toast({ title: "Issue failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-bg border border-border rounded-lg w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-text-mute">Salary advance</p>
+            <h2 className="text-lg font-semibold mt-0.5">Issue advance</h2>
+          </div>
+          <button onClick={onClose} className="text-text-mute hover:text-text p-1"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Employee</span>
+            <select
+              value={form.employeeId}
+              onChange={set("employeeId")}
+              className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+              data-testid="advance-dialog-employee"
+            >
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.fullName}</option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Advance amount</span>
+              <input
+                type="number" min="1" step="1"
+                placeholder="e.g. 5000"
+                value={form.amount}
+                onChange={set("amount")}
+                className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                data-testid="advance-dialog-amount"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Monthly installment</span>
+              <input
+                type="number" min="1" step="1"
+                placeholder="e.g. 500"
+                value={form.installmentAmount}
+                onChange={set("installmentAmount")}
+                className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                data-testid="advance-dialog-installment"
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Repayment starts (YYYY-MM)</span>
+            <input
+              type="month"
+              value={form.startPeriod}
+              onChange={set("startPeriod")}
+              className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+              data-testid="advance-dialog-start"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Note (optional)</span>
+            <textarea
+              rows={2} maxLength={500}
+              placeholder="Reason or reference"
+              value={form.note}
+              onChange={set("note")}
+              className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text resize-none"
+              data-testid="advance-dialog-note"
+            />
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-mono uppercase tracking-widest text-text-mute hover:text-text">Cancel</button>
+            <PillButton disabled={busy} onClick={submit} data-testid="advance-dialog-submit">
+              {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+              Issue advance
+            </PillButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Advances section ─────────────────────────────────────────────────────────
+
+interface AdvancesSectionProps {
+  employees: RosterPerson[];
+}
+
+function AdvancesSection({ employees }: AdvancesSectionProps) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [issueOpen, setIssueOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
+  const advancesQ = useQuery({
+    queryKey: ["payroll-advances"],
+    queryFn: async () =>
+      (await jfetch("/finance/payroll/advances")) as {
+        items: SalaryAdvance[];
+        repayments: AdvanceRepayment[];
+      },
+  });
+
+  const advances = advancesQ.data?.items ?? [];
+  const repayments = advancesQ.data?.repayments ?? [];
+
+  async function act(key: string, fn: () => Promise<unknown>, ok: string) {
+    setBusy(key);
+    try {
+      await fn();
+      toast({ title: ok });
+      await qc.invalidateQueries({ queryKey: ["payroll-advances"] });
+      await qc.invalidateQueries({ queryKey: ["payroll-overview"] });
+      await qc.invalidateQueries({ queryKey: ["payroll-run"] });
+    } catch (e) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const statusTone = (s: string) => s === "repaid" ? "green" : s === "paused" ? "amber" : "default";
+
+  return (
+    <section data-testid="advances-section">
+      <SectionHead headline="Salary advances" />
+      <Card className="p-6 mt-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-text-mute">
+            Outstanding balances and repayment schedule. Installments deduct automatically each payroll run.
+          </p>
+          {employees.length > 0 && (
+            <PillButton onClick={() => setIssueOpen(true)} data-testid="advance-issue-btn">
+              <Plus className="w-4 h-4" /> Issue advance
+            </PillButton>
+          )}
+        </div>
+
+        {advancesQ.isLoading && <p className="text-sm text-text-mute">Loading…</p>}
+        {advancesQ.isError && <p className="text-sm text-red-400">{(advancesQ.error as Error).message}</p>}
+
+        {advances.length === 0 && !advancesQ.isLoading && (
+          <p className="text-sm text-text-mute">No advances recorded yet.</p>
+        )}
+
+        {advances.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+                  <th className="py-2 pr-4">Employee</th>
+                  <th className="py-2 pr-4">Issued</th>
+                  <th className="py-2 pr-4 text-right">Principal</th>
+                  <th className="py-2 pr-4 text-right">Outstanding</th>
+                  <th className="py-2 pr-4 text-right">Installment</th>
+                  <th className="py-2 pr-4">Starts</th>
+                  <th className="py-2 pr-4">Status</th>
+                  <th className="py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {advances.map((adv) => {
+                  const advRep = repayments.filter((r) => r.advanceId === adv.id).sort((a, b) => b.periodLabel.localeCompare(a.periodLabel));
+                  const expanded = expandedId === adv.id;
+                  return (
+                    <React.Fragment key={adv.id}>
+                      <tr className="border-b border-border/50" data-testid={`advance-row-${adv.id}`}>
+                        <td className="py-2 pr-4">{adv.personName}</td>
+                        <td className="py-2 pr-4 font-mono">{adv.issuedOn}</td>
+                        <td className="py-2 pr-4 text-right font-mono">{fmt2(adv.principal)} {adv.currency}</td>
+                        <td className="py-2 pr-4 text-right font-mono">
+                          <span className={adv.outstanding > 0 && adv.status !== "repaid" ? "text-amber-400" : ""}>
+                            {fmt2(adv.outstanding)} {adv.currency}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 text-right font-mono">{fmt2(adv.installmentAmount)}</td>
+                        <td className="py-2 pr-4 font-mono">{adv.startPeriod}</td>
+                        <td className="py-2 pr-4">
+                          <MonoChip tone={statusTone(adv.status)}>{adv.status}</MonoChip>
+                        </td>
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            {advRep.length > 0 && (
+                              <button
+                                className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-text inline-flex items-center gap-1"
+                                onClick={() => setExpandedId(expanded ? null : adv.id)}
+                                data-testid={`advance-history-${adv.id}`}
+                              >
+                                {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                {advRep.length} payment{advRep.length !== 1 ? "s" : ""}
+                              </button>
+                            )}
+                            {adv.status === "active" && (
+                              <PillButton
+                                disabled={busy !== null}
+                                onClick={() => act(`pause-${adv.id}`, () => jfetch(`/finance/payroll/advances/${adv.id}/pause`, { method: "POST" }), "Advance paused")}
+                                data-testid={`advance-pause-${adv.id}`}
+                              >
+                                <Pause className="w-3.5 h-3.5" /> Pause
+                              </PillButton>
+                            )}
+                            {adv.status === "paused" && (
+                              <PillButton
+                                disabled={busy !== null}
+                                onClick={() => act(`resume-${adv.id}`, () => jfetch(`/finance/payroll/advances/${adv.id}/resume`, { method: "POST" }), "Advance resumed")}
+                                data-testid={`advance-resume-${adv.id}`}
+                              >
+                                <Play className="w-3.5 h-3.5" /> Resume
+                              </PillButton>
+                            )}
+                            {adv.status !== "repaid" && (
+                              <PillButton
+                                disabled={busy !== null}
+                                onClick={() => act(`payoff-${adv.id}`, () => jfetch(`/finance/payroll/advances/${adv.id}/payoff`, { method: "POST" }), "Advance paid off")}
+                                data-testid={`advance-payoff-${adv.id}`}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Pay off
+                              </PillButton>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded && advRep.length > 0 && (
+                        <tr className="border-b border-border/50 bg-bg-elevate/30">
+                          <td colSpan={8} className="px-6 py-3">
+                            <p className="text-xs font-mono uppercase tracking-widest text-text-mute mb-2">Repayment history</p>
+                            <table className="text-xs w-full">
+                              <thead>
+                                <tr className="text-left text-text-faint border-b border-border/50">
+                                  <th className="py-1 pr-4">Period</th>
+                                  <th className="py-1 pr-4 text-right">Amount</th>
+                                  <th className="py-1">Date</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {advRep.map((r) => (
+                                  <tr key={r.id}>
+                                    <td className="py-1 pr-4 font-mono">{r.periodLabel}</td>
+                                    <td className="py-1 pr-4 text-right font-mono">{fmt2(r.amount)} {adv.currency}</td>
+                                    <td className="py-1 font-mono text-text-faint">{r.createdAt?.slice(0, 10) ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                      {adv.note && (
+                        <tr className="border-b border-border/30">
+                          <td colSpan={8} className="px-2 pb-2 text-xs text-text-faint">{adv.note}</td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {issueOpen && employees.length > 0 && (
+        <IssueAdvanceDialog
+          employees={employees}
+          onClose={() => setIssueOpen(false)}
+          onIssued={() => {
+            void qc.invalidateQueries({ queryKey: ["payroll-advances"] });
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function FinancePayroll() {
   const qc = useQueryClient();
@@ -182,13 +789,23 @@ export default function FinancePayroll() {
     queryKey: ["eosb-settlements"],
     queryFn: async () => (await jfetch("/finance/payroll/eosb/settlements")) as { items: SettlementRow[] },
   });
-  // The overview call is what materializes the filing calendar rows, so
-  // fetch the register only after it has settled or we'd race the backfill.
   const filingsQ = useQuery({
     queryKey: ["statutory-filings"],
     enabled: !!overviewQ.data,
     queryFn: async () => (await jfetch("/finance/comply/statutory")) as { items: FilingItem[] },
   });
+
+  // Task #1146 — roster employees for the advance issue form and comp dialog.
+  const employeesQ = useQuery({
+    queryKey: ["roster-employees-payroll"],
+    queryFn: async () =>
+      (await jfetch("/roster/people?workerType=employee&status=active")) as { people: RosterPerson[] },
+  });
+  const employees = employeesQ.data?.people ?? [];
+
+  // Task #1146 — comp edit dialog state.
+  const [compDialogPerson, setCompDialogPerson] = React.useState<{ id: string; name: string } | null>(null);
+
   const allFilings = filingsQ.data?.items ?? [];
   const overdueFilings = allFilings.filter((f) => f.status === "overdue");
   const entityFilings = allFilings
@@ -500,6 +1117,7 @@ export default function FinancePayroll() {
                       <th className="py-2 pr-4 text-right">Net</th>
                       <th className="py-2 pr-4 text-right">EOSB Δ</th>
                       <th className="py-2 pr-4">Schemes</th>
+                      <th className="py-2" />
                     </tr>
                   </thead>
                   <tbody>
@@ -525,6 +1143,18 @@ export default function FinancePayroll() {
                         <td className="py-2 pr-4 text-xs text-text-mute">
                           {(l.detail?.contributions ?? []).map((c) => c.schemeKey).join(", ") || "—"}
                         </td>
+                        <td className="py-2 text-right">
+                          {l.employeeId && (
+                            <button
+                              className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-gold transition-colors"
+                              onClick={() => setCompDialogPerson({ id: l.employeeId, name: l.personName })}
+                              data-testid={`payroll-edit-comp-${l.id}`}
+                              title="Edit comp / view history"
+                            >
+                              Edit comp
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -533,6 +1163,9 @@ export default function FinancePayroll() {
             )}
           </Card>
         </section>
+
+        {/* Task #1146 — Salary advances panel */}
+        <AdvancesSection employees={employees} />
 
         {entity?.covered && (
           <section>
@@ -641,6 +1274,20 @@ export default function FinancePayroll() {
           </Card>
         </section>
       </div>
+
+      {/* Task #1146 — comp-change dialog */}
+      {compDialogPerson && (
+        <CompChangeDialog
+          personId={compDialogPerson.id}
+          personName={compDialogPerson.name}
+          onClose={() => setCompDialogPerson(null)}
+          onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ["comp-changes", compDialogPerson.id] });
+            void qc.invalidateQueries({ queryKey: ["payroll-overview"] });
+            void qc.invalidateQueries({ queryKey: ["payroll-run"] });
+          }}
+        />
+      )}
     </div>
   );
 }
