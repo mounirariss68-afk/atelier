@@ -26,6 +26,17 @@ export const STRINGS = {
   },
   fileTooLarge: { en: "File too large (max 25 MB)", ar: "الملف كبير جدًا (الحد 25 م.ب.)" },
   fileTypeRejected: { en: "Unsupported file type", ar: "نوع الملف غير مدعوم" },
+  fileUnreadable: {
+    en: "File is empty or unreadable",
+    ar: "الملف فارغ أو غير قابل للقراءة",
+  },
+  uploadFailed: { en: "Upload failed", ar: "فشل الرفع" },
+  uploading: { en: "Uploading…", ar: "جارٍ الرفع…" },
+  retryUpload: { en: "Retry upload", ar: "أعد المحاولة" },
+  waitForUploads: {
+    en: "Wait for uploads to finish",
+    ar: "انتظر اكتمال رفع الملفات",
+  },
   thinking: { en: "Thinking…", ar: "يفكّر…" },
   proposedPlan: { en: "Proposed plan", ar: "الخطّة المقترحة" },
   confirm: { en: "Confirm", ar: "تأكيد" },

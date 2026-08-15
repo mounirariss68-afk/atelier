@@ -65,6 +65,13 @@ import {
 import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
 import { slashInsertionText, shouldSlashMenuOpen, enterAction } from "./slashComposer";
+import {
+  uploadCliAttachment,
+  rejectionMessage,
+  readyAttachmentIds,
+  hasUploadInFlight,
+  type ComposerAttachment,
+} from "./attachmentUpload";
 import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
 import { FlightPlannerCard } from "./FlightPlannerCard";
 import { Markdown } from "./Markdown";
@@ -312,9 +319,12 @@ export function CommandBar(props: CommandBarProps) {
   }, [open]);
 
   const [input, setInput] = React.useState("");
-  const [attachments, setAttachments] = React.useState<
-    Array<{ id: string; name: string; size: number; mime: string; error?: string }>
-  >([]);
+  // Task #1194 — attachment pills now track a real upload lifecycle:
+  // `uploading` (POST in flight) → `ready` (server-returned id in
+  // `serverId`) or `failed` (client precheck or server rejection, with
+  // a human-readable `error`). Only `ready` ids ride on the turn; the
+  // File handle is retained on failures so the user can retry.
+  const [attachments, setAttachments] = React.useState<ComposerAttachment[]>([]);
   const [slashOpen, setSlashOpen] = React.useState(false);
   const [slashIndex, setSlashIndex] = React.useState(0);
   const [helpOpen, setHelpOpen] = React.useState(false);
@@ -541,21 +551,24 @@ export function CommandBar(props: CommandBarProps) {
       setSlashOpen(false);
       return;
     }
+    // Task #1194 — never race an in-flight upload: the send button is
+    // disabled while any pill is uploading, and this guard covers the
+    // Enter-key path too. The turn must carry the real server ids.
+    if (hasUploadInFlight(attachments)) return;
     lastPromptRef.current = text;
     setInput("");
     setSlashOpen(false);
     setShowAllSteps(false);
     setTypedName("");
     setEditingPlanRow(null);
+    // Only server-acknowledged ids ride on the turn. Failed pills stay
+    // in the composer (with their error + retry affordance) so the user
+    // never believes a broken file was attached.
+    const readyIds = readyAttachmentIds(attachments);
+    setAttachments((list) => list.filter((a) => a.status !== "ready"));
     void cli.submit({
       prompt: text,
-      // Attachments are UI-only in this task — Task #334 ships the
-      // real upload pipeline. Sending the synthetic client-side IDs
-      // would generate dangling refs server-side, so we forward an
-      // empty list. Chips remain visible so the user sees what they
-      // attached; the file payload reaches the orchestrator only after
-      // #334 lands.
-      attachmentIds: [] as string[],
+      attachmentIds: readyIds,
       pageContext: pageCtx,
       dryRun,
       intent,
@@ -584,17 +597,63 @@ export function CommandBar(props: CommandBarProps) {
     setEditingPlanRow(null);
   }
 
+  /**
+   * Task #1194 — real upload on attach. One POST per file to the
+   * existing CLI attachments endpoint so each pill tracks its own
+   * lifecycle independently (a rejected file never blocks a good one).
+   * The server digest-dedupes per org, so re-attaching the same bytes
+   * returns the same attachment id.
+   */
+  async function uploadOne(pillId: string, file: File) {
+    const patch = (p: Partial<ComposerAttachment>) =>
+      setAttachments((list) => list.map((a) => (a.id === pillId ? { ...a, ...p } : a)));
+    const outcome = await uploadCliAttachment(file, cli.sessionId);
+    if (outcome.ok) {
+      patch({ status: "ready", serverId: outcome.serverId, error: undefined });
+    } else {
+      patch({ status: "failed", error: rejectionMessage(outcome.reason, locale) });
+    }
+  }
+
   function handleAttach(files: FileList | null) {
     if (!files) return;
+    const started: Array<{ pillId: string; file: File }> = [];
     const next = [...attachments];
     for (const f of Array.from(files)) {
       const id = `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      let error: string | undefined;
-      if (f.size > MAX_FILE_BYTES) error = s("fileTooLarge", locale);
-      else if (f.type && !ALLOWED_MIME.has(f.type)) error = s("fileTypeRejected", locale);
-      next.push({ id, name: f.name, size: f.size, mime: f.type, error });
+      // Client prechecks fail fast (no request); the server remains the
+      // authoritative validator for everything that passes.
+      if (f.size > MAX_FILE_BYTES) {
+        next.push({
+          id, name: f.name, size: f.size, mime: f.type,
+          status: "failed", error: s("fileTooLarge", locale),
+        });
+        continue;
+      }
+      if (f.type && !ALLOWED_MIME.has(f.type)) {
+        next.push({
+          id, name: f.name, size: f.size, mime: f.type,
+          status: "failed", error: s("fileTypeRejected", locale),
+        });
+        continue;
+      }
+      next.push({
+        id, name: f.name, size: f.size, mime: f.type,
+        status: "uploading", file: f,
+      });
+      started.push({ pillId: id, file: f });
     }
     setAttachments(next);
+    for (const { pillId, file } of started) void uploadOne(pillId, file);
+  }
+
+  function retryAttachment(id: string) {
+    const pill = attachments.find((a) => a.id === id);
+    if (!pill || pill.status !== "failed" || !pill.file) return;
+    setAttachments((list) =>
+      list.map((a) => (a.id === id ? { ...a, status: "uploading", error: undefined } : a)),
+    );
+    void uploadOne(id, pill.file);
   }
 
   function removeAttachment(id: string) {
@@ -917,6 +976,7 @@ export function CommandBar(props: CommandBarProps) {
         onDropFiles={(fl) => handleAttach(fl)}
         attachments={attachments}
         onRemoveAttachment={removeAttachment}
+        onRetryAttachment={retryAttachment}
         locale={locale}
         status={status}
         slashOpen={slashOpen}
@@ -1046,6 +1106,7 @@ function Composer({
   onDropFiles,
   attachments,
   onRemoveAttachment,
+  onRetryAttachment,
   locale,
   status,
   slashOpen,
@@ -1060,8 +1121,9 @@ function Composer({
   onSubmit: () => void;
   onAttach: () => void;
   onDropFiles: (fl: FileList) => void;
-  attachments: Array<{ id: string; name: string; size: number; mime: string; error?: string }>;
+  attachments: ComposerAttachment[];
   onRemoveAttachment: (id: string) => void;
+  onRetryAttachment: (id: string) => void;
   locale: CliLocale;
   status: string;
   slashOpen: boolean;
@@ -1132,15 +1194,43 @@ function Composer({
               key={a.id}
               className={cn(
                 "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-mono border",
-                a.error
+                a.status === "failed"
                   ? "bg-danger/10 border-danger/40 text-danger"
                   : "bg-bg-elevate-2 border-border text-text-mute",
               )}
-              title={a.error ?? `${(a.size / 1024).toFixed(1)} KB · ${a.mime || "?"}`}
+              title={
+                a.status === "failed"
+                  ? a.error ?? s("uploadFailed", locale)
+                  : a.status === "uploading"
+                    ? s("uploading", locale)
+                    : `${(a.size / 1024).toFixed(1)} KB · ${a.mime || "?"}`
+              }
               data-testid="cli-attachment-chip"
+              data-status={a.status}
             >
-              <Paperclip className="w-3 h-3" />
+              {a.status === "uploading" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : a.status === "failed" ? (
+                <AlertCircle className="w-3 h-3" />
+              ) : (
+                <Paperclip className="w-3 h-3" />
+              )}
               <span className="max-w-[160px] truncate">{a.name}</span>
+              {a.status === "failed" && a.error && (
+                <span className="max-w-[160px] truncate opacity-80">{a.error}</span>
+              )}
+              {a.status === "failed" && a.file && (
+                <button
+                  type="button"
+                  onClick={() => onRetryAttachment(a.id)}
+                  aria-label={s("retryUpload", locale)}
+                  title={s("retryUpload", locale)}
+                  className="hover:text-text"
+                  data-testid="cli-attachment-retry"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onRemoveAttachment(a.id)}
@@ -1211,7 +1301,12 @@ function Composer({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={!input.trim() || status === "streaming" || overLimit}
+            disabled={
+              !input.trim() ||
+              status === "streaming" ||
+              overLimit ||
+              hasUploadInFlight(attachments)
+            }
             className={cn(
               "shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors",
               // Task #915 — send stays brand-purple even when idle/disabled
