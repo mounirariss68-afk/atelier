@@ -1711,6 +1711,10 @@ const CRITICAL_ROLE_LABELS: Record<string, string> = {
   head_of_transformation: "Head of Transformation",
   head_of_pmo: "Head of PMO",
   head_of_vro: "Head of VRO (Value Realization)",
+  // Task #1189 — government-mode functional roles (ministry accounts only).
+  gov_it_lead: "IT Leadership (Gov)",
+  gov_cyber_lead: "Cybersecurity Leadership (Gov)",
+  gov_customer_care_lead: "Customer Care Leadership (Gov)",
 };
 
 // Task #206 — critical-role coverage summary from the latest completed

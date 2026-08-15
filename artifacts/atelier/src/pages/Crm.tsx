@@ -482,6 +482,9 @@ interface CoverageRollupAccount {
   tier: string;
   runAt: string | null;
   mappedCount: number | null;
+  // Task #1189 — per-account role denominator (gov accounts track extra
+  // functional roles); older responses omit it, fall back to totalRoles.
+  roleCount?: number | null;
   missingRoles: Array<{ role: string; label: string }>;
 }
 
@@ -546,7 +549,7 @@ function CoverageRollupCard() {
                 className={`text-[11px] font-mono ${a.missingRoles.length === 0 ? "text-success" : "text-text-faint"}`}
                 data-testid={`rollup-count-${a.accountId}`}
               >
-                {a.mappedCount}/{data.totalRoles} mapped
+                {a.mappedCount}/{a.roleCount ?? data.totalRoles} mapped
               </span>
               {a.missingRoles.length > 0 && (
                 <span className="flex flex-wrap gap-1">

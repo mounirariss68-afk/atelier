@@ -73,6 +73,7 @@ import {
 import {
   classifyCriticalRole,
   computeCriticalRoleCoverage,
+  isGovernmentAccount,
 } from "../../lib/atelier-agents/critical-roles.js";
 import {
   computeAccountFinancials,
@@ -4961,6 +4962,15 @@ router.get("/accounts/:accountId/executive-mapper/coverage", async (req, res) =>
         isNull(atelierContacts.deletedAt),
       ),
     );
+  // Task #1189 — government accounts add the gov functional-role slice
+  // (ministry IT / Cyber / Customer-care leads) to the coverage view, and the
+  // live-roster reclassification must use the same gov-mode classifier the
+  // run guard used or approved gov leads would read as unfound.
+  const [covAcct] = await db
+    .select({ name: atelierAccounts.name, sector: atelierAccounts.sector })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, req.params.accountId));
+  const covGov = isGovernmentAccount({ sector: covAcct?.sector, name: covAcct?.name });
   const crmCoverage = computeCriticalRoleCoverage(
     liveContacts.map((c) => ({
       fullName: c.fullName,
@@ -4968,8 +4978,9 @@ router.get("/accounts/:accountId/executive-mapper/coverage", async (req, res) =>
       confidence: (c.confidence === "verified" ? "verified" : "inferred") as
         | "verified"
         | "inferred",
-      criticalRole: classifyCriticalRole(c.title),
+      criticalRole: classifyCriticalRole(c.title, { government: covGov }),
     })),
+    { government: covGov },
   );
   const out = (run?.output ?? {}) as {
     criticalRoleCoverage?: unknown;
@@ -5104,6 +5115,10 @@ router.get("/executive-mapper/coverage-rollup", async (req, res) => {
       tier: a.tier ?? "C",
       runAt: run.createdAt,
       mappedCount: coverage.filter((c) => c && c.found === true).length,
+      // Task #1189 — government accounts track extra functional roles (IT /
+      // Cyber / Customer care), so their denominator is the stored coverage
+      // length, not the global 15-role corporate count.
+      roleCount: coverage.length,
       missingRoles,
     };
   });

@@ -3828,6 +3828,10 @@ export async function runExecutiveMapper(args: {
                 `${args.accountName} ${args.accountCountry} minister, deputy ministers, vice ministers and assistant ministers: current names and exact titles`,
                 `${args.accountName} undersecretary, assistant undersecretaries, directors general and heads of department: current names and titles (organizational structure)`,
                 `${args.accountName} leadership appointments, new minister or director general (recent news)`,
+                // Task #1189 — functional department leads below Assistant
+                // Undersecretary: the people running the ministry functions
+                // Cognirise sells into.
+                `${args.accountName} director or head of department for information technology, cybersecurity, artificial intelligence, digital transformation, customer care / customer happiness: current names and exact titles`,
               ]
             : [
                 `${args.accountName} ${args.accountCountry} full executive leadership team: names, exact titles, and which legal entity each leads (group vs subsidiary)`,

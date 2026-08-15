@@ -28,7 +28,15 @@ export type CriticalRoleId =
   | "cpo_procurement"
   | "head_of_transformation"
   | "head_of_pmo"
-  | "head_of_vro";
+  | "head_of_vro"
+  // Government-mode functional roles (Task #1189) — ministries have no CIO/
+  // CISO; the people running IT, Cybersecurity and Customer care sit at
+  // Director / Head of Department level below the Assistant Undersecretary.
+  // These ids classify ONLY in government mode and never join the 15-role
+  // corporate coverage view.
+  | "gov_it_lead"
+  | "gov_cyber_lead"
+  | "gov_customer_care_lead";
 
 export interface CriticalRoleDef {
   id: CriticalRoleId;
@@ -250,10 +258,74 @@ export const CRITICAL_ROLES: CriticalRoleDef[] = [
   R("head_of_vro", "Head of VRO (Value Realization)", 2, /\bvro\b|value real(is|iz)ation/),
 ];
 
+/**
+ * Government-mode functional-role slice (Task #1189). Cognirise sells into
+ * ministry IT / Cybersecurity / AI / Digital / Customer-care departments,
+ * whose named leads sit BELOW Assistant Undersecretary (Director / Head of
+ * Department / Daire Başkanı). Two kinds of entries:
+ *
+ *  - Gov-only role ids (gov_it_lead, gov_cyber_lead, gov_customer_care_lead):
+ *    functions with no corporate-taxonomy equivalent at director level.
+ *  - Gov floor overrides for existing ids (head_of_ai, cdo,
+ *    head_of_transformation): the corporate defs already carry the function
+ *    wording but their floors/matches assume CxO conventions; in a ministry a
+ *    rank-2 "Director of Artificial Intelligence" IS the functional lead.
+ *
+ * Active ONLY when RoleClassifyOpts.government is true; the corporate list
+ * and its floors are untouched. Bare-acronym ambiguity rules stay intact —
+ * "IT" only matches as a standalone word or spelled out, and bare CPO/CCO
+ * still match nothing.
+ */
+export const GOV_FUNCTIONAL_ROLES: CriticalRoleDef[] = [
+  R(
+    "gov_it_lead",
+    "IT Leadership (Gov)",
+    2,
+    /information technology|\bict\b|\bit\b|bilgi teknolojileri|bilgi i[sş]lem/,
+    /\bcyber|security|siber/,
+  ),
+  R(
+    "gov_cyber_lead",
+    "Cybersecurity Leadership (Gov)",
+    2,
+    /cyber ?security|\bcyber\b|information security|\b(it|ict) security\b|\bciso\b|siber g[uü]venlik/,
+  ),
+  // Existing ids, gov-mode floor 2 (+ local-language function wording).
+  R(
+    "head_of_ai",
+    "Head of AI",
+    2,
+    /\bai\b|artificial intelligence|machine learning|generative ai|\bgenai\b|yapay zeka/,
+  ),
+  R(
+    "cdo",
+    "CDO (Data / Digital)",
+    2,
+    /\bdigital\b|dijital|\bdata\b(?! entry)/,
+    /diversity/,
+  ),
+  R("head_of_transformation", "Head of Transformation", 2, /\btransformation\b|d[oö]n[uü][sş][uü]m/),
+  R(
+    "gov_customer_care_lead",
+    "Customer Care Leadership (Gov)",
+    2,
+    /customer (care|experience|service|services|happiness|satisfaction)|\bcx\b|m[uü][sş]teri (hizmetleri|deneyimi|memnuniyeti)/,
+  ),
+];
+
+/** Gov-only coverage rows appended to the 15 corporate roles for gov accounts. */
+export const GOV_ONLY_ROLES: CriticalRoleDef[] = GOV_FUNCTIONAL_ROLES.filter(
+  (r) => !CRITICAL_ROLES.some((c) => c.id === r.id),
+);
+
 export const CRITICAL_ROLE_IDS = new Set<string>(CRITICAL_ROLES.map((r) => r.id));
 
 export function criticalRoleLabel(id: CriticalRoleId): string {
-  return CRITICAL_ROLES.find((r) => r.id === id)?.label ?? id;
+  return (
+    CRITICAL_ROLES.find((r) => r.id === id)?.label ??
+    GOV_FUNCTIONAL_ROLES.find((r) => r.id === id)?.label ??
+    id
+  );
 }
 
 /** All critical roles a verbatim title supports (priority order). */
@@ -268,7 +340,13 @@ export function classifyCriticalRoles(
   if (opts?.government ? GOV_CONTEXT_VETO.test(t) : CONTEXT_VETO.test(t)) return [];
   const rank = titleSeniorityRank(rawTitle, opts);
   const out: CriticalRoleId[] = [];
-  for (const r of CRITICAL_ROLES) {
+  // Government mode appends the functional-role slice (ministry IT / Cyber /
+  // AI / Digital / Customer-care leads at director / head-of-department
+  // level). Corporate defs run first so C-level tags keep priority; a gov
+  // override for an id already matched is skipped by the dedupe below.
+  const defs = opts?.government ? [...CRITICAL_ROLES, ...GOV_FUNCTIONAL_ROLES] : CRITICAL_ROLES;
+  for (const r of defs) {
+    if (out.includes(r.id)) continue;
     if (r.veto && r.veto.test(t)) continue;
     if (!r.match.test(t)) continue;
     if (rank < r.floor) continue;
@@ -337,11 +415,18 @@ export function seniorityGuardDropReason(
   return null;
 }
 
-/** Code-computed coverage of the 15 critical roles across a roster. */
+/**
+ * Code-computed coverage of the critical roles across a roster. The corporate
+ * view is always the 15 canonical roles; government mode appends the gov-only
+ * functional roles (IT / Cyber / Customer care) so an unfound "Head of
+ * Cybersecurity" at a ministry shows honestly as a gap.
+ */
 export function computeCriticalRoleCoverage(
   dms: Array<GuardableDm>,
+  opts?: RoleClassifyOpts,
 ): CriticalRoleCoverageEntry[] {
-  return CRITICAL_ROLES.map((r) => {
+  const roles = opts?.government ? [...CRITICAL_ROLES, ...GOV_ONLY_ROLES] : CRITICAL_ROLES;
+  return roles.map((r) => {
     const holders = dms.filter((d) => d.criticalRole === r.id);
     const best = holders.find((h) => h.confidence === "verified") ?? holders[0] ?? null;
     return {
@@ -389,7 +474,7 @@ export function guardExecutiveMapperCriticalRoles<
   }
   output.decisionMakers = kept;
   output.droppedBySeniorityGuard = dropped;
-  output.criticalRoleCoverage = computeCriticalRoleCoverage(kept);
+  output.criticalRoleCoverage = computeCriticalRoleCoverage(kept, opts);
   const unfound = output.criticalRoleCoverage.filter((c) => !c.found).map((c) => c.label);
   if (
     unfound.length > 0 &&

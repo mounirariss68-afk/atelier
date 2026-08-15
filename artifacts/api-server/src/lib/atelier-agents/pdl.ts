@@ -208,7 +208,26 @@ export async function searchPdlExecutives(
     ` OR job_title LIKE '%governor%'` +
     ` OR job_title LIKE '%bakan%' OR job_title LIKE '%genel müdür%'` +
     ` OR job_title LIKE '%genel mudur%' OR job_title LIKE '%daire başkanı%'` +
-    ` OR job_title LIKE '%müsteşar%')`;
+    ` OR job_title LIKE '%müsteşar%'` +
+    // Task #1189 — functional department leads below Assistant Undersecretary
+    // (IT / Cybersecurity / AI / Digital / Customer care). Function keywords
+    // ANDed with director/head seniority markers (same pattern as the
+    // corporate functional sweep) so ministry department heads surface
+    // without juniors eating the capped slots.
+    ` OR ((job_title LIKE '%information technology%' OR job_title LIKE '% it %'` +
+    ` OR job_title LIKE 'it %' OR job_title LIKE '% it' OR job_title LIKE '%ict%'` +
+    ` OR job_title LIKE '%cyber%' OR job_title LIKE '%information security%'` +
+    ` OR job_title LIKE '%artificial intelligence%' OR job_title LIKE '% ai %'` +
+    ` OR job_title LIKE 'ai %' OR job_title LIKE '%digital%'` +
+    ` OR job_title LIKE '%transformation%'` +
+    ` OR job_title LIKE '%customer happiness%' OR job_title LIKE '%customer experience%'` +
+    ` OR job_title LIKE '%customer care%' OR job_title LIKE '%customer service%'` +
+    ` OR job_title LIKE '%bilgi teknolojileri%' OR job_title LIKE '%bilgi işlem%'` +
+    ` OR job_title LIKE '%siber güvenlik%' OR job_title LIKE '%yapay zeka%'` +
+    ` OR job_title LIKE '%müşteri%')` +
+    ` AND (job_title_levels IN ('director', 'vp', 'cxo')` +
+    ` OR job_title LIKE '%director%' OR job_title LIKE 'head%'` +
+    ` OR job_title LIKE '%head of%' OR job_title LIKE '%daire başkanı%')))`;
   const boardRaw = (await pdlFetch("/person/search", {
     sql: boardSql,
     size: String(MAX_BOARD_PEOPLE),
