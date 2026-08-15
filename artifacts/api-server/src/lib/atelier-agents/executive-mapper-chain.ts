@@ -16,13 +16,17 @@
 
 import { db, atelierAccounts, atelierAgentRuns, atelierAuditEvents, atelierContacts } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
-import { agentRunIsFresh } from "./run-staleness.js";
 import {
   agentRunIsFresh,
   hasFreshRunningRun,
   launchEntryIsStale,
   INTERRUPTED_RUN_MESSAGE,
 } from "./run-staleness.js";
+import {
+  noteAgentLaunch,
+  updateAgentLaunchLabel,
+  clearAgentLaunch,
+} from "./launch-visibility.js";
 import {
   runExecutiveMapper,
   buildExecutiveMapperProposals,
@@ -152,10 +156,19 @@ export async function runExecutiveMapperAndQueue(
     openQuestions: [],
     startedAt: Date.now(),
   });
+  // Task #1193 — make the launch visible in the Background Work bell during
+  // the pre-run-row window (the durable run row is inserted minutes later).
+  noteAgentLaunch({
+    agentId: "executive_mapper",
+    targetId: accountId,
+    targetLabel: null,
+    userId: triggeredByUserId,
+  });
   const ownsSlot = () => executiveMapperInFlight.get(accountId) === myToken;
   try {
     const a = await loadAccount(accountId);
     if (!a) throw new Error("account-not-found");
+    updateAgentLaunchLabel("executive_mapper", accountId, a.brandName ?? a.name);
     const [inFlight] = await db
       .select({ id: atelierAgentRuns.id })
       .from(atelierAgentRuns)
@@ -186,6 +199,7 @@ export async function runExecutiveMapperAndQueue(
         openQuestions: result.openQuestions,
         startedAt: Date.now(),
       });
+      clearAgentLaunch("executive_mapper", accountId);
     }
     return result;
   } catch (err) {
@@ -198,6 +212,7 @@ export async function runExecutiveMapperAndQueue(
       // drop OUR provisional entry rather than recording a bogus failure over
       // the real run's state.
       executiveMapperLaunches.delete(accountId);
+      clearAgentLaunch("executive_mapper", accountId);
     } else {
       executiveMapperLaunches.set(accountId, {
         status: "failed",
@@ -210,6 +225,7 @@ export async function runExecutiveMapperAndQueue(
         openQuestions: [],
         startedAt: Date.now(),
       });
+      clearAgentLaunch("executive_mapper", accountId);
     }
     throw err;
   } finally {

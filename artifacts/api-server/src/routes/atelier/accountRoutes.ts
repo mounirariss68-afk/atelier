@@ -67,6 +67,10 @@ import {
   INTERRUPTED_RUN_MESSAGE,
 } from "../../lib/atelier-agents/run-staleness.js";
 import {
+  noteAgentLaunch,
+  clearAgentLaunch,
+} from "../../lib/atelier-agents/launch-visibility.js";
+import {
   classifyCriticalRole,
   computeCriticalRoleCoverage,
 } from "../../lib/atelier-agents/critical-roles.js";
@@ -1010,6 +1014,14 @@ router.post("/accounts", async (req, res) => {
   // response stays snappy; the Profile tab polls for completion. Only taken
   // when no reviewed research accompanied the create request (e.g. the CRM
   // "New account" button rather than the chat "Review & Create" flow).
+  // Task #1193 — Background Work bell visibility for the auto-on-create
+  // Cartographer run (pre-run-row window included). Cleared in the finally.
+  noteAgentLaunch({
+    agentId: "account_cartographer",
+    targetId: inserted.id,
+    targetLabel: inserted.brandName ?? inserted.name,
+    userId: me.id,
+  });
   void (async () => {
     try {
       // Task #560 — use the Cartographer's returned v2 output directly
@@ -1134,6 +1146,9 @@ router.post("/accounts", async (req, res) => {
           payloadSummary: `Cartographer auto-ran on creation: persisted research and seeded ${seedContacts.length} contact(s) for ${inserted.brandName ?? inserted.name}.`,
         });
       });
+      // Cartographer finished — its bell entry clears here; the Executive
+      // Mapper chain registers its own (Task #1193).
+      clearAgentLaunch("account_cartographer", inserted.id);
       // Cartographer finished — chain the Executive Mapper (people-only
       // roster sweep). Its progress shows in the AI activity rail and its
       // findings land as governed proposals, never direct writes.
@@ -1178,6 +1193,8 @@ router.post("/accounts", async (req, res) => {
       } catch {
         /* best-effort */
       }
+    } finally {
+      clearAgentLaunch("account_cartographer", inserted.id);
     }
   })();
 
@@ -4701,6 +4718,13 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     startedAt: Date.now(),
   });
   const triggeredByUserId = me.id;
+  // Task #1193 — Background Work bell visibility during the pre-run-row window.
+  noteAgentLaunch({
+    agentId: "account_cartographer",
+    targetId: a.id,
+    targetLabel: a.brandName ?? a.name,
+    userId: triggeredByUserId,
+  });
   void (async () => {
     try {
       const { runId, output } = await runAccountCartographer({
@@ -4775,6 +4799,8 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
         startedAt: Date.now(),
       });
 
+      clearAgentLaunch("account_cartographer", a.id);
+
       // Cartographer refresh finished and its proposals are queued — chain the
       // Executive Mapper (fire-and-forget), same as the account-creation flow.
       // A failed / empty / already-running sweep never breaks the refresh.
@@ -4789,6 +4815,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
         openQuestions: [],
         startedAt: Date.now(),
       });
+      clearAgentLaunch("account_cartographer", a.id);
       console.warn(`[atelier] cartographer refresh failed for ${a.name}`, message);
     }
   })();

@@ -32,6 +32,7 @@ import {
 } from "@workspace/db";
 import { listJobsForUser } from "../../lib/background-jobs.js";
 import { agentRunIsFresh } from "../../lib/atelier-agents/run-staleness.js";
+import { listAgentLaunchesForUser } from "../../lib/atelier-agents/launch-visibility.js";
 import { mirrorSelfNotificationPush } from "../../lib/expoPush.js";
 import {
   AtelierGetMyProfileResponse,
@@ -396,6 +397,33 @@ router.get("/me/background-jobs", async (req, res, next) => {
         startedAt: r.createdAt.toISOString(),
         finishedAt: null,
       }));
+    // Task #1193 — in-flight launches (Cartographer / Executive Mapper) whose
+    // durable run row does not exist yet. Deduped against DB run rows on the
+    // same (agent, target) and running jobs on the same target so nothing
+    // shows twice once the row lands.
+    const shownRunKeys = new Set(runs.map((r) => `${r.agentId}:${r.targetId}`));
+    const launches = listAgentLaunchesForUser(me.id)
+      .filter(
+        (l) =>
+          !shownRunKeys.has(`${l.agentId}:${l.targetId}`) &&
+          !runningTargets.has(l.targetId),
+      )
+      .map((l) => ({
+        id: `launch_${l.agentId}_${l.targetId}`,
+        kind: l.agentId,
+        label:
+          l.targetLabel ||
+          (l.agentId === "executive_mapper"
+            ? "Executive Mapper"
+            : l.agentId === "account_cartographer"
+              ? "Account research"
+              : "Agent run"),
+        status: "running" as const,
+        error: null,
+        resultHref: "/agents/monitor",
+        startedAt: new Date(l.startedAt).toISOString(),
+        finishedAt: null,
+      }));
     res.json({
       jobs: [
         ...jobs.map((j) => ({
@@ -409,6 +437,7 @@ router.get("/me/background-jobs", async (req, res, next) => {
           finishedAt: j.finishedAt ? j.finishedAt.toISOString() : null,
         })),
         ...extra,
+        ...launches,
       ],
     });
   } catch (err) {

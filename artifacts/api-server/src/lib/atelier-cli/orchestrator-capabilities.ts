@@ -64,7 +64,7 @@ import {
   runPursuitScout,
 } from "../atelier-agents/runner.js";
 import { chainExecutiveMapperAfterCartographer } from "../atelier-agents/executive-mapper-chain.js";
-import { resolveNavPath } from "./orchestrator-nav-path.js";
+import { noteAgentLaunch, clearAgentLaunch } from "../atelier-agents/launch-visibility.js";
 
 const FUZZY_LIMIT = 5;
 
@@ -436,14 +436,27 @@ defineCapability({
               errorMessage: `Account ${targetId} not found in this org.`,
             };
           }
-          const result = await runAccountCartographer({
-            accountId: acct.id,
-            accountName: acct.brandName ?? acct.name,
-            accountSector: acct.sector ?? "",
-            accountCountry: acct.country ?? "",
-            triggeredByUserId: ctx.persona.id,
-            actorLabel: "Chat Orchestrator",
+          // Task #1193 — Background Work bell visibility during the
+          // pre-run-row window. Cleared in the finally below.
+          noteAgentLaunch({
+            agentId: "account_cartographer",
+            targetId: acct.id,
+            targetLabel: acct.brandName ?? acct.name,
+            userId: ctx.persona.id,
           });
+          let result: Awaited<ReturnType<typeof runAccountCartographer>>;
+          try {
+            result = await runAccountCartographer({
+              accountId: acct.id,
+              accountName: acct.brandName ?? acct.name,
+              accountSector: acct.sector ?? "",
+              accountCountry: acct.country ?? "",
+              triggeredByUserId: ctx.persona.id,
+              actorLabel: "Chat Orchestrator",
+            });
+          } finally {
+            clearAgentLaunch("account_cartographer", acct.id);
+          }
           // Cartographer ran against a persisted account — chain the
           // Executive Mapper (fire-and-forget), same as account creation
           // and the manual refresh route. Research-only runs (no targetId)
