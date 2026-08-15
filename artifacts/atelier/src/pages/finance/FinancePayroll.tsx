@@ -1155,6 +1155,32 @@ export default function FinancePayroll() {
                             data-testid={`payroll-post-${r.periodLabel}`}
                           ><BookOpenCheck className="w-4 h-4" /> Post</PillButton>
                         )}
+                        {r.status === "posted" && (
+                          <PillButton
+                            disabled={busy !== null}
+                            onClick={async () => {
+                              setBusy(`wio-${r.id}`);
+                              try {
+                                const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+                                const res2 = await fetch(`${API_BASE}/finance/payroll/runs/${r.id}/export-wio`, { method: "POST", credentials: "include" });
+                                if (res2.ok) {
+                                  const blob = await res2.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `WIO-SALARY-${r.periodLabel}-${today}.csv`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                  toast({ title: "Wio salary file downloaded" });
+                                } else {
+                                  const body = await res2.json().catch(() => ({})) as { message?: string };
+                                  toast({ title: "Export failed", description: body.message ?? `HTTP ${res2.status}`, variant: "destructive" });
+                                }
+                              } finally { setBusy(null); }
+                            }}
+                            data-testid={`payroll-wio-${r.periodLabel}`}
+                          >Download Wio file</PillButton>
+                        )}
                       </td>
                     </tr>
                   ))}

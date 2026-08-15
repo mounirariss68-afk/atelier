@@ -28,6 +28,8 @@ import {
   atelierPartnerFirmInvoices,
   atelierPartnerFirms,
   atelierExpenses,
+  atelierEmployees,
+  atelierContractors,
   type PaymentRunSignature,
 } from "@workspace/db";
 import { runSelfBillingClerk } from "../../lib/atelier-agents/selfBillingClerk.js";
@@ -830,6 +832,138 @@ router.post("/finance/payables/payment-runs/:id/export", async (req, res, next) 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${run.runNumber}.csv`));
     res.send(lines.join("\n"));
+  } catch (err) { next(err); }
+});
+
+// @cli-skip: finance export; Wio Bank bulk-payment CSV with IBAN look-ups
+router.post("/finance/payables/payment-runs/:id/export-wio", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res);
+    if (!me) return;
+    const run = await loadRun(me, req.params.id);
+    if (!run) { res.status(404).json({ error: "not-found" }); return; }
+    if (run.status !== "approved" && run.status !== "exported") {
+      res.status(409).json({ error: "invalid-status", message: "Run must be dual-signed (approved) before Wio export." });
+      return;
+    }
+    const items = await db.select().from(atelierPaymentRunItems)
+      .where(and(eq(atelierPaymentRunItems.runId, run.id), eq(atelierPaymentRunItems.status, "pending")));
+
+    // ── IBAN look-ups per item type ──────────────────────────────────────────
+    // IBANs are never stored on run items (sensitive data stays on source
+    // records); we re-join at export time under the finance write gate.
+
+    const pfInvRefIds = items.filter((i) => i.itemType === "partner_firm_invoice").map((i) => i.refId);
+    const expRefIds   = items.filter((i) => i.itemType === "expense_reimbursement").map((i) => i.refId);
+    const sbiRefIds   = items.filter((i) => i.itemType === "self_billed_invoice").map((i) => i.refId);
+
+    // partner_firm_invoice → partnerFirmInvoices → partnerFirms.bankIban (registered firms)
+    //   OR supplierBankIban/supplierBankHolder on the invoice itself (one-off suppliers, Task #1075)
+    const pfInvRows = pfInvRefIds.length
+      ? await db.select({
+          id: atelierPartnerFirmInvoices.id,
+          partnerFirmId: atelierPartnerFirmInvoices.partnerFirmId,
+          supplierBankIban: atelierPartnerFirmInvoices.supplierBankIban,
+          supplierBankHolder: atelierPartnerFirmInvoices.supplierBankHolder,
+        })
+          .from(atelierPartnerFirmInvoices)
+          .where(and(eq(atelierPartnerFirmInvoices.orgId, me.orgId), inArray(atelierPartnerFirmInvoices.id, pfInvRefIds)))
+      : [];
+    const pfInvMap = new Map(pfInvRows.map((r) => [r.id, r]));
+
+    // expense_reimbursement → expenses → persons.iban
+    const expRows = expRefIds.length
+      ? await db.select({ id: atelierExpenses.id, personId: atelierExpenses.personId })
+          .from(atelierExpenses)
+          .where(and(eq(atelierExpenses.orgId, me.orgId), inArray(atelierExpenses.id, expRefIds)))
+      : [];
+    const expPersonId = new Map(expRows.map((r) => [r.id, r.personId]));
+
+    // self_billed_invoice → supplierId/supplierType
+    const sbiRows = sbiRefIds.length
+      ? await db.select({ id: atelierSelfBilledInvoices.id, supplierId: atelierSelfBilledInvoices.supplierId, supplierType: atelierSelfBilledInvoices.supplierType })
+          .from(atelierSelfBilledInvoices)
+          .where(and(eq(atelierSelfBilledInvoices.orgId, me.orgId), inArray(atelierSelfBilledInvoices.id, sbiRefIds)))
+      : [];
+    const sbiInfo = new Map(sbiRows.map((r) => [r.id, { supplierId: r.supplierId, supplierType: r.supplierType }]));
+
+    // Collect all partner firm IDs (from pfInv registered firms + sbi partner_firm rows)
+    const sbiPfSupplierIds = sbiRows.filter((r) => r.supplierType === "partner_firm").map((r) => r.supplierId);
+    const registeredPfIds = [...pfInvMap.values()].map((r) => r.partnerFirmId).filter((v): v is string => !!v);
+    const allPfIds = [...new Set([...registeredPfIds, ...sbiPfSupplierIds].filter((v): v is string => !!v))];
+    const pfBankRows = allPfIds.length
+      ? await db.select({ id: atelierPartnerFirms.id, bankIban: atelierPartnerFirms.bankIban, bankSwift: atelierPartnerFirms.bankSwift, bankName: atelierPartnerFirms.bankName })
+          .from(atelierPartnerFirms)
+          .where(and(eq(atelierPartnerFirms.orgId, me.orgId), inArray(atelierPartnerFirms.id, allPfIds)))
+      : [];
+    const pfBank = new Map(pfBankRows.map((r) => [r.id, r]));
+
+    // Expense reimbursements → employee IBAN (sole IBAN write path is HR bank-change approve on atelierEmployees).
+    // Contractor self-billed invoices have no system IBAN (contractors have no bank/IBAN per pay-hub policy).
+    const expEmpIds = [...expPersonId.values()].filter((v): v is string => !!v);
+    const empIbanRows = expEmpIds.length
+      ? await db.select({ id: atelierEmployees.id, iban: atelierEmployees.iban })
+          .from(atelierEmployees)
+          .where(and(eq(atelierEmployees.orgId, me.orgId), inArray(atelierEmployees.id, expEmpIds)))
+      : [];
+    const empIban = new Map(empIbanRows.map((r) => [r.id, r.iban ?? ""]));
+    // Contractors have no registered IBAN in the system (contractorRows still used for firm-path lookup only)
+
+    function resolveBank(it: typeof atelierPaymentRunItems.$inferSelect): { iban: string; swift: string; bankName: string } {
+      if (it.itemType === "partner_firm_invoice") {
+        const inv = pfInvMap.get(it.refId);
+        if (inv?.partnerFirmId) {
+          // Registered partner firm: use the finance-approved firm bank registry
+          const pf = pfBank.get(inv.partnerFirmId);
+          return { iban: pf?.bankIban ?? "", swift: pf?.bankSwift ?? "", bankName: pf?.bankName ?? "" };
+        }
+        // One-off supplier (Task #1075): bank details stored on the invoice itself
+        return { iban: inv?.supplierBankIban ?? "", swift: "", bankName: inv?.supplierBankHolder ?? "" };
+      }
+      if (it.itemType === "expense_reimbursement") {
+        const empId = expPersonId.get(it.refId);
+        return { iban: empId ? (empIban.get(empId) ?? "") : "", swift: "", bankName: "" };
+      }
+      if (it.itemType === "self_billed_invoice") {
+        const info = sbiInfo.get(it.refId);
+        if (!info) return { iban: "", swift: "", bankName: "" };
+        if (info.supplierType === "partner_firm") {
+          const pf = pfBank.get(info.supplierId);
+          return { iban: pf?.bankIban ?? "", swift: pf?.bankSwift ?? "", bankName: pf?.bankName ?? "" };
+        }
+        // Contractor self-billed: contractors have no system IBAN — blank for manual fill-in
+        return { iban: "", swift: "", bankName: "" };
+      }
+      return { iban: "", swift: "", bankName: "" };
+    }
+
+    const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const csvLines = [
+      "Beneficiary Name,IBAN,Amount,Currency,Reference,SWIFT Code,Bank Name",
+      ...items.map((it) => {
+        const bank = resolveBank(it);
+        const ref = `${run.runNumber} - ${it.description}`.slice(0, 140);
+        return [esc(it.payeeName), esc(bank.iban), it.amount.toFixed(2), it.currency, esc(ref), esc(bank.swift), esc(bank.bankName)].join(",");
+      }),
+    ];
+    const missingIban = items.filter((it) => !resolveBank(it).iban).map((it) => it.payeeName);
+
+    if (run.status === "approved") {
+      await db.update(atelierPaymentRuns).set({ status: "exported", exportedAt: new Date(), updatedAt: new Date() })
+        .where(eq(atelierPaymentRuns.id, run.id));
+    }
+    await audit({
+      entityType: "payment_run", entityId: run.id, actor: me,
+      action: "finance.payment_run.export_wio",
+      payload: { runNumber: run.runNumber, itemCount: items.length, missingIban },
+      summary: `Exported Wio bulk payment file for run ${run.runNumber} (${items.length} item(s)${missingIban.length ? `; ${missingIban.length} missing IBAN` : ""}).`,
+    });
+
+    const filename = `WIO-${run.runNumber}-${today}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+    res.send(csvLines.join("\r\n"));
   } catch (err) { next(err); }
 });
 

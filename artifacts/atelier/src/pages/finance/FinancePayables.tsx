@@ -1120,6 +1120,21 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
       URL.revokeObjectURL(url);
     }
   };
+  const onExportWio = async () => {
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const res = await fetch(`${API_BASE}/finance/payables/payment-runs/${runRow.id}/export-wio`, {
+      method: "POST", credentials: "include",
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `WIO-${runRow.runNumber}-${today}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
   return (
     <Card className="p-4" data-testid={`run-${runRow.id}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -1202,6 +1217,7 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
         {(runRow.status === "approved" || runRow.status === "exported") && (
           <>
             <Button size="sm" variant="outline" onClick={onExport} disabled={!!busy} data-testid={`btn-export-${runRow.id}`}>Export bank file</Button>
+            <Button size="sm" variant="outline" onClick={onExportWio} disabled={!!busy} data-testid={`btn-export-wio-${runRow.id}`}>Download Wio file</Button>
             <Button size="sm" onClick={onMarkPaid} disabled={!!busy} data-testid={`btn-markpaid-${runRow.id}`}>
               {busy === `mp:${runRow.id}` ? "…" : "Mark paid"}
             </Button>

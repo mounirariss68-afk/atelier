@@ -44,8 +44,10 @@ import {
   atelierSalaryAdvances,
   atelierAdvanceRepayments,
   atelierCompChanges,
+  atelierEmployees,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
 import { buildPayrollLines } from "../../lib/atelier-payroll.js";
 import {
@@ -212,6 +214,68 @@ router.post("/finance/payroll/runs/:id/post", async (req, res) => {
   try {
     const out = await postPayrollRun({ orgId: me.orgId, runId: String(req.params.id), postedByUserId: me.id });
     res.json({ run: out.run, alreadyPosted: out.alreadyPosted });
+  } catch (err) { fail(res, err); }
+});
+
+// @cli-skip: finance payroll export; Wio Bank bulk-payment CSV for net salary wires
+router.post("/finance/payroll/runs/:id/export-wio", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  try {
+    const [run] = await db.select().from(atelierPayrollRuns).where(and(
+      eq(atelierPayrollRuns.orgId, me.orgId),
+      eq(atelierPayrollRuns.id, String(req.params.id)),
+      isNull(atelierPayrollRuns.deletedAt),
+    ));
+    if (!run) { res.status(404).json({ error: "not-found" }); return; }
+    if (run.status !== "posted") {
+      res.status(409).json({ error: "not-posted", message: "Post the payroll run to GL before downloading the Wio salary file." });
+      return;
+    }
+    const lines = await db.select().from(atelierPayrollLines)
+      .where(and(eq(atelierPayrollLines.orgId, me.orgId), eq(atelierPayrollLines.runId, run.id)));
+
+    // Look up IBAN for each employee from atelier_employees (sole IBAN write path via HR bank-change approve)
+    const employeeIds = [...new Set(lines.map((l) => l.employeeId))];
+    const empRows = employeeIds.length
+      ? await db.select({ id: atelierEmployees.id, iban: atelierEmployees.iban })
+          .from(atelierEmployees)
+          .where(and(eq(atelierEmployees.orgId, me.orgId), inArray(atelierEmployees.id, employeeIds)))
+      : [];
+    const employeeIban = new Map(empRows.map((r) => [r.id, r.iban ?? ""]));
+
+    // Use persisted netPay (= monthlyGross − employeeTotal − advanceDeduction) to match the posted GL amount
+    const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const csvLines = [
+      "Beneficiary Name,IBAN,Amount,Currency,Reference,SWIFT Code,Bank Name",
+      ...lines
+        .sort((a, b) => a.personName.localeCompare(b.personName))
+        .map((l) => {
+          const iban = employeeIban.get(l.employeeId) ?? "";
+          const ref = `Salary ${run.periodLabel} - ${l.personName}`.slice(0, 140);
+          return [esc(l.personName), esc(iban), l.netPay.toFixed(2), l.currency, esc(ref), esc(""), esc("")].join(",");
+        }),
+    ];
+    const missingIban = lines.filter((l) => !(employeeIban.get(l.employeeId) ?? "").trim()).map((l) => l.personName);
+
+    // Fetch entity short name for filename
+    const [entity] = await db.select({ shortName: atelierLegalEntities.shortName })
+      .from(atelierLegalEntities)
+      .where(and(eq(atelierLegalEntities.orgId, me.orgId), eq(atelierLegalEntities.id, run.legalEntityId)));
+    const entitySlug = (entity?.shortName ?? run.legalEntityId).replace(/[^a-zA-Z0-9]/g, "-").slice(0, 20);
+
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"), entityType: "payroll_run", entityId: run.id,
+      actorType: "human", actorId: me.id, actorLabel: me.name,
+      action: "payroll.run_export_wio",
+      payload: { periodLabel: run.periodLabel, headcount: lines.length, missingIban },
+      payloadSummary: `Exported Wio salary file for payroll ${run.periodLabel} / ${entitySlug} (${lines.length} employee(s)${missingIban.length ? `; ${missingIban.length} missing IBAN` : ""}).`,
+    });
+
+    const filename = `WIO-SALARY-${entitySlug}-${run.periodLabel}-${today}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+    res.send(csvLines.join("\r\n"));
   } catch (err) { fail(res, err); }
 });
 
