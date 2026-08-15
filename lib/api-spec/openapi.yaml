@@ -10624,6 +10624,32 @@ components:
         swift: { type: ["string", "null"] }
         canRequestChange: { type: boolean }
 
+    AtelierAdvanceBalance:
+      type: object
+      description: >
+        Aggregated salary-advance outstanding balance for the signed-in
+        employee. Employees only; contractors never have this field.
+      required: [totalOutstanding, currency, monthlyInstallment, count]
+      properties:
+        totalOutstanding:
+          type: number
+          description: Sum of outstanding balances across all active advances.
+        currency:
+          type: string
+          description: Currency code (all active advances share a single currency).
+        monthlyInstallment:
+          type: number
+          description: Total scheduled monthly deduction (sum across all active advances).
+        count:
+          type: integer
+          description: Number of active advances contributing to this balance.
+        issuedOn:
+          type: ["string", "null"]
+          description: Issuance date of the most-recent advance (ISO date).
+        startPeriod:
+          type: ["string", "null"]
+          description: First payroll period the deduction applies to (YYYY-MM).
+
     AtelierMyPay:
       type: object
       required: [documents, bankRequests]
@@ -10652,6 +10678,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AtelierBankChangeRequest"
+        advanceBalance:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierAdvanceBalance"
+          description: >
+            Per-currency salary-advance outstanding balances. Empty for
+            contractors or when the employee has no active advances. One entry
+            per currency — the common case is a single AED entry.
 
     # ---- Performance & Learning (Task #55) ----
     AtelierSelfReview:

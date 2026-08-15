@@ -24,5 +24,6 @@ export type {
   AtelierUpdateFinanceAutopilotSettingsBody,
   AtelierCreateRateCardVersionBody,
   AtelierPricingHandoffBillingBody,
+  AtelierRejectSalaryProposalBody,
   AuthLoginResponse,
 } from "./generated/types";

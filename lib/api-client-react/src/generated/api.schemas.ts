@@ -4957,6 +4957,21 @@ export interface AtelierMyPayBank {
   canRequestChange: boolean;
 }
 
+export interface AtelierAdvanceBalance {
+  /** Sum of outstanding balances across all active advances. */
+  totalOutstanding: number;
+  /** Currency code (all active advances share a single currency). */
+  currency: string;
+  /** Total scheduled monthly deduction (sum across all active advances). */
+  monthlyInstallment: number;
+  /** Number of active advances contributing to this balance. */
+  count: number;
+  /** Issuance date of the most-recent advance (ISO date). @nullable */
+  issuedOn?: string | null;
+  /** First payroll period the deduction applies to (YYYY-MM). @nullable */
+  startPeriod?: string | null;
+}
+
 export interface AtelierMyPay {
   person?: AtelierSelfPerson | null;
   documents: AtelierPayDocument[];
@@ -4964,6 +4979,11 @@ export interface AtelierMyPay {
   insurance?: AtelierPersonInsurance | null;
   bank?: AtelierMyPayBank | null;
   bankRequests: AtelierBankChangeRequest[];
+  /**
+   * Per-currency salary-advance outstanding balances. Empty for contractors
+   * or when the employee has no active advances. One entry per currency.
+   */
+  advanceBalance?: AtelierAdvanceBalance[];
 }
 
 export type AtelierSelfReviewStatus =

@@ -44,6 +44,7 @@ import {
   atelierPersonInsurance,
   atelierBankChangeRequests,
   atelierAuditEvents,
+  atelierSalaryAdvances,
 } from "@workspace/db";
 import {
   AtelierGetMyPayResponse,
@@ -429,6 +430,69 @@ router.get("/me/pay", async (req, res, next) => {
             .orderBy(desc(atelierBankChangeRequests.createdAt))
         : [];
 
+    // Salary-advance balance — employees only.
+    // Group by currency so a multi-currency employee (rare but possible after
+    // an entity transfer) never sees a blended cross-currency total.
+    type AdvanceBalanceEntry = {
+      totalOutstanding: number;
+      currency: string;
+      monthlyInstallment: number;
+      count: number;
+      issuedOn: string | null;
+      startPeriod: string | null;
+    };
+    let advanceBalance: AdvanceBalanceEntry[] = [];
+
+    if (person.workerType === "employee") {
+      const advances = await db
+        .select()
+        .from(atelierSalaryAdvances)
+        .where(
+          and(
+            eq(atelierSalaryAdvances.orgId, me.orgId),
+            eq(atelierSalaryAdvances.employeeId, person.id),
+            isNull(atelierSalaryAdvances.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierSalaryAdvances.createdAt));
+
+      const active = advances.filter(
+        (a) => a.status === "active" && a.outstanding > 0.005,
+      );
+
+      // Group by currency — advances ordered newest-first so the first
+      // occurrence of each currency is the most-recent one.
+      const byCurrency = new Map<
+        string,
+        { outstanding: number; installment: number; count: number; latest: (typeof active)[number] }
+      >();
+      for (const a of active) {
+        const cur = a.currency;
+        const slot = byCurrency.get(cur);
+        if (slot) {
+          slot.outstanding += a.outstanding;
+          slot.installment += a.installmentAmount;
+          slot.count += 1;
+        } else {
+          byCurrency.set(cur, {
+            outstanding: a.outstanding,
+            installment: a.installmentAmount,
+            count: 1,
+            latest: a,
+          });
+        }
+      }
+
+      advanceBalance = [...byCurrency.entries()].map(([currency, slot]) => ({
+        totalOutstanding: Math.round(slot.outstanding * 100) / 100,
+        currency,
+        monthlyInstallment: Math.round(slot.installment * 100) / 100,
+        count: slot.count,
+        issuedOn: slot.latest.issuedOn ?? null,
+        startPeriod: slot.latest.startPeriod ?? null,
+      }));
+    }
+
     res.json(
       AtelierGetMyPayResponse.parse({
         person,
@@ -437,6 +501,7 @@ router.get("/me/pay", async (req, res, next) => {
         insurance,
         bank,
         bankRequests: bankRequests.map(bankReqToSelfWire),
+        advanceBalance,
       }),
     );
   } catch (err) {

@@ -6033,6 +6033,15 @@ export const atelierGetMyPayResponsePersonOneCellPhonesItemCountryMax = 60;
 export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMin = 3;
 export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMax = 40;
 
+export const AtelierAdvanceBalance = zod.object({
+  totalOutstanding: zod.number(),
+  currency: zod.string(),
+  monthlyInstallment: zod.number(),
+  count: zod.number().int(),
+  issuedOn: zod.string().nullish(),
+  startPeriod: zod.string().nullish(),
+});
+
 export const AtelierGetMyPayResponse = zod.object({
   person: zod
     .union([
@@ -6157,6 +6166,7 @@ export const AtelierGetMyPayResponse = zod.object({
       })
       .describe("Self-scope view of a bank-detail change request (masked)."),
   ),
+  advanceBalance: zod.array(AtelierAdvanceBalance).optional(),
 });
 
 /**

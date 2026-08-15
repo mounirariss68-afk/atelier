@@ -15,6 +15,7 @@ import {
   getAtelierGetMyPayQueryKey,
   type AtelierMyPay,
   type AtelierPayDocument,
+  type AtelierAdvanceBalance,
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,13 @@ export default function MePay() {
         <CompCard data={data} isContractor={isContractor} />
         {isContractor ? <ContractorNoteCard /> : <InsuranceCard data={data} />}
       </div>
+      {!isContractor && (data.advanceBalance ?? []).length > 0 && (
+        <div className="space-y-3" data-testid="me-pay-advance-list">
+          {(data.advanceBalance ?? []).map((bal) => (
+            <AdvanceBalanceCard key={bal.currency} balance={bal} />
+          ))}
+        </div>
+      )}
       {!isContractor && <BankCard data={data} />}
       <SelfBilledInvoicesCard />
     </div>
@@ -311,6 +319,47 @@ function InsuranceCard({ data }: { data: AtelierMyPay }) {
           ) : null}
         </div>
       )}
+    </Card>
+  );
+}
+
+function AdvanceBalanceCard({ balance }: { balance: AtelierAdvanceBalance }) {
+  const estimatedMonthsLeft =
+    balance.monthlyInstallment > 0
+      ? Math.ceil(balance.totalOutstanding / balance.monthlyInstallment)
+      : null;
+  return (
+    <Card className="p-4" data-testid="me-pay-advance">
+      <h3 className="text-sm font-semibold text-text mb-2">Salary advance balance</h3>
+      <div className="divide-y divide-border-soft">
+        <Field
+          label="Outstanding"
+          value={
+            <span className="font-mono font-semibold">
+              {balance.currency} {balance.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          }
+        />
+        <Field
+          label="Monthly deduction"
+          value={`${balance.currency} ${balance.monthlyInstallment.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+        />
+        {balance.startPeriod && (
+          <Field label="Deductions from" value={balance.startPeriod} />
+        )}
+        {balance.issuedOn && (
+          <Field label="Issued on" value={balance.issuedOn} />
+        )}
+        {estimatedMonthsLeft !== null && (
+          <Field
+            label="Est. months remaining"
+            value={estimatedMonthsLeft === 1 ? "1 month" : `${estimatedMonthsLeft} months`}
+          />
+        )}
+      </div>
+      <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-text-faint">
+        Recovered via monthly payroll deductions · read-only
+      </p>
     </Card>
   );
 }

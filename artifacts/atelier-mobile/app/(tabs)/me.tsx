@@ -10,8 +10,9 @@ import {
   useAtelierDeleteMyTask,
   useAtelierReplaceMyDocumentScan,
   useAtelierUploadMyPhoto,
+  useAtelierGetMyPay,
 } from "@workspace/api-client-react";
-import type { AtelierSelfDocument } from "@workspace/api-client-react";
+import type { AtelierSelfDocument, AtelierAdvanceBalance } from "@workspace/api-client-react";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
@@ -1118,6 +1119,278 @@ function vCard(name: string, title: string, email: string, phone: string): strin
   return lines.join("\n");
 }
 
+// ============================================================
+// Task #1147 — Pay & Payslips tab: self-scope pay documents
+// (payslips, salary letters, etc.) and advance balance view.
+// Uses the codegen'd useAtelierGetMyPay hook so the ACL wiring
+// is identical to the web Me Pay page.
+// ============================================================
+const PAY_CATEGORY_LABEL: Record<string, string> = {
+  contract: "Contract",
+  salary_letter: "Salary letter",
+  bonus_letter: "Bonus letter",
+  comp_letter: "Comp letter",
+  payslip: "Payslip",
+  remittance: "Remittance",
+  insurance: "Insurance",
+};
+
+function PaySection() {
+  const c = useColors();
+  const { t } = useI18n();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const pay = useAtelierGetMyPay();
+
+  const openPayDoc = useCallback(
+    async (docId: string, fileName: string, downloadUrl: string) => {
+      if (Platform.OS === "web") {
+        Linking.openURL(`${API_BASE}${downloadUrl}`);
+        return;
+      }
+      setDownloading(docId);
+      try {
+        const FileSystem = getFileSystem();
+        const Sharing = getSharing();
+        if (!FileSystem || !Sharing)
+          throw new Error("Native file modules unavailable");
+        const dir =
+          FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+        const safe = fileName.replace(/[^\w.\-]+/g, "_");
+        const dest = `${dir}${Date.now()}_${safe}`;
+        const result = await FileSystem.downloadAsync(
+          `${API_BASE}${downloadUrl}`,
+          dest,
+          { headers: authHeader() },
+        );
+        if (result.status && result.status >= 400)
+          throw new Error(`${result.status}`);
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri);
+        hapticSuccess();
+      } catch {
+        hapticError();
+        feedback.toast(t("me.pay.download") + " failed", "error");
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [feedback, t],
+  );
+
+  if (pay.isLoading) {
+    return (
+      <View style={{ gap: 12 }}>
+        {[0, 1, 2].map((i) => (
+          <Card key={i}>
+            <Skeleton height={16} width="60%" />
+          </Card>
+        ))}
+      </View>
+    );
+  }
+  if (pay.isError) {
+    return <ErrorState onRetry={() => pay.refetch()} message={t("common.error")} />;
+  }
+
+  const data = pay.data;
+  const docs = data?.documents ?? [];
+  // Per-currency advance balances — one entry per currency (common case: one AED entry).
+  const advances: AtelierAdvanceBalance[] = data?.advanceBalance ?? [];
+
+  return (
+    <View style={{ gap: 16 }}>
+      {/* Advance balance cards — one per currency, employees only */}
+      {advances.map((advance) => {
+        const estimatedMonths =
+          advance.monthlyInstallment > 0
+            ? Math.ceil(advance.totalOutstanding / advance.monthlyInstallment)
+            : null;
+        return (
+          <View key={advance.currency} testID={`mobile-me-pay-advance-${advance.currency}`}>
+          <Card style={{ gap: 8 }}>
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_700Bold",
+                fontSize: 15,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {t("me.pay.advance")}
+              {advances.length > 1 ? ` (${advance.currency})` : ""}
+            </Text>
+            <View style={{ gap: 6 }}>
+              {[
+                {
+                  label: t("me.pay.advanceOutstanding"),
+                  value: `${advance.currency} ${advance.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                  bold: true,
+                },
+                {
+                  label: t("me.pay.advanceMonthly"),
+                  value: `${advance.currency} ${advance.monthlyInstallment.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                },
+                advance.startPeriod
+                  ? { label: t("me.pay.advanceFrom"), value: advance.startPeriod }
+                  : null,
+                advance.issuedOn
+                  ? { label: t("me.pay.advanceIssuedOn"), value: advance.issuedOn }
+                  : null,
+                estimatedMonths !== null
+                  ? { label: t("me.pay.advanceMonthsLeft"), value: String(estimatedMonths) }
+                  : null,
+              ]
+                .filter(Boolean)
+                .map((row) => (
+                  <View
+                    key={row!.label}
+                    style={{
+                      flexDirection: rtl.row,
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {row!.label}
+                    </Text>
+                    <Text
+                      style={{
+                        color: c.foreground,
+                        fontFamily: row!.bold
+                          ? "PlusJakartaSans_700Bold"
+                          : "PlusJakartaSans_500Medium",
+                        fontSize: 13,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {row!.value}
+                    </Text>
+                  </View>
+                ))}
+            </View>
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_400Regular",
+                fontSize: 11,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {t("me.pay.advanceNote")}
+            </Text>
+          </Card>
+          </View>
+        );
+      })}
+
+      {/* Pay documents list */}
+      <Text
+        style={{
+          color: c.foreground,
+          fontFamily: "PlusJakartaSans_800ExtraBold",
+          fontSize: 17,
+          letterSpacing: -0.2,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {t("me.pay.payslips")}
+      </Text>
+
+      {docs.length === 0 ? (
+        <EmptyState
+          icon="file-text"
+          title={t("me.pay.noPayslips")}
+          body={t("me.pay.noPayslipsBody")}
+        />
+      ) : (
+        <View style={{ gap: 10 }}>
+          {docs.map((doc) => (
+            <View key={doc.id} testID={`mobile-me-pay-doc-${doc.id}`}>
+            <Card
+              style={{ flexDirection: rtl.row, alignItems: "center", gap: 12 }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 14,
+                  backgroundColor: c.tint08,
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name="file-text" size={20} color={c.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 14,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {doc.title}
+                </Text>
+                <View style={{ flexDirection: rtl.row, gap: 6, flexWrap: "wrap" }}>
+                  <Chip
+                    label={PAY_CATEGORY_LABEL[doc.category] ?? doc.category}
+                    color={c.primary}
+                  />
+                  {doc.periodDate ? (
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontSize: 11,
+                        alignSelf: "center",
+                      }}
+                    >
+                      {doc.periodDate}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              <Pressable
+                onPress={() =>
+                  void openPayDoc(doc.id, doc.fileName, doc.downloadUrl)
+                }
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                testID={`mobile-me-pay-download-${doc.id}`}
+              >
+                {downloading === doc.id ? (
+                  <ActivityIndicator size="small" color={c.primary} />
+                ) : (
+                  <Feather
+                    name={Platform.OS === "web" ? "external-link" : "download"}
+                    size={20}
+                    color={c.primary}
+                  />
+                )}
+              </Pressable>
+            </Card>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function MeScreen() {
   const c = useColors();
   const { t } = useI18n();
@@ -1136,7 +1409,7 @@ export default function MeScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   // Task #1036 — the page content below the QR business card is split
   // into three tabs. Selection survives while the screen stays mounted.
-  const [meTab, setMeTab] = useState<"tasks" | "documents" | "letters">("tasks");
+  const [meTab, setMeTab] = useState<"tasks" | "documents" | "letters" | "pay">("tasks");
 
   const refetchDocs = docs.refetch;
   const focusedOnceRef = React.useRef(false);
@@ -1609,6 +1882,7 @@ export default function MeScreen() {
               { key: "tasks", label: t("me.tabTasks") },
               { key: "documents", label: t("me.tabDocuments") },
               { key: "letters", label: t("me.tabLetters") },
+              { key: "pay", label: t("me.tabPay") },
             ] as const
           ).map((tab) => {
             const active = meTab === tab.key;
@@ -1791,6 +2065,13 @@ export default function MeScreen() {
           <>
             {/* Task #850 — official letters: history + re-download + request. */}
             <LettersSection />
+          </>
+        ) : null}
+
+        {meTab === "pay" ? (
+          <>
+            {/* Task #1147 — payslips, pay documents and advance balance. */}
+            <PaySection />
           </>
         ) : null}
 
