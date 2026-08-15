@@ -442,6 +442,8 @@ function MyTasksSection() {
   const updateTask = useAtelierUpdateMyTask();
   const deleteTask = useAtelierDeleteMyTask();
   const [title, setTitle] = useState("");
+  // Task #1178 — the add-task input is revealed by the header "Add task" pill.
+  const [addOpen, setAddOpen] = useState(false);
 
   // Refresh whenever the Me tab regains focus (chat writes elsewhere).
   const refetch = list.refetch;
@@ -540,15 +542,59 @@ function MyTasksSection() {
   };
 
   return (
-    <Card style={{ gap: 10 }}>
+    <>
+      {/* Task #1178 — header outside the card, mirroring the documents pane. */}
+      <View
+        style={{
+          flexDirection: rtl.row,
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: 4,
+        }}
+      >
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 17,
+            letterSpacing: -0.2,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {t("me.tabTasks")}
+        </Text>
+        <PressScale onPress={() => setAddOpen(true)}>
+          <View
+            style={{
+              flexDirection: rtl.row,
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 999,
+              backgroundColor: c.tint08,
+              borderWidth: 1,
+              borderColor: c.tint25,
+            }}
+            testID="button-mobile-task-add-open"
+          >
+            <Feather name="plus" size={14} color={c.primary} />
+            <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_700Bold", fontSize: 13 }}>
+              {t("me.addTask")}
+            </Text>
+          </View>
+        </PressScale>
+      </View>
+      <Card style={{ gap: 10 }}>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
         <Feather name="check-circle" size={16} color={c.accent} />
         <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, textAlign: rtl.textAlign }}>
-          My tasks & reminders
+          Reminders
         </Text>
         {open.length > 0 ? <Chip label={`${open.length} open`} /> : null}
       </View>
       <TaskPushToggle />
+      {addOpen ? (
       <View style={{ flexDirection: rtl.row, gap: 8, alignItems: "center" }}>
         <TextInput
           value={title}
@@ -557,6 +603,7 @@ function MyTasksSection() {
           placeholderTextColor={c.mutedForeground}
           onSubmitEditing={add}
           returnKeyType="done"
+          autoFocus
           style={{
             flex: 1,
             borderWidth: 1,
@@ -578,10 +625,11 @@ function MyTasksSection() {
           <Feather name="plus-circle" size={22} color={c.accent} />
         </Pressable>
       </View>
+      ) : null}
       {list.isLoading ? <Skeleton height={40} /> : null}
       {!list.isLoading && open.length === 0 ? (
         <Text style={{ color: c.mutedForeground, fontSize: 13, textAlign: rtl.textAlign }}>
-          Nothing open. Add one above — or ask Riser to “remind me to submit my timesheet on Friday”.
+          Nothing open. Tap “{t("me.addTask")}” above — or ask Riser to “remind me to submit my timesheet on Friday”.
         </Text>
       ) : null}
       {open.map((task) => {
@@ -630,7 +678,8 @@ function MyTasksSection() {
           </Text>
         </View>
       ))}
-    </Card>
+      </Card>
+    </>
   );
 }
 
