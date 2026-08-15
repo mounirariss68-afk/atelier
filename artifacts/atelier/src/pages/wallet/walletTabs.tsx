@@ -8,7 +8,9 @@
  *  - "main":  the primary Wallet menu (Expenses · Invoices · AR aging ·
  *             Collections · + New expense · Cards · Policy · VAT register).
  *             Policy/VAT stay hidden for non-leadership roles.
- *  - "cash":  Cash · Bank reconciliation · Treasury · AR aging.
+ *  - "cash":  Expenses · Cash · Bank reconciliation · Treasury · AR aging.
+ *             ("Expenses" links back to the main Wallet home, matching the
+ *             revrec/approvals groups.)
  *  - "revrec": Expenses · Rev-rec · WIP · Margin & leakage.
  *  - "approvals": Expenses · Approvals · Cards.
  */
@@ -37,6 +39,7 @@ export function walletTabsFor(group: WalletTabGroup, isLeader: boolean): SubSect
       ];
     case "cash":
       return [
+        { id: "expenses", label: "Expenses", href: "/wallet" },
         { id: "cash", label: "Cash", href: "/wallet/cash" },
         { id: "cash-recon", label: "Bank reconciliation", href: "/wallet/cash/recon" },
         { id: "treasury", label: "Treasury", href: "/wallet/treasury" },
