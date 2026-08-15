@@ -26,6 +26,7 @@ import {
   atelierUsers,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "../../../routes/atelier/engagementRoutes.js";
+import { canSeeAccount } from "../../../routes/atelier/accountRoutes.js";
 import { foldRosterName } from "../chat-normalizers.js";
 import type { CliPersona } from "../index.js";
 
@@ -43,6 +44,11 @@ const MAX_CHOICES = 5;
 /**
  * Account by free-text query. Task #332 — scoped to the persona's
  * org so the CLI cannot leak account names from other tenants.
+ *
+ * Task #1167 — also ACL-filtered through canSeeAccount BEFORE
+ * capping to disambiguation options, so restricted personas (e.g.
+ * partner_firm_resource) cannot discover accounts outside their
+ * perimeter via disambiguation prompts.
  */
 export async function resolveAccount(
   query: string,
@@ -50,6 +56,8 @@ export async function resolveAccount(
 ): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
+  // Over-fetch so that after ACL filtering we still have enough
+  // candidates to fill up to MAX_CHOICES choices.
   const rows = await db
     .select({ id: atelierAccounts.id, name: atelierAccounts.name, country: atelierAccounts.country })
     .from(atelierAccounts)
@@ -60,16 +68,25 @@ export async function resolveAccount(
         isNull(atelierAccounts.deletedAt),
       ),
     )
-    .limit(MAX_CHOICES + 1);
+    .limit(MAX_CHOICES * 3);
   if (rows.length === 0) return { kind: "none" };
-  if (rows.length === 1) {
-    const r = rows[0]!;
+  // Apply canSeeAccount ACL before surfacing any candidates.
+  const access = await accessibleEngagementIds({
+    id: persona.id,
+    role: persona.role,
+  } as Parameters<typeof accessibleEngagementIds>[0]);
+  const me = { id: persona.id };
+  const flags = await Promise.all(rows.map((r) => canSeeAccount(access, me, r.id)));
+  const visible = rows.filter((_, i) => flags[i]);
+  if (visible.length === 0) return { kind: "none" };
+  if (visible.length === 1) {
+    const r = visible[0]!;
     return { kind: "match", id: r.id, label: r.name };
   }
   return {
     kind: "choices",
     prompt: `Which account did you mean by "${q}"?`,
-    options: rows.slice(0, MAX_CHOICES).map((r) => ({
+    options: visible.slice(0, MAX_CHOICES).map((r) => ({
       id: r.id,
       label: r.name,
       secondary: r.country ?? undefined,
