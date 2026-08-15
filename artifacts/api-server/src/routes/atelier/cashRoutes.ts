@@ -319,7 +319,7 @@ router.post("/triage/:id/confirm", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
   if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-  const b = req.body as { invoiceId?: string; appliedAmount?: number; rationale?: string };
+  const b = req.body as { invoiceId?: string; candidateIndex?: number; appliedAmount?: number; rationale?: string };
   const [txn] = await db.select().from(atelierBankTransaction)
     .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
   if (!txn) return res.status(404).json({ error: "not_found" });
@@ -335,8 +335,22 @@ router.post("/triage/:id/confirm", async (req, res) => {
     (typeof proposal?.recommended === "object" && proposal.recommended?.invoiceId)
       ? proposal.recommended.invoiceId
       : (proposal?.candidates?.[0]?.invoiceId ?? null);
+  // Task #1077 — pick a ranked candidate by index (recon exceptions panel).
+  // Resolved server-side against the CURRENT stored proposal so a stale UI
+  // index can't silently apply the wrong invoice.
+  let candidateInvoiceId: string | null = null;
+  if (b.candidateIndex !== undefined) {
+    if (!Number.isInteger(b.candidateIndex) || b.candidateIndex < 0
+      || !proposal?.candidates || b.candidateIndex >= proposal.candidates.length) {
+      return res.status(400).json({ error: "invalid_input", message: "candidateIndex out of range for the stored match proposal." });
+    }
+    candidateInvoiceId = proposal.candidates[b.candidateIndex]?.invoiceId ?? null;
+    if (!candidateInvoiceId) return res.status(400).json({ error: "invalid_input", message: "Selected candidate has no invoiceId." });
+    if (b.invoiceId && b.invoiceId !== candidateInvoiceId)
+      return res.status(400).json({ error: "invalid_input", message: "invoiceId and candidateIndex disagree; send one or the other." });
+  }
   // Correction UX: an explicit invoiceId in the body overrides the proposal.
-  const invoiceId = b.invoiceId ?? recommendedInvoiceId ?? null;
+  const invoiceId = b.invoiceId ?? candidateInvoiceId ?? recommendedInvoiceId ?? null;
   if (!invoiceId) return res.status(400).json({ error: "invalid_input", message: "No invoiceId (no proposal recommendation and none supplied)." });
   // Resolve (or create) the receipt row.
   let receiptId = proposal?.cashReceiptId ?? null;

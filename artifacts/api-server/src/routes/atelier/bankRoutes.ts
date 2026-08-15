@@ -647,17 +647,44 @@ router.get("/recon/:id/exceptions", async (req, res) => {
     .where(and(eq(atelierBankReconPeriod.id, req.params.id), eq(atelierBankReconPeriod.orgId, me.orgId), isNull(atelierBankReconPeriod.deletedAt)));
   if (!period) return res.status(404).json({ error: "not_found" });
   const txns = await loadPeriodTxns(me.orgId, period);
-  const exceptions = deriveStatementExceptions(txns).map((e) => ({
-    txnId: e.txn.id,
-    postedDate: e.txn.postedDate,
-    amount: e.txn.amount,
-    currency: e.txn.currency,
-    counterpartyNameRaw: e.txn.counterpartyNameRaw,
-    referenceRaw: e.txn.referenceRaw,
-    matchedState: e.txn.matchedState,
-    reasons: e.reasons,
-    detail: e.detail,
-  }));
+  const exceptions = deriveStatementExceptions(txns).map((e) => {
+    // Task #1077 — surface ranked inflow candidates inline so finance can
+    // resolve the exception from the recon screen (via triage/:id/confirm
+    // with candidateIndex). Outflow candidates resolve via outflow-confirm
+    // on /wallet/cash, so only inflow candidates are exposed here.
+    const proposal = e.txn.matchProposal as {
+      candidates?: Array<{
+        invoiceId?: string | null; invoiceNumber?: string | null;
+        appliedAmount?: number; confidence?: number; rationale?: string;
+        invoiceOutstanding?: number;
+      }>;
+    } | null;
+    const candidates = e.txn.amount > 0
+      ? (proposal?.candidates ?? [])
+          .map((c, index) => ({
+            index,
+            invoiceId: c.invoiceId ?? null,
+            invoiceNumber: c.invoiceNumber ?? null,
+            appliedAmount: typeof c.appliedAmount === "number" ? c.appliedAmount : null,
+            confidence: typeof c.confidence === "number" ? c.confidence : null,
+            rationale: c.rationale ?? null,
+            invoiceOutstanding: typeof c.invoiceOutstanding === "number" ? c.invoiceOutstanding : null,
+          }))
+          .filter((c) => c.invoiceId)
+      : [];
+    return {
+      txnId: e.txn.id,
+      postedDate: e.txn.postedDate,
+      amount: e.txn.amount,
+      currency: e.txn.currency,
+      counterpartyNameRaw: e.txn.counterpartyNameRaw,
+      referenceRaw: e.txn.referenceRaw,
+      matchedState: e.txn.matchedState,
+      reasons: e.reasons,
+      detail: e.detail,
+      candidates,
+    };
+  });
   return res.json({ ok: true, data: { periodId: period.id, summary: summarizeReconTxns(txns), exceptions } });
 });
 

@@ -32,6 +32,10 @@ args = "vat201"
 task = "workflow.run"
 args = "bookkeeper-collision"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "recon-candidates"
+
 [[workflows.workflow]]
 name = "chat-reliability"
 author = "agent"
@@ -72,6 +76,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test:bookkeeper-collision"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "recon-candidates"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run test:recon-candidates"
 
 [workflows.workflow.metadata]
 isValidation = true

@@ -26,6 +26,15 @@ interface ReconRow {
   reconSummary?: ReconSummary;
 }
 
+interface ExceptionCandidate {
+  index: number;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  appliedAmount: number | null;
+  confidence: number | null;
+  rationale: string | null;
+  invoiceOutstanding: number | null;
+}
 interface ExceptionRow {
   txnId: string;
   postedDate: string;
@@ -36,6 +45,7 @@ interface ExceptionRow {
   matchedState: string;
   reasons: string[];
   detail: string | null;
+  candidates?: ExceptionCandidate[];
 }
 
 interface BankAccount {
@@ -135,6 +145,24 @@ export default function WalletCashRecon() {
       });
       const j = await resp.json().catch(() => null);
       setNote(resp.ok ? `Marked as ${classification.replace("_", " ")}.` : `Failed: ${j?.message ?? j?.error ?? resp.status}`);
+      await Promise.all([load(), loadExceptions(r.id)]);
+    } finally { setBusy(false); }
+  };
+
+  // Task #1077 — apply a ranked match candidate without leaving the recon screen.
+  const applyCandidate = async (r: ReconRow, e: ExceptionRow, c: ExceptionCandidate) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const resp = await fetch(`/api/atelier/wallet/cash/triage/${e.txnId}/confirm`, {
+        method: "POST", credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateIndex: c.index }),
+      });
+      const j = await resp.json().catch(() => null);
+      setNote(resp.ok
+        ? `Applied ${e.currency} ${Number(j?.data?.applied ?? e.amount).toFixed(2)} to invoice ${c.invoiceNumber ?? c.invoiceId}.`
+        : `Apply failed: ${j?.message ?? j?.error ?? resp.status}`);
       await Promise.all([load(), loadExceptions(r.id)]);
     } finally { setBusy(false); }
   };
@@ -323,27 +351,52 @@ export default function WalletCashRecon() {
                           )}
                           <ul className="space-y-1" data-testid={`exceptions-list-${r.id}`}>
                             {exceptions.map((e) => (
-                              <li key={e.txnId} className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono" data-testid={`exception-${e.txnId}`}>
-                                <span className="text-text-mute">
-                                  {e.postedDate} · {e.counterpartyNameRaw ?? e.referenceRaw ?? "—"} · {e.currency} {e.amount.toFixed(2)}
-                                  {e.detail && <span className="text-text-faint"> — {e.detail}</span>}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  {e.reasons.map((reason) => (
-                                    <MonoChip key={reason} tone={REASON_TONE[reason] ?? "default"}>{REASON_LABEL[reason] ?? reason}</MonoChip>
-                                  ))}
-                                  {r.status !== "finalised" && (
-                                    <>
-                                      <a className="underline text-text-mute hover:text-gold" href="/wallet/cash" data-testid={`link-resolve-${e.txnId}`}>match</a>
-                                      <PillButton variant="ghost" disabled={busy} data-testid={`btn-fee-${e.txnId}`}
-                                        onClick={() => void classify(r, e, "bank_fee")}>Fee</PillButton>
-                                      <PillButton variant="ghost" disabled={busy} data-testid={`btn-transfer-${e.txnId}`}
-                                        onClick={() => void classify(r, e, "internal_transfer")}>Transfer</PillButton>
-                                      <PillButton variant="ghost" disabled={busy} data-testid={`btn-other-${e.txnId}`}
-                                        onClick={() => void classify(r, e, "other")}>Other</PillButton>
-                                    </>
-                                  )}
-                                </span>
+                              <li key={e.txnId} className="space-y-1 text-xs font-mono" data-testid={`exception-${e.txnId}`}>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-text-mute">
+                                    {e.postedDate} · {e.counterpartyNameRaw ?? e.referenceRaw ?? "—"} · {e.currency} {e.amount.toFixed(2)}
+                                    {e.detail && <span className="text-text-faint"> — {e.detail}</span>}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    {e.reasons.map((reason) => (
+                                      <MonoChip key={reason} tone={REASON_TONE[reason] ?? "default"}>{REASON_LABEL[reason] ?? reason}</MonoChip>
+                                    ))}
+                                    {r.status !== "finalised" && (
+                                      <>
+                                        <a className="underline text-text-mute hover:text-gold" href="/wallet/cash" data-testid={`link-resolve-${e.txnId}`}>match</a>
+                                        <PillButton variant="ghost" disabled={busy} data-testid={`btn-fee-${e.txnId}`}
+                                          onClick={() => void classify(r, e, "bank_fee")}>Fee</PillButton>
+                                        <PillButton variant="ghost" disabled={busy} data-testid={`btn-transfer-${e.txnId}`}
+                                          onClick={() => void classify(r, e, "internal_transfer")}>Transfer</PillButton>
+                                        <PillButton variant="ghost" disabled={busy} data-testid={`btn-other-${e.txnId}`}
+                                          onClick={() => void classify(r, e, "other")}>Other</PillButton>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                                {r.status !== "finalised" && (e.candidates?.length ?? 0) > 0 && (
+                                  <ul className="ml-4 space-y-0.5 border-l border-border-soft pl-2" data-testid={`candidates-${e.txnId}`}>
+                                    {e.candidates!.map((c) => (
+                                      <li key={c.index} className="flex flex-wrap items-center justify-between gap-2"
+                                        data-testid={`candidate-${e.txnId}-${c.index}`}>
+                                        <span className="text-text-mute">
+                                          {c.invoiceNumber ?? c.invoiceId}
+                                          {c.appliedAmount !== null && <> · apply {e.currency} {c.appliedAmount.toFixed(2)}</>}
+                                          {c.invoiceOutstanding !== null && <span className="text-text-faint"> · outstanding {c.invoiceOutstanding.toFixed(2)}</span>}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                          {c.confidence !== null && (
+                                            <MonoChip tone={c.confidence >= 0.85 ? "green" : c.confidence >= 0.55 ? "gold" : "default"}>
+                                              {Math.round(c.confidence * 100)}%
+                                            </MonoChip>
+                                          )}
+                                          <PillButton variant="ghost" disabled={busy} data-testid={`btn-apply-candidate-${e.txnId}-${c.index}`}
+                                            onClick={() => void applyCandidate(r, e, c)}>Apply</PillButton>
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                               </li>
                             ))}
                           </ul>

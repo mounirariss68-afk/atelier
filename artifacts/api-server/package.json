@@ -117,7 +117,8 @@
     "test:push-prefs": "tsx ./tests/push-notif-prefs/run.ts",
     "test:gl-drill-through": "tsx ./tests/gl-drill-through/run.ts",
     "test:gl-drill-through-int": "NODE_ENV=test tsx ./tests/gl-drill-through/integration-probe.ts",
-    "test:vat201": "export CRM_TEST_DB_NAME=crm_test_vat && tsx ./scripts/vat201-probe.ts && tsx ./scripts/vat201-route-probe.ts"
+    "test:vat201": "export CRM_TEST_DB_NAME=crm_test_vat && tsx ./scripts/vat201-probe.ts && tsx ./scripts/vat201-route-probe.ts",
+    "test:recon-candidates": "tsx ./scripts/recon-candidate-pick-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
