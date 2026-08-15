@@ -18,6 +18,7 @@
     "test:coverage-staleness": "tsx --tsconfig tsconfig.test.json src/pages/Account.coverage-staleness.test.tsx",
     "test:esign-dialog": "tsx --tsconfig tsconfig.test.json src/components/esign/SendForSignatureDialog.locked-account.test.tsx",
     "test:agents-dashboard": "tsx --tsconfig tsconfig.test.json src/pages/agents/AgentsLensHome.render.test.tsx",
+    "test:gl-needs-attention": "tsx --tsconfig tsconfig.test.json src/pages/finance/LedgerPage.render.test.tsx",
     "test:slash-composer": "tsx src/components/cli/slashComposer.test.ts",
     "test:cli-attachment-upload": "tsx src/components/cli/attachmentUpload.test.ts",
     "test:me-lens-gating": "tsx --tsconfig tsconfig.json src/lib/meLensGating.test.ts",

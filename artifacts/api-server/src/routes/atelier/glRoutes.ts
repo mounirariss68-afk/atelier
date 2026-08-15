@@ -18,7 +18,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -39,7 +39,9 @@ import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import {
   proposeExpenseAllocation,
   proposeSupplierInvoiceAllocation,
+  proposeGlRecordAllocation,
   decideAllocation,
+  type GlProposeKind,
 } from "../../lib/atelier-entity-allocation.js";
 import {
   DEFAULT_CHART,
@@ -504,35 +506,86 @@ router.post("/gl/exceptions/:id/resolve", async (req, res) => {
 
 // ─────────────────────── entity tagging ───────────────────────
 
+// Task #1199 — every untagged row carries its allocation proposal so the
+// "Needs attention" tab can render approve/change instead of a bare picker.
+// Rows never proposed yet get a deterministic (rules-only) propose pass
+// inline, capped per request; the AI fallback runs via the sweep route.
+const UNTAGGED_INLINE_PROPOSE_CAP = 40;
+const PENDING_ALLOC = ["proposed", "needs_input"];
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/gl/untagged", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
-  const [invoices, expenses, cps, pfis, txns] = await Promise.all([
+  const fetchRows = () => Promise.all([
     db.select().from(atelierInvoice).where(and(
       eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.legalEntityId),
       inArray(atelierInvoice.status, ["issued", "paid"]), isNull(atelierInvoice.deletedAt))).limit(100),
+    // Expenses/PFIs with a pending allocation keep their row here even
+    // though the propose path prefilled entityId — the human decision
+    // happens on this feed.
     db.select().from(atelierExpenses).where(and(
-      eq(atelierExpenses.orgId, me.orgId), isNull(atelierExpenses.entityId),
+      eq(atelierExpenses.orgId, me.orgId),
+      or(isNull(atelierExpenses.entityId), inArray(atelierExpenses.allocStatus, PENDING_ALLOC)),
       inArray(atelierExpenses.status, ["approved", "reimbursed"]), isNull(atelierExpenses.deletedAt))).limit(100),
     db.select().from(atelierContractorPayments).where(and(
       eq(atelierContractorPayments.orgId, me.orgId), isNull(atelierContractorPayments.legalEntityId),
       eq(atelierContractorPayments.status, "paid"), isNull(atelierContractorPayments.deletedAt))).limit(100),
     db.select().from(atelierPartnerFirmInvoices).where(and(
-      eq(atelierPartnerFirmInvoices.orgId, me.orgId), isNull(atelierPartnerFirmInvoices.legalEntityId),
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      or(isNull(atelierPartnerFirmInvoices.legalEntityId), inArray(atelierPartnerFirmInvoices.allocStatus, PENDING_ALLOC)),
       eq(atelierPartnerFirmInvoices.status, "paid"), isNull(atelierPartnerFirmInvoices.deletedAt))).limit(100),
     db.select().from(atelierBankTransaction).where(and(
       eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.legalEntityId),
       isNull(atelierBankTransaction.deletedAt))).limit(100),
   ]);
+  let [invoices, expenses, cps, pfis, txns] = await fetchRows();
+
+  // Trigger a deterministic propose pass for rows that have no proposal
+  // yet (rules only — nothing auto-applies; results land as proposed /
+  // needs_input for the user to decide).
+  let budget = UNTAGGED_INLINE_PROPOSE_CAP;
+  let proposedAny = false;
+  const sweep = async (ids: string[], run: (id: string) => Promise<unknown>) => {
+    for (const id of ids) {
+      if (budget <= 0) return;
+      budget--;
+      proposedAny = true;
+      await run(id).catch(() => null);
+    }
+  };
+  await sweep(expenses.filter((r) => r.allocStatus == null).map((r) => r.id),
+    (id) => proposeExpenseAllocation(id, { allowAi: false, actorId: me.id }));
+  await sweep(pfis.filter((r) => r.allocStatus == null).map((r) => r.id),
+    (id) => proposeSupplierInvoiceAllocation(id, { allowAi: false, actorId: me.id }));
+  await sweep(invoices.filter((r) => r.allocStatus == null).map((r) => r.id),
+    (id) => proposeGlRecordAllocation("invoice", id, { allowAi: false, actorId: me.id }));
+  await sweep(cps.filter((r) => r.allocStatus == null).map((r) => r.id),
+    (id) => proposeGlRecordAllocation("contractor_payment", id, { allowAi: false, actorId: me.id }));
+  await sweep(txns.filter((r) => r.allocStatus == null).map((r) => r.id),
+    (id) => proposeGlRecordAllocation("bank_transaction", id, { allowAi: false, actorId: me.id }));
+  if (proposedAny) [invoices, expenses, cps, pfis, txns] = await fetchRows();
+
+  const alloc = (r: {
+    allocStatus: string | null; allocRuleId: string | null;
+    allocJustification: string | null; allocConfidence: number | null;
+    allocDecidedBy: string | null;
+  }, proposedEntityId: string | null) => ({
+    allocStatus: r.allocStatus,
+    allocRuleId: r.allocRuleId,
+    allocJustification: r.allocJustification,
+    allocConfidence: r.allocConfidence,
+    allocDecidedBy: r.allocDecidedBy,
+    proposedEntityId,
+  });
   res.json({
     ok: true,
     data: {
       rows: [
-        ...invoices.map((r) => ({ kind: "invoice", id: r.id, label: r.invoiceNumber ?? r.id, amount: r.total, currency: r.currency, date: r.issuedAt?.toISOString().slice(0, 10) ?? null })),
-        ...expenses.map((r) => ({ kind: "expense", id: r.id, label: `${r.merchant ?? r.category} · ${r.expenseDate}`, amount: r.usdAmount, currency: "USD", date: r.expenseDate })),
-        ...cps.map((r) => ({ kind: "contractor_payment", id: r.id, label: `${r.payeeName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null })),
-        ...pfis.map((r) => ({ kind: "partner_firm_invoice", id: r.id, label: `${r.partnerFirmName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null })),
-        ...txns.map((r) => ({ kind: "bank_transaction", id: r.id, label: `${r.counterpartyNameRaw ?? "Bank txn"} · ${r.postedDate}`, amount: r.amount, currency: r.currency, date: r.postedDate })),
+        ...invoices.map((r) => ({ kind: "invoice", id: r.id, label: r.invoiceNumber ?? r.id, amount: r.total, currency: r.currency, date: r.issuedAt?.toISOString().slice(0, 10) ?? null, ...alloc(r, r.allocProposedEntityId) })),
+        ...expenses.map((r) => ({ kind: "expense", id: r.id, label: `${r.merchant ?? r.category} · ${r.expenseDate}`, amount: r.usdAmount, currency: "USD", date: r.expenseDate, ...alloc(r, r.entityId) })),
+        ...cps.map((r) => ({ kind: "contractor_payment", id: r.id, label: `${r.payeeName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null, ...alloc(r, r.allocProposedEntityId) })),
+        ...pfis.map((r) => ({ kind: "partner_firm_invoice", id: r.id, label: `${r.partnerFirmName} · ${r.weekIso}`, amount: r.usdAmount, currency: "USD", date: r.paidAt?.toISOString().slice(0, 10) ?? null, ...alloc(r, r.legalEntityId) })),
+        ...txns.map((r) => ({ kind: "bank_transaction", id: r.id, label: `${r.counterpartyNameRaw ?? "Bank txn"} · ${r.postedDate}`, amount: r.amount, currency: r.currency, date: r.postedDate, ...alloc(r, r.allocProposedEntityId) })),
       ].map((r) => ({ ...r, sourceHref: glSourceHref(r.kind, r.id) })),
     },
   });
@@ -553,54 +606,37 @@ router.post("/gl/tag", async (req, res) => {
   const [ent] = await db.select().from(atelierLegalEntities)
     .where(and(eq(atelierLegalEntities.id, b.legalEntityId), eq(atelierLegalEntities.orgId, me.orgId)));
   if (!ent) return res.status(404).json({ error: "entity_not_found" });
-  let updated = 0;
-  if (b.kind === "invoice") {
-    updated = (await db.update(atelierInvoice).set({ legalEntityId: ent.id, updatedAt: new Date() })
-      .where(and(eq(atelierInvoice.id, b.id), eq(atelierInvoice.orgId, me.orgId))).returning({ id: atelierInvoice.id })).length;
-  } else if (b.kind === "expense" || b.kind === "partner_firm_invoice") {
-    // Task #1095 — manual GL tagging IS an allocation decision: route it
-    // through the shared decide path so period-close locks, mandatory
-    // override reasons, and allocation.approve/override audits all apply.
-    const sourceKind = b.kind;
-    const [posted] = await db
-      .select({ periodLabel: atelierGlJournalEntry.periodLabel })
-      .from(atelierGlJournalEntry)
-      .where(and(
-        eq(atelierGlJournalEntry.orgId, me.orgId),
-        eq(atelierGlJournalEntry.sourceKind, sourceKind),
-        eq(atelierGlJournalEntry.sourceRef, b.id),
-        isNull(atelierGlJournalEntry.deletedAt)))
-      .limit(1);
-    if (posted && (await isGlPeriodLocked(me.orgId, posted.periodLabel))) {
-      return res.status(409).json({
-        error: "period-locked",
-        message: `Posted in close-locked period ${posted.periodLabel}; use reversal/repost instead.`,
-      });
-    }
-    const decided = await decideAllocation({
-      kind: b.kind === "expense" ? "expense" : "supplier_invoice",
-      id: b.id, orgId: me.orgId,
-      actor: { id: me.id, name: me.name },
-      entityId: ent.id,
-      overrideReason: typeof (req.body ?? {}).reason === "string" ? String((req.body as any).reason) : null,
+  // Task #1095 / #1199 — manual GL tagging IS an allocation decision for
+  // EVERY kind: route it through the shared decide path so period-close
+  // locks, mandatory override reasons, and allocation.approve/override
+  // audits all apply.
+  const [posted] = await db
+    .select({ periodLabel: atelierGlJournalEntry.periodLabel })
+    .from(atelierGlJournalEntry)
+    .where(and(
+      eq(atelierGlJournalEntry.orgId, me.orgId),
+      eq(atelierGlJournalEntry.sourceKind, b.kind),
+      eq(atelierGlJournalEntry.sourceRef, b.id),
+      isNull(atelierGlJournalEntry.deletedAt)))
+    .limit(1);
+  if (posted && (await isGlPeriodLocked(me.orgId, posted.periodLabel))) {
+    return res.status(409).json({
+      error: "period-locked",
+      message: `Posted in close-locked period ${posted.periodLabel}; use reversal/repost instead.`,
     });
-    if (!decided.ok) {
-      const httpStatus = decided.error === "not_found" ? 404 : 400;
-      return res.status(httpStatus).json({ error: decided.error, message: decided.message });
-    }
-    return res.json({ ok: true, data: { status: decided.status, entityId: decided.entityId } });
-  } else if (b.kind === "contractor_payment") {
-    updated = (await db.update(atelierContractorPayments).set({ legalEntityId: ent.id, updatedAt: new Date() })
-      .where(and(eq(atelierContractorPayments.id, b.id), eq(atelierContractorPayments.orgId, me.orgId))).returning({ id: atelierContractorPayments.id })).length;
-  } else if (b.kind === "bank_transaction") {
-    updated = (await db.update(atelierBankTransaction).set({ legalEntityId: ent.id, updatedAt: new Date() })
-      .where(and(eq(atelierBankTransaction.id, b.id), eq(atelierBankTransaction.orgId, me.orgId))).returning({ id: atelierBankTransaction.id })).length;
   }
-  if (updated === 0) return res.status(404).json({ error: "not_found" });
-  await audit({ entityType: b.kind, entityId: b.id, actor: me,
-    action: "gl.entity_tag", payload: { legalEntityId: ent.id },
-    summary: `Tagged ${b.kind} ${b.id} to ${ent.shortName || ent.legalNameEn}` });
-  return res.json({ ok: true });
+  const decided = await decideAllocation({
+    kind: b.kind === "partner_firm_invoice" ? "supplier_invoice" : b.kind,
+    id: b.id, orgId: me.orgId,
+    actor: { id: me.id, name: me.name },
+    entityId: ent.id,
+    overrideReason: typeof (req.body ?? {}).reason === "string" ? String((req.body as { reason?: string }).reason) : null,
+  });
+  if (!decided.ok) {
+    const httpStatus = decided.error === "not_found" ? 404 : 400;
+    return res.status(httpStatus).json({ error: decided.error, message: decided.message });
+  }
+  return res.json({ ok: true, data: { status: decided.status, entityId: decided.entityId } });
 });
 
 // ─────────────── Task #1095 — entity-allocation queue & sweep ───────────────
@@ -652,7 +688,7 @@ router.get("/gl/allocations/pending", async (req, res) => {
 router.post("/gl/allocations/sweep", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
   const allowAi = (req.body ?? {}).allowAi === true;
-  const [expenses, pfis] = await Promise.all([
+  const [expenses, pfis, invoices, cps, txns] = await Promise.all([
     db.select({ id: atelierExpenses.id }).from(atelierExpenses).where(and(
       eq(atelierExpenses.orgId, me.orgId),
       isNull(atelierExpenses.allocStatus),
@@ -664,6 +700,32 @@ router.post("/gl/allocations/sweep", async (req, res) => {
       isNull(atelierPartnerFirmInvoices.allocStatus),
       isNull(atelierPartnerFirmInvoices.legalEntityId),
       isNull(atelierPartnerFirmInvoices.deletedAt))).limit(100),
+    // Task #1199 — remaining untagged kinds join the sweep. needs_input
+    // rows are retried here too when the AI fallback is on (rules alone
+    // could not decide them; AI may now, still landing as proposed).
+    db.select({ id: atelierInvoice.id }).from(atelierInvoice).where(and(
+      eq(atelierInvoice.orgId, me.orgId),
+      allowAi
+        ? or(isNull(atelierInvoice.allocStatus), eq(atelierInvoice.allocStatus, "needs_input"))
+        : isNull(atelierInvoice.allocStatus),
+      isNull(atelierInvoice.legalEntityId),
+      inArray(atelierInvoice.status, ["issued", "paid"]),
+      isNull(atelierInvoice.deletedAt))).limit(100),
+    db.select({ id: atelierContractorPayments.id }).from(atelierContractorPayments).where(and(
+      eq(atelierContractorPayments.orgId, me.orgId),
+      allowAi
+        ? or(isNull(atelierContractorPayments.allocStatus), eq(atelierContractorPayments.allocStatus, "needs_input"))
+        : isNull(atelierContractorPayments.allocStatus),
+      isNull(atelierContractorPayments.legalEntityId),
+      eq(atelierContractorPayments.status, "paid"),
+      isNull(atelierContractorPayments.deletedAt))).limit(100),
+    db.select({ id: atelierBankTransaction.id }).from(atelierBankTransaction).where(and(
+      eq(atelierBankTransaction.orgId, me.orgId),
+      allowAi
+        ? or(isNull(atelierBankTransaction.allocStatus), eq(atelierBankTransaction.allocStatus, "needs_input"))
+        : isNull(atelierBankTransaction.allocStatus),
+      isNull(atelierBankTransaction.legalEntityId),
+      isNull(atelierBankTransaction.deletedAt))).limit(100),
   ]);
   let proposed = 0, needsInput = 0;
   for (const e of expenses) {
@@ -676,13 +738,24 @@ router.post("/gl/allocations/sweep", async (req, res) => {
     if (r?.status === "proposed") proposed++;
     else if (r?.status === "needs_input") needsInput++;
   }
+  const glKindRows: Array<[GlProposeKind, Array<{ id: string }>]> = [
+    ["invoice", invoices], ["contractor_payment", cps], ["bank_transaction", txns],
+  ];
+  for (const [kind, rows] of glKindRows) {
+    for (const row of rows) {
+      const r = await proposeGlRecordAllocation(kind, row.id, { allowAi, actorId: me.id }).catch(() => null);
+      if (r?.status === "proposed") proposed++;
+      else if (r?.status === "needs_input") needsInput++;
+    }
+  }
+  const scanned = expenses.length + pfis.length + invoices.length + cps.length + txns.length;
   await audit({
     entityType: "gl", entityId: "allocation_sweep", actor: me,
     action: "allocation.propose",
-    payload: { scanned: expenses.length + pfis.length, proposed, needsInput, allowAi },
-    summary: `Allocation sweep: ${proposed} proposed, ${needsInput} need input (of ${expenses.length + pfis.length} scanned).`,
+    payload: { scanned, proposed, needsInput, allowAi },
+    summary: `Allocation sweep: ${proposed} proposed, ${needsInput} need input (of ${scanned} scanned).`,
   });
-  res.json({ ok: true, data: { scanned: expenses.length + pfis.length, proposed, needsInput } });
+  res.json({ ok: true, data: { scanned, proposed, needsInput } });
 });
 
 // Approve / override the allocation on a queue item (period-lock aware).
@@ -690,7 +763,11 @@ router.post("/gl/allocations/sweep", async (req, res) => {
 router.post("/gl/allocations/:kind/:id/decide", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
   const kind = req.params.kind === "expense" ? "expense" as const
-    : req.params.kind === "partner_firm_invoice" ? "supplier_invoice" as const : null;
+    : req.params.kind === "partner_firm_invoice" ? "supplier_invoice" as const
+    : req.params.kind === "invoice" ? "invoice" as const
+    : req.params.kind === "contractor_payment" ? "contractor_payment" as const
+    : req.params.kind === "bank_transaction" ? "bank_transaction" as const
+    : null;
   if (!kind) return res.status(400).json({ error: "invalid_kind" });
   const b = (req.body ?? {}) as { entityId?: string; reason?: string };
   const sourceKind = req.params.kind;

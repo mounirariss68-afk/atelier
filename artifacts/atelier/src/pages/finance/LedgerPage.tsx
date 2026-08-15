@@ -1,10 +1,15 @@
 /**
  * LedgerPage — Finance GL backbone (Task #428).
  *
- * Tabs: Trial balance · Journal · Chart of accounts · Exceptions ·
- * Untagged. Runs the rule-based Bookkeeper posting agent per period,
- * seeds the default chart per entity, and lets finance fix entity
- * tags on money-moving records.
+ * Tabs: Trial balance · Journal · Chart of accounts · Needs attention.
+ * Runs the rule-based Bookkeeper posting agent per period, seeds the
+ * default chart per entity, and lets finance fix entity tags on
+ * money-moving records.
+ *
+ * Task #1199 — the former Exceptions + Untagged tabs are merged into one
+ * "Needs attention" tab: posting exceptions keep their resolve flow, and
+ * every untagged item carries an allocation-engine proposal (entity +
+ * rule + confidence) the user approves or changes in one click.
  */
 
 import * as React from "react";
@@ -31,6 +36,7 @@ import {
   postJson,
   type BookkeeperRunResult,
   type GlJournalEntryRow,
+  type GlUntaggedRow,
 } from "@/lib/v5-hooks";
 
 function fmt(n: number): string {
@@ -65,14 +71,13 @@ function currentPeriod(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-const TABS = ["trial-balance", "journal", "accounts", "exceptions", "untagged"] as const;
+const TABS = ["trial-balance", "journal", "accounts", "needs-attention"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   "trial-balance": "Trial balance",
   journal: "Journal",
   accounts: "Chart of accounts",
-  exceptions: "Exceptions",
-  untagged: "Untagged",
+  "needs-attention": "Needs attention",
 };
 
 export default function LedgerPage() {
@@ -86,6 +91,12 @@ export default function LedgerPage() {
   const [runError, setRunError] = React.useState<string | null>(null);
   const { data: statusData } = useGlBookkeeperStatus(period);
   const lastRun = statusData?.data.lastRun ?? null;
+  // Task #1199 — page-level fetch of open exceptions + untagged so the
+  // "Needs attention" tab label carries a combined open-items count.
+  const { data: openExceptions } = useGlExceptions("open");
+  const { data: untagged } = useGlUntagged();
+  const needsAttentionCount =
+    (openExceptions?.data.rows.length ?? 0) + (untagged?.data.rows.length ?? 0);
 
   const effEntity = entityId ?? entities[0]?.id ?? null;
 
@@ -184,6 +195,14 @@ export default function LedgerPage() {
               data-testid={`tab-${t}`}
             >
               {TAB_LABEL[t]}
+              {t === "needs-attention" && needsAttentionCount > 0 && (
+                <span
+                  className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500/15 text-amber-400 px-1.5 py-0.5 text-[10px]"
+                  data-testid="count-needs-attention"
+                >
+                  {needsAttentionCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -191,8 +210,9 @@ export default function LedgerPage() {
         {tab === "trial-balance" && <TrialBalanceTab entityId={effEntity} period={period} />}
         {tab === "journal" && <JournalTab entityId={effEntity} period={period} />}
         {tab === "accounts" && <AccountsTab entityId={effEntity} />}
-        {tab === "exceptions" && <ExceptionsTab onChanged={refetchAll} />}
-        {tab === "untagged" && <UntaggedTab entities={entities} onChanged={refetchAll} />}
+        {tab === "needs-attention" && (
+          <NeedsAttentionTab entities={entities} onChanged={refetchAll} />
+        )}
       </div>
     </div>
   );
@@ -525,7 +545,47 @@ function AccountsTab({ entityId }: { entityId: string | null }) {
   );
 }
 
-function ExceptionsTab({ onChanged }: { onChanged: () => void }) {
+/**
+ * NeedsAttentionTab — Task #1199. One tab, two clearly separated
+ * sections: Bookkeeper posting exceptions (resolve flow unchanged) and
+ * untagged items with allocation-engine proposals. A single all-clear
+ * card shows when both are empty.
+ */
+export function NeedsAttentionTab({ entities, onChanged }: {
+  entities: Array<{ id: string; shortName: string }>;
+  onChanged: () => void;
+}) {
+  const { data: exceptionsData, isLoading: exLoading } = useGlExceptions("open");
+  const { data: untaggedData, isLoading: unLoading } = useGlUntagged();
+  const openExceptions = exceptionsData?.data.rows.length ?? 0;
+  const untaggedCount = untaggedData?.data.rows.length ?? 0;
+  const loaded = !exLoading && !unLoading;
+  if (loaded && openExceptions === 0 && untaggedCount === 0) {
+    return (
+      <Card className="p-6 text-text-mute" data-testid="needs-attention-all-clear">
+        All clear — the Bookkeeper has no open exceptions and everything that moves money carries a legal-entity tag.
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-6" data-testid="needs-attention">
+      <section data-testid="section-exceptions">
+        <h3 className="text-sm font-mono uppercase text-text-faint mb-2">
+          Posting exceptions{openExceptions > 0 ? ` · ${openExceptions} open` : ""}
+        </h3>
+        <ExceptionsSection onChanged={onChanged} />
+      </section>
+      <section data-testid="section-untagged">
+        <h3 className="text-sm font-mono uppercase text-text-faint mb-2">
+          Untagged items{untaggedCount > 0 ? ` · ${untaggedCount}` : ""}
+        </h3>
+        <UntaggedSection entities={entities} onChanged={onChanged} />
+      </section>
+    </div>
+  );
+}
+
+function ExceptionsSection({ onChanged }: { onChanged: () => void }) {
   const [status, setStatus] = React.useState<"open" | "resolved">("open");
   const { data, isLoading } = useGlExceptions(status);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -594,19 +654,31 @@ function ExceptionsTab({ onChanged }: { onChanged: () => void }) {
   );
 }
 
-function UntaggedTab({ entities, onChanged }: {
+function UntaggedSection({ entities, onChanged }: {
   entities: Array<{ id: string; shortName: string }>;
   onChanged: () => void;
 }) {
   const { data, isLoading, refetch } = useGlUntagged();
+  const { toast } = useToast();
   const [busy, setBusy] = React.useState<string | null>(null);
-  async function tag(kind: string, id: string, legalEntityId: string) {
-    if (!legalEntityId) return;
-    setBusy(id);
+  async function decide(row: GlUntaggedRow, entityId: string, reason?: string) {
+    if (!entityId) return;
+    setBusy(row.id);
     try {
-      await postJson("/gl/tag", { kind, id, legalEntityId });
+      // Expenses/PFIs and the newer GL kinds all ride the shared,
+      // period-lock-aware allocation decide path.
+      await postJson(`/gl/allocations/${row.kind}/${row.id}/decide`, {
+        entityId,
+        ...(reason ? { reason } : {}),
+      });
       await refetch();
       onChanged();
+    } catch (e) {
+      toast({
+        title: "Could not tag record",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setBusy(null);
     }
@@ -617,34 +689,97 @@ function UntaggedTab({ entities, onChanged }: {
     <div className="space-y-2" data-testid="list-untagged">
       {rows.length === 0 && <Card className="p-6 text-text-mute">Everything that moves money carries a legal-entity tag. Nothing to fix.</Card>}
       {rows.map((r) => (
-        <Card key={`${r.kind}:${r.id}`} className="p-3 flex items-center justify-between gap-3 flex-wrap" data-testid={`untagged-${r.id}`}>
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <MonoChip>{r.kind.replace(/_/g, " ")}</MonoChip>
-            {r.sourceHref ? (
-              <Link
-                href={r.sourceHref}
-                className="truncate text-gold hover:underline"
-                data-testid={`link-untagged-source-${r.id}`}
-              >
-                {r.label} ↗
-              </Link>
-            ) : (
-              <span className="truncate">{r.label}</span>
-            )}
-            <span className="font-mono text-xs text-text-mute">{r.currency} {fmt(r.amount)}</span>
-          </div>
-          <select
-            defaultValue=""
-            disabled={busy === r.id}
-            onChange={(e) => void tag(r.kind, r.id, e.target.value)}
-            className="bg-bg-elevate border border-border rounded px-2 py-1 text-xs font-mono"
-            data-testid={`select-tag-${r.id}`}
-          >
-            <option value="" disabled>Assign entity…</option>
-            {entities.map((e) => <option key={e.id} value={e.id}>{e.shortName}</option>)}
-          </select>
-        </Card>
+        <UntaggedRow
+          key={`${r.kind}:${r.id}`}
+          row={r}
+          entities={entities}
+          busy={busy === r.id}
+          onDecide={decide}
+        />
       ))}
     </div>
+  );
+}
+
+/**
+ * UntaggedRow — Task #1199. One untagged record with its allocation
+ * proposal: proposed entity + rule + confidence with one-click Approve;
+ * picking a different entity requires a reason ("Change & approve").
+ * Rows the engine could not decide show "needs input" + a plain picker.
+ */
+function UntaggedRow({ row: r, entities, busy, onDecide }: {
+  row: GlUntaggedRow;
+  entities: Array<{ id: string; shortName: string }>;
+  busy: boolean;
+  onDecide: (row: GlUntaggedRow, entityId: string, reason?: string) => Promise<void>;
+}) {
+  const hasProposal = r.allocStatus === "proposed" && !!r.proposedEntityId;
+  const [selected, setSelected] = React.useState<string>(hasProposal ? r.proposedEntityId! : "");
+  const [reason, setReason] = React.useState("");
+  const isOverride = hasProposal && selected !== r.proposedEntityId;
+  const entityName = (id: string | null) =>
+    entities.find((e) => e.id === id)?.shortName ?? id ?? "?";
+  return (
+    <Card className="p-3 space-y-2" data-testid={`untagged-${r.id}`}>
+      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+        <MonoChip>{r.kind.replace(/_/g, " ")}</MonoChip>
+        {r.sourceHref ? (
+          <Link
+            href={r.sourceHref}
+            className="truncate text-gold hover:underline"
+            data-testid={`link-untagged-source-${r.id}`}
+          >
+            {r.label} ↗
+          </Link>
+        ) : (
+          <span className="truncate">{r.label}</span>
+        )}
+        <span className="font-mono text-xs text-text-mute">{r.currency} {fmt(r.amount)}</span>
+        {hasProposal ? (
+          <MonoChip tone="gold" data-testid={`chip-proposed-${r.id}`}>
+            proposed: {entityName(r.proposedEntityId)}
+            {r.allocConfidence != null ? ` · ${Math.round(r.allocConfidence * 100)}%` : ""}
+          </MonoChip>
+        ) : (
+          <MonoChip tone="amber" data-testid={`chip-needs-input-${r.id}`}>needs input</MonoChip>
+        )}
+      </div>
+      {hasProposal && r.allocJustification && (
+        <p className="text-xs text-text-mute" data-testid={`text-justification-${r.id}`}>
+          {r.allocRuleId ? <span className="font-mono text-text-faint">{r.allocRuleId} · </span> : null}
+          {r.allocJustification}
+          {r.allocDecidedBy === "ai" ? <span className="font-mono text-text-faint"> · AI-suggested</span> : null}
+        </p>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={selected}
+          disabled={busy}
+          onChange={(e) => setSelected(e.target.value)}
+          className="bg-bg-elevate border border-border rounded px-2 py-1 text-xs font-mono"
+          data-testid={`select-tag-${r.id}`}
+        >
+          <option value="" disabled>Assign entity…</option>
+          {entities.map((e) => <option key={e.id} value={e.id}>{e.shortName}</option>)}
+        </select>
+        {isOverride && (
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why a different entity?"
+            className="h-8 w-56 text-xs"
+            data-testid={`input-override-reason-${r.id}`}
+          />
+        )}
+        <button
+          onClick={() => void onDecide(r, selected, isOverride ? reason : undefined)}
+          disabled={busy || !selected || (isOverride && reason.trim().length < 3)}
+          className="text-xs font-mono border border-gold/40 text-gold rounded px-3 py-1.5 hover:bg-gold/10 disabled:opacity-50"
+          data-testid={`button-approve-${r.id}`}
+        >
+          {busy ? "…" : isOverride ? "Change & approve" : hasProposal ? "Approve" : "Assign"}
+        </button>
+      </div>
+    </Card>
   );
 }

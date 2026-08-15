@@ -37,6 +37,10 @@ import {
   atelierContractors,
   atelierUsers,
   atelierAuditEvents,
+  atelierInvoice,
+  atelierContractorPayments,
+  atelierBankTransaction,
+  atelierBankAccount,
 } from "@workspace/db";
 import { extractFirstJsonObject } from "./atelier-agents/runner.js";
 
@@ -491,7 +495,12 @@ function rid(prefix: string): string {
 }
 
 export async function writeAllocationAudit(args: {
-  entityType: "expense" | "partner_firm_invoice";
+  entityType:
+    | "expense"
+    | "partner_firm_invoice"
+    | "invoice"
+    | "contractor_payment"
+    | "bank_transaction";
   entityId: string;
   actorId: string | null;
   actorLabel: string;
@@ -759,10 +768,194 @@ export async function proposeSupplierInvoiceAllocation(
   return { status: "proposed", decision };
 }
 
+// ── Propose on the remaining GL untagged kinds (Task #1199) ──────────
+//
+// Client invoices, contractor payments and bank transactions do not gate
+// Bookkeeper posting on allocStatus (out of scope to change), so the
+// proposed entity is stored in allocProposedEntityId and legalEntityId is
+// written ONLY when a human approves via decideAllocation — a proposal
+// can never auto-post.
+
+export type GlProposeKind = "invoice" | "contractor_payment" | "bank_transaction";
+
+const GL_PROPOSE_TABLES = {
+  invoice: atelierInvoice,
+  contractor_payment: atelierContractorPayments,
+  bank_transaction: atelierBankTransaction,
+} as const;
+
+export async function proposeGlRecordAllocation(
+  kind: GlProposeKind,
+  id: string,
+  opts: { allowAi?: boolean; actorId?: string | null } = {},
+): Promise<ProposeResult> {
+  const table = GL_PROPOSE_TABLES[kind];
+  const [row] = await db.select().from(table)
+    .where(and(eq(table.id, id), isNull(table.deletedAt)));
+  if (!row) return { status: null, decision: null };
+  const r = row as {
+    orgId: string;
+    legalEntityId: string | null;
+    allocStatus: string | null;
+  };
+  if (r.allocStatus === "approved" || r.allocStatus === "overridden") {
+    return { status: null, decision: null };
+  }
+  // Already tagged (e.g. by the Bookkeeper backfill) — nothing to propose.
+  if (r.legalEntityId) return { status: null, decision: null };
+  const ctx = await loadAllocationContext(r.orgId);
+  if (ctx.entities.length === 0) return { status: null, decision: null };
+
+  let decision: AllocationDecision | null = null;
+  let aiText: string | null = null;
+  let aiContext = "";
+  let label = id;
+
+  if (kind === "invoice") {
+    const inv = row as typeof atelierInvoice.$inferSelect;
+    label = inv.invoiceNumber ?? inv.id;
+    const engEnt = entityById(ctx.entities, await engagementEntityId(r.orgId, inv.engagementId));
+    const jurEnt = soleEntityInCountry(ctx.entities, inv.jurisdiction);
+    if (engEnt) {
+      decision = {
+        entityId: engEnt.id, ruleId: "engagement_entity",
+        justification: `Invoice issued under an engagement contracted by ${engEnt.shortName} — invoiced revenue belongs to the contracting entity.`,
+        confidence: 0.95, decidedBy: "deterministic", shared: false,
+      };
+    } else if (jurEnt) {
+      decision = {
+        entityId: jurEnt.id, ruleId: "registry_match",
+        justification: `Invoice raised in the ${inv.jurisdiction.toUpperCase()} jurisdiction — ${jurEnt.shortName} is the sole registered entity there.`,
+        confidence: 0.85, decidedBy: "deterministic", shared: false,
+      };
+    }
+    aiContext = `Client (AR) invoice ${label}, ${inv.currency} ${inv.total}.`;
+    aiText = [
+      `bill to: ${inv.billTo?.name ?? "?"} (${inv.billTo?.country ?? "?"})`,
+      `jurisdiction: ${inv.jurisdiction}`,
+      inv.notes,
+    ].filter(Boolean).join("\n");
+  } else if (kind === "contractor_payment") {
+    const cp = row as typeof atelierContractorPayments.$inferSelect;
+    label = `${cp.payeeName} · ${cp.weekIso}`;
+    const engEnt = entityById(ctx.entities, await engagementEntityId(r.orgId, cp.engagementId));
+    if (engEnt) {
+      decision = {
+        entityId: engEnt.id, ruleId: "engagement_entity",
+        justification: `Contractor cost on an engagement contracted by ${engEnt.shortName} — subcontractor costs follow the contracting entity.`,
+        confidence: 0.95, decidedBy: "deterministic", shared: false,
+      };
+    } else {
+      const home = await homeInfoForUser(r.orgId, cp.payeeUserId);
+      const homeEnt =
+        entityById(ctx.entities, home.homeEntityId) ??
+        soleEntityInCountry(ctx.entities, home.homeCountry);
+      if (homeEnt) {
+        decision = {
+          entityId: homeEnt.id, ruleId: "person_home",
+          justification: `No engagement entity is tagged — allocated to ${cp.payeeName}'s home entity ${homeEnt.shortName}.`,
+          confidence: 0.8, decidedBy: "deterministic", shared: false,
+        };
+      }
+    }
+    aiContext = `Contractor payment to ${cp.payeeName} for week ${cp.weekIso}, USD ${cp.usdAmount}.`;
+    aiText = [cp.notes, `payee: ${cp.payeeName}`].filter(Boolean).join("\n");
+  } else {
+    const bt = row as typeof atelierBankTransaction.$inferSelect;
+    label = `${bt.counterpartyNameRaw ?? "Bank txn"} · ${bt.postedDate}`;
+    const [acct] = await db.select().from(atelierBankAccount)
+      .where(and(eq(atelierBankAccount.id, bt.bankAccountId), isNull(atelierBankAccount.deletedAt)));
+    const acctEnt = entityById(ctx.entities, acct?.legalEntityId);
+    if (acctEnt) {
+      decision = {
+        entityId: acctEnt.id, ruleId: "registry_match",
+        justification: `Bank account "${acct!.accountLabel}" is registered to ${acctEnt.shortName} — its transactions belong to that entity.`,
+        confidence: 0.95, decidedBy: "deterministic", shared: false,
+      };
+    }
+    aiContext = `Bank transaction (${bt.kind}) of ${bt.currency} ${bt.amount} on ${bt.postedDate}.`;
+    aiText = [
+      bt.counterpartyNameRaw ? `counterparty: ${bt.counterpartyNameRaw}` : null,
+      bt.referenceRaw ? `reference: ${bt.referenceRaw}` : null,
+      bt.notes,
+    ].filter(Boolean).join("\n");
+  }
+
+  // Single-entity org fallback before AI.
+  if (!decision && ctx.entities.length === 1) {
+    decision = {
+      entityId: ctx.entities[0].id, ruleId: "default_entity",
+      justification: `${ctx.entities[0].shortName} is the only active legal entity.`,
+      confidence: 0.9, decidedBy: "deterministic", shared: false,
+    };
+  }
+
+  if (!decision && opts.allowAi !== false && aiText) {
+    const ai = await aiAllocateEntity({
+      contextLabel: aiContext,
+      text: aiText,
+      entities: ctx.entities,
+    });
+    if (ai?.entityId && ai.confidence >= AI_CONFIDENCE_FLOOR) {
+      decision = {
+        entityId: ai.entityId, ruleId: "ai",
+        justification: ai.justification,
+        confidence: ai.confidence, decidedBy: "ai", shared: ai.shared,
+      };
+    }
+  }
+
+  const now = new Date();
+  if (!decision) {
+    await db.update(table).set({
+      allocStatus: "needs_input",
+      allocProposedEntityId: null,
+      allocRuleId: null,
+      allocJustification:
+        "Could not determine which entity this belongs to — pick the entity manually.",
+      allocConfidence: null,
+      allocDecidedBy: null,
+      updatedAt: now,
+    }).where(eq(table.id, id));
+    await writeAllocationAudit({
+      entityType: kind, entityId: id,
+      actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
+      action: "allocation.needs_input",
+      changes: [{ field: "allocStatus", from: r.allocStatus, to: "needs_input" }],
+      summary: `Entity allocation needs human input for ${kind.replace(/_/g, " ")} ${label}.`,
+    });
+    return { status: "needs_input", decision: null };
+  }
+  // Proposal only — legalEntityId stays null until a human approves.
+  await db.update(table).set({
+    allocStatus: "proposed",
+    allocProposedEntityId: decision.entityId,
+    allocRuleId: decision.ruleId,
+    allocJustification: decision.justification,
+    allocConfidence: decision.confidence,
+    allocDecidedBy: decision.decidedBy,
+    allocShared: decision.shared,
+    updatedAt: now,
+  }).where(eq(table.id, id));
+  await writeAllocationAudit({
+    entityType: kind, entityId: id,
+    actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
+    action: "allocation.propose",
+    changes: [
+      { field: "allocProposedEntityId", from: null, to: decision.entityId },
+      { field: "allocStatus", from: r.allocStatus, to: "proposed" },
+    ],
+    ruleId: decision.ruleId, justification: decision.justification,
+    confidence: decision.confidence, decidedBy: decision.decidedBy,
+    summary: `Proposed entity allocation (${decision.ruleId}) for ${kind.replace(/_/g, " ")} ${label}: ${decision.justification}`,
+  });
+  return { status: "proposed", decision };
+}
+
 // ── Human decision: approve / override ───────────────────────────────
 
 export interface DecideArgs {
-  kind: "expense" | "supplier_invoice";
+  kind: "expense" | "supplier_invoice" | GlProposeKind;
   id: string;
   orgId: string;
   actor: { id: string; name: string };
@@ -781,13 +974,22 @@ export type DecideResult =
  * transition + audit row.
  */
 export async function decideAllocation(args: DecideArgs): Promise<DecideResult> {
-  const table = args.kind === "expense" ? atelierExpenses : atelierPartnerFirmInvoices;
+  const table =
+    args.kind === "expense" ? atelierExpenses
+    : args.kind === "supplier_invoice" ? atelierPartnerFirmInvoices
+    : GL_PROPOSE_TABLES[args.kind];
   const [row] = await db.select().from(table)
     .where(and(eq(table.id, args.id), eq(table.orgId, args.orgId), isNull(table.deletedAt)));
   if (!row) return { ok: false, error: "not_found", message: "Record not found." };
+  // "Current" = the proposal baseline: the allocated entity for expenses /
+  // supplier invoices, or the pending allocProposedEntityId (falling back to
+  // an already-written legalEntityId) for the other GL kinds.
   const current = args.kind === "expense"
     ? (row as typeof atelierExpenses.$inferSelect).entityId
-    : (row as typeof atelierPartnerFirmInvoices.$inferSelect).legalEntityId;
+    : args.kind === "supplier_invoice"
+      ? (row as typeof atelierPartnerFirmInvoices.$inferSelect).legalEntityId
+      : ((row as { legalEntityId: string | null; allocProposedEntityId: string | null }).legalEntityId ??
+         (row as { allocProposedEntityId: string | null }).allocProposedEntityId);
   const wanted = args.entityId ?? current;
   if (!wanted) {
     return { ok: false, error: "entity_required", message: "No entity is proposed — pick one to approve." };
@@ -819,12 +1021,19 @@ export async function decideAllocation(args: DecideArgs): Promise<DecideResult> 
   if (args.kind === "expense") {
     await db.update(atelierExpenses).set({ ...patch, entityId: wanted })
       .where(eq(atelierExpenses.id, args.id));
-  } else {
+  } else if (args.kind === "supplier_invoice") {
     await db.update(atelierPartnerFirmInvoices).set({ ...patch, legalEntityId: wanted })
       .where(eq(atelierPartnerFirmInvoices.id, args.id));
+  } else {
+    // Approval is the ONLY path that writes legalEntityId for these kinds.
+    await db.update(GL_PROPOSE_TABLES[args.kind])
+      .set({ ...patch, legalEntityId: wanted, allocProposedEntityId: wanted })
+      .where(eq(GL_PROPOSE_TABLES[args.kind].id, args.id));
   }
   await writeAllocationAudit({
-    entityType: args.kind === "expense" ? "expense" : "partner_firm_invoice",
+    entityType: args.kind === "expense" ? "expense"
+      : args.kind === "supplier_invoice" ? "partner_firm_invoice"
+      : args.kind,
     entityId: args.id,
     actorId: args.actor.id, actorLabel: args.actor.name,
     action: isOverride ? "allocation.override" : "allocation.approve",

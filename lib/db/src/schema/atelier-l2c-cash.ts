@@ -103,6 +103,19 @@ export const atelierBankTransaction = pgTable(
     // Task #428 — legal-entity tag for GL posting; backfilled from the
     // bank account's legalEntityId when null.
     legalEntityId: text("legal_entity_id"),
+    // Task #1199 — entity-allocation lifecycle (see atelierExpenses.allocStatus).
+    // Proposed entity lives in allocProposedEntityId; legalEntityId is written
+    // only on human approval so the Bookkeeper never posts a proposal.
+    allocStatus: text("alloc_status"),
+    allocProposedEntityId: text("alloc_proposed_entity_id"),
+    allocRuleId: text("alloc_rule_id"),
+    allocJustification: text("alloc_justification"),
+    allocConfidence: doublePrecision("alloc_confidence"),
+    allocDecidedBy: text("alloc_decided_by"),
+    allocShared: boolean("alloc_shared").notNull().default(false),
+    allocApprovedByUserId: text("alloc_approved_by_user_id"),
+    allocApprovedAt: timestamp("alloc_approved_at"),
+    allocOverrideReason: text("alloc_override_reason"),
     statementImportId: text("statement_import_id").notNull(),
     postedDate: text("posted_date").notNull(),
     amount: doublePrecision("amount").notNull(),

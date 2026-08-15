@@ -25,6 +25,7 @@ import {
   type IRouter,
   type Request,
   type Response,
+  type NextFunction,
 } from "express";
 import { createHash, randomBytes } from "node:crypto";
 import multer from "multer";
@@ -1800,9 +1801,9 @@ router.post("/partners/bank-changes/:id/reject", async (req, res, next) => {
   }
 });
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // Task #1172 — Partner firm document library + contact suggestions.
-// =====================================================================
+// ---------------------------------------------------------------------
 
 const PARTNER_DOC_KINDS = new Set([
   "trade_license",
@@ -2419,11 +2420,11 @@ router.post("/partners/contact-suggestions/:id/decide", async (req, res, next) =
   }
 });
 
-// =====================================================================
+// ---------------------------------------------------------------------
 // Task #1173 — Partner notification center (portal reads + mark-read).
 // Scoped via resolvePortalFirm: alliance_partner sees own firm; leadership
 // may preview (read-only — marking read is refused in preview).
-// =====================================================================
+// ---------------------------------------------------------------------
 
 function notificationWire(n: typeof atelierPartnerNotifications.$inferSelect) {
   return {

@@ -148,11 +148,7 @@
 - [UAE FTA VAT 201 export](atelier-vat201.md) — VAT 201 boxes tie to the calculator via the ONE shared GL collector; data-gap boxes default to zero with notes; exports audit as vat.vat201_exported.
 - [Account-module chat capability gating](atelier-account-chat-caps.md) — account module NOT in restricted-deny; new account.* chat tools need requiredRoles + in-run guard + ACL-filter-before-cap resolution.
 - [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
-- [No demo seeding — production policy](atelier-crm-wipe.md) — ALL dummy data deleted + every seeder removed (2026-07-16); only the boot auth seed remains. Never reintroduce seeding.
-- [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions (no revoked_at); orval may skip response zod consts.
 - [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
-- [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
-- [Self-only chat roles clamp](atelier-selfonly-chat-roles.md) — employee/contractor chat limited to me.* tools via SELF_ONLY_CHAT_ROLES + legacy-registry skip + /cli boundary allowlist.
-- [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, guarded on title IS NULL; stub probes see an extra title call.
-- [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
+- [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).
+- [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.

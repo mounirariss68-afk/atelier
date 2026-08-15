@@ -4312,6 +4312,20 @@ export const atelierContractorPayments = pgTable(
     fxRate: doublePrecision("fx_rate").notNull().default(1),
     usdAmount: doublePrecision("usd_amount").notNull().default(0),
     status: text("status").notNull().default("proposed"), // proposed | partner_approved | paid | rejected
+    // Task #1199 — entity-allocation lifecycle (see atelierExpenses.allocStatus).
+    // Unlike expenses, the proposed entity is kept in allocProposedEntityId and
+    // legalEntityId is written ONLY on human approval, so the Bookkeeper never
+    // posts an undecided proposal.
+    allocStatus: text("alloc_status"),
+    allocProposedEntityId: text("alloc_proposed_entity_id"),
+    allocRuleId: text("alloc_rule_id"),
+    allocJustification: text("alloc_justification"),
+    allocConfidence: doublePrecision("alloc_confidence"),
+    allocDecidedBy: text("alloc_decided_by"),
+    allocShared: boolean("alloc_shared").notNull().default(false),
+    allocApprovedByUserId: text("alloc_approved_by_user_id"),
+    allocApprovedAt: timestamp("alloc_approved_at"),
+    allocOverrideReason: text("alloc_override_reason"),
     requiresPartnerApproval: boolean("requires_partner_approval").notNull().default(false),
     proposalRunId: text("proposal_run_id"),
     evidenceEntryIds: jsonb("evidence_entry_ids").$type<string[]>().notNull().default([]),
@@ -4961,6 +4975,19 @@ export const atelierInvoice = pgTable(
     accountId: text("account_id"),
     // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
     legalEntityId: text("legal_entity_id"),
+    // Task #1199 — entity-allocation lifecycle (see atelierExpenses.allocStatus).
+    // Proposed entity lives in allocProposedEntityId; legalEntityId is written
+    // only on human approval so the Bookkeeper never posts a proposal.
+    allocStatus: text("alloc_status"),
+    allocProposedEntityId: text("alloc_proposed_entity_id"),
+    allocRuleId: text("alloc_rule_id"),
+    allocJustification: text("alloc_justification"),
+    allocConfidence: doublePrecision("alloc_confidence"),
+    allocDecidedBy: text("alloc_decided_by"),
+    allocShared: boolean("alloc_shared").notNull().default(false),
+    allocApprovedByUserId: text("alloc_approved_by_user_id"),
+    allocApprovedAt: timestamp("alloc_approved_at"),
+    allocOverrideReason: text("alloc_override_reason"),
     jurisdiction: text("jurisdiction").notNull(),
     invoiceNumber: text("invoice_number"),
     currency: text("currency").notNull().default("USD"),

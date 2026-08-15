@@ -1900,6 +1900,13 @@ export function useGlExceptions(status: "open" | "resolved" | "all") {
 export interface GlUntaggedRow {
   kind: string; id: string; label: string; amount: number; currency: string; date: string | null;
   sourceHref: string | null;
+  // Task #1199 — allocation engine proposal for the row (approve/change UI).
+  allocStatus: "proposed" | "needs_input" | null;
+  allocRuleId: string | null;
+  allocJustification: string | null;
+  allocConfidence: number | null;
+  allocDecidedBy: "deterministic" | "ai" | "human" | null;
+  proposedEntityId: string | null;
 }
 export function useGlUntagged() {
   return useQuery<{ ok: boolean; data: { rows: GlUntaggedRow[] } }>({
