@@ -2280,7 +2280,10 @@ router.get("/roster/compliance", async (req, res, next) => {
           id: r.id,
           kind: r.kind,
           jurisdiction: r.jurisdiction,
-          personType: r.personType,
+          // Task #1171 — trust the resolved person's actual worker type
+          // over the stored (possibly blank/stale) personType so partner
+          // records can't leak into worker buckets or vice versa.
+          personType: person?.workerType ?? r.personType,
           personId: r.personId,
           personName: person?.fullName ?? null,
           partnerFirmId: r.partnerFirmId,
@@ -2294,9 +2297,15 @@ router.get("/roster/compliance", async (req, res, next) => {
         };
       }),
     );
-    // Roll-ups
+    // Roll-ups. Task #1171 — partner-firm records (partner_firm_resource
+    // people or firm-level records tied to a partner firm) are counted in
+    // their own roll-up so the worker buckets only reflect our own
+    // employees/contractors and Cognirise entity-level registrations.
+    const isPartnerRecord = (r: (typeof enriched)[number]) =>
+      r.personType === "partner_firm_resource" || (!r.personId && !!r.partnerFirmId);
     const buckets = { expired: 0, expiring_30: 0, expiring_60: 0, expiring_90: 0, ok: 0 };
-    for (const r of enriched) buckets[r.bucket]++;
+    const partnerBuckets = { expired: 0, expiring_30: 0, expiring_60: 0, expiring_90: 0, ok: 0 };
+    for (const r of enriched) (isPartnerRecord(r) ? partnerBuckets : buckets)[r.bucket]++;
     const saudization = enriched
       .filter((r) => r.kind === "saudization")
       .map((r) => ({
@@ -2310,6 +2319,7 @@ router.get("/roster/compliance", async (req, res, next) => {
       horizonDays: horizon,
       horizonDate,
       buckets,
+      partnerBuckets,
       records: enriched,
       saudization,
     });
@@ -2345,9 +2355,21 @@ router.post("/roster/compliance", async (req, res, next) => {
     }
     const id = rid("cmp");
     const { redacted, lastFour } = redactReference(body.referenceNumber);
+    // Task #1171 — when a person is attached, derive personType from the
+    // actual roster row instead of trusting the request, so records are
+    // never mislabeled across the worker/partner boundary.
+    let personType = body.personType ?? null;
+    if (body.personId) {
+      const resolved = await findPerson(body.personId);
+      if (!resolved) {
+        res.status(400).json({ error: "unknown personId" });
+        return;
+      }
+      personType = resolved.workerType;
+    }
     await db.insert(atelierComplianceRecords).values({
       id,
-      personType: body.personType ?? null,
+      personType,
       personId: body.personId ?? null,
       partnerFirmId: body.partnerFirmId ?? null,
       kind: body.kind,

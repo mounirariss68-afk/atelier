@@ -2042,16 +2042,25 @@ function CoDeliverView() {
       </p>
 
       <section className="space-y-3">
-        <h3 className="section-label">Partner-firm resources</h3>
+        {/* Task #1171 — this is the home for partner-firm people; the
+            internal People directory no longer lists them. Cards link to
+            the person page (partner-contact layout). */}
+        <h3 className="section-label">Partner contacts</h3>
         {!isLoading && resources.length === 0 && (
-          <p className="text-sm text-text-mute">No partner-firm resources on the roster.</p>
+          <p className="text-sm text-text-mute">No partner-firm contacts on record.</p>
         )}
         <div className="grid gap-3 md:grid-cols-2">
           {resources.map((r) => (
             <Card key={r.id} className="p-4" data-testid={`card-resource-${r.id}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-medium text-text">{r.fullName}</div>
+                  <Link
+                    href={`/roster/people/${r.id}`}
+                    className="font-medium text-text hover:text-gold"
+                    data-testid={`link-resource-${r.id}`}
+                  >
+                    {r.fullName}
+                  </Link>
                   <div className="text-xs text-text-faint">
                     {[r.role, r.seniority, r.country].filter(Boolean).join(" · ") || "—"}
                   </div>

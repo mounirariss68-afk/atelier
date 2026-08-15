@@ -53,6 +53,7 @@
 - [Agent-run staleness rules](atelier-agent-run-staleness.md) — every surface reading atelier_agent_runs status="running" must apply agentRunIsFresh()/effectiveAgentRunStatus (2h heartbeat) or dead runs spin forever.
 - [Atelier async agent launches](atelier-agent-async-launch.md) — long agent routes must return instantly + poll (proxy 502s held requests); durable job registry details (atomic start, stale reap, boot sweep) in [atelier-background-jobs.md](atelier-background-jobs.md).
 - [Atelier legal-entity registry](atelier-legal-entity-registry.md) — ENTITIES_SEED removed; plan/reports read registry via listFinanceEntities + setFpaEntities, firm pseudo-entity fallback; extract data under proposal.fields.
+- [Partner-firm contact separation](atelier-pfr-separation.md) — PFRs stay real roster rows; internal surfaces use workerType=internal, compliance classifies from resolved person, person page gates content dispatch not just tabs.
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
 - [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).

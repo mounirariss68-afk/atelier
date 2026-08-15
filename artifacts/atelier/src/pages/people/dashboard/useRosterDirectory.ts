@@ -29,7 +29,9 @@ export function useRosterDirectory(): State {
   const [state, setState] = React.useState<State>({ rows: null, error: null });
   React.useEffect(() => {
     let cancelled = false;
-    fetch(`/api/atelier/roster/people`, { credentials: "include" })
+    // Task #1171 — workforce dashboards cover internal workers only;
+    // partner-firm contacts are not part of our headcount.
+    fetch(`/api/atelier/roster/people?workerType=internal`, { credentials: "include" })
       .then(async (r) => {
         // Fail loud on non-OK responses (401/403/500) — a JSON error body
         // parsed as `{}` used to silently render as headcount 0.

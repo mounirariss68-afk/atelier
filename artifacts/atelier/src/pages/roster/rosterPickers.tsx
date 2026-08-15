@@ -366,9 +366,20 @@ export function PersonPicker({
               }}
               data-testid={testId ? `${testId}-opt-${p.id}` : undefined}
             >
-              <div className="font-medium">{p.fullName}</div>
+              <div className="font-medium flex items-center gap-2">
+                {p.fullName}
+                {/* Task #1171 — partner-firm people stay findable but are
+                    clearly badged as external partner contacts. */}
+                {p.workerType === "partner_firm_resource" && (
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-purple-400 border border-purple-400/40 rounded px-1">
+                    Partner firm
+                  </span>
+                )}
+              </div>
               <div className="text-text-mute text-xs">
-                {p.workerType}
+                {p.workerType === "partner_firm_resource"
+                  ? "Partner contact"
+                  : p.workerType}
                 {p.title ? ` · ${p.title}` : ""}
                 {p.email ? ` · ${p.email}` : ""}
               </div>

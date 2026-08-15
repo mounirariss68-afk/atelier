@@ -112,6 +112,12 @@ export default function RosterPerson() {
   if (!person)
     return <div className="px-8 py-12 text-text-mute">Loading…</div>;
 
+  // Task #1171 — partner contacts have no worker surfaces; direct deep
+  // links to those tabs normalize to Profile instead of rendering them.
+  const PFR_HIDDEN_TABS = ["timesheet", "skills", "learning", "performance", "conflicts"];
+  const isPfr = person.workerType === "partner_firm_resource";
+  const effectiveTab = isPfr && PFR_HIDDEN_TABS.includes(activeTab) ? "profile" : activeTab;
+
   return (
     <div>
       <PageHero>
@@ -122,10 +128,15 @@ export default function RosterPerson() {
         <div className="flex flex-wrap gap-2 mt-1">
           <MonoChip>
             {person.workerType === "partner_firm_resource"
-              ? "Partner-firm"
+              ? "Partner contact"
               : person.workerType[0]!.toUpperCase() +
                 person.workerType.slice(1)}
           </MonoChip>
+          {/* Task #1171 — partner contacts are badged with their firm and
+              framed as external, never as our workers. */}
+          {person.workerType === "partner_firm_resource" && person.partnerFirmName && (
+            <MonoChip tone="gold">{person.partnerFirmName}</MonoChip>
+          )}
           {person.title && <MonoChip>{person.title}</MonoChip>}
           {person.seniority && <MonoChip>{person.seniority}</MonoChip>}
           {person.country && <MonoChip>{countryName(person.country)}</MonoChip>}
@@ -141,6 +152,14 @@ export default function RosterPerson() {
           // Compensation drop out of the manager (business-only) view.
           if ((t.id === "documents" || t.id === "audit") && !viewerCanSeeSensitive) return false;
           if (t.id === "conflicts" && viewerScope !== "full") return false;
+          // Task #1171 — partner-firm contacts are not our workers: no
+          // Time, skills, learning, performance or conflicts framing.
+          // Documents/Audit stay (visas etc. legitimately live there).
+          if (
+            person.workerType === "partner_firm_resource" &&
+            ["timesheet", "skills", "learning", "performance", "conflicts"].includes(t.id)
+          )
+            return false;
           return true;
         }).map((t) => (
           <TabNavLink
@@ -150,7 +169,7 @@ export default function RosterPerson() {
                 ? tabBase
                 : `${tabBase}/${t.id}`
             }
-            active={activeTab === t.id}
+            active={effectiveTab === t.id}
             data-testid={`tab-${t.id}`}
           >
             {t.label}
@@ -159,12 +178,12 @@ export default function RosterPerson() {
       </TabNav>
 
       <div className="mt-6">
-        {activeTab === "profile" && (
+        {effectiveTab === "profile" && (
           <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEdit={viewerCanEdit} viewerCanEditTitle={viewerCanEditTitle} onUpdated={setPerson} />
         )}
-        {activeTab === "access" && <AccessTab personId={personId} />}
-        {activeTab === "engagements" && <EngagementsTab personId={personId} />}
-        {activeTab === "skills" && (
+        {effectiveTab === "access" && <AccessTab personId={personId} />}
+        {effectiveTab === "engagements" && <EngagementsTab personId={personId} />}
+        {effectiveTab === "skills" && (
           person?.workerType === "partner_firm_resource" ? (
             <Card className="p-6 text-text-mute">
               Partner-firm resources are not part of the firm's skill graph by design.
@@ -173,17 +192,17 @@ export default function RosterPerson() {
             <SkillsTab personId={personId} />
           )
         )}
-        {activeTab === "learning" && <LearningTab personId={personId} workerType={person.workerType} />}
-        {activeTab === "performance" && <PerformanceTab personId={personId} workerType={person.workerType} />}
-        {activeTab === "timesheet" && <TimeTab personId={personId} />}
-        {activeTab === "documents" && (
+        {effectiveTab === "learning" && <LearningTab personId={personId} workerType={person.workerType} />}
+        {effectiveTab === "performance" && <PerformanceTab personId={personId} workerType={person.workerType} />}
+        {effectiveTab === "timesheet" && <TimeTab personId={personId} />}
+        {effectiveTab === "documents" && (
           <>
             <ContractsPanel personId={personId} title="Contracts" />
             <DocumentsTab personId={personId} />
           </>
         )}
-        {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
-        {activeTab === "audit" && <AuditTab personId={personId} />}
+        {effectiveTab === "conflicts" && <ConflictsTab personId={personId} />}
+        {effectiveTab === "audit" && <AuditTab personId={personId} />}
       </div>
       </div>
     </div>
@@ -295,6 +314,21 @@ function ProfileTab({
           }}
         />
       )}
+      {/* Task #1171 — partner contacts have no personal comp/banking with
+          us; commercials run firm-level through partner billing (RCTI). */}
+      {person.workerType === "partner_firm_resource" ? (
+        <Card className="p-4 md:col-span-2" data-testid="partner-contact-commercials-note">
+          <h3 className="font-mono text-xs uppercase text-text-mute mb-2">Commercials</h3>
+          <p className="text-sm text-text-mute">
+            This person works for {person.partnerFirmName ?? "a partner firm"}. Rates,
+            invoicing and payments are handled at the firm level under{" "}
+            <Link href="/partners/co-deliver" className="text-gold hover:underline">
+              Partners · Co-deliver
+            </Link>
+            , not as personal compensation.
+          </p>
+        </Card>
+      ) : (
       <Card className="p-4 space-y-3 md:col-span-2">
         <h3 className="font-mono text-xs uppercase text-text-mute flex items-center gap-2">
           Compensation & banking
@@ -341,6 +375,7 @@ function ProfileTab({
           </p>
         )}
       </Card>
+      )}
       {person.notes && (
         <Card className="p-4 md:col-span-2">
           <h3 className="font-mono text-xs uppercase text-text-mute mb-2">

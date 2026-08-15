@@ -111,7 +111,11 @@ export default function RosterPeople() {
 
   React.useEffect(() => {
     const params = new URLSearchParams();
-    if (filter !== "all") params.set("workerType", filter);
+    // Task #1171 — the People directory shows internal workers only.
+    // Partner-firm contacts live under Partners → Co-deliver; deep links
+    // with ?workerType=partner_firm_resource still resolve for back-compat.
+    if (filter === "all") params.set("workerType", "internal");
+    else params.set("workerType", filter);
     if (q.trim()) params.set("q", q.trim());
     for (const k of COHORT_KEYS) {
       if (cohort[k]) params.set(k, cohort[k]);
@@ -145,7 +149,7 @@ export default function RosterPeople() {
       <PageHero>
         <SectionHead
           headline="The Roster — Firm-wide People"
-          lede="Employees, contractors, and partner-firm seconded resources — one accessor, one access policy."
+          lede="Employees and contractors — one accessor, one access policy. Partner-firm contacts live in the Partners lens."
         />
       </PageHero>
       <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
@@ -154,7 +158,7 @@ export default function RosterPeople() {
         <div className="flex items-center gap-2 text-text-mute text-xs font-mono uppercase">
           <Filter className="w-3 h-3" /> Worker type
         </div>
-        {(["all", "employee", "contractor", "partner_firm_resource"] as const).map(
+        {(["all", "employee", "contractor"] as const).map(
           (v) => (
             <button
               key={v}
@@ -174,6 +178,15 @@ export default function RosterPeople() {
             </button>
           ),
         )}
+        {/* Task #1171 — partner-firm contacts are not internal workers;
+            they live in the Partners lens instead of this directory. */}
+        <Link
+          href="/partners/co-deliver"
+          className="px-3 py-1 rounded text-xs font-mono border border-border text-text-mute hover:text-text hover:border-gold transition-colors"
+          data-testid="link-partner-contacts"
+        >
+          Partner contacts →
+        </Link>
         <div className="ml-auto flex items-center gap-3">
           {canQuickAdd && (
             // Task #759 — streamlined direct create for already-hired /

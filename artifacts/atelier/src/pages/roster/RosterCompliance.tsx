@@ -26,6 +26,8 @@ interface ComplianceRecord {
 interface ApiResp {
   horizonDays: number;
   buckets: Record<string, number>;
+  // Task #1171 — partner-firm records roll up separately from workers.
+  partnerBuckets?: Record<string, number>;
   records: ComplianceRecord[];
   saudization: Array<{
     id: string;
@@ -64,7 +66,7 @@ export default function RosterCompliance(): React.ReactElement {
     fetch("/api/atelier/roster/compliance?horizonDays=90", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => setData(d))
-      .catch(() => setData({ horizonDays: 90, buckets: {}, records: [], saudization: [] }));
+      .catch(() => setData({ horizonDays: 90, buckets: {}, partnerBuckets: {}, records: [], saudization: [] }));
   }, []);
   React.useEffect(() => {
     reload();
@@ -107,6 +109,14 @@ export default function RosterCompliance(): React.ReactElement {
 
   if (!data) return <div className="px-8 py-12 text-text-mute">Loading…</div>;
 
+  // Task #1171 — partner-firm people are not our workers: their records
+  // (and firm-level partner records) render in a separate section so the
+  // worker buckets reflect employees/contractors/our entities only.
+  const isPartnerRecord = (r: ComplianceRecord) =>
+    r.personType === "partner_firm_resource" || (!r.personId && !!r.partnerFirmId);
+  const workerRecords = data.records.filter((r) => !isPartnerRecord(r));
+  const partnerRecords = data.records.filter(isPartnerRecord);
+
   return (
     <div>
       <PageHero>
@@ -119,6 +129,9 @@ export default function RosterCompliance(): React.ReactElement {
       <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
       <RosterNav />
 
+      <p className="text-[11px] font-mono uppercase tracking-widest text-text-faint mb-2">
+        Our workers & entities
+      </p>
       <div className="grid gap-3 md:grid-cols-5 mb-6">
         {(["expired", "expiring_30", "expiring_60", "expiring_90", "ok"] as const).map((b) => (
           <Card key={b} className="p-4 text-center" data-testid={`bucket-${b}`}>
@@ -223,41 +236,74 @@ export default function RosterCompliance(): React.ReactElement {
       </Card>
 
       <div className="space-y-2">
-        {data.records.length === 0 && (
+        {workerRecords.length === 0 && (
           <div className="text-text-mute py-8 italic">No compliance records yet.</div>
         )}
-        {data.records.map((r) => (
-          <Card
-            key={r.id}
-            className="p-4 flex items-start justify-between gap-4"
-            data-testid={`compliance-row-${r.id}`}
-          >
-            <div className="space-y-1">
-              <div className="font-medium">
-                {r.kind.toUpperCase()}
-                {r.jurisdiction ? ` · ${r.jurisdiction}` : ""}
-              </div>
-              <div className="text-text-mute text-xs">
-                {r.personId ? (
-                  <Link href={`/roster/people/${r.personId}`} className="hover:text-gold">
-                    {r.personName ?? r.personId}
-                  </Link>
-                ) : (
-                  <span>{r.partnerFirmId ?? "entity-level"}</span>
-                )}
-                {r.referenceNumberRedacted && (
-                  <span className="ml-2 font-mono">ref {r.referenceNumberRedacted}</span>
-                )}
-              </div>
-              <div className="flex gap-1 mt-1">
-                <MonoChip tone={BUCKET_TONE[r.bucket]}>{r.bucket}</MonoChip>
-                {r.expiryDate && <MonoChip>expires {r.expiryDate}</MonoChip>}
-              </div>
-            </div>
-          </Card>
+        {workerRecords.map((r) => (
+          <ComplianceRow key={r.id} r={r} />
         ))}
       </div>
+
+      {/* Task #1171 — partner-firm people are compliance-tracked, but they
+          are not our workers; they get their own section and roll-up. */}
+      {partnerRecords.length > 0 && (
+        <div className="mt-10" data-testid="partner-compliance-section">
+          <p className="text-[11px] font-mono uppercase tracking-widest text-text-faint mb-2">
+            Partner-firm people & firms
+          </p>
+          <div className="grid gap-3 md:grid-cols-5 mb-4">
+            {(["expired", "expiring_30", "expiring_60", "expiring_90", "ok"] as const).map((b) => (
+              <Card key={b} className="p-4 text-center" data-testid={`partner-bucket-${b}`}>
+                <div className="text-2xl font-mono">{data.partnerBuckets?.[b] ?? 0}</div>
+                <div className="text-text-mute text-[11px] uppercase font-mono mt-1">{b.replace("_", " ")}</div>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {partnerRecords.map((r) => (
+              <ComplianceRow key={r.id} r={r} partner />
+            ))}
+          </div>
+        </div>
+      )}
       </div>
     </div>
+  );
+}
+
+function ComplianceRow({ r, partner }: { r: ComplianceRecord; partner?: boolean }) {
+  return (
+    <Card
+      className="p-4 flex items-start justify-between gap-4"
+      data-testid={`compliance-row-${r.id}`}
+    >
+      <div className="space-y-1">
+        <div className="font-medium">
+          {r.kind.toUpperCase()}
+          {r.jurisdiction ? ` · ${r.jurisdiction}` : ""}
+        </div>
+        <div className="text-text-mute text-xs">
+          {r.personId ? (
+            <Link href={`/roster/people/${r.personId}`} className="hover:text-gold">
+              {r.personName ?? r.personId}
+            </Link>
+          ) : (
+            <span>{r.partnerFirmId ?? "entity-level"}</span>
+          )}
+          {partner && (
+            <span className="ml-2 text-[10px] font-mono uppercase tracking-widest text-purple-400 border border-purple-400/40 rounded px-1">
+              Partner firm
+            </span>
+          )}
+          {r.referenceNumberRedacted && (
+            <span className="ml-2 font-mono">ref {r.referenceNumberRedacted}</span>
+          )}
+        </div>
+        <div className="flex gap-1 mt-1">
+          <MonoChip tone={BUCKET_TONE[r.bucket]}>{r.bucket}</MonoChip>
+          {r.expiryDate && <MonoChip>expires {r.expiryDate}</MonoChip>}
+        </div>
+      </div>
+    </Card>
   );
 }

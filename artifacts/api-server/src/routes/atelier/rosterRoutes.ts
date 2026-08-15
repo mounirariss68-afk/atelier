@@ -397,7 +397,11 @@ function rid(prefix: string): string {
 // -----------------------------------------------------------------
 
 export interface ListOpts {
-  workerType?: WorkerType | "all";
+  // Task #1171 — "internal" = employees + contractors only, excluding
+  // partner-firm resources. The web People directory uses it so partner
+  // contacts stop appearing mixed into the worker roster; default stays
+  // "all" so search/pickers/chat keep finding partner-firm people.
+  workerType?: WorkerType | "all" | "internal";
   q?: string;
   status?: string;
   // Task #412 — cohort filters surfaced from the People Lens Composition
@@ -462,7 +466,7 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
     return matches(p.preferredName) || matches(p.displayName);
   };
 
-  if (wt === "all" || wt === "employee") {
+  if (wt === "all" || wt === "internal" || wt === "employee") {
     const rows = await db
       .select()
       .from(atelierEmployees)
@@ -483,7 +487,7 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
     }
   }
 
-  if (wt === "all" || wt === "contractor") {
+  if (wt === "all" || wt === "internal" || wt === "contractor") {
     const rows = await db
       .select()
       .from(atelierContractors)
@@ -1050,7 +1054,7 @@ router.get("/roster/people", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const wt = req.query.workerType as WorkerType | "all" | undefined;
+    const wt = req.query.workerType as WorkerType | "all" | "internal" | undefined;
     const q = typeof req.query.q === "string" ? req.query.q : undefined;
     const status =
       typeof req.query.status === "string" ? req.query.status : undefined;

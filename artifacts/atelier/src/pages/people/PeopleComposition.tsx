@@ -95,7 +95,9 @@ function useCompositionData(): LoadState {
     // (nothing can render without it), but a skills failure only degrades
     // the language/skill panels — demographics still chart.
     Promise.allSettled([
-      fetch("/api/atelier/roster/people", { credentials: "include" }).then((r) => {
+      // Task #1171 — composition analytics cover internal workers only;
+      // partner-firm contacts are not part of our workforce.
+      fetch("/api/atelier/roster/people?workerType=internal", { credentials: "include" }).then((r) => {
         if (!r.ok) throw new Error(`roster fetch failed (${r.status})`);
         return r.json() as Promise<{ people?: RosterPersonWire[] }>;
       }),
