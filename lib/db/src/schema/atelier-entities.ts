@@ -133,6 +133,21 @@ export interface EntityStatutory {
   ceilingOverride?: Record<string, number> | null;
   /** TR kıdem tazminatı ceiling per year of service (updated semi-annually). */
   eosbCapPerYearOverride?: number | null;
+  /**
+   * Task #1136 — WPS (UAE Wage Protection System) employer config for the
+   * SIF export. `applicable: false` marks a WPS-exempt jurisdiction
+   * (DIFC / ADGM — DEWS regimes file outside MOHRE WPS); the SIF builder
+   * refuses those entities with an on-screen explanation, never a silently
+   * invalid file. Defaults: AE entities are applicable unless flagged off
+   * or their freeZoneRegime is DIFC/ADGM.
+   */
+  wps?: {
+    applicable?: boolean | null;
+    /** 13-digit MOHRE Employer Unique ID (establishment card). */
+    employerUniqueId?: string | null;
+    /** 9-digit routing code of the employer's WPS agent bank (Wio). */
+    agentBankRoutingCode?: string | null;
+  } | null;
   notes?: string | null;
 }
 

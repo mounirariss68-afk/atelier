@@ -1508,6 +1508,9 @@ const SENSITIVE_EDIT_FIELDS = new Set([
   "basicWageMonthly",
   "housingAllowanceMonthly",
   "schemeRegisteredOn",
+  // Task #1136 — WPS identifiers live on the dedicated payroll PATCH.
+  "mohrePersonId",
+  "bankRoutingCode",
   "payrollCountry",
   "payrollCountryCode",
   "costToCognirisePerDay",
@@ -1933,6 +1936,18 @@ const payrollEditSchema = z
     basicWageMonthly: z.number().positive().finite().nullable(),
     housingAllowanceMonthly: z.number().min(0).finite().nullable(),
     schemeRegisteredOn: zIsoDate,
+    // Task #1136 — WPS identifiers (audited payroll write path; IBAN/SWIFT
+    // stay exclusively on the HR-approved bank-change flow, NOT here).
+    mohrePersonId: z
+      .string()
+      .trim()
+      .regex(/^\d{14}$/, "14-digit MOHRE Person ID / labour card number")
+      .nullable(),
+    bankRoutingCode: z
+      .string()
+      .trim()
+      .regex(/^\d{9}$/, "9-digit UAE agent-bank routing code")
+      .nullable(),
     // Task #1135 — comp-change provenance (not employee columns).
     effectiveFrom: zIsoDate,
     reason: z.enum(["promotion", "raise", "adjustment", "correction"]),

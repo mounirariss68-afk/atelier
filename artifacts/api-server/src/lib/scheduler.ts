@@ -13,6 +13,7 @@ import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
 import { runMsLicenseSeatForecast } from "./msLicenseForecast";
 import { runProcurementRenewalScan } from "./atelier-procurement-renewal";
 import { runSelfBillingClerk } from "./atelier-agents/selfBillingClerk";
+import { runPayrollClerk } from "./atelier-agents/payrollClerk";
 import { runCollectionsAgent } from "./atelier-agents/collections";
 import { runRevenueRecognizerForOrg } from "./atelier-agents/revrec-scheduler";
 import { runAgentExclusive } from "./atelier-agents/exclusive-runs";
@@ -56,6 +57,11 @@ const SELF_BILLING_CRON = process.env.SELF_BILLING_CRON ?? "30 3 * * 1";
 const COLLECTIONS_AGENT_CRON = process.env.COLLECTIONS_AGENT_CRON ?? "15 6 * * *";
 // Revenue Recognizer — monthly (1st, 04:00 UTC): compute period schedules.
 const REVENUE_RECOGNIZER_CRON = process.env.REVENUE_RECOGNIZER_CRON ?? "0 4 1 * *";
+// Payroll Clerk — monthly (25th, 05:00 UTC): draft statutory payroll runs
+// + exception review AHEAD of period close, so the close checklist's
+// payroll gate finds drafts ready (Task #1136). Manual trigger shares the
+// same exclusive lock.
+const PAYROLL_CLERK_CRON = process.env.PAYROLL_CLERK_CRON ?? "0 5 25 * *";
 const AUTOPILOT_ORG_ID = process.env.ATELIER_AUTOPILOT_ORG_ID ?? "aico";
 const SYSTEM_USER_ID = "system";
 
@@ -74,6 +80,7 @@ let procurementRenewalTask: ScheduledTask | null = null;
 let selfBillingTask: ScheduledTask | null = null;
 let collectionsAgentTask: ScheduledTask | null = null;
 let revenueRecognizerTask: ScheduledTask | null = null;
+let payrollClerkTask: ScheduledTask | null = null;
 
 // Task #629 — hourly: renew Graph calendar subscriptions (max ~3-day
 // lifetime), roll cache windows forward, and safety-sync stale caches.
@@ -458,6 +465,30 @@ export function startScheduler(): void {
     logger.error({ cron: SELF_BILLING_CRON }, "Invalid SELF_BILLING_CRON expression, Self-Billing Clerk not scheduled");
   }
 
+  // Payroll Clerk — monthly, ahead of period close (Task #1136).
+  if (cron.validate(PAYROLL_CLERK_CRON)) {
+    payrollClerkTask = cron.schedule(
+      PAYROLL_CLERK_CRON,
+      async () => {
+        try {
+          const res = await runAgentExclusive({
+            agent: "payroll_clerk", orgId: AUTOPILOT_ORG_ID, userId: SYSTEM_USER_ID,
+            label: "Payroll Clerk — monthly draft", resultHref: "/finance/payroll",
+            work: () => runPayrollClerk({ orgId: AUTOPILOT_ORG_ID, input: {}, triggeredByUserId: null }),
+          });
+          if (!res.ran) { logger.info("Payroll Clerk skipped — run already in progress"); return; }
+          logger.info({ runId: res.result.runId }, "Payroll Clerk scheduled run finished");
+        } catch (err) {
+          logger.error({ err }, "Payroll Clerk scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: PAYROLL_CLERK_CRON }, "Payroll Clerk scheduler started");
+  } else {
+    logger.error({ cron: PAYROLL_CLERK_CRON }, "Invalid PAYROLL_CLERK_CRON expression, Payroll Clerk not scheduled");
+  }
+
   // Collections Agent — daily.
   if (cron.validate(COLLECTIONS_AGENT_CRON)) {
     collectionsAgentTask = cron.schedule(
@@ -590,6 +621,11 @@ export function stopScheduler(): void {
     revenueRecognizerTask.stop();
     revenueRecognizerTask = null;
     logger.info("Revenue Recognizer scheduler stopped");
+  }
+  if (payrollClerkTask) {
+    payrollClerkTask.stop();
+    payrollClerkTask = null;
+    logger.info("Payroll Clerk scheduler stopped");
   }
 }
 

@@ -66,6 +66,11 @@ import {
   getCountryRules,
   STATUTORY_COUNTRIES,
 } from "../../lib/atelier-payroll/statutoryRules.js";
+import { previewWpsSif, exportWpsSif } from "../../lib/atelier-payroll/wpsSifExport.js";
+import { runPayrollClerk } from "../../lib/atelier-agents/payrollClerk.js";
+import { launchAgentExclusive, AGENT_SINGLETON_TARGET } from "../../lib/atelier-agents/exclusive-runs.js";
+import { getLatestJob } from "../../lib/background-jobs.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 const router: IRouter = Router();
 
@@ -399,6 +404,65 @@ router.post("/finance/payroll/advances/:id/payoff", async (req, res) => {
       summary: `Salary advance for ${advance.personName} paid off early (cash received)` });
     res.json({ advance });
   } catch (err) { fail(res, err); }
+});
+
+// ─────────────── Task #1136 — WPS SIF export + Payroll Clerk ───────────────
+// Bank handoff is a MANUAL Wio portal upload for now; wpsSifExport.ts is
+// the isolated seam a future Wio API integration replaces.
+
+// @cli-skip: finance payroll read; REST-only surface (Task #1136)
+router.get("/finance/payroll/runs/:id/wps-sif", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  try {
+    const preview = await previewWpsSif(me.orgId, String(req.params.id));
+    res.json({ preview });
+  } catch (err) { fail(res, err); }
+});
+
+// @cli-skip: finance payroll write; UI-workflow only (Task #1136)
+router.post("/finance/payroll/runs/:id/wps-sif/export", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  try {
+    const out = await exportWpsSif({
+      orgId: me.orgId,
+      runId: String(req.params.id),
+      actor: { id: me.id, name: me.name },
+    });
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", out.fileName));
+    res.setHeader("X-Wps-Export-Id", out.exportId);
+    res.send(out.content);
+  } catch (err) {
+    if (err instanceof PayrollError) {
+      const problems = (err as PayrollError & { problems?: unknown }).problems;
+      res.status(err.status).json({ error: "payroll", message: err.message, ...(problems ? { problems } : {}) });
+      return;
+    }
+    throw err;
+  }
+});
+
+// @cli-skip: finance payroll write; UI-workflow only (Task #1136)
+router.post("/finance/payroll/clerk/run", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const periodLabel = typeof req.body?.periodLabel === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.body.periodLabel)
+    ? req.body.periodLabel : undefined;
+  const launched = await launchAgentExclusive({
+    agent: "payroll_clerk", orgId: me.orgId, userId: me.id,
+    label: "Payroll Clerk — manual draft", resultHref: "/finance/payroll",
+    work: () => runPayrollClerk({ orgId: me.orgId, input: { periodLabel }, triggeredByUserId: me.id }),
+  });
+  if (!launched.started) {
+    return res.status(409).json({ error: "already_running", message: "The Payroll Clerk is already running — wait for it to finish." });
+  }
+  return res.status(202).json({ started: true, jobId: launched.jobId });
+});
+
+// @cli-skip: finance payroll read; REST-only surface (Task #1136)
+router.get("/finance/payroll/clerk/status", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const job = await getLatestJob(["payroll_clerk"], AGENT_SINGLETON_TARGET, me.orgId);
+  res.json({ job: job ?? null });
 });
 
 // ─────────────── Simple monthly payroll (Task #654) ───────────────

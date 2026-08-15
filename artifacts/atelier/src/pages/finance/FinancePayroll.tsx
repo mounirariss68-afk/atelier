@@ -119,6 +119,13 @@ interface SettlementRow {
   adjustmentFactor: number;
   finalAmount: number;
 }
+
+interface SifProblem {
+  employeeId: string | null;
+  name: string | null;
+  field: string;
+  message: string;
+}
 interface FilingItem {
   id: string;
   entityId: string;
@@ -814,6 +821,49 @@ export default function FinancePayroll() {
   const openEntityFilings = entityFilings.filter((f) => f.status !== "filed");
   const filedEntityFilings = entityFilings.filter((f) => f.status === "filed").slice(-6);
 
+  // ── Task #1136 — WPS SIF + Payroll Clerk ──
+  const wpsQ = useQuery({
+    queryKey: ["wps-sif", openRunId],
+    enabled: !!openRunId && (runQ.data?.run.countryCode === "AE"),
+    queryFn: async () => ((await jfetch(`/finance/payroll/runs/${openRunId}/wps-sif`)) as { preview: WpsPreview }).preview,
+  });
+  const clerkQ = useQuery({
+    queryKey: ["payroll-clerk-status"],
+    queryFn: async () => ((await jfetch("/finance/payroll/clerk/status")) as { job: ClerkJob | null }).job,
+    refetchInterval: (q) => (q.state.data?.status === "running" ? 4000 : false),
+  });
+
+  async function downloadSif(runId: string) {
+    setBusy(`sif-${runId}`);
+    try {
+      const res = await fetch(`${API_BASE}/finance/payroll/runs/${runId}/wps-sif/export`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message || `HTTP ${res.status}`);
+      }
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "wps.SIF";
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: `WPS SIF downloaded — ${fileName}`, description: "Upload it manually through the Wio business portal, then mark the WPS filing as filed." });
+      await qc.invalidateQueries({ queryKey: ["wps-sif"] });
+      await qc.invalidateQueries({ queryKey: ["statutory-filings"] });
+    } catch (e) {
+      toast({ title: "WPS SIF", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function act(key: string, fn: () => Promise<unknown>, ok: string) {
     setBusy(key);
     try {
@@ -821,6 +871,7 @@ export default function FinancePayroll() {
       toast({ title: ok });
       await qc.invalidateQueries({ queryKey: ["payroll-overview"] });
       await qc.invalidateQueries({ queryKey: ["payroll-run"] });
+      await qc.invalidateQueries({ queryKey: ["wps-sif"] });
       await qc.invalidateQueries({ queryKey: ["eosb-report"] });
       await qc.invalidateQueries({ queryKey: ["eosb-settlements"] });
       await qc.invalidateQueries({ queryKey: ["statutory-filings"] });
@@ -1043,7 +1094,26 @@ export default function FinancePayroll() {
               >
                 {busy === "compute" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />} Compute run
               </PillButton>
+              <PillButton
+                disabled={busy !== null || clerkQ.data?.status === "running"}
+                onClick={() => act("clerk", () => jfetch("/finance/payroll/clerk/run", {
+                  method: "POST",
+                  body: JSON.stringify({ periodLabel: period }),
+                }), "Payroll Clerk started — drafts + exception review will land shortly")}
+                data-testid="payroll-clerk-run-btn"
+              >
+                {clerkQ.data?.status === "running" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />} Run Payroll Clerk
+              </PillButton>
+              {clerkQ.data && (
+                <MonoChip tone={clerkQ.data.status === "running" ? "amber" : clerkQ.data.status === "failed" ? "red" : "green"} data-testid="payroll-clerk-status">
+                  clerk {clerkQ.data.status}{clerkQ.data.status === "failed" && clerkQ.data.error ? ` · ${clerkQ.data.error}` : ""}
+                </MonoChip>
+              )}
             </div>
+            <p className="mt-2 text-xs text-text-mute">
+              The Payroll Clerk drafts each entity's statutory run monthly ahead of close and flags
+              exceptions (roster gaps, WPS SIF exclusions, leavers, advances) — it never posts or pays.
+            </p>
             <div className="mt-6 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1159,6 +1229,53 @@ export default function FinancePayroll() {
                     ))}
                   </tbody>
                 </table>
+                {runQ.data.run.countryCode === "AE" && (
+                  <div className="mt-6 border-t border-border pt-4" data-testid="wps-sif-panel">
+                    <p className="text-xs font-mono uppercase tracking-widest text-text-mute mb-2">WPS bank file (SIF)</p>
+                    {wpsQ.isLoading && <p className="text-sm text-text-mute">Checking WPS readiness…</p>}
+                    {wpsQ.data && !wpsQ.data.applicable && (
+                      <p className="text-sm text-amber-400" data-testid="wps-exempt-reason">
+                        <AlertTriangle className="w-4 h-4 inline mr-1" />{wpsQ.data.exemptReason}
+                      </p>
+                    )}
+                    {wpsQ.data?.applicable && (
+                      <>
+                        {wpsQ.data.problems.length > 0 && (
+                          <div className="mb-3 text-sm text-red-400" data-testid="wps-problems">
+                            <p className="mb-1">SIF generation is blocked — fix these first:</p>
+                            {wpsQ.data.problems.map((p, i) => (
+                              <p key={i}>• {p.name ? `${p.name} — ` : ""}{p.message}</p>
+                            ))}
+                          </div>
+                        )}
+                        {wpsQ.data.problems.length === 0 && wpsQ.data.runStatus !== "posted" && (
+                          <p className="text-sm text-text-mute">All {wpsQ.data.recordCount} employees are SIF-ready — post the run to enable the download.</p>
+                        )}
+                        {wpsQ.data.ready && (
+                          <PillButton
+                            disabled={busy !== null}
+                            onClick={() => downloadSif(runQ.data!.run.id)}
+                            data-testid="wps-sif-download-btn"
+                          >
+                            {busy === `sif-${runQ.data.run.id}` ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Download SIF ({wpsQ.data.recordCount} records)
+                          </PillButton>
+                        )}
+                        <p className="mt-2 text-xs text-text-mute">{wpsQ.data.gpssaNote}</p>
+                        <p className="mt-1 text-xs text-text-mute">
+                          Handoff is a manual upload in the Wio business portal for now; each export is
+                          recorded (file hash) and linked to the WPS filing row below so marking it filed is one step.
+                        </p>
+                        {wpsQ.data.exports.length > 0 && (
+                          <ul className="mt-2 text-xs font-mono text-text-mute space-y-0.5" data-testid="wps-export-history">
+                            {wpsQ.data.exports.map((x) => (
+                              <li key={x.id}>{x.fileName} · {x.recordCount} rec · sha256 {x.sha256.slice(0, 12)}…</li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -1290,4 +1407,26 @@ export default function FinancePayroll() {
       )}
     </div>
   );
+}
+
+interface ClerkJob {
+  id: string;
+  status: string;
+  label: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  error?: string | null;
+}
+
+interface WpsPreview {
+  applicable: boolean;
+  exemptReason: string | null;
+  problems: SifProblem[];
+  ready: boolean;
+  runStatus: string;
+  recordCount: number;
+  totalNetPay: number;
+  exports: Array<{ id: string; fileName: string; sha256: string; createdAt: string; recordCount: number; totalNetPay: number }>;
+  filingEntryId: string | null;
+  gpssaNote: string;
 }

@@ -201,6 +201,22 @@ const statutorySchema = z.object({
   employeePctOverride: z.record(z.string(), z.number().finite().min(0).max(100)).nullish(),
   ceilingOverride: z.record(z.string(), z.number().finite().min(0)).nullish(),
   eosbCapPerYearOverride: z.number().finite().min(0).nullish(),
+  // Task #1136 — WPS employer config for the SIF export (see EntityStatutory).
+  wps: z
+    .object({
+      applicable: z.boolean().nullish(),
+      employerUniqueId: z
+        .string()
+        .trim()
+        .regex(/^\d{13}$/, "13-digit MOHRE Employer Unique ID")
+        .nullish(),
+      agentBankRoutingCode: z
+        .string()
+        .trim()
+        .regex(/^\d{9}$/, "9-digit agent-bank routing code")
+        .nullish(),
+    })
+    .nullish(),
   notes: optStr(2000),
 });
 
@@ -312,6 +328,14 @@ function normalizeStatutory(s: z.infer<typeof statutorySchema> | null | undefine
     employeePctOverride: s.employeePctOverride && Object.keys(s.employeePctOverride).length > 0 ? s.employeePctOverride : null,
     ceilingOverride: s.ceilingOverride && Object.keys(s.ceilingOverride).length > 0 ? s.ceilingOverride : null,
     eosbCapPerYearOverride: s.eosbCapPerYearOverride ?? null,
+    wps:
+      s.wps && (s.wps.applicable != null || s.wps.employerUniqueId || s.wps.agentBankRoutingCode)
+        ? {
+            applicable: s.wps.applicable ?? null,
+            employerUniqueId: s.wps.employerUniqueId ?? null,
+            agentBankRoutingCode: s.wps.agentBankRoutingCode ?? null,
+          }
+        : null,
     notes: s.notes ?? null,
   };
   const hasValue = Object.values(shaped).some((v) => v !== null);

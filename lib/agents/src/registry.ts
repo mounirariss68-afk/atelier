@@ -1897,6 +1897,87 @@ export const SelfBillingClerk = defineAgent({
   evals: [],
 });
 
+// ---------------------- TASK #1136 — PAYROLL CLERK ----------------------
+// Rule-based like the Self-Billing Clerk: deterministic monthly payroll
+// preparation. Drafts the statutory run per entity, gathers exceptions
+// (roster gaps, WPS SIF exclusions, leaver settlements, unapplied
+// advances), and routes for human approval — never posts or pays.
+
+export const PayrollClerk = defineAgent({
+  id: "ag_payroll_clerk",
+  name: "Payroll Clerk",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Rule-based monthly payroll preparer: computes the draft statutory payroll run per legal entity ahead of period close, validates the roster (missing comp/IBAN/MOHRE identifiers, unprocessed advances, pending comp changes, leavers needing settlement), reports exactly who would be excluded from the UAE WPS SIF bank file, and delivers the draft + exception list to finance for the existing partner-gated approval.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/payroll_clerk.v1.md",
+  inputSchema: z.object({
+    periodLabel: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  }),
+  outputSchema: z.object({
+    periodLabel: z.string(),
+    entities: z.array(
+      z.object({
+        entityId: z.string(),
+        entityName: z.string(),
+        country: z.string(),
+        status: z.enum(["draft_ready", "draft_with_exceptions", "already_posted"]),
+        runId: z.string().nullable(),
+        headcount: z.number(),
+        netPay: z.number(),
+        currency: z.string(),
+        wps: z
+          .object({
+            applicable: z.boolean(),
+            exemptReason: z.string().nullable(),
+            excludedCount: z.number(),
+          })
+          .nullable(),
+        exceptionCount: z.number(),
+      }),
+    ),
+    exceptions: z.array(
+      z.object({
+        entityId: z.string(),
+        entityName: z.string(),
+        code: z.enum([
+          "run_validation",
+          "sif_exclusion",
+          "sif_entity_config",
+          "leaver_settlement",
+          "advance_unapplied",
+          "comp_change_pending",
+        ]),
+        employeeId: z.string().nullable(),
+        name: z.string().nullable(),
+        message: z.string(),
+      }),
+    ),
+    notifiedUserIds: z.array(z.string()),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Drafts only: never posts a run, never pays, never generates the bank file itself — approval and SIF export stay with the existing partner-gated finance flow.",
+    "Reads employee bank details only; IBAN/SWIFT writes remain exclusively in the HR-approved bank-change request flow.",
+    "Deterministic and idempotent per (entity, period): reruns refresh drafts only; posted runs are never touched.",
+    "Every WPS-exempt entity (DIFC/ADGM) is reported with an explanation, never silently skipped.",
+  ],
+  humanCheckpoints: [
+    partnerCheck("Finance reviews the draft + exceptions and posts the run through the existing approval flow"),
+  ],
+  evals: [
+    {
+      id: "eval_payroll_clerk_fixture",
+      description: "Golden fixture input/output validate against the registry schemas (pnpm test:agents)",
+      threshold: 1,
+    },
+  ],
+});
+
 // ============================================================
 // BILLING ORCHESTRATOR — Task #429 (automated billing engine)
 // ============================================================
@@ -2229,6 +2310,8 @@ export const ATELIER_AGENTS: Agent[] = [
   Bookkeeper,
   // Finance self-billing / RCTI (Task #430)
   SelfBillingClerk,
+  // WPS payroll preparation (Task #1136)
+  PayrollClerk,
   // Automated billing (Task #429)
   BillingOrchestrator,
   // Period close + collections (Task #432)

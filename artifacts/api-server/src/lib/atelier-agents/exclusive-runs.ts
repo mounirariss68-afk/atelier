@@ -35,7 +35,8 @@ import {
 export type AutopilotAgentKey =
   | "self_billing_clerk"
   | "collections_agent"
-  | "revenue_recognizer";
+  | "revenue_recognizer"
+  | "payroll_clerk";
 
 /** Stable per-agent lock key — NOT date-derived (that was the bug). */
 export function agentLockKey(agent: AutopilotAgentKey): string {
@@ -98,4 +99,43 @@ export async function runAgentExclusive<T>(
     await failBackgroundJob(jobId, err instanceof Error ? err.message : String(err));
     throw err;
   }
+}
+
+export type LaunchAgentExclusiveResult =
+  | { started: true; jobId: string }
+  | { started: false; reason: "already_running" };
+
+/**
+ * Task #1136 — async variant for manual routes that must return 202
+ * instantly (the proxy 502s held requests on multi-minute work): acquires
+ * the SAME per-agent singleton lock, then runs `work` in the background,
+ * completing/failing the job when it finishes. Callers poll the
+ * background-job registry (getLatestJob) for status.
+ */
+export async function launchAgentExclusive(
+  args: Omit<RunAgentExclusiveArgs<unknown>, "work"> & { work: () => Promise<unknown> },
+): Promise<LaunchAgentExclusiveResult> {
+  const lockKey = agentLockKey(args.agent);
+  const target = AGENT_SINGLETON_TARGET;
+  await reapStaleRunningJob([args.agent], target, args.orgId, args.staleMs ?? AGENT_STALE_MS);
+  const jobId = await startBackgroundJob({
+    orgId: args.orgId,
+    userId: args.userId,
+    kind: args.agent,
+    lockKey,
+    targetType: "autopilot_agent",
+    targetId: target,
+    label: args.label,
+    resultHref: args.resultHref ?? null,
+  });
+  if (!jobId) return { started: false, reason: "already_running" };
+  void (async () => {
+    try {
+      await args.work();
+      await completeBackgroundJob(jobId, { resultHref: args.resultHref ?? null });
+    } catch (err) {
+      await failBackgroundJob(jobId, err instanceof Error ? err.message : String(err)).catch(() => {});
+    }
+  })();
+  return { started: true, jobId };
 }

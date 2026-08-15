@@ -1,0 +1,58 @@
+{
+  "agentId": "ag_payroll_clerk",
+  "notes": "Task #1136 — contract fixture: monthly draft prep with one AE entity carrying WPS SIF exclusions and one DIFC entity reported exempt.",
+  "input": { "periodLabel": "2026-08" },
+  "expectedOutput": {
+    "periodLabel": "2026-08",
+    "entities": [
+      {
+        "entityId": "ent_ae_mainland",
+        "entityName": "Cognirise Consulting FZ-LLC",
+        "country": "AE",
+        "status": "draft_with_exceptions",
+        "runId": "payrun_x1",
+        "headcount": 6,
+        "netPay": 148500,
+        "currency": "AED",
+        "wps": { "applicable": true, "exemptReason": null, "excludedCount": 1 },
+        "exceptionCount": 2
+      },
+      {
+        "entityId": "ent_difc",
+        "entityName": "Cognirise Capital (DIFC)",
+        "country": "AE",
+        "status": "draft_ready",
+        "runId": "payrun_x2",
+        "headcount": 2,
+        "netPay": 60000,
+        "currency": "AED",
+        "wps": {
+          "applicable": false,
+          "exemptReason": "Cognirise Capital (DIFC) is registered in DIFC — a WPS-exempt financial free zone (employees are paid outside MOHRE WPS; DEWS/It's-style schemes apply). No SIF file is generated for this entity.",
+          "excludedCount": 0
+        },
+        "exceptionCount": 0
+      }
+    ],
+    "exceptions": [
+      {
+        "entityId": "ent_ae_mainland",
+        "entityName": "Cognirise Consulting FZ-LLC",
+        "code": "sif_exclusion",
+        "employeeId": "emp_1",
+        "name": "Aisha Al Mansoori",
+        "message": "mohrePersonId: missing/invalid 14-digit MOHRE Person ID (labour card) — set it via the payroll fields editor."
+      },
+      {
+        "entityId": "ent_ae_mainland",
+        "entityName": "Cognirise Consulting FZ-LLC",
+        "code": "leaver_settlement",
+        "employeeId": "emp_2",
+        "name": "Deniz Kaya",
+        "message": "left on 2026-08-14 but no EOSB settlement has been started — final pay needs a leaver settlement, not a regular salary line."
+      }
+    ],
+    "notifiedUserIds": ["u_founder_1", "u_founder_2"],
+    "rationaleSummary": "Period 2026-08: 2 draft(s) prepared, 0 already posted, 2 exception(s) across 2 covered entities; notified 2 finance user(s)."
+  }
+}

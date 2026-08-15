@@ -2567,6 +2567,13 @@ export const atelierEmployees = pgTable(
     schemeRegisteredOn: text("scheme_registered_on"), // ISO date
     iban: text("iban"),
     swift: text("swift"),
+    // Task #1136 — WPS (UAE Wage Protection System) identifiers. Written
+    // ONLY via the audited payroll PATCH (applyPayrollUpdate in
+    // rosterRoutes); the general roster PATCH field-locks them. IBAN/SWIFT
+    // writes stay exclusively on the HR-approved bank-change flow (pay hub)
+    // — the SIF builder only ever READS them.
+    mohrePersonId: text("mohre_person_id"), // 14-digit MOHRE Person ID / labour card number
+    bankRoutingCode: text("bank_routing_code"), // 9-digit UAE agent-bank routing code
     noticePeriodDays: integer("notice_period_days").notNull().default(30),
     baseCurrency: text("base_currency"), // PRD §2.1 (policy-locked)
     baseCompensation: doublePrecision("base_compensation"), // PRD §2.1 (policy-locked)

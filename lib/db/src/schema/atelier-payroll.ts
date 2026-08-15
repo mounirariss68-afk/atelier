@@ -284,3 +284,35 @@ export const atelierAdvanceRepayments = pgTable(
     index("idx_atelier_advrep_adv").on(t.advanceId),
   ],
 );
+
+/**
+ * Task #1136 — WPS SIF export audit trail. One row per generated SIF file
+ * (who / when / run / file hash), linked to the WPS row in the statutory
+ * comply register (`complianceEntryId`) so marking it filed is one step.
+ * The file bytes themselves are handed to Wio via manual portal upload for
+ * now — only the deterministic content hash is kept.
+ */
+export const atelierWpsSifExports = pgTable(
+  "atelier_wps_sif_exports",
+  {
+    id: text("id").primaryKey(), // wpssif_...
+    orgId: ORG("org_id"),
+    runId: text("run_id").notNull(),
+    legalEntityId: text("legal_entity_id").notNull(),
+    periodLabel: text("period_label").notNull(), // YYYY-MM
+    fileName: text("file_name").notNull(), // <EmployerUniqueID><DDMMYYYY><HHMMSS>.SIF
+    sha256: text("sha256").notNull(),
+    employerUniqueId: text("employer_unique_id").notNull(),
+    recordCount: doublePrecision("record_count").notNull(),
+    totalNetPay: doublePrecision("total_net_pay").notNull(),
+    currency: text("currency").notNull().default("AED"),
+    /** Linked WPS filing row in atelier_finance_compliance_entries. */
+    complianceEntryId: text("compliance_entry_id"),
+    exportedByUserId: text("exported_by_user_id").notNull(),
+    ...COMMON,
+  },
+  (t) => [
+    index("idx_atelier_wpssif_run").on(t.runId),
+    index("idx_atelier_wpssif_entity_period").on(t.legalEntityId, t.periodLabel),
+  ],
+);

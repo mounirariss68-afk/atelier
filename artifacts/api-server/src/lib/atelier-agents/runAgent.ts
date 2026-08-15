@@ -35,6 +35,8 @@ export interface RunAgentContext<TInput> {
 
 export interface RunAgentArgs<TInput> {
   agentId: string;
+  /** Tenant org for the run row; legacy single-tenant callers may omit. */
+  orgId?: string;
   input: TInput;
   triggeredByUserId: string | null;
   targetType: string;
@@ -110,6 +112,7 @@ export async function runAgent<TInput, TOutput>(
   const inputForRow = (inputParse.success ? inputParse.data : args.input) as Record<string, unknown>;
   const runId = await startRun({
     agentId: agent.id,
+    orgId: args.orgId,
     triggeredByUserId: args.triggeredByUserId,
     targetType: args.targetType,
     targetId: args.targetId,

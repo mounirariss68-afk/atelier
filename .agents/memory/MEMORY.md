@@ -1,7 +1,5 @@
-- [Bank-credential exposure rule](atelier-entity-bank-accounts.md) — IBAN/SWIFT/holder only for fp/partner/finance on ANY surface; others get empty/redacted rows.
 - [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps the 7-equals marker as a substring; decorative `// ====` comments trip it — use dashes.
-- [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip onnxruntime CUDA bins for 8GiB image cap.
-- [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
+- [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip CUDA bins for 8GiB cap; navy-logo bg via ImageMagick color-key ([logo-bg-removal.md](logo-bg-removal.md)).
 - [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; navy logo only fits server PDFs.
 - [Atelier account-scope auth split](atelier-account-auth-split.md) — reads gate on shared `canSeeAccount`; financial blocks gate separately; don't over-restrict the whole route.
 - [Atelier org chart invariants](atelier-org-chart-invariants.md) — reports_to allows multi-manager (BFS all edges); user lookups must be orgId-scoped.
@@ -37,11 +35,10 @@
 - [Long LLM jobs need a workflow](long-llm-jobs-need-workflow.md) — multi-minute web-search LLM probes stall/die under nohup in the shell; run one-offs as a temp console workflow.
 - [Opportunity-child FK integrity](atelier-opp-child-fks.md) — opp children FK-cascade (or SET NULL); meetings/transcripts are polymorphic → hard-delete opps ONLY via shared hardDeleteOpportunities helper; broad meeting reads filter on live parent.
 - [Me lens & Me-tab linkage](atelier-me-lens.md) — employee/contractor locked to /me/* (deactivate deletes sessions); timesheets/skills key on roster person id, expenses/payments on user id ([atelier-me-tab-linkage.md](atelier-me-tab-linkage.md)).
-- [Atelier pay hub invariants](atelier-pay-hub.md) — pay doc bytes base64 in-row behind ACL routes on purpose; HR approve is sole IBAN write path; contractor variant has no bank/insurance.
+- [Atelier pay hub invariants](atelier-pay-hub.md) — HR approve is sole IBAN write path; pay doc bytes in-row behind ACL; IBAN/SWIFT visible only to fp/partner/finance ([atelier-entity-bank-accounts.md](atelier-entity-bank-accounts.md)).
 - [Atelier performance & learning](atelier-perf-learning.md) — hrNotes never in self shape; contractors 403 on reviews/goals but DO get audience-filtered /me/learning; name inline orval bodies.
 - [Prod DB replace path](prod-db-replace.md) — prod DB is read-only to the agent; only Publish "Overwrite data" can replace it; chunked read-only exports for backups; pre-replace snapshot in backups/.
 - [Atelier tsx UI tests of page modules](atelier-tsx-ui-tests.md) — need --tsconfig jsx react-jsx + guard import.meta.env; expo/RN mock probes in [expo-module-mock-probes.md](expo-module-mock-probes.md).
-- [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF server-side pdf-lib; rasterize checks via pdftoppm.
 - [Atelier DocuSeal e-sign](atelier-esign.md) — webhook trigger-only (authoritative re-fetch); terminal statuses never regress; see also docuseal-live-quirks.md, atelier-esign-extra-fields.md.
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
 - [Fresh/scratch DB provisioning](rag-fresh-db-provisioning.md) — guard boot DDL with to_regclass (batches are ONE tx); db push blocked by orphaned FK child rows — delete first ([db-push-orphan-fk.md](db-push-orphan-fk.md)).
@@ -69,11 +66,10 @@
 - [Self-billing (RCTI) invariants](atelier-self-billing.md) — clerk reruns skip approved/disputed/paid; run builds take approved-only; harness now auto-creates pgvector before push (stale-scratch-schema failures fixed).
 - [Atelier self-only shell gating](atelier-selfonly-shell-gating.md) — guard holds org routes unmounted until /me loads; app-wide dialogs gate queries on open; polls/tabs gated on role or employees 403-flood.
 - [RN sheet → picker deferral](rn-sheet-picker-defer.md) — never timer-race native pickers after Modal close; defer via onDismiss + single-flight runExclusivePick or expo-document-picker wedges.
-- [Atelier pricing structures](atelier-pricing-structures.md) — risk-adjusted blend is 0.2/0.6/0.2; agent run status is "complete"; opp direct seeds need slug/lead/hypothesis/etc.
+- [Atelier pricing structures](atelier-pricing-structures.md) — 0.2/0.6/0.2 blend, run status "complete", opp seeds need slug/lead/etc; fit-scorecard recompute only via computeFitTotals ([atelier-qualify-fit-scorecard.md](atelier-qualify-fit-scorecard.md)).
 - [Durable deferred-retry for locked runs](billing-event-rescan.md) — skipped event launches need a durable, CAS-acked pending signal consumed on completion/failure/boot; never in-memory timers or timestamp windows.
 - [Billing trigger draft concurrency](billing-trigger-concurrency.md) — invoice-from-trigger paths must FOR UPDATE-claim the trigger row in a tx; overlapping runs otherwise draft duplicates.
-- [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, guarded on title IS NULL; stub probes see an extra title call.
-- [Chat timesheet tools](atelier-chat-timesheet.md) — chat timesheet writes resolve roster person + ISO week server-side (never model ids) and recompute week totals; current-week fixtures must use isoWeekOf, not hardcoded week labels.
+- [Chat titles & timesheet tools](chat-session-titles.md) — Haiku title after first turn (title IS NULL); timesheet writes resolve person+ISO week server-side ([atelier-chat-timesheet.md](atelier-chat-timesheet.md)).
 - [Cash matchProposal shape](atelier-cash-matchproposal.md) — matchProposal.recommended is a string ACTION ("apply_full"); the invoice lives in candidates[0]; consumers must handle both shapes.
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock; isDefault dunning ladders only; close-stack quirks in [atelier-finance-654.md](atelier-finance-654.md).
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
@@ -85,7 +81,6 @@
 - [Atelier POV revision loop](atelier-pov-revision.md) — draft/revise async 202+poll; only "done"=success; quality gates in [atelier-pov-pipeline.md](atelier-pov-pipeline.md).
 - [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
-- [Qualify fit-scorecard adjust](atelier-qualify-fit-scorecard.md) — total/verdict recomputed only via shared computeFitTotals; adjust stamps mark manual scores; noop = no audit; legacy capabilities column unused.
 - [Atelier structured person names](atelier-structured-names.md) — name updates go through writePersonAndSync (mirrors!); signer snapshots upgrade to legal name; parser keeps underscores; Me self-edit preferredName-only.
 - [Meeting-chat clarification hardening](atelier-meeting-chat-clarify.md) — never raw ILIKE for people names (foldRosterName handles Turkish ı/İ); fixed-choice answers normalize before enum check; mobile preserves needs_disambiguation.
 - [Atelier internal meetings](atelier-internal-meetings.md) — internal rows merge into /me/calendar even without MS connected; iCalUId dedupe; reschedule/cancel via shared internalMeetingLifecycle (Graph-first on organizer token).
@@ -130,8 +125,7 @@
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
 - [Partner registration flow](atelier-partner-registration.md) — token purpose partner_registration; "registered" signal is firm.registrationCompletedAt (NOT cred.userManaged); firm bank columns write only via finance approve.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
-- [Mechanical className sweeps over tsx](tsx-classname-sweeps.md) — never regex all string literals (apostrophes in comments corrupt code); line-based + tag-aware; skip form controls.
-- [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass; fixed Tailwind-alpha surfaces need explicit fallback selectors; rail now LEFT-anchored.
+- [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass, alpha fallbacks, LEFT rail; className sweeps must be line-based/tag-aware ([tsx-classname-sweeps.md](tsx-classname-sweeps.md)).
 - [Screen catalog & find_screen](atelier-screen-catalog.md) — catalog.ts is GENERATED from web nav (regenerate, never hand-edit); nav/role-gate changes must re-run generator; find_screen widening is role-sliced.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — dual invoice lifecycles keyed on `source`; bank-IBAN gate at approve+run-build; upload/run builds advisory-lock atomic ([atelier-supplier-invoices.md](atelier-supplier-invoices.md)).
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
@@ -140,7 +134,7 @@
 - [Expo Liquid Glass gating](expo-liquid-glass.md) — isLiquidGlassAvailable() THROWS without the native module (Expo Go/old builds); try/catch fail-closed; cards use translucent wash, not per-card blur.
 - [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); EXPO_PUSH_BASE_URL stub; tap deep-link stash rules in [atelier-push-tap-deeplink.md](atelier-push-tap-deeplink.md).
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic reminder cards, every mutation dismisses stale ones; delegation accept/decline rules in [atelier-task-delegation.md](atelier-task-delegation.md).
-- [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — all pdfkit docs use the shared glass kit; addBrandPage before writing; zero bottom margin for near-edge text or phantom pages appear.
+- [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — shared glass kit, addBrandPage first, zero bottom margin or phantom pages; bio/card quirks in [atelier-bio-card.md](atelier-bio-card.md).
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
@@ -150,5 +144,12 @@
 - [Payables nav & action panel](atelier-payables-nav.md) — landing + tab strip share one grouped structure; "Needs your action" reuses the unified inbox, never a parallel aggregation.
 - [One-off DB cleanups](oneoff-db-cleanups.md) — purge = committed idempotent script + explicit per-table delete/unlink policy + system audit row + rerun-safe fixture-scoped probe.
 - [Guarded PDF statement parse](pdf-bank-statement-parse.md) — date-anchored deterministic rows; multi-amount rows flagged never guessed; commit via canonical CSV through the shared import core.
+- [WPS SIF & Payroll Clerk](atelier-wps-sif.md) — pure SIF builder + DB export seam (future Wio API); exempt≠invalid; WPS ids via payroll PATCH only; clerk drafts never post.
 - [UAE FTA VAT 201 export](atelier-vat201.md) — VAT 201 boxes tie to the calculator via the ONE shared GL collector; data-gap boxes default to zero with notes; exports audit as vat.vat201_exported.
 - [Account-module chat capability gating](atelier-account-chat-caps.md) — account module NOT in restricted-deny; new account.* chat tools need requiredRoles + in-run guard + ACL-filter-before-cap resolution.
+- [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
+- [Me-tab data linkage split](atelier-me-tab-linkage.md) — timesheets/skills key on roster person id; expenses/payments key on user id; self-service quirks in [atelier-selfservice-policy.md](atelier-selfservice-policy.md).
+- [db push blocked by orphaned FK rows](db-push-orphan-fk.md) — delete orphaned child rows before re-push; fresh DBs may miss Drizzle cols → 500s.
+- [Chat person-name scoping](atelier-chat-person-scoping.md) — listPersons is unscoped; filter name matches through roster scope BEFORE disambiguation or options leak out-of-perimeter people; contractor/employee chat = me.* only.
+- [Statutory filings & payroll](atelier-statutory-filings.md) — overdue derived at read time, audited mark-filed/reopen; payroll invariants in [atelier-statutory-payroll.md](atelier-statutory-payroll.md).
+- [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.

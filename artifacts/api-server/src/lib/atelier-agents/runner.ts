@@ -207,6 +207,8 @@ function rid(prefix: string): string {
 
 interface StartRunInput {
   agentId: string;
+  /** Tenant org for the run row; omitted = schema default (legacy callers). */
+  orgId?: string;
   triggeredByUserId: string | null;
   targetType: string;
   targetId: string;
@@ -247,6 +249,7 @@ export async function startRun(input: StartRunInput): Promise<string> {
   const id = rid("run");
   await db.insert(atelierAgentRuns).values({
     id,
+    ...(input.orgId ? { orgId: input.orgId } : {}),
     agentId: input.agentId,
     triggeredByUserId: input.triggeredByUserId,
     targetType: input.targetType,
