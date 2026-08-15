@@ -683,6 +683,16 @@
     transition: all 180ms var(--ease);
     cursor: pointer;
     white-space: nowrap;
+    max-width: 100%;
+  }
+  /* Action rows inside cards — wrap instead of clipping when the card is
+     narrow. Pair with .pill-btn's max-width so a lone long button still
+     stays inside its container. */
+  .card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
   }
   .pill-btn-primary {
     background: var(--gold);

@@ -1662,7 +1662,7 @@ function ProfileTab({
               <p className="text-text-mute italic text-sm">No pending proposals.</p>
             ) : (
               <>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => onBulkDecide("approve")}
                     className="pill-btn pill-btn-primary text-xs"
@@ -2090,7 +2090,7 @@ function PendingProposalCard({
         </div>
       )}
 
-      <div className="flex gap-2 mt-3">
+      <div className="flex flex-wrap gap-2 mt-3">
         <button
           onClick={approve}
           className="pill-btn pill-btn-primary text-xs"

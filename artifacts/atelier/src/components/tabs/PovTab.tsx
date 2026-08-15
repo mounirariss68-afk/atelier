@@ -154,7 +154,7 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
               <Textarea id="pov-obj" value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })} className="bg-bg-deep border-border text-text min-h-[80px]" placeholder="What position should this POV land?" />
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
             <PillButton variant="ghost" onClick={() => setShowStart(false)}>Cancel</PillButton>
             <PillButton variant="primary" onClick={start} disabled={startMut.isPending}>
               {startMut.isPending ? "Drafting outline…" : "Generate outline"}
@@ -354,7 +354,7 @@ function ActivePov({
   return (
     <div className="space-y-5">
       <Card className="p-6 space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           {editMeta ? (
             <Input
               value={metaForm.title}
@@ -365,7 +365,7 @@ function ActivePov({
           ) : (
             <h3 className="text-lg font-semibold text-text">{pov.title}</h3>
           )}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="text-xs font-mono text-text-mute">
               {pov.audience} · {pov.depth === "memo" ? "memo" : "full doc"} · {pov.status}
             </span>
@@ -417,7 +417,7 @@ function ActivePov({
               className="bg-bg-deep border-border text-text min-h-[70px]"
               data-testid="input-pov-objective"
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <PillButton variant="ghost" onClick={() => setEditMeta(false)}>Cancel</PillButton>
               <PillButton variant="primary" onClick={saveMeta} disabled={updateMut.isPending}>
                 {updateMut.isPending ? "Saving…" : "Save"}

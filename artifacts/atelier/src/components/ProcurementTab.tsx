@@ -363,7 +363,7 @@ export function ProcurementTab({
               <p className="text-xs text-white/60 mt-2 whitespace-pre-wrap">{p.statusNotes}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canEdit && !editing && (
               <button
                 onClick={() => setEditing(true)}
@@ -412,7 +412,7 @@ export function ProcurementTab({
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/30 focus:outline-none focus:border-sky-400/40"
               data-testid="input-procurement-notes"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() =>
                   patchMut.mutate({
@@ -482,7 +482,7 @@ export function ProcurementTab({
               </div>
             </div>
             {canEdit && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => act("approve", { runId: nav.runId })}
                   disabled={busy !== null}

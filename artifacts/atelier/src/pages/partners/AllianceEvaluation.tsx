@@ -397,7 +397,7 @@ export function AllianceEvaluationPanel({
             return (
             <div
               key={p.id}
-              className="flex items-start justify-between gap-3 text-xs border-b border-border-soft last:border-0 pb-2 last:pb-0"
+              className="flex flex-wrap items-start justify-between gap-3 text-xs border-b border-border-soft last:border-0 pb-2 last:pb-0"
               data-testid={`row-proposal-${p.id}`}
             >
               <div className="min-w-0">

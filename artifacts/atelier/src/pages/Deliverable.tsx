@@ -161,11 +161,11 @@ export default function Deliverable() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <Card className="p-5 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-xs font-mono uppercase tracking-wide text-text-mute">
                       Current draft {current ? `· v${current.versionNumber}` : ""}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <PillButton
                         variant="ghost"
                         onClick={() => onScaffold(false)}

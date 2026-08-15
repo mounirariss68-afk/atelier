@@ -241,12 +241,12 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       <>
 
       <Card className="p-4 space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Proposal</div>
             <div className="font-medium text-text">{proposal.title}</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <PillButton
               variant="ghost"
               data-testid="button-toggle-prompt-sheet"
@@ -612,7 +612,7 @@ function ProposalRecipients({ proposalId }: { proposalId: string }) {
           placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="input-recipient-email" />
         <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text"
           placeholder="Org (optional)" value={org} onChange={(e) => setOrg(e.target.value)} data-testid="input-recipient-org" />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text w-20"
             placeholder="days" value={expiry} onChange={(e) => setExpiry(e.target.value)} data-testid="input-recipient-expiry" />
           <PillButton onClick={add} disabled={busy || !name.trim()} data-testid="add-recipient">

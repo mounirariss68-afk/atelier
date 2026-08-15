@@ -44,11 +44,11 @@ export function ApproveEditReject({ personaName, onDecision }: ApproveEditReject
           className="bg-bg-deep border-border text-text min-h-[80px]"
         />
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-text-faint font-mono uppercase tracking-wider">
           Decided by {personaName}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <PillButton 
             variant="ghost" 
             onClick={() => handleDecision("reject")}

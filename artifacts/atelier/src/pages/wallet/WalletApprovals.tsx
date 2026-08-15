@@ -229,7 +229,7 @@ export default function WalletApprovals() {
                           {p.requiresPartnerApproval && p.status === "proposed" && <MonoChip tone="gold">partner-required</MonoChip>}
                         </div>
                         {isPartner && p.status === "proposed" && (
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex flex-wrap gap-2 justify-end">
                             <PillButton onClick={() => decide("contractor", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-${p.id}`}>Approve</PillButton>
                             <PillButton onClick={() => decide("contractor", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-${p.id}`}>Reject</PillButton>
                           </div>
@@ -297,7 +297,7 @@ export default function WalletApprovals() {
                           <MonoChip tone="gold">partner-required</MonoChip>
                         </div>
                         {isPartner && p.status === "proposed" && (
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex flex-wrap gap-2 justify-end">
                             <PillButton onClick={() => decide("partner-firm", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-pfi-${p.id}`}>Approve</PillButton>
                             <PillButton onClick={() => decide("partner-firm", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-pfi-${p.id}`}>Reject</PillButton>
                           </div>

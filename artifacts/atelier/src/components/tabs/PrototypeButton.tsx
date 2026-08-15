@@ -76,7 +76,7 @@ export function PrototypeButton({ oppId, oppName }: { oppId: string; oppName: st
             onClick={(e) => e.stopPropagation()}
             data-testid="prototype-modal"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium text-text">{proto.name}</div>
                 <div className="text-[10px] font-mono uppercase text-text-mute mt-0.5">
@@ -130,7 +130,7 @@ export function PrototypeButton({ oppId, oppName }: { oppId: string; oppName: st
             {/* Approval state machine */}
             <div className="rounded border border-border-soft bg-bg-deep p-3 space-y-2" data-testid="prototype-gates">
               <div className="text-[11px] font-mono uppercase text-text-mute">Approval gates</div>
-              <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className={`w-3 h-3 ${briefApproved ? "text-gold" : "text-text-mute"}`} />
                   <span className={briefApproved ? "text-text" : "text-text-mute"}>
@@ -158,7 +158,7 @@ export function PrototypeButton({ oppId, oppName }: { oppId: string; oppName: st
                   {briefApproved ? "Approved" : approveBrief.isPending ? "Approving…" : "Approve brief"}
                 </PillButton>
               </div>
-              <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className={`w-3 h-3 ${promptApproved ? "text-gold" : "text-text-mute"}`} />
                   <span className={promptApproved ? "text-text" : "text-text-mute"}>

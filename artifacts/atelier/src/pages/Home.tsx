@@ -289,7 +289,7 @@ function TimesheetApprovalsCard({ role }: { role: string }) {
                   {row.week.suspiciousFlags.length} flag
                 </MonoChip>
               )}
-              <div className="flex gap-1.5 ml-auto">
+              <div className="flex flex-wrap justify-end gap-1.5 ml-auto">
                 <button
                   type="button"
                   onClick={() => approve(row)}

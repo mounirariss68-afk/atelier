@@ -1641,7 +1641,7 @@ function QualifyView() {
                         </span>
                       )}
                       {!isRunning && pendingScorecard && (
-                        <span className="mt-0.5 flex items-center gap-2 text-[10px] text-gold/90" onClick={(e) => e.stopPropagation()} data-testid={`row-qualify-proposal-${f.id}`}>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-gold/90" onClick={(e) => e.stopPropagation()} data-testid={`row-qualify-proposal-${f.id}`}>
                           scorecard proposal awaiting review
                           {canEdit && (
                             <>
@@ -2336,7 +2336,7 @@ function PortalSharingSection({ firms, canEdit }: { firms: Array<{ id: string; n
                   <span className="text-text-mute"> · {d.partnerFirmName} · {d.uploadedByLabel}</span>
                   {d.note && <div className="text-xs text-text-mute mt-0.5">{d.note}</div>}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <MonoChip tone={d.status === "pending" ? "amber" : d.status === "accepted" ? "green" : "red"}>{d.status}</MonoChip>
                   <a href={`${QUALIFY_API}/partners/doc-inbox/${d.id}/download`} className="text-xs text-gold hover:text-gold/80">download</a>
                   {canEdit && d.status === "pending" && (
@@ -2417,12 +2417,12 @@ function PortalSharingSection({ firms, canEdit }: { firms: Array<{ id: string; n
         )}
         <div className="space-y-2">
           {shares.map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm" data-testid={`share-${s.id}`}>
+            <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-sm" data-testid={`share-${s.id}`}>
               <div>
                 <span className="font-medium text-text">{s.contract?.title ?? s.contractId}</span>
                 <span className="text-text-mute"> · shared by {s.sharedByLabel} · {s.createdAt.slice(0, 10)}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {s.revokedAt ? (
                   <MonoChip tone="red">revoked</MonoChip>
                 ) : (
@@ -2619,7 +2619,7 @@ function GovernView() {
                       {c.partnerFirmName ? ` · ${c.partnerFirmName}` : ""}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     {c.expiresAt && <span className="text-xs text-text-faint">expires {c.expiresAt.slice(0, 10)}</span>}
                     <MonoChip tone={c.status === "active" ? "green" : c.status === "lapsing" ? "amber" : "red"}>{c.status}</MonoChip>
                     {canEdit && (
@@ -2730,7 +2730,7 @@ function GovernView() {
                   </MonoChip>
                   <MonoChip tone={c.status === "resolved" ? "green" : "amber"}>{c.status}</MonoChip>
                   {canEdit && (
-                    <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap justify-end gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
                       {c.status === "open" && (
                         <button
                           className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold"
@@ -2956,7 +2956,7 @@ function FirmBankChangesSection() {
                 {r.newCurrency ? ` · ${r.newCurrency}` : ""}
               </div>
               {r.reason && <div className="text-xs text-text-faint">{r.reason}</div>}
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <button
                   type="button"
                   className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
