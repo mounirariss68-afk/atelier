@@ -155,7 +155,9 @@ export type ResultCard =
   | "entity_resolution"
   // Task #853 — universal entity lookups + AR rollups.
   | "statement_of_account"
-  | "pending_invoices";
+  | "pending_invoices"
+  // Task #1163 — account research brief (distilled view + executive tensions).
+  | "account_brief";
 
 export type SurfaceContext =
   | "engagement_dashboard"

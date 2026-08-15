@@ -53,7 +53,8 @@ import {
   resolveLinkedUserId,
   type PersonWire,
 } from "../../routes/atelier/rosterRoutes.js";
-import { isRestrictedPersona } from "../../routes/atelier/personaRoles.js";
+import { isRestrictedPersona, isBoardObserver } from "../../routes/atelier/personaRoles.js";
+import { distillBriefView } from "../atelier-brief-view.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
 import { freshAccessToken, fmtDubai } from "../msScheduling.js";
 import { foldRosterName } from "./chat-normalizers.js";
@@ -2737,6 +2738,253 @@ defineCapability({
         totalAllocationPct,
         capacityStatus,
         availablePct: Math.max(0, 100 - totalAllocationPct),
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// account.brief — account_brief (Task #1163)
+//
+// Fetches an account's stored Cartographer research brief for chat:
+// the distilled "Our view" (shared distillBriefView — ONE synthesized
+// opinion, never raw stress-test fields next to the hypothesis),
+// what's changing, executive tensions (with evidence + sources so the
+// model can genuinely elaborate), mandate angles, and open questions.
+// Read-only; account candidates are ACL-filtered through canSeeAccount
+// BEFORE capping/disambiguation so out-of-perimeter account names can
+// never appear as options, and the fetch re-checks the same ACL
+// (defense in depth). Accounts without a brief return a friendly
+// "run Cartographer research" answer, not an error.
+// ---------------------------------------------------------------------
+
+/**
+ * ACL-scoped account resolution for the brief tool. `resolveAccount`
+ * is only org-scoped, so its disambiguation options could name
+ * accounts outside a grant-scoped caller's perimeter. This variant
+ * fetches a wider candidate set, filters through canSeeAccount FIRST,
+ * and only then caps/offers choices.
+ */
+async function resolveVisibleAccount(
+  q: string,
+  ctx: ToolContext,
+): Promise<
+  | { kind: "match"; id: string; label: string }
+  | { kind: "choices"; prompt: string; options: Array<{ id: string; label: string; secondary?: string }> }
+  | { kind: "none" }
+> {
+  const needle = q.trim();
+  if (needle.length < 2) return { kind: "none" };
+  const rows = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      country: atelierAccounts.country,
+    })
+    .from(atelierAccounts)
+    .where(
+      and(
+        ilike(atelierAccounts.name, `%${needle}%`),
+        eq(atelierAccounts.orgId, ctx.persona.orgId),
+        isNull(atelierAccounts.deletedAt),
+      ),
+    )
+    .limit(25);
+  const access = await engAclFor(ctx.persona);
+  const me = { id: ctx.persona.id };
+  const flags = await Promise.all(rows.map((r) => canSeeAccount(access, me, r.id)));
+  const visible = rows.filter((_, i) => flags[i]);
+  if (visible.length === 0) return { kind: "none" };
+  if (visible.length === 1) {
+    const r = visible[0]!;
+    return { kind: "match", id: r.id, label: r.name };
+  }
+  return {
+    kind: "choices",
+    prompt: `Which account did you mean by "${needle}"?`,
+    options: visible.slice(0, 5).map((r) => ({
+      id: r.id,
+      label: r.name,
+      secondary: r.country ?? undefined,
+    })),
+  };
+}
+
+defineCapability({
+  id: "account.brief",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_brief",
+  description:
+    "Fetch an account's stored research brief: the firm's distilled view ('Our view'), what's changing at the client, executive tensions and dynamics (with evidence), mandate angles, and key open questions. Use for questions about an account's brief, executive tensions, leadership dynamics, or entry angles. Read-only — it never triggers new research.",
+  slashAliases: { en: ["/brief", "/account-brief", "/tensions"], fr: ["/synthese-compte"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: { type: "string", description: "Exact account id when known (e.g. from a disambiguation pick)." },
+      accountName: { type: "string", description: "Account name to resolve when the id is unknown." },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["account_workspace", "home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "account_brief",
+  promoteAsSuggestion: true,
+  // Partner-side roles that can see accounts. Deliberately excludes the
+  // restricted set (contractor / partner_firm_resource / recruiter),
+  // board_observer, employee and alliance_partner — the brief is CRM
+  // origination intelligence.
+  requiredRoles: [
+    "founding_partner",
+    "partner",
+    "senior_manager",
+    "consultant",
+    "finance",
+    "hr",
+    "compliance_officer",
+  ],
+  examplePhrases: {
+    en: [
+      "Give me our account brief about QIB and explain the executive tensions",
+      "What are the executive tensions at DEWA?",
+      "Show the research brief for NEOM",
+    ],
+    ar: ["أعطني ملخص الحساب لبنك قطر الإسلامي واشرح التوترات التنفيذية"],
+    fr: ["Donne-moi la synthèse du compte QIB et explique les tensions exécutives"],
+  },
+  async run(input, ctx) {
+    // Defense in depth — the catalog gate already strips module
+    // "account" from self-only / restricted / board-observer /
+    // alliance-partner slices; refuse explicitly if ever invoked.
+    if (
+      isRestrictedPersona(ctx.persona.role) ||
+      isBoardObserver(ctx.persona.role) ||
+      ctx.persona.role === "employee"
+    ) {
+      return denyForbidden("Account research briefs are not available to your role.");
+    }
+    // ---- resolve the account (ACL-filtered BEFORE disambiguation) ----
+    let accountId = typeof input.accountId === "string" ? input.accountId.trim() : "";
+    let label = "";
+    if (!accountId) {
+      const q = typeof input.accountName === "string" ? input.accountName.trim() : "";
+      if (!q) {
+        return { ok: false, errorCode: "invalid_input", errorMessage: "Provide accountId or accountName." };
+      }
+      const r = await resolveVisibleAccount(q, ctx);
+      if (r.kind === "choices") {
+        return {
+          ok: true,
+          data: { prompt: r.prompt, options: r.options },
+          disambiguation: { kind: "account", options: r.options },
+        };
+      }
+      if (r.kind === "none") {
+        return { ok: false, errorCode: "not_found", errorMessage: `no account matched "${q}"` };
+      }
+      accountId = r.id;
+      label = r.label;
+    }
+    // ---- fetch + ACL re-check (defense in depth) ----
+    const access = await engAclFor(ctx.persona);
+    if (!(await canSeeAccount(access, { id: ctx.persona.id }, accountId))) {
+      return denyForbidden(`You don't have access to the account "${label || accountId}".`);
+    }
+    const [acc] = await db
+      .select({
+        id: atelierAccounts.id,
+        name: atelierAccounts.name,
+        country: atelierAccounts.country,
+        sector: atelierAccounts.sector,
+        researchBrief: atelierAccounts.researchBrief,
+      })
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.id, accountId),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!acc) return notFound("account");
+
+    const href = `/accounts/${acc.id}`;
+    const brief = acc.researchBrief ?? null;
+    if (!brief) {
+      return {
+        ok: true,
+        data: {
+          shape: "account_brief",
+          kind: "account",
+          id: acc.id,
+          name: acc.name,
+          href,
+          hasBrief: false,
+          message:
+            "No research brief is available for this account yet. Run Cartographer research from the account page to generate one.",
+          navigateTo: { path: href, when: "on_commit" as const },
+        },
+      };
+    }
+
+    // ONE synthesized opinion via the shared distiller — never the raw
+    // stress-test fields side by side with the hypothesis.
+    const view = distillBriefView({
+      whyNowHypothesis: brief.whyNowHypothesis ?? null,
+      stressTest: brief.stressTest ?? null,
+    });
+    const claim = (x: { text: string; evidence: string; sourceUrls?: string[] }) => ({
+      text: x.text,
+      evidence: x.evidence,
+      sourceUrls: Array.isArray(x.sourceUrls) ? x.sourceUrls.slice(0, 2) : [],
+    });
+    const arr = <T,>(v: T[] | null | undefined, n: number): T[] => (Array.isArray(v) ? v.slice(0, n) : []);
+    return {
+      ok: true,
+      data: {
+        shape: "account_brief",
+        kind: "account",
+        id: acc.id,
+        name: acc.name,
+        country: acc.country ?? null,
+        sector: acc.sector ?? null,
+        href,
+        hasBrief: true,
+        ourView: view.ourView,
+        fromStressTest: view.fromStressTest,
+        confidence: view.confidence
+          ? {
+              level: view.confidence.level,
+              label: view.confidence.label,
+              evidenced: view.confidence.evidenced,
+              untested: view.confidence.untested,
+              uncertain: view.confidence.uncertain,
+            }
+          : null,
+        watchOuts: view.watchOuts,
+        singleMostImportant:
+          typeof brief.singleMostImportant === "string" && brief.singleMostImportant.trim()
+            ? brief.singleMostImportant.trim()
+            : null,
+        whatsChanging: arr(brief.whatsChanging, 5).map(claim),
+        executiveTensions: arr(brief.executiveTensions, 6).map(claim),
+        mandateAngles: arr(brief.mandateAngles, 5).map((m) => ({
+          title: m.title,
+          tension: m.tension,
+          whyNow: m.whyNow,
+          entryStakeholder: m.entryStakeholder,
+          serviceLines: Array.isArray(m.serviceLines) ? m.serviceLines : [],
+        })),
+        openQuestions: arr(brief.openQuestions, 6),
+        pdfExport: {
+          href: `/api/atelier/accounts/${acc.id}/research-brief.pdf`,
+          label: "Research brief (PDF)",
+        },
+        navigateTo: { path: href, when: "on_commit" as const },
       },
     };
   },

@@ -1371,6 +1371,170 @@ function FallbackGrid({ data, lang }: { data: Json; lang: string }) {
   return <FieldGrid entries={entries} currency={asStr(data.currency) || null} lang={lang} />;
 }
 
+/* ────────── Task #1163 — account research brief (mobile) ────────── */
+
+// Mobile rendering of the account.brief payload: distilled "Our view"
+// headline, executive tensions (with evidence tags), what's changing,
+// mandate angles and open questions. The distillation happened
+// server-side — never renders raw stress-test fields. Degrades to a
+// friendly hint when the account has no brief yet.
+function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const name = asStr(data.name);
+  const sectionTitle = (label: string) => (
+    <Text
+      style={{
+        color: c.mutedForeground,
+        fontFamily: "PlusJakartaSans_600SemiBold",
+        fontSize: 10,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        textAlign: rtl.textAlign,
+      }}
+    >
+      {label}
+    </Text>
+  );
+  const bullet = (text: string, i: number, muted = false) => (
+    <Text
+      key={i}
+      style={{
+        color: muted ? c.mutedForeground : c.foreground,
+        fontFamily: "PlusJakartaSans_400Regular",
+        fontSize: 13,
+        textAlign: rtl.textAlign,
+      }}
+    >
+      {"• "}
+      {text}
+    </Text>
+  );
+  if (!("hasBrief" in data)) {
+    return <FallbackGrid data={data} lang={lang} />;
+  }
+  if (data.hasBrief !== true) {
+    return (
+      <View style={{ gap: 4 }}>
+        {name ? (
+          <Text
+            style={{
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 14,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {name}
+          </Text>
+        ) : null}
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_400Regular",
+            fontSize: 13,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {ar
+            ? "لا يوجد ملخص بحثي لهذا الحساب بعد — شغّل بحث Cartographer من صفحة الحساب."
+            : "No research brief yet — run Cartographer research from the account page to generate one."}
+        </Text>
+      </View>
+    );
+  }
+  const ourView = asStr(data.ourView);
+  const claims = (v: unknown) =>
+    asArr(v)
+      .map((x) => asObj(x))
+      .filter((x) => asStr(x.text).trim().length > 0);
+  const tensions = claims(data.executiveTensions);
+  const whatsChanging = claims(data.whatsChanging);
+  const angles = asArr(data.mandateAngles)
+    .map((x) => asObj(x))
+    .filter((x) => asStr(x.title).trim().length > 0);
+  const watchOuts = asArr(data.watchOuts).map(asStr).filter(Boolean);
+  const openQuestions = asArr(data.openQuestions).map(asStr).filter(Boolean);
+  return (
+    <View style={{ gap: 6 }}>
+      {name ? (
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontSize: 14,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {name}
+        </Text>
+      ) : null}
+      {ourView ? (
+        <View style={{ gap: 2 }}>
+          <Text
+            style={{
+              color: "#C9A24E",
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 10,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {ar ? "رأينا" : "Our view"}
+          </Text>
+          <Text
+            style={{
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_400Regular",
+              fontSize: 13,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {ourView}
+          </Text>
+        </View>
+      ) : null}
+      {tensions.length > 0 ? (
+        <View style={{ gap: 2 }}>
+          {sectionTitle(ar ? "التوترات التنفيذية" : "Executive tensions")}
+          {tensions.slice(0, 5).map((t, i) => bullet(asStr(t.text), i))}
+        </View>
+      ) : null}
+      {whatsChanging.length > 0 ? (
+        <View style={{ gap: 2 }}>
+          {sectionTitle(ar ? "ما الذي يتغيّر" : "What's changing")}
+          {whatsChanging.slice(0, 4).map((w, i) => bullet(asStr(w.text), i, true))}
+        </View>
+      ) : null}
+      {angles.length > 0 ? (
+        <View style={{ gap: 2 }}>
+          {sectionTitle(ar ? "زوايا الدخول" : "Mandate angles")}
+          {angles.slice(0, 4).map((m, i) =>
+            bullet(
+              asStr(m.tension) ? `${asStr(m.title)} — ${asStr(m.tension)}` : asStr(m.title),
+              i,
+            ),
+          )}
+        </View>
+      ) : null}
+      {watchOuts.length > 0 ? (
+        <View style={{ gap: 2 }}>
+          {sectionTitle(ar ? "تحذيرات" : "Watch-outs")}
+          {watchOuts.slice(0, 4).map((w, i) => bullet(w, i, true))}
+        </View>
+      ) : null}
+      {openQuestions.length > 0 ? (
+        <View style={{ gap: 2 }}>
+          {sectionTitle(ar ? "أسئلة مفتوحة" : "Open questions")}
+          {openQuestions.slice(0, 4).map((q, i) => bullet(q, i, true))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /* ────────── Task #745 — traveller picker (mobile) ────────── */
 
 function TravellerPicker({
@@ -1920,6 +2084,10 @@ export function ToolResultCards({
                 break;
               }
               body = <FallbackGrid data={dataObj} lang={lang} />;
+              break;
+            // Task #1163 — account research brief.
+            case "account_brief":
+              body = <AccountBriefBody data={dataObj} lang={lang} />;
               break;
             // Task #853 — AR rollup cards (universal chat lookups).
             case "statement_of_account":

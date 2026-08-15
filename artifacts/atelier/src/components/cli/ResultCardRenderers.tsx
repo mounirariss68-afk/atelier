@@ -791,12 +791,182 @@ function ShapeBody({
     // "Catching you up" treatment when composed lists exist.
     case "recap_card":
       return <RecapCard data={data} locale={locale} />;
+    // Task #1163 — account research brief (distilled view + tensions).
+    case "account_brief":
+      return <AccountBriefCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
 }
 
 /* ─────────── Task #994 — /recap result card (proactive parity) ─────────── */
+
+/* ─────────── Task #1163 — account research brief card ─────────── */
+
+// Renders the account.brief payload: ONE distilled "Our view" (shared
+// distillation already applied server-side — never raw stress-test
+// fields), what's changing, executive tensions with evidence, mandate
+// angles, watch-outs, and open questions. Degrades to a friendly empty
+// state when the account has no brief yet.
+function AccountBriefCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const name = asStr(data.name);
+  const href = asStr(data.href);
+  // Disambiguation payloads reuse the tool's default shape — show the
+  // prompt only; the chips render via the needs_disambiguation frame.
+  if (!("hasBrief" in data)) {
+    const prompt = asStr(data.prompt);
+    return prompt ? <div className="text-xs text-text-mute">{prompt}</div> : <FallbackJson data={data} />;
+  }
+  if (data.hasBrief !== true) {
+    return (
+      <div data-testid="cli-account-brief-empty">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-semibold truncate">{name || "—"}</span>
+          {href && <OpenLink href={href} locale={locale} />}
+        </div>
+        <EmptyState
+          icon={FlaskConical}
+          title={ar ? "لا يوجد ملخص بحثي لهذا الحساب بعد" : "No research brief yet for this account"}
+          hint={
+            ar
+              ? "شغّل بحث Cartographer من صفحة الحساب لإنشائه"
+              : "Run Cartographer research from the account page to generate one"
+          }
+        />
+      </div>
+    );
+  }
+  const ourView = asStr(data.ourView);
+  const confidence = asObj(data.confidence);
+  const confLevel = asStr(confidence.level);
+  const watchOuts = asArr(data.watchOuts).map(asStr).filter(Boolean);
+  const claims = (v: unknown) =>
+    asArr(v)
+      .map((x) => asObj(x))
+      .filter((x) => asStr(x.text).trim() !== "");
+  const whatsChanging = claims(data.whatsChanging);
+  const tensions = claims(data.executiveTensions);
+  const angles = asArr(data.mandateAngles)
+    .map((x) => asObj(x))
+    .filter((x) => asStr(x.title).trim() !== "");
+  const openQuestions = asArr(data.openQuestions).map(asStr).filter(Boolean);
+  const pdf = asObj(data.pdfExport);
+  const pdfHref = asStr(pdf.href);
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mt-2">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-0.5">{title}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <div data-testid="cli-account-brief">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex items-center gap-1.5">
+          <Building2 className="w-3.5 h-3.5 text-text-faint shrink-0" aria-hidden />
+          <span className="text-sm font-semibold truncate">{name || "—"}</span>
+        </div>
+        {href && <OpenLink href={href} locale={locale} />}
+      </div>
+      {ourView && (
+        <div className="mt-2 rounded border border-gold/30 bg-gold/5 p-2" data-testid="cli-brief-our-view">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-gold mb-0.5">
+            {BRIEF_VIEW_LABELS.ourView[ar ? "ar" : "en"]}
+          </div>
+          <div className="text-[12px] text-text leading-relaxed">{ourView}</div>
+          {confLevel && (
+            <div className="mt-1 text-[10px] text-text-faint">
+              {briefConfidenceLabel(
+                {
+                  level: confLevel as "strong" | "moderate" | "tentative",
+                  evidenced: asNum(confidence.evidenced) ?? 0,
+                  untested: asNum(confidence.untested) ?? 0,
+                  uncertain: asNum(confidence.uncertain) ?? 0,
+                },
+                ar ? "ar" : "en",
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {tensions.length > 0 && (
+        <Section title={ar ? "التوترات التنفيذية" : "Executive tensions"}>
+          <ShowMoreList
+            items={tensions}
+            initial={3}
+            locale={locale}
+            className="space-y-1"
+            render={(t, i) => (
+              <li key={i} className="text-[12px] text-text leading-relaxed list-none" data-testid="cli-brief-tension">
+                · {asStr(t.text)}
+                {asStr(t.evidence) && (
+                  <span className="ml-1 text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                    [{humanLabel(asStr(t.evidence))}]
+                  </span>
+                )}
+              </li>
+            )}
+          />
+        </Section>
+      )}
+      {whatsChanging.length > 0 && (
+        <Section title={ar ? "ما الذي يتغيّر" : "What's changing"}>
+          <ul className="space-y-1">
+            {whatsChanging.slice(0, 4).map((w, i) => (
+              <li key={i} className="text-[12px] text-text-mute leading-relaxed">
+                · {asStr(w.text)}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {angles.length > 0 && (
+        <Section title={ar ? "زوايا الدخول" : "Mandate angles"}>
+          <ul className="space-y-1">
+            {angles.slice(0, 4).map((m, i) => (
+              <li key={i} className="text-[12px] leading-relaxed" data-testid="cli-brief-angle">
+                <span className="text-text font-medium">{asStr(m.title)}</span>
+                {asStr(m.tension) && <span className="text-text-mute"> — {asStr(m.tension)}</span>}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {watchOuts.length > 0 && (
+        <Section title={BRIEF_VIEW_LABELS.watchOuts[ar ? "ar" : "en"]}>
+          <ul className="space-y-1">
+            {watchOuts.map((w, i) => (
+              <li key={i} className="text-[12px] text-text-mute leading-relaxed">· {w}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {openQuestions.length > 0 && (
+        <Section title={ar ? "أسئلة مفتوحة" : "Open questions"}>
+          <ul className="space-y-1">
+            {openQuestions.slice(0, 4).map((q, i) => (
+              <li key={i} className="text-[12px] text-text-mute leading-relaxed">· {q}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {pdfHref && (
+        <div className="mt-2">
+          <a
+            href={pdfHref}
+            className="text-[11px] inline-flex items-center gap-1 text-text-mute hover:text-gold"
+            data-testid="cli-brief-pdf-link"
+          >
+            <FileText className="w-3 h-3" aria-hidden />
+            {ar ? "ملخص البحث (PDF)" : asStr(pdf.label) || "Research brief (PDF)"}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function RecapCard({ data, locale }: { data: Json; locale: CliLocale }) {
   const accomplishments = asArr(data.accomplishments)

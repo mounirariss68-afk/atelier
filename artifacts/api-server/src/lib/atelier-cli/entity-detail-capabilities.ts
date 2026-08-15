@@ -323,6 +323,22 @@ registerDetailProvider({
   },
 });
 
+// ---- account research brief (Task #1163) ------------------------------
+// Untyped "show me the QIB brief / executive tensions" lookups route to
+// the dedicated account.brief tool (single source of truth for the
+// distilled-view card shape + ACL). Not self-only-allowed: the brief is
+// CRM intelligence, not a staffed-delivery surface.
+registerDetailProvider({
+  kind: "account_brief",
+  aliases: ["brief", "research_brief", "account_research_brief", "executive_tensions"],
+  search: resolverSearch("account"),
+  async visible(id, ctx, access) {
+    if (isSelfOnly(ctx)) return false;
+    return canSeeAccount(access, { id: ctx.persona.id }, id);
+  },
+  fetch: bridgeFetch("account_brief", "accountId"),
+});
+
 // ---- opportunity ------------------------------------------------------
 registerDetailProvider({
   kind: "opportunity",
