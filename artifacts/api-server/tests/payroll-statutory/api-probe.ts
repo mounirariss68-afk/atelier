@@ -698,6 +698,250 @@ async function main() {
     const statSep = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-09" });
     const statSepPost = await api(fpId, "POST", `/finance/payroll/runs/${statSep.body?.run?.id}/post`);
     check("statutory post blocked when legacy approved (409)", statSepPost.status === 409 && /legacy monthly payroll already posted/.test(statSepPost.body?.message ?? ""), statSepPost.status === 409 ? statSepPost.body : statSepPost);
+
+    // ════════ Task #1148 — GL journal per-account balance assertions ════════
+    // Full EOSB settlement with ALL components non-zero:
+    //   • finalAmount > 0       (~10 yrs AE expat service)
+    //   • leaveEncashment >= 0  (natural annual-leave accrual from long tenure)
+    //   • noticePay < 0         (employee owes 30 unserved notice days — negative debit
+    //                            flips to a credit on account 6000 inside postJournal)
+    //   • advOffset = 4 000 AED (active advance outstanding)
+    //   • salaryPart > 0        (no posted payroll run for leave month 2027-05 for this employee)
+    // After settling, read back atelierGlJournalLine rows and assert per-account
+    // debit/credit sums match the figures stored on the settled row.
+    const glEmpId = `emp_${runTag}_glcheck`;
+    await db.insert(atelierEmployees).values({
+      id: glEmpId,
+      orgId: "aico",
+      fullName: "Probe GL Check",
+      email: `${runTag}_glcheck@example.test`,
+      role: "consultant",
+      nationality: "IN",
+      startDate: "2017-04-01", // ~10 years by 2027-05-31 → significant EOSB gratuity
+      legalEntityId: entityId,
+      basicWageMonthly: 12_000,
+      housingAllowanceMonthly: 2_500,
+      baseCurrency: "AED",
+      baseCompensation: 174_000,
+      iban: "AE070331234567890123491",
+    } as any);
+
+    // Issue advance before the settlement — will become the advOffset component.
+    const glAdv = await api(fpId, "POST", "/finance/payroll/advances", {
+      employeeId: glEmpId, amount: 4_000, installmentAmount: 1_000, startPeriod: "2027-05",
+    });
+    check("gl-check: advance issued (4 000 AED)", glAdv.status === 201 && glAdv.body?.advance?.outstanding === 4_000, glAdv.body?.advance);
+
+    // noticeDaysServed: 0 with noticeDaysDue: 30 → employee owes 30 days notice → noticePay < 0.
+    // No posted run for "2027-05" on this employee → salaryIncluded = true → salaryPart > 0.
+    const glStl = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: glEmpId,
+      leaveDate: "2027-05-31",
+      reason: "resignation",
+      noticeDaysDue: 30,
+      noticeDaysServed: 0,
+    });
+    check("gl-check: settlement -> 201", glStl.status === 201, glStl.body);
+    const glSf = glStl.body?.settlement;
+    check(
+      "gl-check: settlement has all components (finalAmount>0, noticePay<0, advOffset=4000, salary included)",
+      !!glSf &&
+        glSf.finalAmount > 0 &&
+        (glSf.noticePay ?? 0) < 0 &&
+        (glSf.advanceOffset ?? 0) === 4_000 &&
+        glSf.salaryIncluded === true &&
+        glSf.lastSalary > 0,
+      { finalAmount: glSf?.finalAmount, noticePay: glSf?.noticePay, advOffset: glSf?.advanceOffset, salary: glSf?.lastSalary, encash: glSf?.leaveEncashment },
+    );
+
+    const glSettled = await api(fpId, "POST", `/finance/payroll/eosb/settlements/${glSf?.id}/settle`);
+    check("gl-check: settle -> 200 settled", glSettled.status === 200 && glSettled.body?.settlement?.status === "settled", glSettled.body?.settlement?.status);
+
+    if (glSettled.status === 200 && glSf) {
+      const glRow = glSettled.body?.settlement;
+      const journalId: string | undefined = glRow?.journalEntryId;
+      check("gl-check: settled row has journalEntryId", !!journalId, glRow);
+
+      if (journalId) {
+        // Read back every GL line for this settlement journal.
+        const { atelierGlJournalLine: glLineTable } = D as any;
+        const jLines: any[] = await db.select().from(glLineTable).where(dEq(glLineTable.journalEntryId, journalId));
+
+        // Aggregate debit and credit per account code.
+        const byCode: Record<string, { debit: number; credit: number }> = {};
+        for (const jl of jLines) {
+          if (!byCode[jl.accountCode]) byCode[jl.accountCode] = { debit: 0, credit: 0 };
+          byCode[jl.accountCode].debit  = Math.round((byCode[jl.accountCode].debit  + (jl.debit  ?? 0)) * 100) / 100;
+          byCode[jl.accountCode].credit = Math.round((byCode[jl.accountCode].credit + (jl.credit ?? 0)) * 100) / 100;
+        }
+
+        // ── Overall balance ──
+        const totDr = Math.round(jLines.reduce((s: number, l: any) => s + (l.debit  ?? 0), 0) * 100) / 100;
+        const totCr = Math.round(jLines.reduce((s: number, l: any) => s + (l.credit ?? 0), 0) * 100) / 100;
+        check("gl-check: journal lines balance (ΣDebit === ΣCredit)", Math.abs(totDr - totCr) < 0.02, { totDr, totCr, lineCount: jLines.length });
+
+        // Derive expected amounts from the authoritative settled-row figures.
+        // postJournal flips negative debits: a line spec { debit: x < 0 } becomes { debit: 0, credit: -x }.
+        const provAccrued = Math.round((glRow.provisionAccrued ?? 0) * 100) / 100;
+        const truUp       = Math.round(((glRow.finalAmount ?? 0) - provAccrued) * 100) / 100;
+        const encash      = Math.round((glRow.leaveEncashment ?? 0) * 100) / 100;
+        const noticeAmt   = Math.round((glRow.noticePay ?? 0) * 100) / 100; // < 0 in this fixture
+        const salaryPart  = glRow.salaryIncluded ? Math.round((glRow.lastSalary ?? 0) * 100) / 100 : 0;
+        const advOff      = Math.round((glRow.advanceOffset ?? 0) * 100) / 100;
+        const payable     = Math.round((glRow.finalPayTotal ?? 0) * 100) / 100;
+
+        // ── Account 2500: release of provision ──
+        // postJournal skips zero-amount lines, so when provisionAccrued = 0 (this
+        // employee has no prior posted runs) there must be NO 2500 line at all.
+        if (provAccrued > 0.01) {
+          check(
+            "gl-check 2500: debit = provisionAccrued",
+            !!byCode["2500"] && Math.abs(byCode["2500"].debit - provAccrued) < 0.02,
+            { got: byCode["2500"], expected: provAccrued },
+          );
+        } else {
+          check(
+            "gl-check 2500: zero provisionAccrued → line absent (postJournal drops zero lines)",
+            !byCode["2500"],
+            { got: byCode["2500"] },
+          );
+        }
+
+        // ── Account 6020: gratuity true-up (positive = under-provisioned → debit; negative → credit) ──
+        const exp6020Dr = Math.max(0, truUp);
+        const exp6020Cr = Math.max(0, -truUp);
+        if (exp6020Dr > 0.01 || exp6020Cr > 0.01) {
+          check(
+            "gl-check 6020: true-up debit/credit matches (finalAmount − provisionAccrued)",
+            !!byCode["6020"] &&
+              Math.abs(byCode["6020"].debit  - exp6020Dr) < 0.02 &&
+              Math.abs(byCode["6020"].credit - exp6020Cr) < 0.02,
+            { got: byCode["6020"], exp6020Dr, exp6020Cr, truUp },
+          );
+        }
+
+        // ── Account 6000 (three lines merged by the aggregation):
+        //   Line "encash"  : spec debit=encash    ≥ 0  → stays debit
+        //   Line "notice"  : spec debit=noticeAmt < 0  → flips: debit=0, credit=-noticeAmt
+        //   Line "salary"  : spec debit=salaryPart≥ 0  → stays debit
+        //   ∴ sum(debit) on 6000  = encash + salaryPart
+        //     sum(credit) on 6000 = -noticeAmt        (positive because noticeAmt < 0)
+        const exp6000Dr = Math.round((encash + salaryPart) * 100) / 100;
+        const exp6000Cr = Math.round(-noticeAmt * 100) / 100; // noticeAmt < 0 → this is > 0
+        check(
+          "gl-check 6000: debit = encashment + final-month salary",
+          !!byCode["6000"] && Math.abs(byCode["6000"].debit - exp6000Dr) < 0.02,
+          { got: byCode["6000"]?.debit, expected: exp6000Dr, encash, salaryPart },
+        );
+        check(
+          "gl-check 6000: credit = unserved-notice recovery (−noticePay)",
+          !!byCode["6000"] && Math.abs(byCode["6000"].credit - exp6000Cr) < 0.02,
+          { got: byCode["6000"]?.credit, expected: exp6000Cr, noticeAmt },
+        );
+
+        // ── Account 1150: advance asset drawdown (credit only) ──
+        check(
+          "gl-check 1150: credit = advanceOffset, no debit",
+          !!byCode["1150"] &&
+            Math.abs(byCode["1150"].credit - advOff) < 0.02 &&
+            byCode["1150"].debit === 0,
+          { got: byCode["1150"], expected: advOff },
+        );
+
+        // ── Account 2100: net payable to employee (credit only) ──
+        check(
+          "gl-check 2100: credit = finalPayTotal (net payable), no debit",
+          !!byCode["2100"] &&
+            Math.abs(byCode["2100"].credit - payable) < 0.02 &&
+            byCode["2100"].debit === 0,
+          { got: byCode["2100"], expected: payable },
+        );
+      }
+    }
+
+    // ════════ Task #1148 — Paused-then-resumed advance across two POSTED periods ════════
+    // Sequence:
+    //   Period 2027-06 (active)  → installment deducted, run posted  → outstanding drops.
+    //   Period 2027-07 (paused)  → NO deduction, run posted           → outstanding unchanged.
+    //   Period 2027-08 (resumed) → deduction resumes, run posted      → outstanding drops again.
+    //   Final outstanding = (after-A) - (period-C deduction); period B is skipped entirely.
+    const prEmpId = `emp_${runTag}_pr`;
+    await db.insert(atelierEmployees).values({
+      id: prEmpId,
+      orgId: "aico",
+      fullName: "Probe Pause Resume",
+      email: `${runTag}_pr@example.test`,
+      role: "consultant",
+      nationality: "IN",
+      startDate: "2024-06-01",
+      legalEntityId: entityId,
+      basicWageMonthly: 10_000,
+      baseCurrency: "AED",
+      baseCompensation: 120_000,
+      iban: "AE070331234567890123492",
+    } as any);
+
+    const prAdv = await api(fpId, "POST", "/finance/payroll/advances", {
+      employeeId: prEmpId, amount: 6_000, installmentAmount: 2_000, startPeriod: "2027-06",
+    });
+    check("pause-resume: advance issued (6 000 AED, 2 000/mo)", prAdv.status === 201 && prAdv.body?.advance?.outstanding === 6_000, prAdv.body?.advance);
+    const prAdvId: string | undefined = prAdv.body?.advance?.id;
+
+    // ── Period A (2027-06): active → deduction applied, then run posted ──
+    const runPA = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-06" });
+    const runPADetail = await api(fpId, "GET", `/finance/payroll/runs/${runPA.body?.run?.id}`);
+    const prLineA = (runPADetail.body?.lines ?? []).find((l: any) => l.employeeId === prEmpId);
+    const dedA = Math.round((prLineA?.advanceDeduction ?? 0) * 100) / 100;
+    check("pause-resume period A: installment scheduled on draft line", dedA > 0, prLineA?.advanceDeduction);
+    const postPA = await api(fpId, "POST", `/finance/payroll/runs/${runPA.body?.run?.id}/post`);
+    check("pause-resume period A: run posts cleanly", postPA.status === 200, postPA.body);
+
+    const advListA = await api(fpId, "GET", "/finance/payroll/advances");
+    const advRowA = (advListA.body?.items ?? []).find((a: any) => a.id === prAdvId);
+    const outstandingAfterA = Math.round((advRowA?.outstanding ?? 6_000) * 100) / 100;
+    check("pause-resume after period A: outstanding reduced by installment", outstandingAfterA < 6_000 && Math.abs(outstandingAfterA - (6_000 - dedA)) < 0.02, { outstanding: outstandingAfterA, expected: 6_000 - dedA });
+
+    // ── Pause, then Period B (2027-07): paused → NO deduction, run posts ──
+    const prPause = await api(fpId, "POST", `/finance/payroll/advances/${prAdvId}/pause`);
+    check("pause-resume: pause -> 200 paused", prPause.status === 200 && prPause.body?.advance?.status === "paused", prPause.body?.advance?.status);
+
+    const runPB = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-07" });
+    const runPBDetail = await api(fpId, "GET", `/finance/payroll/runs/${runPB.body?.run?.id}`);
+    const prLineB = (runPBDetail.body?.lines ?? []).find((l: any) => l.employeeId === prEmpId);
+    check("pause-resume period B: draft line has zero deduction while paused", !!prLineB && (prLineB.advanceDeduction ?? 0) === 0, prLineB?.advanceDeduction);
+    const postPB = await api(fpId, "POST", `/finance/payroll/runs/${runPB.body?.run?.id}/post`);
+    check("pause-resume period B: run posts cleanly", postPB.status === 200, postPB.body);
+
+    const advListB = await api(fpId, "GET", "/finance/payroll/advances");
+    const advRowB = (advListB.body?.items ?? []).find((a: any) => a.id === prAdvId);
+    const outstandingAfterB = Math.round((advRowB?.outstanding ?? -1) * 100) / 100;
+    check(
+      "pause-resume after period B (paused): outstanding unchanged vs after-A",
+      Math.abs(outstandingAfterB - outstandingAfterA) < 0.01,
+      { afterA: outstandingAfterA, afterB: outstandingAfterB },
+    );
+
+    // ── Resume, then Period C (2027-08): resumed → deduction resumes, run posts ──
+    const prResume = await api(fpId, "POST", `/finance/payroll/advances/${prAdvId}/resume`);
+    check("pause-resume: resume -> 200 active", prResume.status === 200 && prResume.body?.advance?.status === "active", prResume.body?.advance?.status);
+
+    const runPC = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-08" });
+    const runPCDetail = await api(fpId, "GET", `/finance/payroll/runs/${runPC.body?.run?.id}`);
+    const prLineC = (runPCDetail.body?.lines ?? []).find((l: any) => l.employeeId === prEmpId);
+    const dedC = Math.round((prLineC?.advanceDeduction ?? 0) * 100) / 100;
+    check("pause-resume period C: installment scheduled again after resume", dedC > 0, prLineC?.advanceDeduction);
+    const postPC = await api(fpId, "POST", `/finance/payroll/runs/${runPC.body?.run?.id}/post`);
+    check("pause-resume period C: run posts cleanly", postPC.status === 200, postPC.body);
+
+    const advListC = await api(fpId, "GET", "/finance/payroll/advances");
+    const advRowC = (advListC.body?.items ?? []).find((a: any) => a.id === prAdvId);
+    const outstandingAfterC = Math.round((advRowC?.outstanding ?? -1) * 100) / 100;
+    const expectedFinalOut = Math.round((outstandingAfterA - dedC) * 100) / 100;
+    check(
+      "pause-resume final outstanding = (after-A) − C_ded (period B entirely skipped)",
+      Math.abs(outstandingAfterC - expectedFinalOut) < 0.02 && outstandingAfterC < outstandingAfterA,
+      { outstandingAfterA, dedC, expectedFinalOut, outstandingAfterC },
+    );
   } finally {
     server.close();
     await pool.end().catch(() => {});
