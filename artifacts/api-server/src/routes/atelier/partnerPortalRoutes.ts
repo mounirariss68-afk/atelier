@@ -27,6 +27,7 @@ import {
   type Response,
 } from "express";
 import { createHash, randomBytes } from "node:crypto";
+import multer from "multer";
 import { and, eq, isNull, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
@@ -41,6 +42,14 @@ import {
   atelierPartnerFirmDocuments,
   atelierPartnerContactSuggestions,
   atelierPartnerNotifications,
+  atelierPartnerEngagementGrants,
+  atelierPartnerSharedDocuments,
+  atelierEngagements,
+  atelierDeliverables,
+  atelierRaidItems,
+  atelierMeetings,
+  atelierDocuments,
+  atelierDocumentVersions,
 } from "@workspace/db";
 import { notifyPartnerFirm } from "../../lib/partnerNotify.js";
 import { audit } from "./engagementRoutes";
@@ -60,6 +69,12 @@ import {
   decodeBase64Strict,
   magicBytesMatchMime,
 } from "../../lib/partnerDocStorage.js";
+import {
+  storeSharedDocBytes,
+  loadSharedDocBytes,
+  dropSharedDocBytes,
+} from "../../lib/partnerSharedDocStorage.js";
+import { loadDocBytes } from "../../lib/atelier-documents.js";
 
 const router: IRouter = Router();
 
@@ -272,6 +287,153 @@ export async function grantedOppScopeForFirm(
   return { opps, sharedAtByOppId };
 }
 
+// ---------------------------------------------------------------------
+// Task #1174 — Delivery read model (field-allowlisted, server-composed).
+//
+// The partner delivery portal exposes GRANTED engagements only. The
+// snapshot is built through a SINGLE pure wire-builder so the allowlist is
+// testable + greppable. HARD EXCLUSIONS (never composed anywhere):
+//   charter, workstreams, valueCase, economics, timesheets/expenses,
+//   legalEntityId, owner/lead user ids, deliverable criticReadiness /
+//   criticReportSummary / partner-approval internals / version bodies /
+//   hypothesis ids, RAID ownerId/ownerName + mitigation, meeting attendees /
+//   transcripts / links, and any OTHER firm's grants (never reveal that a
+//   different firm is involved).
+// ---------------------------------------------------------------------
+
+/** The redacted delivery-list projection for one granted engagement. */
+export function partnerEngagementWire(
+  e: typeof atelierEngagements.$inferSelect,
+  sharedAt?: Date | null,
+): {
+  id: string;
+  name: string;
+  plmStage: string;
+  raidStatus: string;
+  startDate: string | null;
+  plannedEndDate: string | null;
+  sharedAt: string | null;
+} {
+  return {
+    id: e.id,
+    name: e.name,
+    // plmStage is the phase (mobilize|deliver|compound|closed); raidStatus is
+    // the health colour. There is NO status/health column beyond these.
+    plmStage: e.plmStage,
+    raidStatus: e.raidStatus,
+    startDate: e.startDate ?? null,
+    plannedEndDate: e.plannedEndDate ?? null,
+    sharedAt: sharedAt ? sharedAt.toISOString() : null,
+  };
+}
+
+/**
+ * The FULL delivery snapshot wire object. Pure: given the already-loaded
+ * (and already firm-scoped) rows it composes ONLY allowlisted fields. This
+ * is the single greppable allowlist — deep-scan tests assert forbidden keys
+ * are absent from its output.
+ */
+export function partnerDeliverySnapshotWire(input: {
+  engagement: typeof atelierEngagements.$inferSelect;
+  sharedAt: Date | null;
+  account: typeof atelierAccounts.$inferSelect | null;
+  deliverables: Array<typeof atelierDeliverables.$inferSelect>;
+  openItems: Array<typeof atelierRaidItems.$inferSelect>;
+  upcomingMeetings: Array<typeof atelierMeetings.$inferSelect>;
+}): {
+  engagement: ReturnType<typeof partnerEngagementWire> & {
+    account: ReturnType<typeof redactedAccountOverview> | null;
+  };
+  deliverables: Array<{
+    name: string;
+    type: string;
+    status: string;
+    dueDate: string | null;
+    sentAt: string | null;
+    clientVisibility: string;
+  }>;
+  openItems: Array<{
+    kind: string;
+    severity: string;
+    status: string;
+    dueDate: string | null;
+    description: string;
+  }>;
+  upcomingMeetings: Array<{ title: string; date: string; kind: string }>;
+} {
+  return {
+    engagement: {
+      ...partnerEngagementWire(input.engagement, input.sharedAt),
+      account: input.account ? redactedAccountOverview(input.account) : null,
+    },
+    deliverables: input.deliverables.map((d) => ({
+      name: d.name,
+      type: d.type,
+      status: d.status,
+      dueDate: d.dueDate ?? null,
+      sentAt: d.sentAt ? d.sentAt.toISOString() : null,
+      clientVisibility: d.clientVisibility,
+    })),
+    openItems: input.openItems.map((r) => ({
+      kind: r.kind,
+      severity: r.severity,
+      status: r.status,
+      dueDate: r.dueDate ?? null,
+      description: r.description,
+    })),
+    upcomingMeetings: input.upcomingMeetings.map((m) => ({
+      title: m.title,
+      date: m.date,
+      kind: m.kind,
+    })),
+  };
+}
+
+/**
+ * Live granted engagements for a firm (rows + earliest active grant time),
+ * org-scoped. Shared by partner reads AND leadership preview reads. Mirrors
+ * grantedOppScopeForFirm.
+ */
+export async function grantedEngScopeForFirm(
+  orgId: string,
+  firm: typeof atelierPartnerFirms.$inferSelect,
+): Promise<{
+  engs: Array<typeof atelierEngagements.$inferSelect>;
+  sharedAtByEngId: Map<string, Date>;
+}> {
+  const grantRows = await db
+    .select({
+      engagementId: atelierPartnerEngagementGrants.engagementId,
+      createdAt: atelierPartnerEngagementGrants.createdAt,
+    })
+    .from(atelierPartnerEngagementGrants)
+    .where(
+      and(
+        eq(atelierPartnerEngagementGrants.orgId, orgId),
+        eq(atelierPartnerEngagementGrants.partnerFirmId, firm.id),
+        isNull(atelierPartnerEngagementGrants.revokedAt),
+      ),
+    );
+  const sharedAtByEngId = new Map<string, Date>();
+  for (const r of grantRows) {
+    const prev = sharedAtByEngId.get(r.engagementId);
+    if (!prev || r.createdAt < prev) sharedAtByEngId.set(r.engagementId, r.createdAt);
+  }
+  const engIds = [...sharedAtByEngId.keys()];
+  if (engIds.length === 0) return { engs: [], sharedAtByEngId };
+  const engs = await db
+    .select()
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.orgId, orgId),
+        inArray(atelierEngagements.id, engIds),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  return { engs, sharedAtByEngId };
+}
+
 // resolvePortalFirm / refuseIfPreview + the Express.Request.portalPreview
 // declaration now live in ./portalFirmResolver (imported above) and are
 // re-exported so existing importers keep working.
@@ -372,6 +534,117 @@ router.get(
     }
   },
 );
+
+// ---------------------------------------------------------------------
+// Task #1174 — Partner delivery portal reads (/partner-portal/delivery/*)
+// ---------------------------------------------------------------------
+
+// @cli-skip: partner-portal read — external delivery surface (Task #1174), portal-UI only
+router.get("/partner-portal/delivery", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    if (req.portalPreview) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_portal.previewed",
+        payload: { firmId: firm.id, firmName: firm.name, surface: "delivery" },
+        summary: `${me.name} previewed ${firm.name}'s partner portal (delivery).`,
+      });
+    }
+    const scope = await grantedEngScopeForFirm(me.orgId, firm);
+    res.json({
+      firm: { id: firm.id, name: firm.name },
+      engagements: scope.engs
+        .map((e) => partnerEngagementWire(e, scope.sharedAtByEngId.get(e.id) ?? null))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal read — external delivery detail surface (Task #1174), portal-UI only
+router.get("/partner-portal/delivery/:engId", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    const scope = await grantedEngScopeForFirm(me.orgId, firm);
+    const eng = scope.engs.find((e) => e.id === req.params.engId);
+    // Foreign-firm / revoked / unknown ids are indistinguishable: 404.
+    if (!eng) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    // Server-composed snapshot from an EXPLICIT allowlist. Each collection is
+    // narrowly SELECTed (never a spread of the raw row) and further filtered.
+    const [account] = eng.accountId
+      ? await db
+          .select()
+          .from(atelierAccounts)
+          .where(and(eq(atelierAccounts.id, eng.accountId), eq(atelierAccounts.orgId, me.orgId)))
+      : [];
+
+    const deliverables = await db
+      .select()
+      .from(atelierDeliverables)
+      .where(
+        and(
+          eq(atelierDeliverables.orgId, me.orgId),
+          eq(atelierDeliverables.engagementId, eng.id),
+          isNull(atelierDeliverables.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierDeliverables.createdAt));
+
+    const openItems = await db
+      .select()
+      .from(atelierRaidItems)
+      .where(
+        and(
+          eq(atelierRaidItems.orgId, me.orgId),
+          eq(atelierRaidItems.engagementId, eng.id),
+          eq(atelierRaidItems.status, "open"),
+          isNull(atelierRaidItems.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierRaidItems.createdAt));
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const meetings = await db
+      .select()
+      .from(atelierMeetings)
+      .where(
+        and(
+          eq(atelierMeetings.orgId, me.orgId),
+          eq(atelierMeetings.parentType, "engagement"),
+          eq(atelierMeetings.parentId, eng.id),
+          isNull(atelierMeetings.deletedAt),
+        ),
+      );
+    const upcomingMeetings = meetings
+      .filter((m) => (m.date ?? "") >= todayIso)
+      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+
+    res.json({
+      firm: { id: firm.id, name: firm.name },
+      ...partnerDeliverySnapshotWire({
+        engagement: eng,
+        sharedAt: scope.sharedAtByEngId.get(eng.id) ?? null,
+        account: account ?? null,
+        deliverables,
+        openItems,
+        upcomingMeetings,
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ---------------------------------------------------------------------
 // Internal admin — opportunity grants (leadership-only, audited)
@@ -582,6 +855,242 @@ router.post(
     }
   },
 );
+
+// ---------------------------------------------------------------------
+// Task #1174 — Internal admin: engagement delivery grants
+// (leadership-only, audited). Mirrors the opportunity-grant trio.
+// ---------------------------------------------------------------------
+
+async function loadLiveEngagement(orgId: string, engId: string) {
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.id, engId),
+        eq(atelierEngagements.orgId, orgId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  return eng ?? null;
+}
+
+// @cli-skip: internal admin read — leadership delivery-grant listing on the engagement page UI only
+router.get("/engagements/:engId/partner-grants", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const eng = await loadLiveEngagement(me.orgId, req.params.engId);
+    if (!eng) {
+      res.status(404).json({ error: "engagement-not-found" });
+      return;
+    }
+    const rows = await db
+      .select({
+        grant: atelierPartnerEngagementGrants,
+        firmName: atelierPartnerFirms.name,
+        firmDeletedAt: atelierPartnerFirms.deletedAt,
+      })
+      .from(atelierPartnerEngagementGrants)
+      .leftJoin(
+        atelierPartnerFirms,
+        eq(atelierPartnerFirms.id, atelierPartnerEngagementGrants.partnerFirmId),
+      )
+      .where(
+        and(
+          eq(atelierPartnerEngagementGrants.orgId, me.orgId),
+          eq(atelierPartnerEngagementGrants.engagementId, eng.id),
+        ),
+      )
+      .orderBy(desc(atelierPartnerEngagementGrants.createdAt));
+    res.json({
+      grants: rows.map((r) => ({
+        id: r.grant.id,
+        partnerFirmId: r.grant.partnerFirmId,
+        firmName: r.firmName ?? "(deleted firm)",
+        firmArchived: r.firmDeletedAt != null,
+        createdAt: r.grant.createdAt.toISOString(),
+        createdByUserId: r.grant.createdByUserId,
+        revokedAt: r.grant.revokedAt ? r.grant.revokedAt.toISOString() : null,
+        revokedByUserId: r.grant.revokedByUserId ?? null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: security-sensitive external-access grant — deliberate UI-only write (no chat surface for access control)
+router.post("/engagements/:engId/partner-grants", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const eng = await loadLiveEngagement(me.orgId, req.params.engId);
+    if (!eng) {
+      res.status(404).json({ error: "engagement-not-found" });
+      return;
+    }
+    const partnerFirmId =
+      typeof req.body?.partnerFirmId === "string" ? req.body.partnerFirmId : "";
+    if (!partnerFirmId) {
+      res.status(400).json({ error: "invalid-body", message: "partnerFirmId is required." });
+      return;
+    }
+    const [firm] = await db
+      .select()
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          eq(atelierPartnerFirms.id, partnerFirmId),
+          eq(atelierPartnerFirms.orgId, me.orgId),
+          isNull(atelierPartnerFirms.deletedAt),
+        ),
+      );
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(atelierPartnerEngagementGrants)
+      .where(
+        and(
+          eq(atelierPartnerEngagementGrants.orgId, me.orgId),
+          eq(atelierPartnerEngagementGrants.partnerFirmId, firm.id),
+          eq(atelierPartnerEngagementGrants.engagementId, eng.id),
+          isNull(atelierPartnerEngagementGrants.revokedAt),
+        ),
+      );
+    if (existing) {
+      res.status(200).json({ ok: true, grantId: existing.id, alreadyGranted: true });
+      return;
+    }
+    const id = rid("ppeg");
+    await db.insert(atelierPartnerEngagementGrants).values({
+      id,
+      orgId: me.orgId,
+      partnerFirmId: firm.id,
+      engagementId: eng.id,
+      createdByUserId: me.id,
+    });
+    await audit({
+      entityType: "engagement",
+      entityId: eng.id,
+      actor: me,
+      action: "partners.engagement.share",
+      payload: { grantId: id, partnerFirmId: firm.id, firmName: firm.name },
+      summary: `${me.name} shared engagement "${eng.name}" with ${firm.name} on the delivery portal.`,
+    });
+    // Notify the firm (in-app + email) AFTER commit.
+    await notifyPartnerFirm({
+      orgId: me.orgId,
+      partnerFirmId: firm.id,
+      kind: "engagement_shared",
+      title: "A delivery engagement was shared with you",
+      body: `"${eng.name}" is now visible in your partner delivery portal.`,
+      href: "/partner/delivery",
+      email: {
+        subject: "A delivery engagement was shared with you — Cognirise",
+        paragraphs: [
+          `Cognirise has shared the engagement "${eng.name}" with ${firm.name}.`,
+          "Sign in to your partner portal to view delivery progress and shared documents.",
+        ],
+      },
+    });
+    res.status(201).json({ ok: true, grantId: id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: security-sensitive external-access revoke — deliberate UI-only write
+router.post(
+  "/engagements/:engId/partner-grants/:grantId/revoke",
+  async (req, res, next) => {
+    try {
+      const me = requireLeadership(req, res);
+      if (!me) return;
+      const [grant] = await db
+        .select()
+        .from(atelierPartnerEngagementGrants)
+        .where(
+          and(
+            eq(atelierPartnerEngagementGrants.id, req.params.grantId),
+            eq(atelierPartnerEngagementGrants.orgId, me.orgId),
+            eq(atelierPartnerEngagementGrants.engagementId, req.params.engId),
+          ),
+        );
+      if (!grant) {
+        res.status(404).json({ error: "grant-not-found" });
+        return;
+      }
+      if (grant.revokedAt) {
+        res.json({ ok: true, alreadyRevoked: true });
+        return;
+      }
+      await db
+        .update(atelierPartnerEngagementGrants)
+        .set({ revokedAt: new Date(), revokedByUserId: me.id })
+        .where(eq(atelierPartnerEngagementGrants.id, grant.id));
+      await audit({
+        entityType: "engagement",
+        entityId: grant.engagementId,
+        actor: me,
+        action: "partners.engagement.share_revoke",
+        payload: { grantId: grant.id, partnerFirmId: grant.partnerFirmId },
+        summary: `${me.name} revoked a partner firm's delivery-portal access to this engagement.`,
+      });
+      // Notify the firm (in-app only; no email for revokes).
+      await notifyPartnerFirm({
+        orgId: me.orgId,
+        partnerFirmId: grant.partnerFirmId,
+        kind: "engagement_revoked",
+        title: "A delivery engagement is no longer shared with you",
+        body: "One of the engagements previously shared with your firm has been removed from your delivery portal.",
+        href: "/partner/delivery",
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// @cli-skip: internal admin read — leadership firm-side delivery-grant listing UI only (Task #1174)
+router.get("/partners/firms/:firmId/engagement-grants", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const rows = await db
+      .select({
+        grant: atelierPartnerEngagementGrants,
+        engagementName: atelierEngagements.name,
+      })
+      .from(atelierPartnerEngagementGrants)
+      .leftJoin(
+        atelierEngagements,
+        eq(atelierEngagements.id, atelierPartnerEngagementGrants.engagementId),
+      )
+      .where(
+        and(
+          eq(atelierPartnerEngagementGrants.orgId, me.orgId),
+          eq(atelierPartnerEngagementGrants.partnerFirmId, req.params.firmId),
+        ),
+      )
+      .orderBy(desc(atelierPartnerEngagementGrants.createdAt));
+    res.json({
+      grants: rows.map((r) => ({
+        id: r.grant.id,
+        engagementId: r.grant.engagementId,
+        engagementName: r.engagementName ?? null,
+        createdAt: r.grant.createdAt.toISOString(),
+        revokedAt: r.grant.revokedAt ? r.grant.revokedAt.toISOString() : null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ---------------------------------------------------------------------
 // Internal admin — partner portal logins (leadership-only, audited)
@@ -2037,5 +2546,674 @@ router.post("/partner-portal/notifications/read-all", async (req, res, next) => 
     next(err);
   }
 });
+
+// =====================================================================
+// Task #1174 — Partner shared-document space.
+//
+// Two directions on atelier_partner_shared_documents:
+//   'shared'          internal → firm. A SNAPSHOT of a library document
+//                     version copied into firm-scoped partner storage.
+//   'partner_upload'  firm → internal, for review.
+// Bytes live in the private bucket under a firm-scoped key prefix; blobRef /
+// sha256 / source ids are NEVER exposed to the portal.
+// =====================================================================
+
+// Portal upload limits (independent of the internal library caps).
+const SHARED_UPLOAD_MIMES = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const SHARED_UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
+// Route-local memory multipart parser. Invoked ONLY after resolvePortalFirm +
+// refuseIfPreview succeed (see the POST handler below), so an unauthenticated
+// or preview caller never has their request body consumed.
+const sharedDocUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1, fileSize: SHARED_UPLOAD_MAX_BYTES },
+});
+// Never trust a client-declared mime — sniff the leading signature and accept
+// only if it matches exactly one allowlisted type. Returns null for anything
+// else (empty, corrupt, or a disallowed format), which the route rejects.
+function sniffSharedMime(buf: Buffer): string | null {
+  for (const mime of SHARED_UPLOAD_MIMES) {
+    if (magicBytesMatchMime(buf, mime)) return mime;
+  }
+  return null;
+}
+// Strip any path components a client may smuggle in originalname and clamp
+// length; the stored fileName is display-only (blob keys are firm-scoped).
+function sanitizeUploadFileName(raw: string): string {
+  const base = raw.replace(/[/\\]/g, "_").replace(/\u0000/g, "").trim();
+  return base.slice(0, 300);
+}
+// Run the route-local multer parser as a promise so the handler can await it
+// AFTER auth/preview gating rather than mounting it as pre-handler middleware.
+function runSharedDocUpload(req: Request, res: Response): Promise<Express.Multer.File | null | "error"> {
+  return new Promise((resolve) => {
+    sharedDocUpload.single("file")(req, res, (err: unknown) => {
+      if (err) {
+        const message =
+          err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE"
+            ? "File exceeds the 16MB upload limit."
+            : err instanceof Error
+              ? err.message
+              : String(err);
+        if (!res.headersSent) {
+          res.status(400).json({ error: "upload-failed", message });
+        }
+        resolve("error");
+        return;
+      }
+      resolve(req.file ?? null);
+    });
+  });
+}
+
+/** Portal-facing serialization: never leaks blobRef / sha256 / source ids. */
+function sharedDocPortalWire(d: typeof atelierPartnerSharedDocuments.$inferSelect) {
+  return {
+    id: d.id,
+    direction: d.direction,
+    title: d.title,
+    fileName: d.fileName,
+    mime: d.mime,
+    sizeBytes: d.sizeBytes,
+    note: d.note ?? null,
+    status: d.status,
+    sharedByLabel: d.direction === "shared" ? d.sharedByLabel ?? null : null,
+    sharedAt: d.createdAt.toISOString(),
+    reviewedAt: d.reviewedAt ? d.reviewedAt.toISOString() : null,
+  };
+}
+
+/** Internal (admin) serialization — richer, still no blobRef. */
+function sharedDocAdminWire(d: typeof atelierPartnerSharedDocuments.$inferSelect) {
+  return {
+    id: d.id,
+    partnerFirmId: d.partnerFirmId,
+    direction: d.direction,
+    title: d.title,
+    fileName: d.fileName,
+    mime: d.mime,
+    sizeBytes: d.sizeBytes,
+    note: d.note ?? null,
+    status: d.status,
+    sourceDocumentId: d.sourceDocumentId ?? null,
+    sourceVersionId: d.sourceVersionId ?? null,
+    sharedByUserId: d.sharedByUserId ?? null,
+    sharedByLabel: d.sharedByLabel ?? null,
+    reviewedByUserId: d.reviewedByUserId ?? null,
+    reviewedAt: d.reviewedAt ? d.reviewedAt.toISOString() : null,
+    createdAt: d.createdAt.toISOString(),
+    revokedAt: d.revokedAt ? d.revokedAt.toISOString() : null,
+  };
+}
+
+async function loadLiveFirm(orgId: string, firmId: string) {
+  const [firm] = await db
+    .select()
+    .from(atelierPartnerFirms)
+    .where(
+      and(
+        eq(atelierPartnerFirms.id, firmId),
+        eq(atelierPartnerFirms.orgId, orgId),
+        isNull(atelierPartnerFirms.deletedAt),
+      ),
+    );
+  return firm ?? null;
+}
+
+/**
+ * Drop a shared-document blob only when NO OTHER active share row IN THE
+ * SAME FIRM references it. Dedupe/refcount is per-firm, never org-global.
+ */
+async function dropSharedBlobIfUnreferenced(
+  orgId: string,
+  partnerFirmId: string,
+  blobRef: string,
+  excludeRowId: string,
+): Promise<void> {
+  const others = await db
+    .select({ id: atelierPartnerSharedDocuments.id })
+    .from(atelierPartnerSharedDocuments)
+    .where(
+      and(
+        eq(atelierPartnerSharedDocuments.orgId, orgId),
+        eq(atelierPartnerSharedDocuments.partnerFirmId, partnerFirmId),
+        eq(atelierPartnerSharedDocuments.blobRef, blobRef),
+        isNull(atelierPartnerSharedDocuments.revokedAt),
+        isNull(atelierPartnerSharedDocuments.deletedAt),
+      ),
+    );
+  if (others.some((o) => o.id !== excludeRowId)) return;
+  await dropSharedDocBytes(blobRef);
+}
+
+// @cli-skip: internal admin read — leadership shared-document listing on the firm page UI only (Task #1174)
+router.get("/partners/firms/:firmId/shared-documents", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const conds = [
+      eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+      eq(atelierPartnerSharedDocuments.partnerFirmId, req.params.firmId),
+      eq(atelierPartnerSharedDocuments.direction, "shared"),
+      isNull(atelierPartnerSharedDocuments.deletedAt),
+    ];
+    if (String(req.query.status ?? "active") === "active") {
+      conds.push(isNull(atelierPartnerSharedDocuments.revokedAt));
+    }
+    const rows = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(and(...conds))
+      .orderBy(desc(atelierPartnerSharedDocuments.createdAt));
+    res.json({ items: rows.map(sharedDocAdminWire) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal admin read — leadership partner-upload review queue UI only (Task #1174)
+router.get("/partners/firms/:firmId/partner-uploads", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const status = String(req.query.status ?? "pending_review");
+    const conds = [
+      eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+      eq(atelierPartnerSharedDocuments.partnerFirmId, req.params.firmId),
+      eq(atelierPartnerSharedDocuments.direction, "partner_upload"),
+      isNull(atelierPartnerSharedDocuments.deletedAt),
+    ];
+    if (status !== "all") conds.push(eq(atelierPartnerSharedDocuments.status, status));
+    const rows = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(and(...conds))
+      .orderBy(desc(atelierPartnerSharedDocuments.createdAt));
+    res.json({ items: rows.map(sharedDocAdminWire) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: security-sensitive external document share — deliberate UI-only write (Task #1174)
+router.post("/partners/firms/:firmId/shared-documents", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const firm = await loadLiveFirm(me.orgId, req.params.firmId);
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const documentId = typeof req.body?.documentId === "string" ? req.body.documentId : "";
+    if (!documentId) {
+      res.status(400).json({ error: "invalid-body", message: "documentId is required." });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) || null : null;
+    // Resolve the internal library document.
+    const [doc] = await db
+      .select()
+      .from(atelierDocuments)
+      .where(
+        and(
+          eq(atelierDocuments.id, documentId),
+          eq(atelierDocuments.orgId, me.orgId),
+          eq(atelierDocuments.status, "active"),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "document-not-found" });
+      return;
+    }
+    // Snapshot the requested version, else the document's current version.
+    const requestedVersionId =
+      typeof req.body?.versionId === "string" ? req.body.versionId : null;
+    const targetVersionId = requestedVersionId ?? doc.currentVersionId;
+    if (!targetVersionId) {
+      res.status(409).json({ error: "no-version", message: "The document has no version to share." });
+      return;
+    }
+    const [version] = await db
+      .select()
+      .from(atelierDocumentVersions)
+      .where(
+        and(
+          eq(atelierDocumentVersions.id, targetVersionId),
+          eq(atelierDocumentVersions.orgId, me.orgId),
+          eq(atelierDocumentVersions.documentId, doc.id),
+        ),
+      );
+    if (!version) {
+      res.status(404).json({ error: "version-not-found" });
+      return;
+    }
+    // Idempotent on (firmId, sourceDocumentId, sourceVersionId) active.
+    const [existing] = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, firm.id),
+          eq(atelierPartnerSharedDocuments.direction, "shared"),
+          eq(atelierPartnerSharedDocuments.sourceDocumentId, doc.id),
+          eq(atelierPartnerSharedDocuments.sourceVersionId, version.id),
+          isNull(atelierPartnerSharedDocuments.revokedAt),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      );
+    if (existing) {
+      res.status(200).json({ ok: true, id: existing.id, alreadyShared: true });
+      return;
+    }
+    // COPY the current version bytes into firm-scoped partner storage
+    // (snapshot semantics; later library edits never leak).
+    const bytes = await loadDocBytes(version.blobRef);
+    if (!bytes) {
+      res.status(409).json({ error: "source-bytes-missing" });
+      return;
+    }
+    const stored = await storeSharedDocBytes({
+      partnerFirmId: firm.id,
+      buf: bytes,
+      sha256: version.sha256,
+      contentType: version.mime,
+    });
+    const id = rid("ppsd");
+    const [created] = await db
+      .insert(atelierPartnerSharedDocuments)
+      .values({
+        id,
+        orgId: me.orgId,
+        partnerFirmId: firm.id,
+        direction: "shared",
+        title: doc.title,
+        fileName: version.fileName,
+        mime: version.mime,
+        sizeBytes: stored.sizeBytes,
+        sha256: version.sha256,
+        blobRef: stored.blobRef,
+        sourceDocumentId: doc.id,
+        sourceVersionId: version.id,
+        note,
+        status: "active",
+        sharedByUserId: me.id,
+        sharedByLabel: me.name,
+      })
+      .returning();
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partners.document.shared",
+      payload: {
+        sharedDocumentId: id,
+        sourceDocumentId: doc.id,
+        sourceVersionId: version.id,
+        fileName: version.fileName,
+        sizeBytes: stored.sizeBytes,
+      },
+      summary: `${me.name} shared document "${doc.title}" (${version.fileName}) with ${firm.name}.`,
+    });
+    // Notify the firm (in-app + email) AFTER commit.
+    await notifyPartnerFirm({
+      orgId: me.orgId,
+      partnerFirmId: firm.id,
+      kind: "document_shared",
+      title: "A document was shared with you",
+      body: `"${doc.title}" is now available in your partner portal documents.`,
+      href: "/partner/documents",
+      email: {
+        subject: "A document was shared with you — Cognirise",
+        paragraphs: [
+          `Cognirise has shared the document "${doc.title}" with ${firm.name}.`,
+          "Sign in to your partner portal to download it.",
+        ],
+      },
+    });
+    res.status(201).json({ ok: true, document: sharedDocAdminWire(created) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: security-sensitive external document revoke — deliberate UI-only write (Task #1174)
+// @cli-skip: internal admin read — leadership byte download for review/inspection UI only (Task #1174)
+router.get("/partners/firms/:firmId/shared-documents/:id/download", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    // Leadership may inspect any share/upload row for this firm (including
+    // revoked shares and decided uploads) — internal review surface.
+    const [row] = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.id, req.params.id),
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, req.params.firmId),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const bytes = await loadSharedDocBytes(row.blobRef);
+    if (!bytes) {
+      res.status(404).json({ error: "document-missing" });
+      return;
+    }
+    res.setHeader("Content-Type", row.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", row.fileName));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/partners/firms/:firmId/shared-documents/:id/revoke", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const [row] = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.id, req.params.id),
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, req.params.firmId),
+          eq(atelierPartnerSharedDocuments.direction, "shared"),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "shared-document-not-found" });
+      return;
+    }
+    if (row.revokedAt) {
+      res.json({ ok: true, alreadyRevoked: true });
+      return;
+    }
+    await db
+      .update(atelierPartnerSharedDocuments)
+      .set({ revokedAt: new Date(), revokedByUserId: me.id })
+      .where(eq(atelierPartnerSharedDocuments.id, row.id));
+    // Unreference-delete the bytes if no OTHER active share row in the SAME
+    // firm references the same blob.
+    await dropSharedBlobIfUnreferenced(me.orgId, row.partnerFirmId, row.blobRef, row.id);
+    await audit({
+      entityType: "partner_firm",
+      entityId: row.partnerFirmId,
+      actor: me,
+      action: "partners.document.revoked",
+      payload: { sharedDocumentId: row.id, fileName: row.fileName },
+      summary: `${me.name} revoked the shared document "${row.title}" from this firm's portal.`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal admin partner-upload review — deliberate UI-only write (Task #1174)
+router.post("/partners/firms/:firmId/partner-uploads/:id/review", async (req, res, next) => {
+  try {
+    const me = requireLeadership(req, res);
+    if (!me) return;
+    const decision = String(req.body?.decision ?? "");
+    if (decision !== "accepted" && decision !== "rejected") {
+      res.status(400).json({ error: "invalid-body", message: "decision must be accepted|rejected." });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
+    const [row] = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.id, req.params.id),
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, req.params.firmId),
+          eq(atelierPartnerSharedDocuments.direction, "partner_upload"),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "upload-not-found" });
+      return;
+    }
+    if (row.status !== "pending_review") {
+      res.status(409).json({ error: "already-decided", status: row.status });
+      return;
+    }
+    // Single-decider CAS.
+    const claimed = await db
+      .update(atelierPartnerSharedDocuments)
+      .set({
+        status: decision,
+        note: note ?? row.note,
+        reviewedByUserId: me.id,
+        reviewedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.id, row.id),
+          eq(atelierPartnerSharedDocuments.status, "pending_review"),
+        ),
+      )
+      .returning({ id: atelierPartnerSharedDocuments.id });
+    if (claimed.length === 0) {
+      res.status(409).json({ error: "already-decided" });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: row.partnerFirmId,
+      actor: me,
+      action: "partners.document.upload_reviewed",
+      payload: { sharedDocumentId: row.id, decision, fileName: row.fileName },
+      summary: `${me.name} ${decision} the partner upload "${row.fileName}".`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal read — external shared-documents surface (Task #1174), portal-UI only
+router.get("/partner-portal/documents", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    if (req.portalPreview) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_portal.previewed",
+        payload: { firmId: firm.id, firmName: firm.name, surface: "documents" },
+        summary: `${me.name} previewed ${firm.name}'s partner portal (documents).`,
+      });
+    }
+    // Active shared docs (internal → firm) + the firm's own uploads.
+    const rows = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, firm.id),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPartnerSharedDocuments.createdAt));
+    const shared = rows.filter((r) => r.direction === "shared" && r.revokedAt == null);
+    const uploads = rows.filter((r) => r.direction === "partner_upload");
+    res.json({
+      firm: { id: firm.id, name: firm.name },
+      shared: shared.map(sharedDocPortalWire),
+      uploads: uploads.map(sharedDocPortalWire),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal download — external surface, own-firm only (Task #1174)
+router.get("/partner-portal/documents/:id/download", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { me, firm } = resolved;
+    // Grant re-checked at byte-serving time: active shared (revokedAt null)
+    // OR the firm's own upload. Foreign/revoked/unknown ids are 404
+    // (indistinguishable). Preview MAY download (read).
+    const [row] = await db
+      .select()
+      .from(atelierPartnerSharedDocuments)
+      .where(
+        and(
+          eq(atelierPartnerSharedDocuments.id, req.params.id),
+          eq(atelierPartnerSharedDocuments.orgId, me.orgId),
+          eq(atelierPartnerSharedDocuments.partnerFirmId, firm.id),
+          isNull(atelierPartnerSharedDocuments.deletedAt),
+        ),
+      );
+    const servable =
+      row &&
+      ((row.direction === "shared" && row.revokedAt == null) ||
+        row.direction === "partner_upload");
+    if (!servable) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const bytes = await loadSharedDocBytes(row.blobRef);
+    if (!bytes) {
+      res.status(404).json({ error: "document-missing" });
+      return;
+    }
+    res.setHeader("Content-Type", row.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", row.fileName));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal write — external upload-for-review surface (Task #1174)
+router.post(
+  "/partner-portal/documents",
+  // NB: NO pre-handler body parser. The web client sends multipart/form-data
+  // (fields: "file" = binary, optional "note"); a JSON base64 body is also
+  // accepted as a secondary content-type. In BOTH cases the body is consumed
+  // ONLY after resolvePortalFirm + refuseIfPreview succeed below, so an
+  // unauthenticated or preview caller is rejected before any bytes are read.
+  async (req, res, next) => {
+    try {
+      const resolved = await resolvePortalFirm(req, res);
+      if (!resolved) return;
+      // refuseIfPreview BEFORE any multipart parsing / storage / DB write.
+      if (refuseIfPreview(req, res)) return;
+      const { me, firm } = resolved;
+
+      // ---- ingest the payload (multipart primary; base64 JSON secondary) --
+      let buf: Buffer | null = null;
+      let rawFileName = "";
+      let note: string | null = null;
+      const contentType = String(req.headers["content-type"] ?? "");
+      if (contentType.includes("multipart/form-data")) {
+        const file = await runSharedDocUpload(req, res);
+        if (file === "error") return; // multer already responded (e.g. 413/size)
+        if (!file || !file.buffer || file.buffer.byteLength === 0) {
+          res.status(400).json({ error: "invalid-body", message: "A file part is required." });
+          return;
+        }
+        buf = file.buffer;
+        rawFileName = String(file.originalname ?? "");
+        const noteField = (req.body as Record<string, unknown> | undefined)?.note;
+        note = typeof noteField === "string" ? noteField.trim().slice(0, 1000) || null : null;
+      } else {
+        // Secondary contract: JSON { base64, fileName?, note? }. Uses the
+        // default express.json parser (small bodies); large uploads should use
+        // multipart. decodeBase64Strict rejects malformed / oversize input.
+        buf = decodeBase64Strict(String(req.body?.base64 ?? ""));
+        if (!buf) {
+          res.status(400).json({ error: "invalid-base64" });
+          return;
+        }
+        rawFileName = String(req.body?.fileName ?? "");
+        const noteField = req.body?.note;
+        note = typeof noteField === "string" ? noteField.trim().slice(0, 1000) || null : null;
+      }
+
+      if (buf.byteLength === 0 || buf.byteLength > SHARED_UPLOAD_MAX_BYTES) {
+        res.status(400).json({ error: "invalid-size", maxBytes: SHARED_UPLOAD_MAX_BYTES });
+        return;
+      }
+      // Mime is derived from magic-byte detection — the declared type (if any)
+      // is never trusted. A buffer matching no allowlisted signature is a
+      // content mismatch (covers garbage / disguised uploads).
+      const mime = sniffSharedMime(buf);
+      if (!mime) {
+        res.status(400).json({ error: "content-mismatch", message: "File content does not match an accepted type (PDF, PNG, JPEG)." });
+        return;
+      }
+      const fileName = sanitizeUploadFileName(rawFileName);
+      if (!fileName) {
+        res.status(400).json({ error: "invalid-body", message: "A file name is required." });
+        return;
+      }
+      const title = fileName;
+      const sha256 = createHash("sha256").update(buf).digest("hex");
+      const stored = await storeSharedDocBytes({
+        partnerFirmId: firm.id,
+        buf,
+        sha256,
+        contentType: mime,
+      });
+      const id = rid("ppsd");
+      const [created] = await db
+        .insert(atelierPartnerSharedDocuments)
+        .values({
+          id,
+          orgId: me.orgId,
+          partnerFirmId: firm.id,
+          direction: "partner_upload",
+          title: title || fileName,
+          fileName,
+          mime,
+          sizeBytes: stored.sizeBytes,
+          sha256,
+          blobRef: stored.blobRef,
+          note,
+          status: "pending_review",
+          sharedByUserId: me.id,
+          sharedByLabel: me.name,
+        })
+        .returning();
+      // Internal review is internal — notify nothing external.
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partners.document.uploaded_for_review",
+        payload: { sharedDocumentId: id, fileName, sizeBytes: stored.sizeBytes },
+        summary: `${me.name} uploaded "${fileName}" from ${firm.name}'s portal for internal review.`,
+      });
+      res.status(201).json({ ok: true, document: sharedDocPortalWire(created) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

@@ -79,7 +79,13 @@ DECLARE
     -- bytes live in object storage and are only served via ACL'd routes.
     'atelier_partner_firm_documents','atelier_partner_contact_suggestions',
     -- Task #1173 — partner-portal in-app notification center.
-    'atelier_partner_notifications'
+    'atelier_partner_notifications',
+    -- Task #1174 — partner delivery grants + shared-document space.
+    -- Org-scoped (deny-all by default); per-firm / per-role ACL is enforced
+    -- in the route layer. Shared/uploaded document bytes live in object
+    -- storage under a firm-scoped key prefix and are only served via ACL'd
+    -- routes.
+    'atelier_partner_engagement_grants','atelier_partner_shared_documents'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

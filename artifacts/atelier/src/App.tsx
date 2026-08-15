@@ -18,7 +18,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
-import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling, PartnerPortalCompany, PartnerPortalPreview } from "@/pages/PartnerPortal";
+import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling, PartnerPortalCompany, PartnerPortalDelivery, PartnerPortalDeliveryDetail, PartnerPortalDocuments, PartnerPortalPreview } from "@/pages/PartnerPortal";
 import Activate from "@/pages/Activate";
 import PartnerRegister from "@/pages/PartnerRegister";
 import ResetPassword from "@/pages/ResetPassword";
@@ -348,6 +348,10 @@ function Router() {
         {/* Task #875 — partner contracts & billing hub. */}
         <Route path="/partner/contracts" component={PartnerPortalContracts} />
         <Route path="/partner/billing" component={PartnerPortalBilling} />
+        {/* Task #1174 — partner delivery view + shared documents. */}
+        <Route path="/partner/delivery" component={PartnerPortalDelivery} />
+        <Route path="/partner/delivery/:engId" component={PartnerPortalDeliveryDetail} />
+        <Route path="/partner/documents" component={PartnerPortalDocuments} />
         {/* Task #1172 — partner company profile (firm details, documents, contacts). */}
         <Route path="/partner/company" component={PartnerPortalCompany} />
         <Route path="/" component={Home} />
@@ -756,6 +760,9 @@ function Router() {
         <Route path="/partners/preview/:firmId/billing" component={PartnerPortalPreview} />
         <Route path="/partners/preview/:firmId/company" component={PartnerPortalPreview} />
         <Route path="/partners/preview/:firmId/opportunities/:oppId" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/delivery" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/delivery/:engId" component={PartnerPortalPreview} />
+        <Route path="/partners/preview/:firmId/documents" component={PartnerPortalPreview} />
         <Route path="/partners/:section" component={PartnersIndex} />
         <Route path="/agents" component={AgentsLensHome} />
         {/* Task #372 — Finance lens. Eight sections: Entities · Record ·

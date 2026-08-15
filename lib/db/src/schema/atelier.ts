@@ -164,6 +164,28 @@ export const atelierPartnerOppGrants = pgTable(
   ],
 );
 
+// Task #1174 — partner delivery grants. Mirrors atelier_partner_opp_grants
+// exactly (soft-revoke, org isolation) but scopes an engagement to a firm's
+// portal delivery view rather than an opportunity.
+export const atelierPartnerEngagementGrants = pgTable(
+  "atelier_partner_engagement_grants",
+  {
+    id: text("id").primaryKey(), // ppeg_...
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+  },
+  (t) => [
+    index("idx_atelier_partner_eng_grants_org").on(t.orgId),
+    index("idx_atelier_partner_eng_grants_firm").on(t.partnerFirmId),
+    index("idx_atelier_partner_eng_grants_eng").on(t.engagementId),
+  ],
+);
+
 // ============================================================
 // ACCOUNTS
 // ============================================================
@@ -3200,6 +3222,54 @@ export const atelierPartnerContactSuggestions = pgTable(
     index("idx_atelier_pf_contact_sug_org").on(t.orgId),
     index("idx_atelier_pf_contact_sug_firm").on(t.partnerFirmId),
     index("idx_atelier_pf_contact_sug_status").on(t.status),
+  ],
+);
+
+// Task #1174 — shared-document space for the partner delivery portal.
+// Two directions:
+//   'shared'          internal → firm. A SNAPSHOT of a library document
+//                     version copied into firm-scoped partner storage at
+//                     share time (later library edits never leak). Always
+//                     status 'active' until revoked (revokedAt stamped).
+//   'partner_upload'  firm → internal. A file a partner uploaded for internal
+//                     review; status pending_review | accepted | rejected.
+// Bytes live in the private bucket under a FIRM-SCOPED key prefix; the row
+// carries the opaque blobRef. blobRef/sha256/source ids are NEVER exposed to
+// the portal. Deny-all RLS; org-isolated like every table.
+export const atelierPartnerSharedDocuments = pgTable(
+  "atelier_partner_shared_documents",
+  {
+    id: text("id").primaryKey(), // ppsd_...
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    // 'shared' (internal→firm) | 'partner_upload' (firm→internal)
+    direction: text("direction").notNull(),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    mime: text("mime").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256"),
+    blobRef: text("blob_ref").notNull(),
+    // Library doc/version this was copied from (shared direction only).
+    sourceDocumentId: text("source_document_id"),
+    sourceVersionId: text("source_version_id"),
+    note: text("note"),
+    // 'active' (shared) | 'pending_review' | 'accepted' | 'rejected' (uploads)
+    status: text("status").notNull(),
+    sharedByUserId: text("shared_by_user_id"),
+    sharedByLabel: text("shared_by_label"),
+    reviewedByUserId: text("reviewed_by_user_id"),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pf_shared_docs_org").on(t.orgId),
+    index("idx_atelier_pf_shared_docs_firm").on(t.partnerFirmId),
+    index("idx_atelier_pf_shared_docs_status").on(t.status),
+    index("idx_atelier_pf_shared_docs_dir").on(t.direction),
   ],
 );
 

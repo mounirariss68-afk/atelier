@@ -21,3 +21,9 @@ description: Security model for external alliance_partner logins (grant-scoped o
 - Reset-link supersede must invalidate BOTH activation and partner_registration tokens, or fresh partners keep two live links.
 - Partner notification hooks for contract/invoice events are deliberately deferred — firm linkage is ambiguous name-join, don't notify on unverified matches.
 - The portal per-user throttle must mount once on the common parent router or separately-mounted portal routers bypass it.
+
+## Delivery view & shared documents
+- Partner delivery reads compose through ONE pure allowlist wire-builder (deep-scanned by probes for forbidden keys); engagement phase = plmStage, health = raidStatus — there is no separate status column. The redacted account overview nests under the engagement, not at response root.
+- Documents shared to a firm are byte-COPY snapshots into firm-scoped storage keys; dedupe and unreference-deletion are per-firm only — org-global dedupe would be an existence side-channel.
+- Partner uploads are multipart, parsed route-LOCALLY (multer memoryStorage) only AFTER firm resolution + preview refusal — never via a path-scoped pre-parser, which consumes bytes before preview auth. Upload statuses: pending_review|accepted|rejected; review decisions use the full words.
+- Internal reviewers need a leadership byte-download surface for uploads/shares (completion review rejects accept/reject UIs with no way to inspect the file).

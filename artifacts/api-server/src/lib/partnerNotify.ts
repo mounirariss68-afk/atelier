@@ -27,7 +27,11 @@ export type PartnerNotificationKind =
   | "contract_renewal"
   | "contract_signature"
   | "bank_change_decided"
-  | "invoice_status";
+  | "invoice_status"
+  // Task #1174 — partner delivery view + shared documents.
+  | "engagement_shared"
+  | "engagement_revoked"
+  | "document_shared";
 
 export interface NotifyPartnerFirmArgs {
   orgId: string;

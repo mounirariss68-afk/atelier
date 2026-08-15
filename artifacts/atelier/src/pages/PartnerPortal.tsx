@@ -113,8 +113,10 @@ function PortalNav() {
   const base = api.isPreview ? `/partners/preview/${api.previewFirmId}` : "/partner";
   const tabs = [
     { href: base, label: "Opportunities", active: location === base || location.startsWith(`${base}/opportunities`) },
+    { href: `${base}/delivery`, label: "Delivery", active: location.startsWith(`${base}/delivery`) },
     { href: `${base}/contracts`, label: "Contracts", active: location.startsWith(`${base}/contracts`) },
     { href: `${base}/billing`, label: "Billing", active: location.startsWith(`${base}/billing`) },
+    { href: `${base}/documents`, label: "Documents", active: location.startsWith(`${base}/documents`) },
     { href: `${base}/company`, label: "Company", active: location.startsWith(`${base}/company`) },
   ];
   return (
@@ -1500,6 +1502,580 @@ export function PartnerPortalOpportunity() {
 }
 
 // ===========================================================================
+// Task #1174 — Delivery view (shared engagements) + shared documents.
+// Raw-fetch backed; the server half ships in parallel, so any non-OK read is
+// treated as an EMPTY result (mirroring the #1173 notification bell) rather
+// than an error surface — the partner sees a friendly empty state instead.
+// ===========================================================================
+
+type PartnerEngagement = {
+  id: string;
+  name: string;
+  plmStage: string | null;
+  raidStatus: string | null;
+  startDate: string | null;
+  plannedEndDate: string | null;
+  sharedAt: string | null;
+};
+type DeliveryListResponse = {
+  firm?: { id: string; name: string };
+  engagements: PartnerEngagement[];
+};
+const EMPTY_DELIVERY: DeliveryListResponse = { engagements: [] };
+
+type PartnerDeliverable = {
+  name: string;
+  type: string | null;
+  status: string;
+  dueDate: string | null;
+  sentAt: string | null;
+};
+type PartnerOpenItem = {
+  kind: string;
+  severity: string | null;
+  status: string;
+  dueDate: string | null;
+  description: string;
+};
+type PartnerMeeting = {
+  title: string;
+  date: string | null;
+  kind: string | null;
+};
+type DeliveryDetailResponse = {
+  engagement: PartnerEngagement & { account?: AccountOverview | null };
+  account?: AccountOverview | null;
+  deliverables: PartnerDeliverable[];
+  openItems: PartnerOpenItem[];
+  upcomingMeetings: PartnerMeeting[];
+};
+
+/** Health dot keyed off the engagement RAID status (green/amber/red). */
+function HealthDot({ status }: { status: string | null }) {
+  const tone =
+    status === "green"
+      ? "bg-emerald-500"
+      : status === "amber"
+        ? "bg-amber-500"
+        : status === "red"
+          ? "bg-destructive"
+          : "bg-muted-foreground/40";
+  return (
+    <span
+      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${tone}`}
+      title={status ? `Health: ${status}` : "Health: unknown"}
+      data-testid="partner-health-dot"
+      aria-label={status ? `Health ${status}` : "Health unknown"}
+    />
+  );
+}
+
+export function PartnerPortalDelivery() {
+  const api = usePortalApi();
+  const engBase = api.isPreview
+    ? `/partners/preview/${api.previewFirmId}`
+    : "/partner";
+  const q = useQuery({
+    queryKey: ["partner-portal", api.previewFirmId, "delivery"],
+    // Server half ships in parallel; treat a 404/non-OK as an empty list.
+    queryFn: () =>
+      api.getJson<DeliveryListResponse>("/delivery").catch(() => EMPTY_DELIVERY),
+  });
+
+  const data = q.data ?? EMPTY_DELIVERY;
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-delivery-home">
+      <PortalNav />
+      <h1 className="text-2xl font-semibold">Delivery</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {data.firm
+          ? `Engagements shared with ${data.firm.name}.`
+          : "Engagements shared with your firm."}
+      </p>
+      {q.isLoading && <div className="mt-8 text-sm text-muted-foreground">Loading…</div>}
+      {!q.isLoading && data.engagements.length === 0 && (
+        <div
+          className="mt-8 rounded-lg border border-border p-8 text-center"
+          data-testid="partner-delivery-empty"
+        >
+          <div className="text-base font-medium">
+            {data.firm
+              ? `Nothing is shared with ${data.firm.name} right now`
+              : "Nothing is shared with your firm right now"}
+          </div>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            This is where Cognirise shares the engagements your firm is helping
+            deliver. When an engagement is shared with your firm it will appear
+            here automatically — there's nothing you need to set up.
+          </p>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+            Expecting to see something? Contact your Cognirise counterpart and
+            ask them to share the engagement with your firm.
+          </p>
+        </div>
+      )}
+      <div className="mt-6 space-y-3">
+        {data.engagements.map((e) => (
+          <Link
+            key={e.id}
+            href={`${engBase}/delivery/${e.id}`}
+            className="block rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
+            data-testid={`link-partner-eng-${e.id}`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <HealthDot status={e.raidStatus} />
+                <span className="font-medium">{e.name}</span>
+              </div>
+              {e.plmStage && <StageBadge stage={e.plmStage} />}
+            </div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              {fmtDate(e.startDate)} → {e.plannedEndDate ? fmtDate(e.plannedEndDate) : "open-ended"}
+            </div>
+            {e.sharedAt && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Shared with you on {fmtDate(e.sharedAt)}
+              </div>
+            )}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SeverityBadge({ value }: { value: string | null }) {
+  if (!value) return null;
+  const tone =
+    value === "high" || value === "critical"
+      ? "border-destructive/40 text-destructive"
+      : value === "medium"
+        ? "border-amber-500/40 text-amber-600"
+        : "border-border text-muted-foreground";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>
+      {value.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+export function PartnerPortalDeliveryDetail() {
+  const api = usePortalApi();
+  const [, realParams] = useRoute("/partner/delivery/:engId");
+  const [, previewParams] = useRoute("/partners/preview/:firmId/delivery/:engId");
+  const engId = previewParams?.engId ?? realParams?.engId ?? "";
+  const engBase = api.isPreview
+    ? `/partners/preview/${api.previewFirmId}`
+    : "/partner";
+
+  const q = useQuery({
+    queryKey: ["partner-portal", api.previewFirmId, "delivery", engId],
+    queryFn: () => api.getJson<DeliveryDetailResponse>(`/delivery/${engId}`),
+    enabled: !!engId,
+  });
+
+  const eng = q.data?.engagement;
+  // Server nests the redacted account overview under engagement.account.
+  const account = q.data?.engagement?.account ?? q.data?.account ?? null;
+  const deliverables = q.data?.deliverables ?? [];
+  const openItems = q.data?.openItems ?? [];
+  const meetings = q.data?.upcomingMeetings ?? [];
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-delivery-detail">
+      <Link href={`${engBase}/delivery`} className="text-sm text-muted-foreground hover:underline">
+        ← All engagements
+      </Link>
+      {q.isLoading && <div className="mt-6 text-sm text-muted-foreground">Loading…</div>}
+      {q.isError && (
+        <div className="mt-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          This engagement is not available.
+        </div>
+      )}
+      {eng && (
+        <>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <HealthDot status={eng.raidStatus} />
+              <h1 className="text-2xl font-semibold">{eng.name}</h1>
+            </div>
+            {eng.plmStage && <StageBadge stage={eng.plmStage} />}
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            {fmtDate(eng.startDate)} → {eng.plannedEndDate ? fmtDate(eng.plannedEndDate) : "open-ended"}
+            {eng.sharedAt ? ` · shared ${fmtDate(eng.sharedAt)}` : ""}
+          </div>
+          {account && (
+            <div className="mt-4 flex flex-wrap gap-2" data-testid="delivery-account-chips">
+              <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium">
+                {account.name}
+                {account.brandName ? ` (${account.brandName})` : ""}
+              </span>
+              {account.sector && (
+                <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {account.sector}
+                </span>
+              )}
+              {account.country && (
+                <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {account.country}
+                  {account.hqCity ? ` · ${account.hqCity}` : ""}
+                </span>
+              )}
+              {account.size && (
+                <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {account.size}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Deliverables */}
+          <section className="mt-8" data-testid="section-deliverables">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Deliverables
+            </h2>
+            {deliverables.length === 0 ? (
+              <div className="mt-3 text-sm text-muted-foreground" data-testid="deliverables-empty">
+                No deliverables have been shared yet.
+              </div>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Name</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium">Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deliverables.map((d, i) => (
+                      <tr key={`${d.name}-${i}`} className="border-t border-border" data-testid={`row-deliverable-${i}`}>
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{d.name}</div>
+                          {d.type && (
+                            <div className="text-xs capitalize text-muted-foreground">
+                              {d.type.replace(/_/g, " ")}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <StatusChip value={d.status} />
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{fmtDate(d.dueDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Open items */}
+          <section className="mt-8" data-testid="section-open-items">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Open items
+            </h2>
+            {openItems.length === 0 ? (
+              <div className="mt-3 text-sm text-muted-foreground" data-testid="open-items-empty">
+                No open items shared with your firm.
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {openItems.map((it, i) => (
+                  <div key={i} className="rounded-lg border border-border p-3 text-sm" data-testid={`row-open-item-${i}`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium capitalize">
+                        {it.kind.replace(/_/g, " ")}
+                      </span>
+                      <SeverityBadge value={it.severity} />
+                      <StatusChip value={it.status} />
+                    </div>
+                    <div className="mt-1.5">{it.description}</div>
+                    {it.dueDate && (
+                      <div className="mt-1 text-xs text-muted-foreground">Due {fmtDate(it.dueDate)}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Upcoming shared meetings */}
+          <section className="mt-8" data-testid="section-meetings">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Upcoming shared meetings
+            </h2>
+            {meetings.length === 0 ? (
+              <div className="mt-3 text-sm text-muted-foreground" data-testid="meetings-empty">
+                No upcoming meetings shared with your firm.
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {meetings.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm" data-testid={`row-meeting-${i}`}>
+                    <div>
+                      <div className="font-medium">{m.title}</div>
+                      {m.kind && (
+                        <div className="text-xs capitalize text-muted-foreground">
+                          {m.kind.replace(/_/g, " ")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{fmtDate(m.date)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Task #1174 — Documents (shared with the firm + firm's own uploads).
+// ===========================================================================
+
+type SharedDoc = {
+  id: string;
+  title: string;
+  fileName: string | null;
+  sizeBytes: number | null;
+  sharedAt: string | null;
+  note: string | null;
+};
+type DocUpload = {
+  id: string;
+  fileName: string;
+  sizeBytes: number | null;
+  status: "pending_review" | "accepted" | "rejected" | string;
+  createdAt: string | null;
+};
+type DocumentsResponse = {
+  firm?: { id: string; name: string };
+  shared: SharedDoc[];
+  uploads: DocUpload[];
+};
+const EMPTY_DOCUMENTS: DocumentsResponse = { shared: [], uploads: [] };
+
+/**
+ * Download a shared document. For real partners a plain anchor to the API
+ * (with cookie credentials) works. In preview the server only authorises the
+ * download via the x-partner-preview-firm header, which an anchor can't send,
+ * so preview fetches the bytes with the header and triggers a blob download.
+ */
+function DownloadDocButton({ id, fileName }: { id: string; fileName: string | null }) {
+  const api = usePortalApi();
+  const [busy, setBusy] = React.useState(false);
+
+  if (!api.isPreview) {
+    return (
+      <a
+        href={`${API}/documents/${id}/download`}
+        className="text-sm text-primary hover:underline"
+        data-testid={`button-download-doc-${id}`}
+      >
+        Download
+      </a>
+    );
+  }
+
+  const onDownload = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/documents/${id}/download`, {
+        credentials: "include",
+        headers: { [PREVIEW_HEADER]: api.previewFirmId ?? "" },
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName ?? "document";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* best-effort in preview */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onDownload}
+      disabled={busy}
+      className="text-sm text-primary hover:underline disabled:opacity-50"
+      data-testid={`button-download-doc-${id}`}
+    >
+      {busy ? "Downloading…" : "Download"}
+    </button>
+  );
+}
+
+export function PartnerPortalDocuments() {
+  const api = usePortalApi();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["partner-portal", api.previewFirmId, "documents"],
+    // Server half ships in parallel; treat a 404/non-OK as empty.
+    queryFn: () =>
+      api.getJson<DocumentsResponse>("/documents").catch(() => EMPTY_DOCUMENTS),
+  });
+
+  const data = q.data ?? EMPTY_DOCUMENTS;
+
+  const [file, setFile] = React.useState<File | null>(null);
+  const [note, setNote] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const onUpload = async () => {
+    if (!file) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      if (note.trim()) form.append("note", note.trim());
+      await api.postForm("/documents", form);
+      setFile(null);
+      setNote("");
+      if (fileRef.current) fileRef.current.value = "";
+      void qc.invalidateQueries({
+        queryKey: ["partner-portal", api.previewFirmId, "documents"],
+      });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-documents">
+      <PortalNav />
+      <h1 className="text-2xl font-semibold">Documents</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Documents Cognirise has shared with {data.firm?.name ?? "your firm"}, plus files your firm has sent for review.
+      </p>
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        Shared with your firm
+      </h2>
+      {q.isLoading && <div className="mt-3 text-sm text-muted-foreground">Loading…</div>}
+      {!q.isLoading && data.shared.length === 0 && (
+        <div className="mt-3 text-sm text-muted-foreground" data-testid="shared-docs-empty">
+          No documents have been shared with your firm yet.
+        </div>
+      )}
+      <div className="mt-3 space-y-2">
+        {data.shared.map((d) => (
+          <div key={d.id} className="rounded-lg border border-border p-4" data-testid={`shared-doc-${d.id}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium">{d.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {d.fileName ? `${d.fileName}` : ""}
+                  {d.sizeBytes != null ? ` · ${fmtBytes(d.sizeBytes)}` : ""}
+                  {d.sharedAt ? ` · shared ${fmtDate(d.sharedAt)}` : ""}
+                </div>
+              </div>
+              <DownloadDocButton id={d.id} fileName={d.fileName} />
+            </div>
+            {d.note && <div className="mt-1 text-xs text-muted-foreground">{d.note}</div>}
+          </div>
+        ))}
+      </div>
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        Your uploads
+      </h2>
+      {data.uploads.length === 0 && (
+        <div className="mt-3 text-sm text-muted-foreground" data-testid="uploads-empty">
+          Your firm hasn't uploaded any documents for review yet.
+        </div>
+      )}
+      <div className="mt-3 space-y-2">
+        {data.uploads.map((u) => (
+          <div key={u.id} className="rounded-lg border border-border p-3 text-sm" data-testid={`upload-status-${u.id}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium">{u.fileName}</span>
+              <div className="flex items-center gap-2">
+              <DownloadDocButton id={u.id} fileName={u.fileName} />
+              <StatusChip
+                value={
+                  u.status === "pending_review"
+                    ? "pending review"
+                    : u.status === "accepted"
+                      ? "accepted"
+                      : u.status === "rejected"
+                        ? "rejected"
+                        : u.status
+                }
+              />
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {u.sizeBytes != null ? `${fmtBytes(u.sizeBytes)} · ` : ""}
+              Uploaded {fmtDate(u.createdAt)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Upload-for-review — hidden entirely in read-only preview. */}
+      {!api.isPreview && (
+        <>
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Send a document for review
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload a document for the Cognirise team to review. It stays pending
+            until they accept it.
+          </p>
+          <div className="mt-3 space-y-3 rounded-lg border border-border p-4">
+            <input
+              ref={fileRef}
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm"
+              data-testid="input-doc-file"
+            />
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Note for the reviewer (optional)"
+              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+              data-testid="input-doc-note"
+            />
+            {err && <div className="text-sm text-destructive">{err}</div>}
+            <button
+              onClick={onUpload}
+              disabled={!file || busy}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              data-testid="button-upload-doc"
+            >
+              {busy ? "Uploading…" : "Upload for review"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ===========================================================================
 // Task #1173 — Preview-as-partner shell (internal leadership only).
 // Renders the SAME portal pages inside a PreviewFirmProvider so every read
 // carries the x-partner-preview-firm header and every mutation is blocked.
@@ -1565,6 +2141,9 @@ export function PartnerPortalPreview() {
   const [billingMatch, billingParams] = useRoute("/partners/preview/:firmId/billing");
   const [companyMatch, companyParams] = useRoute("/partners/preview/:firmId/company");
   const [oppMatch, oppParams] = useRoute("/partners/preview/:firmId/opportunities/:oppId");
+  const [deliveryDetailMatch, deliveryDetailParams] = useRoute("/partners/preview/:firmId/delivery/:engId");
+  const [deliveryMatch, deliveryParams] = useRoute("/partners/preview/:firmId/delivery");
+  const [documentsMatch, documentsParams] = useRoute("/partners/preview/:firmId/documents");
 
   const firmId =
     homeParams?.firmId ??
@@ -1572,12 +2151,18 @@ export function PartnerPortalPreview() {
     billingParams?.firmId ??
     companyParams?.firmId ??
     oppParams?.firmId ??
+    deliveryDetailParams?.firmId ??
+    deliveryParams?.firmId ??
+    documentsParams?.firmId ??
     "";
 
   if (!firmId) return null;
 
   let page: React.ReactNode = null;
   if (oppMatch) page = <PartnerPortalOpportunity />;
+  else if (deliveryDetailMatch) page = <PartnerPortalDeliveryDetail />;
+  else if (deliveryMatch) page = <PartnerPortalDelivery />;
+  else if (documentsMatch) page = <PartnerPortalDocuments />;
   else if (contractsMatch) page = <PartnerPortalContracts />;
   else if (billingMatch) page = <PartnerPortalBilling />;
   else if (companyMatch) page = <PartnerPortalCompany />;

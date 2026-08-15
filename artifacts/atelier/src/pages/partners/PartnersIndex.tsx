@@ -1045,6 +1045,431 @@ function PortalLoginsPanel({
       </div>
 
       {msg && <p className="text-xs text-text-faint">{msg}</p>}
+
+      {/* Task #1174 — delivery (engagement) grants + shared documents. */}
+      <FirmDeliveryAccessPanel firmId={firmId} />
+      <FirmSharedDocumentsPanel firmId={firmId} firmName={firmName} />
+    </div>
+  );
+}
+
+// ---- Delivery access (Task #1174) ------------------------------------------
+// Leadership-only: grant/revoke a partner firm's portal visibility of an
+// ENGAGEMENT, mirroring the per-opportunity grant pattern on the Opportunity
+// page. Raw fetch — bespoke routes, not in the OpenAPI spec. The server half
+// ships in parallel, so a 404/non-OK read is treated as "no grants yet".
+function FirmDeliveryAccessPanel({ firmId }: { firmId: string }) {
+  type EngGrantRow = {
+    id: string;
+    engagementId: string;
+    engagementName?: string | null;
+    createdAt: string;
+    revokedAt: string | null;
+  };
+  type EngOption = { id: string; name: string };
+  const [grants, setGrants] = React.useState<EngGrantRow[] | null>(null);
+  const [engagements, setEngagements] = React.useState<EngOption[]>([]);
+  const [engId, setEngId] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+
+  const load = React.useCallback(() => {
+    // Firm-side listing may 404 (server built in parallel); treat as empty.
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/engagement-grants`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : { grants: [] }))
+      .then((j: { grants?: EngGrantRow[] }) => setGrants(j.grants ?? []))
+      .catch(() => setGrants([]));
+  }, [firmId]);
+  React.useEffect(() => load(), [load]);
+
+  React.useEffect(() => {
+    void fetch(`${QUALIFY_API}/engagements`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((j: unknown) => {
+        // Tolerate both a bare array and an { items|engagements } envelope.
+        const arr = Array.isArray(j)
+          ? j
+          : ((j as { items?: unknown[]; engagements?: unknown[] })?.items ??
+            (j as { engagements?: unknown[] })?.engagements ??
+            []);
+        setEngagements(
+          (arr as Array<{ id?: string; name?: string }>)
+            .filter((e) => !!e.id)
+            .map((e) => ({ id: e.id as string, name: e.name ?? (e.id as string) })),
+        );
+      })
+      .catch(() => setEngagements([]));
+  }, []);
+
+  const active = (grants ?? []).filter((g) => !g.revokedAt);
+
+  const assign = () => {
+    if (!engId) return;
+    setBusy(true);
+    setMsg(null);
+    void fetch(`${QUALIFY_API}/engagements/${engId}/partner-grants`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ partnerFirmId: firmId }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : "Sharing failed.");
+        setEngId("");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const revoke = (g: EngGrantRow) => {
+    setBusy(true);
+    setMsg(null);
+    void fetch(`${QUALIFY_API}/engagements/${g.engagementId}/partner-grants/${g.id}/revoke`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Revoking failed.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const engNameFor = (g: EngGrantRow) =>
+    g.engagementName ?? engagements.find((e) => e.id === g.engagementId)?.name ?? g.engagementId;
+
+  return (
+    <div className="mt-3 border-t border-border-soft pt-3 space-y-2" data-testid={`panel-delivery-access-${firmId}`}>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Delivery access
+      </div>
+      <p className="text-xs text-text-mute">
+        Shared engagements appear in this firm's Delivery tab (read-only:
+        deliverables, open items, upcoming meetings). Revoking removes visibility
+        immediately.
+      </p>
+      {grants == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : active.length === 0 ? (
+        <p className="text-xs text-text-mute">No engagements shared with this firm.</p>
+      ) : (
+        <ul className="space-y-1">
+          {active.map((g) => (
+            <li key={g.id} className="flex items-center gap-2 text-sm" data-testid={`row-eng-grant-${g.id}`}>
+              <span className="font-medium text-text">{engNameFor(g)}</span>
+              <button
+                type="button"
+                className="text-xs text-danger hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => revoke(g)}
+                data-testid={`button-revoke-eng-grant-${g.id}`}
+              >
+                revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          value={engId}
+          onChange={(e) => setEngId(e.target.value)}
+          data-testid={`select-eng-grant-${firmId}`}
+        >
+          <option value="">Select engagement…</option>
+          {engagements
+            .filter((e) => !active.some((g) => g.engagementId === e.id))
+            .map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+        </select>
+        <button
+          type="button"
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+          disabled={busy || !engId}
+          onClick={assign}
+          data-testid={`button-share-engagement-${firmId}`}
+        >
+          share engagement
+        </button>
+      </div>
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
+    </div>
+  );
+}
+
+// ---- Shared documents (Task #1174) -----------------------------------------
+// Leadership-only: share internal library documents to a firm's portal, review
+// the firm's uploads, and revoke shares. Raw fetch — bespoke routes, server
+// built in parallel so non-OK reads degrade to empty lists.
+function FirmSharedDocumentsPanel({ firmId, firmName }: { firmId: string; firmName: string }) {
+  type SharedRow = {
+    id: string;
+    sourceDocumentId: string | null;
+    title?: string | null;
+    fileName?: string | null;
+    note: string | null;
+    sharedByLabel?: string | null;
+    createdAt: string;
+    revokedAt: string | null;
+  };
+  type UploadRow = {
+    id: string;
+    fileName: string;
+    note: string | null;
+    status: "pending_review" | "accepted" | "rejected" | string;
+    reviewNote: string | null;
+    uploadedByLabel?: string | null;
+    createdAt: string;
+  };
+  type LibDoc = { id: string; title: string };
+  const [shared, setShared] = React.useState<SharedRow[] | null>(null);
+  const [uploads, setUploads] = React.useState<UploadRow[]>([]);
+  const [library, setLibrary] = React.useState<LibDoc[]>([]);
+  const [documentId, setDocumentId] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = React.useState<string | null>(null);
+  const [tick, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/shared-documents`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((j: { items?: SharedRow[] }) => setShared(j.items ?? []))
+      .catch(() => setShared([]));
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/partner-uploads?status=all`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((j: { items?: UploadRow[] }) => setUploads(j.items ?? []))
+      .catch(() => setUploads([]));
+  }, [firmId, tick]);
+
+  React.useEffect(() => {
+    void fetch(`${QUALIFY_API}/documents`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { documents: [] }))
+      .then((j: { documents?: Array<{ id: string; title: string }> }) =>
+        setLibrary((j.documents ?? []).map((d) => ({ id: d.id, title: d.title }))),
+      )
+      .catch(() => setLibrary([]));
+  }, []);
+
+  const post = async (path: string, body: unknown) => {
+    setMsg(null);
+    const r = await fetch(`${QUALIFY_API}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+    const d = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!r.ok) {
+      throw new Error(
+        (typeof d?.message === "string" && d.message) ||
+          (typeof d?.error === "string" && d.error) ||
+          `request-failed:${r.status}`,
+      );
+    }
+    setTick((t) => t + 1);
+  };
+  const act = (key: string, fn: () => Promise<void>) => {
+    setBusy(key);
+    void fn()
+      .catch((e) => setMsg((e as Error).message))
+      .finally(() => setBusy(null));
+  };
+
+  const activeShares = (shared ?? []).filter((s) => !s.revokedAt);
+  const pendingUploads = uploads.filter((u) => u.status === "pending_review");
+
+  return (
+    <div className="mt-3 border-t border-border-soft pt-3 space-y-3" data-testid={`panel-shared-documents-${firmId}`}>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Shared documents
+      </div>
+      <p className="text-xs text-text-mute">
+        Share library documents to {firmName}'s portal and review files the firm
+        uploads for your team.
+      </p>
+      {msg && <p className="text-xs text-danger">⚠ {msg}</p>}
+
+      {/* Share a library document */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          value={documentId}
+          onChange={(e) => setDocumentId(e.target.value)}
+          data-testid={`select-share-doc-${firmId}`}
+        >
+          <option value="">Select a document…</option>
+          {library
+            .filter((d) => !activeShares.some((s) => s.sourceDocumentId === d.id))
+            .map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.title}
+              </option>
+            ))}
+        </select>
+        <input
+          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+          placeholder="Note (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          data-testid={`input-share-doc-note-${firmId}`}
+        />
+        <button
+          type="button"
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+          disabled={!!busy || !documentId}
+          onClick={() =>
+            act("share-doc", async () => {
+              await post(`/partners/firms/${firmId}/shared-documents`, {
+                documentId,
+                note: note.trim() || undefined,
+              });
+              setDocumentId("");
+              setNote("");
+            })
+          }
+          data-testid="button-share-doc"
+        >
+          share document
+        </button>
+      </div>
+
+      {shared == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : activeShares.length === 0 ? (
+        <p className="text-xs text-text-mute">No documents shared with this firm yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {activeShares.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center gap-2 text-sm" data-testid={`row-shared-doc-${s.id}`}>
+              <span className="font-medium text-text">{s.title ?? s.fileName ?? s.id}</span>
+              {s.note && <span className="text-xs text-text-mute">· {s.note}</span>}
+              <a
+                className="text-xs text-gold hover:underline"
+                href={`${QUALIFY_API}/partners/firms/${firmId}/shared-documents/${s.id}/download`}
+                data-testid={`button-download-shared-${s.id}`}
+              >
+                download
+              </a>
+              {confirmRevoke === s.id ? (
+                <span className="flex items-center gap-2 text-xs">
+                  <span className="text-danger">Revoke access?</span>
+                  <button
+                    type="button"
+                    className="font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+                    disabled={!!busy}
+                    onClick={() =>
+                      act(`rv:${s.id}`, async () => {
+                        await post(`/partners/firms/${firmId}/shared-documents/${s.id}/revoke`, {});
+                        setConfirmRevoke(null);
+                      })
+                    }
+                    data-testid={`button-revoke-doc-confirm-${s.id}`}
+                  >
+                    confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="text-text-faint hover:underline"
+                    onClick={() => setConfirmRevoke(null)}
+                    data-testid={`button-revoke-doc-cancel-${s.id}`}
+                  >
+                    cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="text-xs text-danger hover:underline disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={() => setConfirmRevoke(s.id)}
+                  data-testid={`button-revoke-doc-${s.id}`}
+                >
+                  revoke
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Partner uploads awaiting review */}
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Partner uploads {pendingUploads.length > 0 && <span className="text-gold">· {pendingUploads.length} pending</span>}
+      </div>
+      {uploads.length === 0 ? (
+        <p className="text-xs text-text-mute" data-testid={`uploads-empty-${firmId}`}>
+          This firm hasn't uploaded any documents for review yet.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {uploads.map((u) => (
+            <div key={u.id} className="flex flex-wrap items-center gap-2 text-sm" data-testid={`row-upload-${u.id}`}>
+              <span className="font-medium text-text">{u.fileName}</span>
+              {u.note && <span className="text-xs text-text-mute">· {u.note}</span>}
+              <a
+                className="text-xs text-gold hover:underline"
+                href={`${QUALIFY_API}/partners/firms/${firmId}/shared-documents/${u.id}/download`}
+                data-testid={`button-download-upload-${u.id}`}
+              >
+                download
+              </a>
+              <MonoChip tone={u.status === "pending_review" ? "amber" : u.status === "accepted" ? "green" : "red"}>
+                {u.status === "pending_review" ? "pending review" : u.status}
+              </MonoChip>
+              {u.status === "pending_review" && (
+                <>
+                  <button
+                    type="button"
+                    className="text-xs text-gold hover:underline disabled:opacity-50"
+                    disabled={!!busy}
+                    onClick={() =>
+                      act(`acc:${u.id}`, () =>
+                        post(`/partners/firms/${firmId}/partner-uploads/${u.id}/review`, { decision: "accepted" }),
+                      )
+                    }
+                    data-testid={`button-review-accept-${u.id}`}
+                  >
+                    accept
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-danger hover:underline disabled:opacity-50"
+                    disabled={!!busy}
+                    onClick={() => {
+                      const reviewNote = window.prompt("Rejection note (shown to the partner)?");
+                      if (reviewNote === null) return;
+                      act(`rej:${u.id}`, () =>
+                        post(`/partners/firms/${firmId}/partner-uploads/${u.id}/review`, {
+                          decision: "rejected",
+                          note: reviewNote.trim() || undefined,
+                        }),
+                      );
+                    }}
+                    data-testid={`button-review-reject-${u.id}`}
+                  >
+                    reject
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
