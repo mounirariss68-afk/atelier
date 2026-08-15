@@ -43,7 +43,7 @@
     "test:chat-clarify": "tsx ./tests/chat/clarification-resolver-probe.ts",
     "test:chat-convo": "tsx ./tests/chat/conversation-probe.ts",
     "test:chat-parity": "tsx ./tests/chat/reducer-parity-probe.ts",
-    "test:chat-suite": "tsx ./tests/cli-turn/narration-contract.ts && tsx ./tests/chat/replay-probe.ts && tsx ./tests/chat/recap-probe.ts && tsx ./tests/chat/session-facts-probe.ts && tsx ./tests/chat/clarification-resolver-probe.ts && tsx ./tests/chat/reducer-parity-probe.ts && tsx ./tests/chat/streaming-probe.ts && tsx ./tests/chat/conversation-probe.ts && tsx ./tests/crm/chat-attachment-continuity-probe.ts && tsx ./tests/cli-turn/confirm-forgery.ts && tsx ./tests/cli-turn/async-approval-gate.ts && tsx ./tests/cli-turn/clarification-approval-smuggle.ts",
+    "test:chat-suite": "export CRM_TEST_DB_NAME=crm_test_chat && tsx ./tests/cli-turn/narration-contract.ts && tsx ./tests/chat/replay-probe.ts && tsx ./tests/chat/recap-probe.ts && tsx ./tests/chat/session-facts-probe.ts && tsx ./tests/chat/clarification-resolver-probe.ts && tsx ./tests/chat/reducer-parity-probe.ts && tsx ./tests/chat/streaming-probe.ts && tsx ./tests/chat/conversation-probe.ts && tsx ./tests/crm/chat-attachment-continuity-probe.ts && tsx ./tests/cli-turn/confirm-forgery.ts && tsx ./tests/cli-turn/async-approval-gate.ts && tsx ./tests/cli-turn/clarification-approval-smuggle.ts",
     "chat:telemetry-rollup": "tsx ./tests/chat/telemetry-rollup.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
@@ -109,7 +109,7 @@
     "test:expense-edit": "tsx ./tests/expense-edit/run.ts",
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
     "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
-    "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts",
+    "test:pov-revision": "CRM_TEST_DB_NAME=crm_test_pov tsx ./tests/crm/pov-revision-probe.ts",
     "test:orphan-invoices": "tsx ./tests/crm/orphan-invoice-probe.ts",
     "test:app-navigation": "tsx tests/app-navigation/run.ts",
     "test:nep-flow": "tsx ./tests/crm/nep-flow-probe.ts",
@@ -117,7 +117,7 @@
     "test:push-prefs": "tsx ./tests/push-notif-prefs/run.ts",
     "test:gl-drill-through": "tsx ./tests/gl-drill-through/run.ts",
     "test:gl-drill-through-int": "NODE_ENV=test tsx ./tests/gl-drill-through/integration-probe.ts",
-    "test:vat201": "tsx ./scripts/vat201-probe.ts && tsx ./scripts/vat201-route-probe.ts"
+    "test:vat201": "export CRM_TEST_DB_NAME=crm_test_vat && tsx ./scripts/vat201-probe.ts && tsx ./scripts/vat201-route-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

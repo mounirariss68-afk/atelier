@@ -28,6 +28,7 @@ import {
   db,
   atelierUsers,
   atelierEmployees,
+  atelierCompChanges,
   atelierContractors,
   atelierPartnerFirms,
   atelierPartnerFirmResources,
@@ -1932,6 +1933,10 @@ const payrollEditSchema = z
     basicWageMonthly: z.number().positive().finite().nullable(),
     housingAllowanceMonthly: z.number().min(0).finite().nullable(),
     schemeRegisteredOn: zIsoDate,
+    // Task #1135 — comp-change provenance (not employee columns).
+    effectiveFrom: zIsoDate,
+    reason: z.enum(["promotion", "raise", "adjustment", "correction"]),
+    changeNote: z.string().trim().max(500),
   })
   .partial()
   .strict();
@@ -1965,6 +1970,13 @@ export async function applyPayrollUpdate(args: {
   patch: Record<string, unknown>;
   extraPayload?: Record<string, unknown>;
   summaryPrefix?: string;
+  /**
+   * Task #1135 — comp-change provenance. When comp fields change, an
+   * effective-dated history record is written alongside the audit event so
+   * the payroll run can split mid-month raises and EOSB can use the wage
+   * in effect. Defaults: effectiveFrom = today, reason = "adjustment".
+   */
+  compMeta?: { effectiveFrom?: string | null; reason?: string | null; note?: string | null };
 }): Promise<ApplyPayrollResult> {
   const [row] = await db
     .select()
@@ -2034,6 +2046,54 @@ export async function applyPayrollUpdate(args: {
       .map((c) => c.field)
       .join(", ")})`,
   });
+
+  // Task #1135 — effective-dated comp-change history for the payroll run.
+  const COMP_FIELDS = ["baseCompensation", "baseCurrency", "basicWageMonthly", "housingAllowanceMonthly"];
+  if (changes.some((c) => COMP_FIELDS.includes(c.field))) {
+    const [after] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.id, args.personId), eq(atelierEmployees.orgId, args.orgId)))
+      .limit(1);
+    if (after?.baseCompensation && after.baseCurrency) {
+      // First change ever → also record the PRIOR package as the baseline
+      // ("initial", effective from the start date) so the run engine can
+      // value pre-change days of a mid-month raise correctly.
+      const [prior] = await db
+        .select({ id: atelierCompChanges.id })
+        .from(atelierCompChanges)
+        .where(and(eq(atelierCompChanges.orgId, args.orgId), eq(atelierCompChanges.employeeId, args.personId)))
+        .limit(1);
+      if (!prior && typeof raw.baseCompensation === "number" && raw.baseCompensation > 0) {
+        await db.insert(atelierCompChanges).values({
+          id: rid("compchg"),
+          orgId: args.orgId,
+          employeeId: args.personId,
+          effectiveFrom: (raw.startDate as string | null) ?? "1970-01-01",
+          baseCompensation: raw.baseCompensation as number,
+          baseCurrency: (raw.baseCurrency as string | null) ?? "USD",
+          basicWageMonthly: (raw.basicWageMonthly as number | null) ?? null,
+          housingAllowanceMonthly: (raw.housingAllowanceMonthly as number | null) ?? null,
+          reason: "initial",
+          note: "Baseline package recorded with the first comp change",
+          createdByUserId: args.actor.id,
+        });
+      }
+      await db.insert(atelierCompChanges).values({
+        id: rid("compchg"),
+        orgId: args.orgId,
+        employeeId: args.personId,
+        effectiveFrom: args.compMeta?.effectiveFrom || new Date().toISOString().slice(0, 10),
+        baseCompensation: after.baseCompensation,
+        baseCurrency: after.baseCurrency,
+        basicWageMonthly: after.basicWageMonthly,
+        housingAllowanceMonthly: after.housingAllowanceMonthly,
+        reason: args.compMeta?.reason || "adjustment",
+        note: args.compMeta?.note ?? null,
+        createdByUserId: args.actor.id,
+      });
+    }
+  }
   return { ok: true, changes };
 }
 
@@ -2066,7 +2126,8 @@ router.patch("/roster/people/:id/payroll", async (req, res, next) => {
       });
       return;
     }
-    const patch = parsed.data as Record<string, unknown>;
+    const { effectiveFrom, reason, changeNote, ...rest } = parsed.data;
+    const patch = rest as Record<string, unknown>;
     if (Object.keys(patch).length === 0) {
       res.status(400).json({ error: "no-updatable-fields" });
       return;
@@ -2077,6 +2138,7 @@ router.patch("/roster/people/:id/payroll", async (req, res, next) => {
       personId: person.id,
       actor: { id: me.id, name: me.name },
       patch,
+      compMeta: { effectiveFrom: effectiveFrom ?? null, reason: reason ?? null, note: changeNote ?? null },
     });
     if (!result.ok && result.code === "person-not-found") {
       res.status(404).json({ error: "person-not-found" });

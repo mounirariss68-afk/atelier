@@ -117,6 +117,7 @@ async function main() {
       housingAllowanceMonthly: 2_000,
       baseCurrency: "AED",
       baseCompensation: 180_000, // 15k/mo gross
+      iban: "AE070331234567890123456",
     } as any);
 
     // ---- Overview: entity covered + filings auto-attached ----
@@ -238,6 +239,7 @@ async function main() {
       basicWageMonthly: 8_000,
       baseCurrency: "AED",
       baseCompensation: 120_000,
+      iban: "AE070331234567890123457",
     } as any);
     const deact = await api(fpId, "POST", `/roster/joiners/${leaverUserId}/deactivate`, {
       markLeaver: true,
@@ -263,6 +265,7 @@ async function main() {
       basicWageMonthly: 20_000,
       baseCurrency: "AED",
       baseCompensation: 240_000,
+      iban: "AE070331234567890123458",
     } as any);
     const run2 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-07" });
     const run2Id = run2.body?.run?.id;
@@ -280,6 +283,421 @@ async function main() {
       stat2.length > 0 && Math.abs(stat2[0].amount - t2.employerContributions) < 0.02,
       { line: stat2[0]?.amount, employerContributions: t2?.employerContributions, netPay: t2?.netPay },
     );
+
+    // ════════ Task #1135 — proration, advances, comp history, final pay ════════
+    const { atelierPayDocuments, atelierPayrollRun, atelierLeaveRequests, atelierCompChanges } = D as any;
+    const { and: dAnd, eq: dEq } = await import("drizzle-orm");
+
+    // Payslips were generated into the pay hub when run2 posted.
+    const slips = await db.select().from(atelierPayDocuments).where(dAnd(
+      dEq(atelierPayDocuments.orgId, "aico"),
+      dEq(atelierPayDocuments.category, "payslip"),
+      dEq(atelierPayDocuments.notes, `payrun:${run2Id}`),
+    ));
+    check("posting generates published payslip docs", slips.length >= 1 && slips.every((s: any) => s.published === true && s.mime === "application/pdf" && s.sizeBytes > 1000), slips.map((s: any) => ({ personId: s.personId, size: s.sizeBytes })));
+
+    // -- Missing IBAN blocks posting --
+    const noIbanId = `emp_${runTag}_noiban`;
+    await db.insert(atelierEmployees).values({
+      id: noIbanId, orgId: "aico", fullName: "Probe NoIban", email: `${runTag}_ni@example.test`,
+      role: "consultant", nationality: "IN", startDate: "2025-01-01", legalEntityId: entityId,
+      basicWageMonthly: 6_000, baseCurrency: "AED", baseCompensation: 96_000,
+    } as any);
+    const runNi = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const veNi = runNi.body?.run?.validationErrors ?? [];
+    check("missing IBAN → validation error on draft", veNi.some((v: any) => /iban/i.test(v.message)), veNi);
+    const postNi = await api(fpId, "POST", `/finance/payroll/runs/${runNi.body?.run?.id}/post`);
+    check("missing IBAN blocks posting", postNi.status >= 400, postNi.status);
+    await db.update(atelierEmployees).set({ iban: "AE070331234567890123459" }).where(dEq(atelierEmployees.id, noIbanId));
+
+    // -- Mid-month joiner proration + unpaid leave --
+    const joinId = `emp_${runTag}_join`;
+    await db.insert(atelierEmployees).values({
+      id: joinId, orgId: "aico", fullName: "Probe Joiner", email: `${runTag}_j@example.test`,
+      role: "consultant", nationality: "IN", startDate: "2026-08-16", legalEntityId: entityId,
+      basicWageMonthly: 6_000, housingAllowanceMonthly: 3_100, baseCurrency: "AED", baseCompensation: 120_000,
+      iban: "AE070331234567890123460",
+    } as any);
+    // Approved unpaid leave for the no-IBAN emp: Aug 1–6 (6 days)
+    await db.insert(atelierLeaveRequests).values({
+      id: `lv_${runTag}`, orgId: "aico", userId: fpId, personId: noIbanId, personType: "employee",
+      leaveType: "unpaid", startDate: "2026-08-01", endDate: "2026-08-06", workingDays: 4,
+      status: "approved",
+    } as any);
+    const runAug = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const augDetail = await api(fpId, "GET", `/finance/payroll/runs/${runAug.body?.run?.id}`);
+    const joinLine = (augDetail.body?.lines ?? []).find((l: any) => l.employeeId === joinId);
+    check("mid-month joiner prorated 16/31 days", !!joinLine && joinLine.payableDays === 16 && joinLine.daysInMonth === 31 && Math.abs(joinLine.monthlyGross - (120_000 / 12) * (16 / 31)) < 0.05, joinLine && { payableDays: joinLine.payableDays, gross: joinLine.monthlyGross, basis: joinLine.prorationBasis });
+    // Housing on the line/payslip is the PRORATED amount, never the
+    // contractual monthly figure (which would exceed a 16/31 gross here).
+    check("joiner housing allowance prorated (16/31 of 3100, < gross)",
+      !!joinLine && Math.abs(joinLine.housingAllowance - 3_100 * (16 / 31)) < 0.05 && joinLine.housingAllowance < joinLine.monthlyGross,
+      joinLine && { housing: joinLine.housingAllowance, gross: joinLine.monthlyGross });
+    const uLine = (augDetail.body?.lines ?? []).find((l: any) => l.employeeId === noIbanId);
+    check("unpaid-leave days reduce pay (25/31 payable)", !!uLine && uLine.unpaidLeaveDays === 6 && uLine.payableDays === 25, uLine && { payableDays: uLine.payableDays, unpaid: uLine.unpaidLeaveDays, basis: uLine.prorationBasis });
+
+    // -- Comp change via audited payroll PATCH → mid-month raise splits --
+    const raisePatch = await api(fpId, "PATCH", `/roster/people/${noIbanId}/payroll`, {
+      baseCompensation: 144_000, basicWageMonthly: 9_000,
+      effectiveFrom: "2026-08-16", reason: "promotion",
+    });
+    check("payroll PATCH with comp meta -> 200", raisePatch.status === 200, raisePatch);
+    const compRows = await db.select().from(atelierCompChanges).where(dEq(atelierCompChanges.employeeId, noIbanId));
+    check("comp-change history row written (promotion, effective 2026-08-16)", compRows.some((c: any) => c.reason === "promotion" && c.effectiveFrom === "2026-08-16"), compRows);
+    const runAug2 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const augDetail2 = await api(fpId, "GET", `/finance/payroll/runs/${runAug2.body?.run?.id}`);
+    const uLine2 = (augDetail2.body?.lines ?? []).find((l: any) => l.employeeId === noIbanId);
+    // Old 8k gross Aug 1–15 (minus 6 unpaid 1–6), new 12k gross Aug 16–31: (9/31)*8000 + (16/31)*12000
+    const expectSplit = (9 / 31) * 8_000 + (16 / 31) * 12_000;
+    check("mid-month raise splits the month's pay", !!uLine2 && Math.abs(uLine2.monthlyGross - expectSplit) < 0.05, uLine2 && { gross: uLine2.monthlyGross, expect: expectSplit, basis: uLine2.prorationBasis });
+
+    // -- Salary advance lifecycle --
+    const advConDenied = await api(conId, "POST", "/finance/payroll/advances", { employeeId: noIbanId, amount: 6_000, installmentAmount: 2_000, startPeriod: "2026-08" });
+    check("consultant cannot issue advances (403)", advConDenied.status === 403, advConDenied.status);
+    const adv = await api(fpId, "POST", "/finance/payroll/advances", { employeeId: noIbanId, amount: 6_000, installmentAmount: 2_000, startPeriod: "2026-08" });
+    check("advance issue -> 201 with journal", adv.status === 201 && !!adv.body?.advance?.journalEntryId && adv.body?.advance?.outstanding === 6_000, adv.body);
+    const advId = adv.body?.advance?.id;
+    const runAug3 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const runAug3Id = runAug3.body?.run?.id;
+    const augDetail3 = await api(fpId, "GET", `/finance/payroll/runs/${runAug3Id}`);
+    const uLine3 = (augDetail3.body?.lines ?? []).find((l: any) => l.employeeId === noIbanId);
+    const dedExpected = Math.min(2_000, (uLine3?.monthlyGross ?? 0) * 0.2);
+    check("run deducts scheduled installment (cap-aware) from net", !!uLine3 && Math.abs(uLine3.advanceDeduction - dedExpected) < 0.05 && uLine3.netPay < uLine3.monthlyGross, uLine3 && { ded: uLine3.advanceDeduction, expect: dedExpected, net: uLine3.netPay });
+    // pause → no deduction
+    const paused = await api(fpId, "POST", `/finance/payroll/advances/${advId}/pause`);
+    check("advance pause -> 200", paused.status === 200 && paused.body?.advance?.status === "paused", paused.body);
+    const runAug4 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const augDetail4 = await api(fpId, "GET", `/finance/payroll/runs/${runAug4.body?.run?.id}`);
+    const uLine4 = (augDetail4.body?.lines ?? []).find((l: any) => l.employeeId === noIbanId);
+    check("paused advance not deducted", !!uLine4 && (uLine4.advanceDeduction ?? 0) === 0, uLine4?.advanceDeduction);
+    await api(fpId, "POST", `/finance/payroll/advances/${advId}/resume`);
+    // deduction cap: 20% of gross — issue big advance on the joiner
+    const bigAdv = await api(fpId, "POST", "/finance/payroll/advances", { employeeId: joinId, amount: 9_000, installmentAmount: 9_000, startPeriod: "2026-08" });
+    check("big advance issued", bigAdv.status === 201, bigAdv.status);
+    const runAug5 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const augDetail5 = await api(fpId, "GET", `/finance/payroll/runs/${runAug5.body?.run?.id}`);
+    const jLine5 = (augDetail5.body?.lines ?? []).find((l: any) => l.employeeId === joinId);
+    check("deduction capped at 20% of gross, net ≥ 0", !!jLine5 && jLine5.advanceDeduction <= jLine5.monthlyGross * 0.2 + 0.01 && jLine5.netPay >= 0, jLine5 && { gross: jLine5.monthlyGross, ded: jLine5.advanceDeduction, net: jLine5.netPay });
+    // post the run → outstanding drops, GL 1150 credited
+    const postAug = await api(fpId, "POST", `/finance/payroll/runs/${runAug5.body?.run?.id}/post`);
+    check("august run posts (advances applied)", postAug.status === 200, postAug.body);
+    const advList = await api(fpId, "GET", "/finance/payroll/advances");
+    const advRow = (advList.body?.items ?? []).find((a: any) => a.id === advId);
+    const uLine5 = (augDetail5.body?.lines ?? []).find((l: any) => l.employeeId === noIbanId);
+    check("outstanding drops after posted run", !!advRow && Math.abs(advRow.outstanding - (6_000 - (uLine5?.advanceDeduction ?? 0))) < 0.05 && advRow.outstanding < 6_000, { outstanding: advRow?.outstanding, ded: uLine5?.advanceDeduction });
+    // early payoff of remaining balance
+    const payoff = await api(fpId, "POST", `/finance/payroll/advances/${advId}/payoff`);
+    check("early payoff -> repaid, outstanding 0", payoff.status === 200 && payoff.body?.advance?.status === "repaid" && payoff.body?.advance?.outstanding === 0, payoff.body?.advance);
+
+    // -- Settlement final pay: encashment + notice − advances --
+    const bigAdvRow = (advList.body?.items ?? []).find((a: any) => a.id === bigAdv.body?.advance?.id);
+    const stlFinal = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: joinId, leaveDate: "2026-09-15", reason: "termination",
+      noticeDaysDue: 30, noticeDaysServed: 30, probation: true,
+    });
+    check("final-pay settlement -> 201", stlFinal.status === 201, stlFinal.body);
+    const sf = stlFinal.body?.settlement;
+    check("probation leaver: gratuity 0 but final pay assembled", !!sf && sf.finalAmount === 0 && typeof sf.finalPayTotal === "number", sf && { finalAmount: sf.finalAmount, finalPayTotal: sf.finalPayTotal, encash: sf.leaveEncashment, advOffset: sf.advanceOffset });
+    check("settlement offsets outstanding advance", !!sf && Math.abs(sf.advanceOffset - (bigAdvRow?.outstanding ?? -1)) < 0.01, { advOffset: sf?.advanceOffset, outstanding: bigAdvRow?.outstanding });
+    check("settlement includes prorated final salary", !!sf && sf.salaryIncluded === true && sf.lastSalary > 0, sf && { salaryIncluded: sf.salaryIncluded, lastSalary: sf.lastSalary });
+    const settledF = await api(fpId, "POST", `/finance/payroll/eosb/settlements/${sf?.id}/settle`);
+    check("final-pay settle -> 200 balanced journal", settledF.status === 200 && settledF.body?.settlement?.status === "settled", settledF.body);
+    const advList2 = await api(fpId, "GET", "/finance/payroll/advances");
+    const bigAfter = (advList2.body?.items ?? []).find((a: any) => a.id === bigAdv.body?.advance?.id);
+    check("settlement drains the advance", !!bigAfter && bigAfter.outstanding === 0 && bigAfter.status === "repaid", bigAfter && { out: bigAfter.outstanding, status: bigAfter.status });
+
+    // -- salaryIncluded is EMPLOYEE-LINE scoped, not run-existence scoped --
+    // noIban had a payable line in the posted Aug run → salary must NOT be
+    // double-included in an Aug-leaver settlement…
+    const stlPaid = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: noIbanId, leaveDate: "2026-08-31", reason: "termination",
+    });
+    check("leaver already paid in posted run: salary not double-included", stlPaid.status === 201 && stlPaid.body?.settlement?.salaryIncluded === false, stlPaid.body?.settlement && { salaryIncluded: stlPaid.body.settlement.salaryIncluded });
+    // …but a leaver EXCLUDED from that posted run (added after compute)
+    // still gets their final salary despite the run existing.
+    const exclId = `emp_${runTag}_excl`;
+    await db.insert(atelierEmployees).values({
+      id: exclId, orgId: "aico", fullName: "Probe Excluded Leaver", email: `${runTag}_excl@example.test`,
+      role: "consultant", nationality: "IN", startDate: "2026-08-01", legalEntityId: entityId,
+      basicWageMonthly: 7_000, baseCurrency: "AED", baseCompensation: 84_000,
+      iban: "AE070331234567890123459",
+    } as any);
+    const stlExcl = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: exclId, leaveDate: "2026-08-31", reason: "termination",
+    });
+    const sfe = stlExcl.body?.settlement;
+    check("leaver excluded from posted run: final salary still included", stlExcl.status === 201 && sfe?.salaryIncluded === true && sfe?.lastSalary > 0, sfe && { salaryIncluded: sfe.salaryIncluded, lastSalary: sfe.lastSalary });
+
+    // -- Payslip repair path: re-posting a posted run regenerates missing slips --
+    const [lostSlip] = slips;
+    if (lostSlip) {
+      await db.delete(atelierPayDocuments).where(dEq(atelierPayDocuments.id, lostSlip.id));
+      const repost = await api(fpId, "POST", `/finance/payroll/runs/${run2Id}/post`);
+      const slipsAfter = await db.select().from(atelierPayDocuments).where(dAnd(
+        dEq(atelierPayDocuments.orgId, "aico"),
+        dEq(atelierPayDocuments.category, "payslip"),
+        dEq(atelierPayDocuments.notes, `payrun:${run2Id}`),
+      ));
+      check("idempotent re-post repairs missing payslips", repost.status === 200 && slipsAfter.length === slips.length, { before: slips.length, after: slipsAfter.length, status: repost.status });
+    }
+
+    // -- Segment-weighted contributions: GPSSA national with a mid-month raise --
+    // Oct 2026 (31 days): 20k basic for Oct 1-15 (15d), 26k from Oct 16 (16d).
+    // GPSSA amounts must be the day-weighted blend of per-segment bases,
+    // NOT end-of-month wage × factor.
+    const natId = `emp_${runTag}_nat`;
+    await db.insert(atelierCompChanges).values([
+      {
+        id: `cc_${runTag}_nat0`, orgId: "aico", employeeId: natId, effectiveFrom: "2024-01-01",
+        baseCompensation: 240_000, baseCurrency: "AED", basicWageMonthly: 20_000, reason: "initial",
+      },
+      {
+        id: `cc_${runTag}_nat1`, orgId: "aico", employeeId: natId, effectiveFrom: "2026-10-16",
+        baseCompensation: 312_000, baseCurrency: "AED", basicWageMonthly: 26_000, reason: "promotion",
+      },
+    ] as any);
+    const runOct = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-10" });
+    const octDetail = await api(fpId, "GET", `/finance/payroll/runs/${runOct.body?.run?.id}`);
+    const natLine = (octDetail.body?.lines ?? []).find((l: any) => l.employeeId === natId);
+    const gpssa = (natLine?.contributions ?? []).find((c: any) => /gpssa|pension/i.test(`${c.schemeKey} ${c.name}`));
+    const oldSegAmt = (20_000 * 0.05) * (15 / 31); // employee 5% (post-2023 registration path may differ — compare weighted vs flat instead
+    // Robust check: weighted amount must sit strictly BETWEEN old-wage×factor and new-wage×factor and differ from new-wage-only.
+    if (gpssa) {
+      const pct = gpssa.employeePct as number;
+      const wOld = (20_000 * pct / 100) * (15 / 31);
+      const wNew = (26_000 * pct / 100) * (16 / 31);
+      const expected = wOld + wNew;
+      const flatEndOfMonth = (26_000 * pct / 100); // full month at raised wage
+      check("GPSSA employee amount is segment-weighted (not end-of-month × factor)",
+        Math.abs(gpssa.employeeAmount - expected) < 0.05 && Math.abs(gpssa.employeeAmount - flatEndOfMonth) > 1,
+        { got: gpssa.employeeAmount, expected, flatEndOfMonth, pct, oldSegAmt });
+    } else {
+      check("GPSSA contribution present on national line", false, natLine?.contributions);
+    }
+
+    // -- Entity transfer: another entity's run never touches the advance --
+    // Advance issued while on entity A stays on A's 1150 ledger; after the
+    // employee transfers to entity B, B's run must not deduct or clear it.
+    const ent2 = await api(fpId, "POST", "/finance/entities", {
+      legalNameEn: `Probe655 Transfer LLC ${runTag}`, country: "AE", legalForm: "LLC",
+      jurisdiction: "Dubai mainland", baseCurrency: "AED", registeredAddress: "Dubai",
+    });
+    const entity2Id: string = ent2.body?.entity?.id;
+    const legEmpId = `emp_leg_${runTag}`;
+    await db.insert(atelierEmployees).values({
+      id: legEmpId,
+      orgId: "aico",
+      fullName: "Probe Legacy Liner",
+      email: `${runTag}_leg@example.test`,
+      role: "consultant",
+      nationality: "IN",
+      startDate: "2024-01-01",
+      status: "active",
+      employmentStatus: "active",
+      employingEntity: "Probe655",
+      legalEntityId: entityId,
+      basicWageMonthly: 9_000,
+      baseCurrency: "AED",
+      baseCompensation: 120_000,
+      iban: "AE070331234567890123457",
+    } as any);
+    const xferAdv = await api(fpId, "POST", "/finance/payroll/advances", {
+      employeeId: legEmpId, amount: 3_000, installmentAmount: 1_000, startPeriod: "2026-11",
+    });
+    check("transfer advance issued on entity A", xferAdv.status === 201, xferAdv.body);
+    await db.update(atelierEmployees).set({ legalEntityId: entity2Id }).where(dEq(atelierEmployees.id, legEmpId));
+    const runB = await api(fpId, "POST", "/finance/payroll/runs", { entityId: entity2Id, periodLabel: "2026-11" });
+    const runBDetail = await api(fpId, "GET", `/finance/payroll/runs/${runB.body?.run?.id}`);
+    const legLineB = (runBDetail.body?.lines ?? []).find((l: any) => l.employeeId === legEmpId);
+    check("transferred employee's new-entity run deducts NO advance",
+      !!legLineB && (legLineB.advanceDeduction ?? 0) === 0,
+      legLineB ? { ded: legLineB.advanceDeduction } : runBDetail.body);
+    const xferList = await api(fpId, "GET", "/finance/payroll/advances");
+    const xferRow = (xferList.body?.items ?? []).find((a: any) => a.id === xferAdv.body?.advance?.id);
+    check("advance outstanding untouched after other-entity run", !!xferRow && xferRow.outstanding === 3_000, xferRow?.outstanding);
+    // move them back so the legacy dual-path fixture below still matches entity A
+    await db.update(atelierEmployees).set({ legalEntityId: entityId }).where(dEq(atelierEmployees.id, legEmpId));
+
+    // -- Stale-draft protection: payoff between compute and post → 409 --
+    const runNov = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-11" });
+    const novDetail = await api(fpId, "GET", `/finance/payroll/runs/${runNov.body?.run?.id}`);
+    const legNov = (novDetail.body?.lines ?? []).find((l: any) => l.employeeId === legEmpId);
+    check("draft run schedules the advance deduction", !!legNov && (legNov.advanceDeduction ?? 0) > 0, legNov?.advanceDeduction);
+    const stalePayoff = await api(fpId, "POST", `/finance/payroll/advances/${xferAdv.body?.advance?.id}/payoff`);
+    check("advance paid off after draft computed", stalePayoff.status === 200, stalePayoff.body);
+    const stalePost = await api(fpId, "POST", `/finance/payroll/runs/${runNov.body?.run?.id}/post`);
+    check("posting a stale draft cannot over-credit the advance asset (409)",
+      stalePost.status === 409 && /recompute the run before posting/.test(stalePost.body?.message ?? ""),
+      { status: stalePost.status, message: stalePost.body?.message });
+    const runNov2 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-11" });
+    const novDetail2 = await api(fpId, "GET", `/finance/payroll/runs/${runNov2.body?.run?.id}`);
+    const legNov2 = (novDetail2.body?.lines ?? []).find((l: any) => l.employeeId === legEmpId);
+    const novPost2 = await api(fpId, "POST", `/finance/payroll/runs/${runNov2.body?.run?.id}/post`);
+    check("recomputed run drops the deduction and posts cleanly",
+      (legNov2?.advanceDeduction ?? -1) === 0 && novPost2.status === 200,
+      { ded: legNov2?.advanceDeduction, status: novPost2.status });
+
+    // -- Concurrency: legacy approve vs statutory post race on one period --
+    // Both drafts exist for 2026-12; fire approve + post simultaneously.
+    // The shared advisory lock must let at most ONE salary journal through.
+    const statDec = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-12" });
+    const legacyDec = await api(fpId, "POST", "/payroll/runs", { entityId, periodLabel: "2026-12" });
+    const [statDecPost, legacyDecApprove] = await Promise.all([
+      api(fpId, "POST", `/finance/payroll/runs/${statDec.body?.run?.id}/post`),
+      api(fpId, "POST", `/payroll/runs/${legacyDec.body?.data?.id}/approve`),
+    ]);
+    const bothWon = statDecPost.status === 200 && legacyDecApprove.status === 200;
+    check("racing legacy approve vs statutory post: not both succeed",
+      !bothWon && (statDecPost.status === 200 || legacyDecApprove.status === 200),
+      { statutory: statDecPost.status, legacy: legacyDecApprove.status });
+    const { atelierGlJournalEntry } = D as any;
+    const decJournals = await db.select().from(atelierGlJournalEntry).where(dAnd(
+      dEq(atelierGlJournalEntry.orgId, "aico"),
+      dEq(atelierGlJournalEntry.sourceKind, "payroll_run"),
+      dEq(atelierGlJournalEntry.legalEntityId, entityId),
+      dEq(atelierGlJournalEntry.periodLabel, "2026-12"),
+    ));
+    check("race leaves exactly one Dec salary journal", decJournals.length === 1, decJournals.map((j: any) => j.sourceRef));
+
+    // Concurrent double-post of the same statutory run → single journal.
+    if (statDecPost.status === 200) {
+      const [rp1, rp2] = await Promise.all([
+        api(fpId, "POST", `/finance/payroll/runs/${statDec.body?.run?.id}/post`),
+        api(fpId, "POST", `/finance/payroll/runs/${statDec.body?.run?.id}/post`),
+      ]);
+      const decJournals2 = await db.select().from(atelierGlJournalEntry).where(dAnd(
+        dEq(atelierGlJournalEntry.orgId, "aico"),
+        dEq(atelierGlJournalEntry.sourceKind, "payroll_run"),
+        dEq(atelierGlJournalEntry.legalEntityId, entityId),
+        dEq(atelierGlJournalEntry.periodLabel, "2026-12"),
+      ));
+      check("concurrent re-posts stay idempotent (one journal)", rp1.status === 200 && rp2.status === 200 && decJournals2.length === 1, { rp1: rp1.status, rp2: rp2.status, journals: decJournals2.length });
+    }
+
+    // -- Race: recompute while posting must never desync journal vs run --
+    const statJan = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-01" });
+    const janRunId = statJan.body?.run?.id;
+    const [janPost, janRecompute] = await Promise.all([
+      api(fpId, "POST", `/finance/payroll/runs/${janRunId}/post`),
+      api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-01" }),
+    ]);
+    // Whatever the interleaving: the post succeeds, the recompute either
+    // ran before the post (200, then post journals ITS snapshot under the
+    // lock), lost the race (409 "posted while recompute"), or returned the
+    // posted snapshot. The posted run/lines/journal must be ONE snapshot.
+    const janRunAfter = (await api(fpId, "GET", `/finance/payroll/runs/${janRunId}`)).body;
+    const janTotals = janRunAfter?.run?.totals;
+    const janLines = janRunAfter?.lines ?? [];
+    const [janJournal] = await db.select().from(atelierGlJournalEntry).where(dAnd(
+      dEq(atelierGlJournalEntry.orgId, "aico"),
+      dEq(atelierGlJournalEntry.sourceKind, "payroll_run"),
+      dEq(atelierGlJournalEntry.sourceRef, `${entityId}:2027-01`),
+    ));
+    const janExpectedDebit = Math.round(((janTotals?.grossSalaries ?? 0) + (janTotals?.employerContributions ?? 0) + (janTotals?.eosbAccrual ?? 0)) * 100) / 100;
+    const janLineGross = Math.round(janLines.reduce((s: number, l: any) => s + l.monthlyGross, 0) * 100) / 100;
+    check("recompute-vs-post race: post succeeded and recompute did not corrupt",
+      janPost.status === 200 && (janRecompute.status === 200 || janRecompute.status === 409),
+      { post: janPost.status, recompute: janRecompute.status });
+    check("recompute-vs-post race: posted run status is posted", janRunAfter?.run?.status === "posted", janRunAfter?.run?.status);
+    check("recompute-vs-post race: journal debit matches posted totals",
+      !!janJournal && Math.abs(janJournal.totalDebit - janExpectedDebit) < 0.02,
+      { journal: janJournal?.totalDebit, expected: janExpectedDebit });
+    check("recompute-vs-post race: lines sum matches posted totals gross",
+      Math.abs(janLineGross - (janTotals?.grossSalaries ?? -1)) < 0.02 && janLines.length === (janTotals?.headcount ?? -1),
+      { lineGross: janLineGross, totals: janTotals?.grossSalaries, lines: janLines.length, headcount: janTotals?.headcount });
+    // Recompute AFTER post returns the posted snapshot unchanged.
+    const janRe2 = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-01" });
+    check("recompute after post returns the posted snapshot", (janRe2.status === 200 || janRe2.status === 201) && janRe2.body?.run?.status === "posted" && janRe2.body?.run?.totals?.grossSalaries === janTotals?.grossSalaries,
+      { status: janRe2.status, runStatus: janRe2.body?.run?.status });
+
+    // -- Race: settlement vs run post → final-month salary paid ONCE --
+    const raceEmpId = `emp_${runTag}_strace`;
+    await db.insert(atelierEmployees).values({
+      id: raceEmpId, orgId: "aico", fullName: "Probe SettleRace", email: `${runTag}_sr@example.test`,
+      role: "consultant", nationality: "IN", startDate: "2025-03-01", endDate: "2027-02-15",
+      legalEntityId: entityId, basicWageMonthly: 7_000, baseCurrency: "AED", baseCompensation: 108_000,
+      iban: "AE070331234567890123499",
+    } as any);
+    const febRun = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-02" });
+    const febHasRace = (febRun.body?.lines ?? (await api(fpId, "GET", `/finance/payroll/runs/${febRun.body?.run?.id}`)).body?.lines ?? []).some((l: any) => l.employeeId === raceEmpId);
+    check("settle-race fixture: leaver on the Feb 2027 draft", febHasRace, febRun.status);
+    const raceStl = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: raceEmpId, leaveDate: "2027-02-15", reason: "resignation",
+    });
+    const raceStlId = raceStl.body?.settlement?.id ?? raceStl.body?.id;
+    check("settle-race fixture: draft settlement includes final salary", (raceStl.body?.settlement ?? raceStl.body)?.salaryIncluded === true, raceStl.status);
+    const [raceSettle, racePost] = await Promise.all([
+      api(fpId, "POST", `/finance/payroll/eosb/settlements/${raceStlId}/settle`),
+      api(fpId, "POST", `/finance/payroll/runs/${febRun.body?.run?.id}/post`),
+    ]);
+    const febRunAfter = (await api(fpId, "GET", `/finance/payroll/runs/${febRun.body?.run?.id}`)).body;
+    const stlAfter = ((await api(fpId, "GET", "/finance/payroll/eosb/settlements")).body?.items ?? []).find((s: any) => s.id === raceStlId);
+    const runPaidSalary = febRunAfter?.run?.status === "posted" && (febRunAfter?.lines ?? []).some((l: any) => l.employeeId === raceEmpId);
+    const stlPaidSalary = stlAfter?.status === "settled" && stlAfter?.salaryIncluded === true;
+    check("settle-vs-post race: settlement settled", raceSettle.status === 200, raceSettle.status);
+    check("settle-vs-post race: exactly one path pays the final-month salary",
+      (runPaidSalary ? 1 : 0) + (stlPaidSalary ? 1 : 0) === 1,
+      { post: racePost.status, settle: raceSettle.status, runPaidSalary, stlPaidSalary, runStatus: febRunAfter?.run?.status, salaryIncluded: stlAfter?.salaryIncluded });
+    // -- Race: concurrent double-settle (with outstanding advance) --
+    const dsEmpId = `emp_${runTag}_dsettle`;
+    await db.insert(atelierEmployees).values({
+      id: dsEmpId, orgId: "aico", fullName: "Probe DoubleSettle", email: `${runTag}_ds@example.test`,
+      role: "consultant", nationality: "IN", startDate: "2025-05-01", endDate: "2027-03-10",
+      legalEntityId: entityId, basicWageMonthly: 8_000, baseCurrency: "AED", baseCompensation: 120_000,
+      iban: "AE070331234567890123497",
+    } as any);
+    const dsAdv = await api(fpId, "POST", "/finance/payroll/advances", { employeeId: dsEmpId, amount: 2_000, installmentAmount: 1_000, startPeriod: "2027-03" });
+    check("double-settle fixture: advance issued", dsAdv.status === 200 || dsAdv.status === 201, dsAdv.status);
+    const dsStl = await api(fpId, "POST", "/finance/payroll/eosb/settlements", {
+      employeeId: dsEmpId, leaveDate: "2027-03-10", reason: "resignation",
+    });
+    const dsStlId = dsStl.body?.settlement?.id ?? dsStl.body?.id;
+    const [ds1, ds2] = await Promise.all([
+      api(fpId, "POST", `/finance/payroll/eosb/settlements/${dsStlId}/settle`),
+      api(fpId, "POST", `/finance/payroll/eosb/settlements/${dsStlId}/settle`),
+    ]);
+    const dsAfter = ((await api(fpId, "GET", "/finance/payroll/eosb/settlements")).body?.items ?? []).find((x: any) => x.id === dsStlId);
+    const [dsJournal, ...dsExtra] = await db.select().from(atelierGlJournalEntry).where(dAnd(
+      dEq(atelierGlJournalEntry.orgId, "aico"),
+      dEq(atelierGlJournalEntry.sourceKind, "eosb_settlement"),
+      dEq(atelierGlJournalEntry.sourceRef, dsStlId),
+    ));
+    check("double-settle: both calls 200, one journal", ds1.status === 200 && ds2.status === 200 && !!dsJournal && dsExtra.length === 0, { ds1: ds1.status, ds2: ds2.status, journals: 1 + dsExtra.length });
+    check("double-settle: settled amounts match the journal (advance offset once)",
+      dsAfter?.status === "settled" && dsAfter?.advanceOffset === 2_000 && Math.abs(dsJournal.totalCredit - (dsAfter.finalPayTotal + dsAfter.advanceOffset)) < 0.02,
+      { advanceOffset: dsAfter?.advanceOffset, finalPayTotal: dsAfter?.finalPayTotal, journalCredit: dsJournal?.totalCredit });
+    const dsAdvAfter = ((await api(fpId, "GET", "/finance/payroll/advances")).body?.items ?? []).find((a: any) => a.employeeId === dsEmpId);
+    check("double-settle: advance drawn down exactly once", dsAdvAfter?.outstanding === 0 && dsAdvAfter?.status === "repaid", { outstanding: dsAdvAfter?.outstanding, status: dsAdvAfter?.status });
+
+    // If the post lost the race it must have 409'd demanding a recompute;
+    // recompute then drops the settled leaver and the run posts cleanly.
+    if (racePost.status !== 200) {
+      check("losing post 409s with a settled-leaver message", racePost.status === 409 && /settled|recompute/i.test(racePost.body?.message ?? ""), { status: racePost.status, msg: racePost.body?.message });
+      const febRe = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2027-02" });
+      const febHasRace2 = ((await api(fpId, "GET", `/finance/payroll/runs/${febRe.body?.run?.id}`)).body?.lines ?? []).some((l: any) => l.employeeId === raceEmpId);
+      const febPost2 = await api(fpId, "POST", `/finance/payroll/runs/${febRe.body?.run?.id}/post`);
+      check("recompute drops settled leaver and posts", !febHasRace2 && febPost2.status === 200, { hasLeaver: febHasRace2, post: febPost2.status });
+    }
+
+    // -- Dual-path guard: legacy simple run cannot double-post --
+    const legacy = await api(fpId, "POST", "/payroll/runs", { entityId, periodLabel: "2026-08" });
+    const legacyId = legacy.body?.data?.id;
+    if (legacyId) {
+      const legacyApprove = await api(fpId, "POST", `/payroll/runs/${legacyId}/approve`);
+      check("legacy approve blocked when statutory run posted (409)", legacyApprove.status === 409 && legacyApprove.body?.error === "statutory_run_posted", legacyApprove);
+    } else {
+      check("legacy run draft creatable", legacy.status === 201 || legacy.status === 200, legacy);
+    }
+    // reverse direction: legacy-approved period blocks statutory post
+    // (the legacy builder picks up the emp_leg fixture created above via
+    // its employingEntity token).
+    const legacySep = await api(fpId, "POST", "/payroll/runs", { entityId, periodLabel: "2026-09" });
+    const legacySepId = legacySep.body?.data?.id;
+    const legacySepApprove = await api(fpId, "POST", `/payroll/runs/${legacySepId}/approve`);
+    check("legacy run with payable lines approves for a free period", legacySepApprove.status === 200, { status: legacySepApprove.status, body: legacySepApprove.body });
+    const statSep = await api(fpId, "POST", "/finance/payroll/runs", { entityId, periodLabel: "2026-09" });
+    const statSepPost = await api(fpId, "POST", `/finance/payroll/runs/${statSep.body?.run?.id}/post`);
+    check("statutory post blocked when legacy approved (409)", statSepPost.status === 409 && /legacy monthly payroll already posted/.test(statSepPost.body?.message ?? ""), statSepPost.status === 409 ? statSepPost.body : statSepPost);
   } finally {
     server.close();
     await pool.end().catch(() => {});

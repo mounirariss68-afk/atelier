@@ -111,6 +111,7 @@
 - [Intent-router resilience](atelier-intent-router-resilience.md) — turn-opening classifier retries then degrades to deterministic (never throws); clarification continuations skip it entirely.
 - [Download filename headers](download-filename-headers.md) — any Content-Disposition built from user data must use the shared httpFilename helper (RFC 5987 dual form) or non-ASCII names crash Node with a 500 HTML page.
 - [Account industry taxonomy resolver](atelier-industry-taxonomy.md) — ALL industry writes via resolveIndustryTaxonomy; unmappable → skip, never raw NAICS; backfill rerun notes in [atelier-industry-backfill.md](atelier-industry-backfill.md).
+- [Statutory payroll engine invariants](atelier-payroll-engine.md) — comp-history segments (first change backfills baseline), advances=1150 asset w/ 20/50% caps, bidirectional dual-path guard, payslip-on-post.
 - [Statutory filings & payroll](atelier-statutory-filings.md) — overdue derived at read time, audited mark-filed/reopen; payroll invariants in [atelier-statutory-payroll.md](atelier-statutory-payroll.md).
 - [Atelier chat travel tools](atelier-travel-tools.md) — flights=Ignav, hotels=StayingAPI; tools DB-free, booking deep-link only; prefs masked outside self+fp/hr (atelier-travel-profile.md, atelier-travel-*.md).
 - [Procurement Navigator invariants](atelier-procurement-navigator.md) — deterministic GCC routing (not prompt-only); approve keeps manual status; account tabs deep-link via ?tab=.

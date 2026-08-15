@@ -59,6 +59,12 @@ interface LineRow {
   employerTotal: number;
   employeeTotal: number;
   eosbAccrual: number;
+  daysInMonth?: number;
+  payableDays?: number;
+  unpaidLeaveDays?: number;
+  prorationBasis?: string | null;
+  advanceDeduction?: number;
+  netPay?: number;
   detail: { contributions?: Array<{ schemeKey: string; name: string; employerAmount: number; employeeAmount: number }> } | null;
 }
 interface EntityCard {
@@ -486,9 +492,12 @@ export default function FinancePayroll() {
                       <th className="py-2 pr-4">Person</th>
                       <th className="py-2 pr-4">Nationality</th>
                       <th className="py-2 pr-4 text-right">Service yrs</th>
+                      <th className="py-2 pr-4 text-right">Days</th>
                       <th className="py-2 pr-4 text-right">Gross</th>
                       <th className="py-2 pr-4 text-right">Employer</th>
                       <th className="py-2 pr-4 text-right">Employee</th>
+                      <th className="py-2 pr-4 text-right">Advance</th>
+                      <th className="py-2 pr-4 text-right">Net</th>
                       <th className="py-2 pr-4 text-right">EOSB Δ</th>
                       <th className="py-2 pr-4">Schemes</th>
                     </tr>
@@ -499,9 +508,19 @@ export default function FinancePayroll() {
                         <td className="py-2 pr-4">{l.personName}</td>
                         <td className="py-2 pr-4">{l.nationality ?? "—"}</td>
                         <td className="py-2 pr-4 text-right font-mono">{l.serviceYears.toFixed(1)}</td>
+                        <td
+                          className="py-2 pr-4 text-right font-mono"
+                          title={l.prorationBasis ?? undefined}
+                          data-testid={`payroll-line-days-${l.id}`}
+                        >
+                          {l.payableDays != null && l.daysInMonth != null ? `${l.payableDays}/${l.daysInMonth}` : "—"}
+                          {(l.unpaidLeaveDays ?? 0) > 0 ? <span className="text-amber-400"> ({l.unpaidLeaveDays}u)</span> : null}
+                        </td>
                         <td className="py-2 pr-4 text-right font-mono">{fmt(l.monthlyGross)}</td>
                         <td className="py-2 pr-4 text-right font-mono">{fmt(l.employerTotal)}</td>
                         <td className="py-2 pr-4 text-right font-mono">{fmt(l.employeeTotal)}</td>
+                        <td className="py-2 pr-4 text-right font-mono">{(l.advanceDeduction ?? 0) > 0 ? fmt(l.advanceDeduction!) : "—"}</td>
+                        <td className="py-2 pr-4 text-right font-mono">{l.netPay != null ? fmt(l.netPay) : "—"}</td>
                         <td className="py-2 pr-4 text-right font-mono">{fmt(l.eosbAccrual)}</td>
                         <td className="py-2 pr-4 text-xs text-text-mute">
                           {(l.detail?.contributions ?? []).map((c) => c.schemeKey).join(", ") || "—"}

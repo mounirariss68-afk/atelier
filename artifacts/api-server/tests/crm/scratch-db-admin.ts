@@ -63,7 +63,15 @@ if (phase === "create") {
   const scratch = new pg.Client({ connectionString: scratchUrl });
   await scratch.connect();
   try {
-    await scratch.query(rlsSql);
+    // Serialize concurrent appliers (validation runs several suites at once);
+    // concurrent CREATE/ALTER POLICY otherwise dies with XX000
+    // "tuple concurrently updated".
+    await scratch.query("SELECT pg_advisory_lock(hashtext('atelier-rls-apply'))");
+    try {
+      await scratch.query(rlsSql);
+    } finally {
+      await scratch.query("SELECT pg_advisory_unlock(hashtext('atelier-rls-apply'))").catch(() => {});
+    }
     console.log("[crm-harness] Applied atelier-rls.sql to the scratch database.");
   } finally {
     await scratch.end().catch(() => {});

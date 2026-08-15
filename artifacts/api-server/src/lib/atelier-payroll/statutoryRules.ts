@@ -74,6 +74,12 @@ export interface ContributionScheme {
   /** Flat monthly amounts (e.g. UAE ILOE premium). */
   employerFixed?: number;
   employeeFixed?: number;
+  /**
+   * Task #1135 — basic-wage-tiered flat employee amounts (UAE ILOE:
+   * AED 5/mo when basic ≤ 16k, AED 10/mo above). First matching tier
+   * (basic ≤ basicUpTo; null = open) wins; overrides employeeFixed.
+   */
+  employeeFixedTiers?: Array<{ basicUpTo: number | null; amount: number }>;
   /** Monthly contribution-base ceiling in entity currency. null = none. */
   ceilingMonthly: number | null;
   /** Scheme-registration-date window (old vs new law variants). */
@@ -92,12 +98,37 @@ export interface FilingObligation {
   description: string;
 }
 
+/**
+ * Task #1135 — employment-law knobs the run/settlement engines need
+ * beyond contributions & EOSB. Effective-dated like everything else;
+ * later versions with a non-null `labor` override earlier ones.
+ */
+export interface LaborRules {
+  /** Max % of the month's wage deductible for advance recovery (AE Art. 25(2): 20%). */
+  advanceDeductionCapPct: number;
+  /** Max % of the month's wage for ALL deductions combined (AE Art. 25: 50%). */
+  totalDeductionCapPct: number;
+  /** Approved unpaid-leave days do not count toward EOSB service (AE Art. 51(6)). */
+  unpaidLeaveExcludedFromService: boolean;
+  /** Statutory notice bounds in days (AE Art. 43: 30–90). */
+  noticeDaysMin: number;
+  noticeDaysMax: number;
+  /** Max probation months (AE Art. 9: 6). */
+  probationMaxMonths: number;
+  /** Employer notice during probation, days (AE Art. 9(2): 14). */
+  probationNoticeDays: number;
+  /** Wage basis for annual-leave encashment (AE Art. 29(9): basic). */
+  leaveEncashmentBasis: "basic" | "gross";
+}
+
 export interface CountryStatutoryVersion {
   /** This version applies to periods ending on/after this date. */
   effectiveFrom: string; // YYYY-MM-DD
   eosb: EosbRules | null;
   contributions: ContributionScheme[];
   filings: FilingObligation[];
+  /** null/absent = inherit from the prior version. */
+  labor?: LaborRules | null;
 }
 
 export interface CountryStatutoryRules {
@@ -159,6 +190,31 @@ const AE: CountryStatutoryRules = {
           registeredFrom: "2023-10-01",
           notes: "New-law rates for first-time registrants from Oct 2023.",
         },
+      ],
+      filings: [
+        { key: "wps_mohre", name: "WPS wage file", authority: "MOHRE", cadence: "monthly", dueDay: 15, description: "Submit the WPS salary information file through the bank/exchange within 15 days of the pay date." },
+        { key: "gpssa_contrib", name: "GPSSA contributions", authority: "GPSSA", cadence: "monthly", dueDay: 15, description: "Pay pension contributions for national employees for the prior wage month." },
+      ],
+      labor: {
+        advanceDeductionCapPct: 20, // Art. 25(2) Decree-Law 33/2021
+        totalDeductionCapPct: 50, // Art. 25(1)
+        unpaidLeaveExcludedFromService: true, // Art. 51(6)
+        noticeDaysMin: 30, // Art. 43(1)
+        noticeDaysMax: 90,
+        probationMaxMonths: 6, // Art. 9(1)
+        probationNoticeDays: 14, // Art. 9(2)
+        leaveEncashmentBasis: "basic", // Art. 29(9)
+      },
+    },
+    // Task #1135 rules review — ILOE did not exist at Decree-Law 33/2021
+    // commencement; the scheme (Decree-Law 13/2022) took effect 2023-01-01.
+    // Corrected as a new effective-dated version with the basic-wage tiered
+    // premium (Cat A AED 5/mo ≤ 16k basic; Cat B AED 10/mo above). Treated
+    // as an EMPLOYEE obligation the employer facilitates as a deduction.
+    {
+      effectiveFrom: "2023-01-01",
+      eosb: null, // unchanged — inherit
+      contributions: [
         {
           key: "iloe",
           name: "ILOE unemployment insurance",
@@ -167,15 +223,15 @@ const AE: CountryStatutoryRules = {
           base: "gross",
           employerPct: 0,
           employeePct: 0,
-          employeeFixed: 5, // AED/month, basic ≤ AED 16k tier (Cat A)
+          employeeFixedTiers: [
+            { basicUpTo: 16_000, amount: 5 },
+            { basicUpTo: null, amount: 10 },
+          ],
           ceilingMonthly: null,
-          notes: "Employee-paid flat premium; AED 10/mo above AED 16k basic (override via employeePctOverride not needed — informational).",
+          notes: "Employee-paid flat premium (employer-facilitated deduction); AED 5/mo for basic ≤ 16k, AED 10/mo above.",
         },
       ],
-      filings: [
-        { key: "wps_mohre", name: "WPS wage file", authority: "MOHRE", cadence: "monthly", dueDay: 15, description: "Submit the WPS salary information file through the bank/exchange within 15 days of the pay date." },
-        { key: "gpssa_contrib", name: "GPSSA contributions", authority: "GPSSA", cadence: "monthly", dueDay: 15, description: "Pay pension contributions for national employees for the prior wage month." },
-      ],
+      filings: [],
     },
   ],
 };
@@ -440,6 +496,7 @@ export interface ResolvedCountryRules {
   eosb: EosbRules | null;
   contributions: ContributionScheme[];
   filings: FilingObligation[];
+  labor: LaborRules | null;
 }
 
 export function resolveRules(country: string, onDate: string): ResolvedCountryRules | null {
@@ -450,12 +507,14 @@ export function resolveRules(country: string, onDate: string): ResolvedCountryRu
   // Merge ascending: later versions override eosb (when non-null),
   // override contribution schemes by key, and append/override filings by key.
   let eosb: EosbRules | null = null;
+  let labor: LaborRules | null = null;
   const schemes = new Map<string, ContributionScheme>();
   const filings = new Map<string, FilingObligation>();
   let effectiveFrom = applicable[0].effectiveFrom;
   for (const v of applicable) {
     effectiveFrom = v.effectiveFrom;
     if (v.eosb) eosb = v.eosb;
+    if (v.labor) labor = v.labor;
     for (const s of v.contributions) schemes.set(s.key, s);
     for (const f of v.filings) filings.set(f.key, f);
   }
@@ -465,6 +524,7 @@ export function resolveRules(country: string, onDate: string): ResolvedCountryRu
     currency: def.currency,
     effectiveFrom,
     eosb,
+    labor,
     contributions: [...schemes.values()],
     filings: [...filings.values()],
   };
@@ -474,11 +534,171 @@ export function resolveRules(country: string, onDate: string): ResolvedCountryRu
 // Service length
 // ──────────────────────────────────────────────────────────────
 
-export function serviceYearsBetween(startDate: string, endDate: string): number {
+/**
+ * Continuous-service years. `excludeDays` (Task #1135) subtracts approved
+ * unpaid-leave calendar days, which UAE law excludes from the service term
+ * used for gratuity (Art. 51(6) Decree-Law 33/2021).
+ */
+export function serviceYearsBetween(startDate: string, endDate: string, excludeDays = 0): number {
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = Date.parse(`${endDate}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
-  return (end - start) / (365.25 * 86_400_000);
+  const days = Math.max(0, (end - start) / 86_400_000 - Math.max(0, excludeDays));
+  return days / 365.25;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Task #1135 — calendar-day proration + notice pay (pure)
+// ──────────────────────────────────────────────────────────────
+
+function toUtc(d: string): number {
+  return Date.parse(`${d}T00:00:00Z`);
+}
+function addDaysIso(d: string, n: number): string {
+  return new Date(toUtc(d) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Inclusive calendar-day overlap between [aStart,aEnd] and [bStart,bEnd]. */
+export function calendarOverlapDays(aStart: string, aEnd: string, bStart: string, bEnd: string): number {
+  const s = aStart > bStart ? aStart : bStart;
+  const e = aEnd < bEnd ? aEnd : bEnd;
+  if (e < s) return 0;
+  return Math.round((toUtc(e) - toUtc(s)) / 86_400_000) + 1;
+}
+
+export interface CompSegment {
+  /** ISO date the package applies from (inclusive). */
+  effectiveFrom: string;
+  monthlyGross: number;
+  monthlyBasic: number;
+  housingAllowanceMonthly: number;
+}
+
+export interface MonthlyProration {
+  daysInMonth: number;
+  employedDays: number;
+  unpaidLeaveDays: number;
+  payableDays: number;
+  factor: number; // payableDays / daysInMonth
+  /** Calendar-day-prorated gross for the month, comp-segment aware. */
+  gross: number;
+  /** Prorated basic & housing on the same basis (contribution inputs). */
+  basic: number;
+  housing: number;
+  /** Package in effect on the LAST employed day (EOSB last-wage rule). */
+  compAtEnd: CompSegment;
+  /**
+   * PAID days valued under each package (mid-month raises produce two
+   * entries). Contribution amounts must be computed per segment and
+   * weighted by paidDays/daysInMonth — never end-of-month wage × factor.
+   */
+  segments: Array<{ comp: CompSegment; paidDays: number }>;
+  /** Human-readable basis, e.g. "18/30 payable days (joined 2026-06-13; 2 unpaid)". */
+  basis: string;
+}
+
+/**
+ * Calendar-day proration for one YYYY-MM period: walks each day of the
+ * month, pays days inside [startDate, endDate] that are not covered by an
+ * approved unpaid-leave range, valuing each day at 1/daysInMonth of the
+ * comp package in effect that day (mid-month raises split exactly).
+ */
+export function prorateMonth(args: {
+  periodLabel: string; // YYYY-MM
+  startDate: string;
+  endDate?: string | null;
+  unpaidRanges?: Array<{ startDate: string; endDate: string }>;
+  /** Ascending or not — resolved per day by max(effectiveFrom <= day). */
+  comp: CompSegment[];
+}): MonthlyProration {
+  const first = `${args.periodLabel}-01`;
+  const y = Number(args.periodLabel.slice(0, 4));
+  const m = Number(args.periodLabel.slice(5, 7));
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const last = `${args.periodLabel}-${String(daysInMonth).padStart(2, "0")}`;
+  const segs = [...args.comp].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  const compOn = (day: string): CompSegment => {
+    let cur = segs[0];
+    for (const s of segs) if (s.effectiveFrom <= day) cur = s;
+    return cur;
+  };
+  const unpaid = args.unpaidRanges ?? [];
+  let employedDays = 0;
+  let unpaidDays = 0;
+  let gross = 0;
+  let basic = 0;
+  let housing = 0;
+  let lastEmployedDay = first;
+  const segPaid = new Map<CompSegment, number>();
+  for (let day = first; day <= last; day = addDaysIso(day, 1)) {
+    if (day < args.startDate) continue;
+    if (args.endDate && day > args.endDate) continue;
+    employedDays++;
+    lastEmployedDay = day;
+    if (unpaid.some((r) => r.startDate <= day && day <= r.endDate)) {
+      unpaidDays++;
+      continue;
+    }
+    const c = compOn(day);
+    segPaid.set(c, (segPaid.get(c) ?? 0) + 1);
+    gross += c.monthlyGross / daysInMonth;
+    basic += c.monthlyBasic / daysInMonth;
+    housing += c.housingAllowanceMonthly / daysInMonth;
+  }
+  const payableDays = employedDays - unpaidDays;
+  const notes: string[] = [];
+  if (args.startDate > first) notes.push(`joined ${args.startDate}`);
+  if (args.endDate && args.endDate <= last) notes.push(`left ${args.endDate}`);
+  if (unpaidDays > 0) notes.push(`${unpaidDays} unpaid-leave day${unpaidDays === 1 ? "" : "s"}`);
+  const basis =
+    payableDays === daysInMonth
+      ? `full month (${daysInMonth} days)`
+      : `${payableDays}/${daysInMonth} payable days${notes.length ? ` (${notes.join("; ")})` : ""}`;
+  return {
+    daysInMonth,
+    employedDays,
+    unpaidLeaveDays: unpaidDays,
+    payableDays,
+    factor: daysInMonth > 0 ? payableDays / daysInMonth : 0,
+    gross: round2(gross),
+    basic: round2(basic),
+    housing: round2(housing),
+    compAtEnd: compOn(lastEmployedDay),
+    segments: [...segPaid.entries()].map(([comp, paidDays]) => ({ comp, paidDays })),
+    basis,
+  };
+}
+
+export interface NoticePayResult {
+  shortfallDays: number;
+  /** Signed: >0 employer pays in lieu; <0 recovered from the employee. */
+  amount: number;
+  explanation: string;
+}
+
+/**
+ * AE notice handling (Art. 43 Decree-Law 33/2021): either party who fails
+ * to serve the agreed notice owes the other compensation equal to the wage
+ * for the unserved period (daily wage = monthlyGross / daysBase). During
+ * probation the employer owes 14 days' notice (Art. 9) — pass the
+ * probation-adjusted `noticeDaysDue`.
+ */
+export function computeNoticePay(args: {
+  monthlyGross: number;
+  daysBase?: number;
+  noticeDaysDue: number;
+  noticeDaysServed: number;
+  reason: SeparationReason;
+}): NoticePayResult {
+  const daysBase = args.daysBase ?? 30;
+  const shortfall = Math.max(0, args.noticeDaysDue - args.noticeDaysServed);
+  if (shortfall === 0 || !["termination", "resignation"].includes(args.reason)) {
+    return { shortfallDays: 0, amount: 0, explanation: "Notice fully served or not applicable." };
+  }
+  const amount = round2((args.monthlyGross / daysBase) * shortfall);
+  return args.reason === "termination"
+    ? { shortfallDays: shortfall, amount, explanation: `Employer pays ${shortfall} days' wage in lieu of notice.` }
+    : { shortfallDays: shortfall, amount: -amount, explanation: `Employee owes ${shortfall} days' wage for unserved notice.` };
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -639,8 +859,15 @@ export function computeContributions(args: {
     const base = ceiling != null ? Math.min(rawBase, ceiling) : rawBase;
     const employerPct = args.overrides?.employerPctOverride?.[scheme.key] ?? scheme.employerPct;
     const employeePct = args.overrides?.employeePctOverride?.[scheme.key] ?? scheme.employeePct;
+    let employeeFixed = scheme.employeeFixed ?? 0;
+    if (scheme.employeeFixedTiers?.length) {
+      const tier = scheme.employeeFixedTiers.find(
+        (t) => t.basicUpTo == null || args.monthlyBasic <= t.basicUpTo,
+      );
+      employeeFixed = tier?.amount ?? employeeFixed;
+    }
     const employerAmount = round2((base * employerPct) / 100 + (scheme.employerFixed ?? 0));
-    const employeeAmount = round2((base * employeePct) / 100 + (scheme.employeeFixed ?? 0));
+    const employeeAmount = round2((base * employeePct) / 100 + employeeFixed);
     if (employerAmount === 0 && employeeAmount === 0) continue;
     out.push({
       schemeKey: scheme.key,

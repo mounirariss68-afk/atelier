@@ -23,7 +23,7 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits, atelierPayrollRuns } from "@workspace/db";
+import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits, atelierPayrollRuns, atelierSalaryAdvances, atelierEosbSettlements } from "@workspace/db";
 import { listFinanceEntities } from "./financeEntitiesRoutes";
 import { loadFinanceFacts, FIRM_ENTITY_ID } from "./financeRealFacts";
 import { hydrateFpaFromFacts, setFpaEntities } from "./financePlanFpaEngine";
@@ -324,6 +324,74 @@ async function buildStatutoryLines(orgId: string): Promise<DisbursementLine[]> {
       date = addMonths(date, 1);
       n += 1;
     }
+  }
+
+  // Task #1135 — salary-advance recoveries REDUCE payroll cash out: the
+  // roster `dis_payroll_*` lines carry gross salary, so each scheduled
+  // installment is emitted as a NEGATIVE payroll line (offset), never a
+  // second positive one. Issuance itself is immediate cash (already in the
+  // GL) — no forward-looking line.
+  const advances = await db
+    .select()
+    .from(atelierSalaryAdvances)
+    .where(and(eq(atelierSalaryAdvances.orgId, orgId), isNull(atelierSalaryAdvances.deletedAt)));
+  for (const adv of advances.filter((a) => a.status === "active" && a.outstanding > 0.005)) {
+    let remaining = adv.outstanding;
+    let d = new Date(`${AS_OF_MONDAY}T00:00:00Z`);
+    if (d.getUTCDate() > 28) d.setUTCMonth(d.getUTCMonth() + 1);
+    d.setUTCDate(28);
+    let date = d.toISOString().slice(0, 10);
+    let n = 0;
+    while (date <= windowEnd && n < 4 && remaining > 0.005) {
+      const take = Math.min(adv.installmentAmount, remaining);
+      if (date >= AS_OF_MONDAY && date.slice(0, 7) >= adv.startPeriod) {
+        lines.push({
+          id: `advrec-${adv.id}-${date}`,
+          entityId: adv.legalEntityId,
+          currency: adv.currency,
+          amount: -Math.round(take * 100) / 100,
+          expectedDate: date,
+          confidence: "high",
+          category: "payroll",
+          vendor: adv.personName,
+          label: `Salary-advance recovery — ${adv.personName}`,
+          detail: `Installment withheld from net pay (reduces the gross roster payroll cash line; ${adv.currency})`,
+        });
+        remaining -= take;
+      }
+      date = addMonths(date, 1);
+      n += 1;
+    }
+  }
+
+  // Task #1135 — upcoming final-pay settlements (draft EOSB settlements):
+  // expected cash out at the later of leave date and today. Settled rows
+  // are already in the GL/payment surfaces.
+  const settlements = await db
+    .select()
+    .from(atelierEosbSettlements)
+    .where(and(
+      eq(atelierEosbSettlements.orgId, orgId),
+      eq(atelierEosbSettlements.status, "draft"),
+      isNull(atelierEosbSettlements.deletedAt),
+    ));
+  for (const s of settlements) {
+    const amount = Math.round(((s.finalPayTotal ?? 0) || s.finalAmount) * 100) / 100;
+    if (amount <= 0) continue;
+    const date = s.leaveDate >= AS_OF_MONDAY ? s.leaveDate : AS_OF_MONDAY;
+    if (date > windowEnd) continue;
+    lines.push({
+      id: `finalpay-${s.id}`,
+      entityId: s.legalEntityId,
+      currency: s.currency,
+      amount,
+      expectedDate: date,
+      confidence: "medium",
+      category: "payroll",
+      vendor: s.personName,
+      label: `Final pay / EOSB — ${s.personName}`,
+      detail: `Draft leaver settlement (gratuity + leave encashment + notice ± − advances, ${s.currency})${s.salaryIncluded ? "; includes final-month salary" : ""}`,
+    });
   }
   return lines;
 }

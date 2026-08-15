@@ -28,7 +28,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql as sqlRaw } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -41,6 +41,8 @@ import {
   atelierGlJournalLine,
   atelierPayrollRun,
   atelierAuditEvents,
+  atelierSalaryAdvances,
+  atelierAdvanceRepayments,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
@@ -52,7 +54,11 @@ import {
   createEosbSettlement,
   settleEosbSettlement,
   ensureStatutoryFilings,
+  issueSalaryAdvance,
+  payoffSalaryAdvance,
+  payrollPeriodLockKey,
   PayrollError,
+  type Dbx,
 } from "../../lib/atelier-payroll/payrollRun.js";
 import {
   resolveRules,
@@ -245,6 +251,10 @@ const settlementBody = z.object({
   employeeId: z.string().min(1),
   leaveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.enum(["resignation", "termination", "end_of_contract", "retirement", "death", "mutual"]),
+  // Task #1135 — notice-pay handling and probation terminations.
+  noticeDaysDue: z.number().int().min(0).max(120).nullish(),
+  noticeDaysServed: z.number().int().min(0).max(365).nullish(),
+  probation: z.boolean().optional(),
 });
 
 // @cli-skip: finance payroll write; UI-workflow only (Task #655)
@@ -258,6 +268,9 @@ router.post("/finance/payroll/eosb/settlements", async (req, res) => {
       employeeId: parsed.data.employeeId,
       leaveDate: parsed.data.leaveDate,
       reason: parsed.data.reason,
+      noticeDaysDue: parsed.data.noticeDaysDue ?? null,
+      noticeDaysServed: parsed.data.noticeDaysServed ?? null,
+      probation: parsed.data.probation ?? false,
       createdByUserId: me.id,
     });
     res.status(201).json({ settlement });
@@ -270,6 +283,102 @@ router.post("/finance/payroll/eosb/settlements/:id/settle", async (req, res) => 
   try {
     const out = await settleEosbSettlement({ orgId: me.orgId, settlementId: String(req.params.id), settledByUserId: me.id });
     res.json({ settlement: out.settlement, alreadySettled: out.alreadySettled });
+  } catch (err) { fail(res, err); }
+});
+
+// ─────────────── Salary advances (Task #1135) ───────────────
+
+// @cli-skip: finance payroll read; REST-only surface (Task #1135)
+router.get("/finance/payroll/advances", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const conds = [eq(atelierSalaryAdvances.orgId, me.orgId), isNull(atelierSalaryAdvances.deletedAt)];
+  const employeeId = String(req.query.employeeId ?? "");
+  if (employeeId) conds.push(eq(atelierSalaryAdvances.employeeId, employeeId));
+  const items = await db.select().from(atelierSalaryAdvances).where(and(...conds))
+    .orderBy(desc(atelierSalaryAdvances.createdAt)).limit(200);
+  const repayments = items.length > 0
+    ? await db.select().from(atelierAdvanceRepayments).where(and(
+        eq(atelierAdvanceRepayments.orgId, me.orgId),
+        inArray(atelierAdvanceRepayments.advanceId, items.map((a) => a.id)),
+      ))
+    : [];
+  res.json({ items, repayments });
+});
+
+const advanceBody = z.object({
+  employeeId: z.string().min(1),
+  amount: z.number().positive(),
+  installmentAmount: z.number().positive(),
+  startPeriod: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  note: z.string().max(500).nullish(),
+});
+
+// @cli-skip: finance money-out write; UI-workflow only (Task #1135)
+router.post("/finance/payroll/advances", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const parsed = advanceBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "invalid body" }); return; }
+  try {
+    const advance = await issueSalaryAdvance({
+      orgId: me.orgId,
+      employeeId: parsed.data.employeeId,
+      amount: parsed.data.amount,
+      installmentAmount: parsed.data.installmentAmount,
+      startPeriod: parsed.data.startPeriod,
+      note: parsed.data.note ?? null,
+      createdByUserId: me.id,
+    });
+    await audit({ entityType: "salary_advance", entityId: advance.id, actor: me,
+      action: "payroll.advance_issue",
+      payload: { employeeId: advance.employeeId, amount: advance.principal, installmentAmount: advance.installmentAmount, startPeriod: advance.startPeriod },
+      summary: `Issued salary advance of ${advance.principal} ${advance.currency} to ${advance.personName} (repaid ${advance.installmentAmount}/month from ${advance.startPeriod})` });
+    res.status(201).json({ advance });
+  } catch (err) { fail(res, err); }
+});
+
+// @cli-skip: finance payroll write; UI-workflow only (Task #1135)
+router.post("/finance/payroll/advances/:id/pause", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  await setAdvanceStatus(me, String(req.params.id), "paused", res);
+});
+
+// @cli-skip: finance payroll write; UI-workflow only (Task #1135)
+router.post("/finance/payroll/advances/:id/resume", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  await setAdvanceStatus(me, String(req.params.id), "active", res);
+});
+
+async function setAdvanceStatus(me: Me, id: string, status: "paused" | "active", res: Response): Promise<void> {
+  const [adv] = await db.select().from(atelierSalaryAdvances).where(and(
+    eq(atelierSalaryAdvances.orgId, me.orgId),
+    eq(atelierSalaryAdvances.id, id),
+    isNull(atelierSalaryAdvances.deletedAt),
+  ));
+  if (!adv) { res.status(404).json({ error: "not_found" }); return; }
+  if (adv.status === "repaid" || adv.status === "cancelled") {
+    res.status(409).json({ error: "payroll", message: `advance is ${adv.status} — deductions cannot be ${status === "paused" ? "paused" : "resumed"}` });
+    return;
+  }
+  await db.update(atelierSalaryAdvances).set({ status, updatedAt: new Date() })
+    .where(eq(atelierSalaryAdvances.id, adv.id));
+  await audit({ entityType: "salary_advance", entityId: adv.id, actor: me,
+    action: status === "paused" ? "payroll.advance_pause" : "payroll.advance_resume",
+    payload: { outstanding: adv.outstanding },
+    summary: `${status === "paused" ? "Paused" : "Resumed"} salary-advance deductions for ${adv.personName} (${adv.outstanding} ${adv.currency} outstanding)` });
+  const [row] = await db.select().from(atelierSalaryAdvances).where(eq(atelierSalaryAdvances.id, adv.id));
+  res.json({ advance: row });
+}
+
+// @cli-skip: finance payroll write; UI-workflow only (Task #1135)
+router.post("/finance/payroll/advances/:id/payoff", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  try {
+    const advance = await payoffSalaryAdvance({ orgId: me.orgId, advanceId: String(req.params.id), createdByUserId: me.id });
+    await audit({ entityType: "salary_advance", entityId: advance.id, actor: me,
+      action: "payroll.advance_payoff",
+      payload: { principal: advance.principal },
+      summary: `Salary advance for ${advance.personName} paid off early (cash received)` });
+    res.json({ advance });
   } catch (err) { fail(res, err); }
 });
 
@@ -312,8 +421,8 @@ async function postPayrollJournal(args: {
   creditCode: string;
   amount: number;
   userId: string;
-}): Promise<{ journalEntryId: string; alreadyPosted: boolean } | { error: string; message: string }> {
-  const [existing] = await db.select().from(atelierGlJournalEntry).where(and(
+}, dbx: Dbx = db): Promise<{ journalEntryId: string; alreadyPosted: boolean } | { error: string; message: string }> {
+  const [existing] = await dbx.select().from(atelierGlJournalEntry).where(and(
     eq(atelierGlJournalEntry.orgId, args.orgId),
     eq(atelierGlJournalEntry.sourceKind, args.sourceKind),
     eq(atelierGlJournalEntry.sourceRef, args.sourceRef),
@@ -321,7 +430,7 @@ async function postPayrollJournal(args: {
   )).limit(1);
   if (existing) return { journalEntryId: existing.id, alreadyPosted: true };
 
-  const accounts = await db.select().from(atelierGlAccount).where(and(
+  const accounts = await dbx.select().from(atelierGlAccount).where(and(
     eq(atelierGlAccount.orgId, args.orgId),
     eq(atelierGlAccount.legalEntityId, args.entityId),
     isNull(atelierGlAccount.deletedAt),
@@ -333,7 +442,7 @@ async function postPayrollJournal(args: {
   }
   const amount = round2(args.amount);
   const entryId = rid("gljrn");
-  await db.transaction(async (tx) => {
+  await dbx.transaction(async (tx) => {
     await tx.insert(atelierGlJournalEntry).values({
       id: entryId, orgId: args.orgId, legalEntityId: args.entityId,
       periodLabel: args.periodLabel, entryDate: args.entryDate, kind: "posting",
@@ -442,21 +551,43 @@ export async function approvePayrollRunCore(args: {
   if (await isGlPeriodLocked(me.orgId, run.periodLabel))
     return { status: 409, body: { error: "period_locked", message: `Period ${run.periodLabel} is locked for the GL module.` } };
 
-  const y = Number(run.periodLabel.slice(0, 4));
-  const m = Number(run.periodLabel.slice(5, 7));
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const posted = await postPayrollJournal({
-    orgId: me.orgId, entityId: run.entityId, periodLabel: run.periodLabel,
-    entryDate: `${run.periodLabel}-${String(lastDay).padStart(2, "0")}`,
-    sourceKind: "payroll_run", sourceRef: run.id,
-    memo: `Payroll ${run.periodLabel} — ${run.lines.length} employee(s)`,
-    debitCode: "6000", creditCode: "2100", amount: run.totalAmount, userId: me.id,
+  // Task #1135 — dual-path guard, serialized under the same per-
+  // entity/period advisory lock the statutory post takes: the statutory
+  // engine (Task #655) is the system of record for salary journals. If it
+  // already posted this entity/period, approving the legacy simple run
+  // would double-post Dr 6000 / Cr 2100. Guard check, journal and status
+  // flip run inside one transaction holding the lock, so concurrent
+  // legacy/statutory posts can never both pass their guards.
+  const outcome = await db.transaction(async (tx): Promise<{ status: number; body: Record<string, unknown> } | { journalEntryId: string }> => {
+    await tx.execute(sqlRaw`select pg_advisory_xact_lock(hashtext(${payrollPeriodLockKey(run.entityId, run.periodLabel)}))`);
+    const [statPosted] = await tx.select({ id: atelierPayrollRuns.id }).from(atelierPayrollRuns).where(and(
+      eq(atelierPayrollRuns.orgId, me.orgId),
+      eq(atelierPayrollRuns.legalEntityId, run.entityId),
+      eq(atelierPayrollRuns.periodLabel, run.periodLabel),
+      eq(atelierPayrollRuns.status, "posted"),
+      isNull(atelierPayrollRuns.deletedAt),
+    )).limit(1);
+    if (statPosted)
+      return { status: 409, body: { error: "statutory_run_posted", message: `The statutory payroll engine already posted salaries for ${run.periodLabel} on this entity — the legacy simple run cannot double-post. Use /finance/payroll runs for this entity.` } };
+    const y = Number(run.periodLabel.slice(0, 4));
+    const m = Number(run.periodLabel.slice(5, 7));
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const posted = await postPayrollJournal({
+      orgId: me.orgId, entityId: run.entityId, periodLabel: run.periodLabel,
+      entryDate: `${run.periodLabel}-${String(lastDay).padStart(2, "0")}`,
+      sourceKind: "payroll_run", sourceRef: run.id,
+      memo: `Payroll ${run.periodLabel} — ${run.lines.length} employee(s)`,
+      debitCode: "6000", creditCode: "2100", amount: run.totalAmount, userId: me.id,
+    }, tx);
+    if ("error" in posted) return { status: 400, body: posted as Record<string, unknown> };
+    await tx.update(atelierPayrollRun).set({
+      status: "approved", approvedByUserId: me.id, approvedAt: new Date(),
+      journalEntryId: posted.journalEntryId, updatedAt: new Date(),
+    }).where(eq(atelierPayrollRun.id, run.id));
+    return { journalEntryId: posted.journalEntryId };
   });
-  if ("error" in posted) return { status: 400, body: posted };
-  await db.update(atelierPayrollRun).set({
-    status: "approved", approvedByUserId: me.id, approvedAt: new Date(),
-    journalEntryId: posted.journalEntryId, updatedAt: new Date(),
-  }).where(eq(atelierPayrollRun.id, run.id));
+  if ("status" in outcome) return outcome;
+  const posted = outcome;
   await audit({ entityType: "payroll_run", entityId: run.id, actor: me,
     action: "payroll.run_approve",
     payload: { periodLabel: run.periodLabel, totalAmount: run.totalAmount, journalEntryId: posted.journalEntryId },

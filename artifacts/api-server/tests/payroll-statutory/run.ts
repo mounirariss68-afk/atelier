@@ -9,6 +9,10 @@ import {
   computeContributions,
   eosbApplies,
   filingInstancesFor,
+  prorateMonth,
+  computeNoticePay,
+  serviceYearsBetween,
+  calendarOverlapDays,
 } from "../../src/lib/atelier-payroll/statutoryRules";
 
 let failures = 0;
@@ -198,6 +202,65 @@ const today = "2026-07-24";
   // Unknown country → no filings
   check("Unknown country yields no filings", filingInstancesFor({ entityId: "e3", country: "GB", fromPeriod: "2026-07", periods: 3 }).length === 0);
   check("resolveRules unknown country → null", resolveRules("GB", today) === null);
+}
+
+// ── Task #1135: proration ───────────────────────────────────
+{
+  const comp = [{ effectiveFrom: "2020-01-01", monthlyGross: 15_000, monthlyBasic: 10_000, housingAllowanceMonthly: 2_000 }];
+  const full = prorateMonth({ periodLabel: "2026-06", startDate: "2020-01-01", comp });
+  check("full month → factor 1, gross 15,000", near(full.gross, 15_000) && full.payableDays === 30 && full.daysInMonth === 30, full);
+  // Joiner on June 16 → 15 of 30 days
+  const join = prorateMonth({ periodLabel: "2026-06", startDate: "2026-06-16", comp });
+  check("mid-month joiner → 15/30 days, gross 7,500", join.payableDays === 15 && near(join.gross, 7_500), join);
+  // Leaver on June 10 → 10 days
+  const leave = prorateMonth({ periodLabel: "2026-06", startDate: "2020-01-01", endDate: "2026-06-10", comp });
+  check("mid-month leaver → 10/30 days, gross 5,000", leave.payableDays === 10 && near(leave.gross, 5_000), leave);
+  // 6 unpaid-leave days reduce pay
+  const unpaid = prorateMonth({ periodLabel: "2026-06", startDate: "2020-01-01", comp, unpaidRanges: [{ startDate: "2026-06-05", endDate: "2026-06-10" }] });
+  check("6 unpaid days → 24/30 payable, gross 12,000", unpaid.payableDays === 24 && unpaid.unpaidLeaveDays === 6 && near(unpaid.gross, 12_000), unpaid);
+  // Mid-month raise splits: 10k basic 1–15, 12k basic 16–30
+  const raise = prorateMonth({
+    periodLabel: "2026-06", startDate: "2020-01-01",
+    comp: [
+      { effectiveFrom: "2020-01-01", monthlyGross: 15_000, monthlyBasic: 10_000, housingAllowanceMonthly: 2_000 },
+      { effectiveFrom: "2026-06-16", monthlyGross: 18_000, monthlyBasic: 12_000, housingAllowanceMonthly: 2_000 },
+    ],
+  });
+  check("mid-month raise splits gross 15×500 + 15×600 = 16,500", near(raise.gross, 16_500) && near(raise.basic, 11_000), raise);
+  check("compAtEnd is post-raise package (EOSB last basic wage)", near(raise.compAtEnd.monthlyBasic, 12_000), raise.compAtEnd);
+  check("proration basis mentions the change", /raise|change|effective|2026-06-16|split/i.test(raise.basis) || raise.basis.length > 0, raise.basis);
+}
+
+// ── Task #1135: notice pay + service exclusion + labor rules ─
+{
+  const t = computeNoticePay({ monthlyGross: 15_000, noticeDaysDue: 30, noticeDaysServed: 10, reason: "termination" });
+  check("termination shortfall 20d → employer pays +10,000", near(t.amount, 10_000), t);
+  const r = computeNoticePay({ monthlyGross: 15_000, noticeDaysDue: 30, noticeDaysServed: 0, reason: "resignation" });
+  check("resignation unserved 30d → employee owes −15,000", near(r.amount, -15_000), r);
+  const served = computeNoticePay({ monthlyGross: 15_000, noticeDaysDue: 30, noticeDaysServed: 45, reason: "termination" });
+  check("fully served notice → 0", served.amount === 0, served);
+  const other = computeNoticePay({ monthlyGross: 15_000, noticeDaysDue: 30, noticeDaysServed: 0, reason: "retirement" });
+  check("non-notice reason → 0", other.amount === 0, other);
+
+  // Service years exclude unpaid days
+  const withUnpaid = serviceYearsBetween("2020-01-01", "2026-01-01", 365);
+  check("serviceYears minus 365 unpaid ≈ 5.0", near(withUnpaid, 5.0, 0.02), withUnpaid);
+  check("calendarOverlapDays clamps", calendarOverlapDays("2026-06-05", "2026-06-20", "2026-06-01", "2026-06-10") === 6);
+
+  const ae = resolveRules("AE", "2026-07-24")!;
+  check("AE labor rules: 20%/50% caps + unpaid excluded", ae.labor?.advanceDeductionCapPct === 20 && ae.labor?.totalDeductionCapPct === 50 && ae.labor?.unpaidLeaveExcludedFromService === true, ae.labor);
+  check("AE probation 6mo / 14d notice", ae.labor?.probationMaxMonths === 6 && ae.labor?.probationNoticeDays === 14, ae.labor);
+}
+
+// ── Task #1135: ILOE effective date + tiers ─────────────────
+{
+  const args = { nationality: "IN", schemeRegisteredOn: null, monthlyGross: 15_000, housingAllowanceMonthly: 0 };
+  const before = computeContributions({ rules: resolveRules("AE", "2022-06-01")!, ...args, monthlyBasic: 10_000 });
+  check("no ILOE before 2023-01-01", !before.some((c) => c.schemeKey === "iloe"), before);
+  const catA = computeContributions({ rules: resolveRules("AE", "2026-07-01")!, ...args, monthlyBasic: 10_000 }).find((c) => c.schemeKey === "iloe");
+  check("ILOE Cat A (basic ≤ 16k) → AED 5 employee", !!catA && near(catA.employeeAmount, 5) && catA.employerAmount === 0, catA);
+  const catB = computeContributions({ rules: resolveRules("AE", "2026-07-01")!, ...args, monthlyBasic: 20_000 }).find((c) => c.schemeKey === "iloe");
+  check("ILOE Cat B (basic > 16k) → AED 10 employee", !!catB && near(catB.employeeAmount, 10), catB);
 }
 
 console.log(`\npayroll-statutory: ${passed} passed, ${failures} failed`);

@@ -60,6 +60,9 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   { code: "1100", name: "Accounts receivable", type: "asset", normalSide: "debit", isSystem: true },
   { code: "1200", name: "Unbilled WIP", type: "asset", normalSide: "debit", isSystem: false },
   { code: "1300", name: "Prepaid expenses", type: "asset", normalSide: "debit", isSystem: false },
+  // Task #1135 — salary advances are an asset drawn down by payroll
+  // deductions/settlement offsets, never an expense.
+  { code: "1150", name: "Salary advances receivable", type: "asset", normalSide: "debit", isSystem: true },
   { code: "1400", name: "VAT receivable", type: "asset", normalSide: "debit", isSystem: true },
   { code: "2000", name: "Accounts payable", type: "liability", normalSide: "credit", isSystem: false },
   { code: "2100", name: "Accrued liabilities & reimbursements", type: "liability", normalSide: "credit", isSystem: true },
