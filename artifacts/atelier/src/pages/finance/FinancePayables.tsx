@@ -532,6 +532,13 @@ const SUPPLIER_STATUS_FILTERS = ["all", "submitted", "under_review", "approved",
 
 type SupplierFirmOption = { id: string; name: string; hasBankDetails: boolean };
 
+type BankHint = {
+  invoiceId: string;
+  supplierBankIban: string | null;
+  supplierBankHolder: string | null;
+  fromDate: string | null;
+};
+
 function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
   const [file, setFile] = React.useState<File | null>(null);
   const [supplierName, setSupplierName] = React.useState("");
@@ -558,6 +565,43 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
   const [error, setError] = React.useState<string | null>(null);
   const [info, setInfo] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  // Task #1145 — bank-detail hint from previous invoice for the same supplier.
+  const [bankHint, setBankHint] = React.useState<BankHint | null>(null);
+  const [hintDismissed, setHintDismissed] = React.useState(false);
+  const hintTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Fetch hint whenever supplier name changes (debounced; only for unlinked).
+  React.useEffect(() => {
+    const name = supplierName.trim();
+    setBankHint(null);
+    setHintDismissed(false);
+    if (!name || selectedFirm) return;
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => {
+      void fetch(
+        `${API_BASE}/finance/payables/supplier-invoices/bank-hint?supplierName=${encodeURIComponent(name)}`,
+        { credentials: "include" },
+      )
+        .then((r) => (r.ok ? r.json() : { hint: null }))
+        .then((d) => { if (d.hint?.supplierBankIban) setBankHint(d.hint as BankHint); })
+        .catch(() => undefined);
+    }, 500);
+    return () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supplierName, selectedFirm]);
+
+  // When user picks a different firm / clears firm, reset hint too.
+  React.useEffect(() => {
+    setBankHint(null);
+    setHintDismissed(false);
+  }, [firmId]);
+
+  const applyBankHint = () => {
+    if (!bankHint) return;
+    setBankIban(bankHint.supplierBankIban ?? "");
+    setBankHolder(bankHint.supplierBankHolder ?? "");
+    setHintDismissed(true); // banner goes away once applied
+  };
 
   // Bank details are optional, but IBAN and holder come together.
   const bankOk = selectedFirm ? true : (!bankIban.trim() && !bankHolder.trim()) || (!!bankIban.trim() && !!bankHolder.trim());
@@ -594,7 +638,7 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
         return;
       }
       setInfo(`Uploaded ${reference.trim()} — awaiting review.`);
-      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes(""); setBankIban(""); setBankHolder("");
+      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes(""); setBankIban(""); setBankHolder(""); setBankHint(null); setHintDismissed(false);
       if (fileRef.current) fileRef.current.value = "";
       onUploaded();
     } catch (err) {
@@ -661,6 +705,39 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
             payment-run bank file carries them instead of manual keying. */}
         {!selectedFirm && (
           <>
+            {/* Task #1145 — bank-detail hint from the most recent previous invoice
+                for the same supplier name. Finance must confirm — never silent. */}
+            {bankHint && !hintDismissed && (
+              <div className="sm:col-span-2 flex items-start gap-3 border border-gold/40 bg-gold/5 rounded px-3 py-2 text-xs" data-testid="supplier-bank-hint">
+                <div className="flex-1">
+                  <span className="font-medium text-gold">Bank details from previous invoice</span>
+                  {bankHint.fromDate && <span className="text-text-mute ml-1">({bankHint.fromDate})</span>}
+                  <div className="mt-1 font-mono text-text-mute">
+                    {bankHint.supplierBankIban}
+                    {bankHint.supplierBankHolder && <span className="ml-2">· {bankHint.supplierBankHolder}</span>}
+                  </div>
+                  <div className="mt-1 text-text-mute">Confirm these are still correct before applying.</div>
+                </div>
+                <div className="flex gap-2 shrink-0 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={applyBankHint}
+                    className="px-2 py-1 rounded border border-gold text-gold hover:bg-gold/10"
+                    data-testid="btn-apply-bank-hint"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHintDismissed(true)}
+                    className="px-2 py-1 rounded border border-border-soft text-text-mute hover:text-text"
+                    data-testid="btn-dismiss-bank-hint"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             <label className="space-y-1">
               <span className="text-text-mute">Supplier IBAN (optional)</span>
               <input className={input} value={bankIban} onChange={(e) => setBankIban(e.target.value)} placeholder="AE07 0331 2345 6789 0123 456" data-testid="input-supplier-bank-iban" />

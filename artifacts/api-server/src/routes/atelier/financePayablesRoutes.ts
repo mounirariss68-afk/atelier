@@ -1296,6 +1296,53 @@ router.get("/finance/payables/supplier-invoices", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// @cli-skip: Task #1145 — bank-detail hint for the upload form (fp/partner/finance only)
+router.get("/finance/payables/supplier-invoices/bank-hint", async (req, res, next) => {
+  try {
+    // Exposure rule: only roles that can see raw IBAN/holder may receive the hint.
+    const me = writeGate(req, res);
+    if (!me) return;
+    if (!canSeeBankDetails(me)) { res.status(403).json({ error: "forbidden" }); return; }
+    const raw = typeof req.query.supplierName === "string" ? req.query.supplierName.trim() : "";
+    if (!raw) { res.json({ hint: null }); return; }
+    // Look up the most recent non-rejected unlinked internal_upload invoice
+    // whose normalized name matches. "Unlinked" means partnerFirmId = '' (the
+    // sentinel used at insert time — registered firms manage bank details on
+    // the firm registry, not per-invoice).
+    const [match] = await db
+      .select({
+        id: atelierPartnerFirmInvoices.id,
+        supplierBankIban: atelierPartnerFirmInvoices.supplierBankIban,
+        supplierBankHolder: atelierPartnerFirmInvoices.supplierBankHolder,
+        submittedAt: atelierPartnerFirmInvoices.submittedAt,
+      })
+      .from(atelierPartnerFirmInvoices)
+      .where(and(
+        eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+        eq(atelierPartnerFirmInvoices.source, "internal_upload"),
+        eq(atelierPartnerFirmInvoices.partnerFirmId, ""),   // unlinked only
+        ne(atelierPartnerFirmInvoices.status, "rejected"),
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+        sql`lower(${atelierPartnerFirmInvoices.partnerFirmName}) = lower(${raw})`,
+      ))
+      .orderBy(desc(atelierPartnerFirmInvoices.submittedAt))
+      .limit(1);
+
+    if (!match || !(match.supplierBankIban ?? "").trim()) {
+      res.json({ hint: null });
+      return;
+    }
+    res.json({
+      hint: {
+        invoiceId: match.id,
+        supplierBankIban: match.supplierBankIban,
+        supplierBankHolder: match.supplierBankHolder,
+        fromDate: match.submittedAt?.toISOString().slice(0, 10) ?? null,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // @cli-skip: Task #1070 UI helper for the upload form's firm selector
 router.get("/finance/payables/supplier-invoices/firms", async (req, res, next) => {
   try {
