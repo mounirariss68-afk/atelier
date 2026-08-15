@@ -48,6 +48,25 @@ const BUCKET_TONE: Record<ComplianceRecord["bucket"], "default" | "gold" | "gree
 
 const KINDS = ["visa", "iqama", "gosi", "wps", "difc", "adgm", "ksa_cr", "saudization", "master_agreement", "cert"];
 
+// Task #1172 — accepted partner-firm documents surface here read-only with a
+// synthetic kind "firm_doc:<docKind>". Prettify those into a human label
+// instead of showing the raw prefixed string.
+const FIRM_DOC_LABELS: Record<string, string> = {
+  trade_license: "Trade license",
+  certificate: "Certificate",
+  insurance: "Insurance",
+  vat_trn: "VAT / TRN",
+  signatory_id: "Signatory ID",
+  other: "Document",
+};
+function kindLabel(kind: string): string {
+  if (kind.startsWith("firm_doc:")) {
+    const sub = kind.slice("firm_doc:".length);
+    return `${FIRM_DOC_LABELS[sub] ?? sub.replace(/_/g, " ")} (firm)`;
+  }
+  return kind.toUpperCase();
+}
+
 export default function RosterCompliance(): React.ReactElement {
   const [data, setData] = React.useState<ApiResp | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -279,7 +298,7 @@ function ComplianceRow({ r, partner }: { r: ComplianceRecord; partner?: boolean 
     >
       <div className="space-y-1">
         <div className="font-medium">
-          {r.kind.toUpperCase()}
+          {kindLabel(r.kind)}
           {r.jurisdiction ? ` · ${r.jurisdiction}` : ""}
         </div>
         <div className="text-text-mute text-xs">

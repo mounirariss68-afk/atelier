@@ -1,10 +1,13 @@
 ---
 name: Partner registration flow
-description: Durable invariants for signed-firm partner onboarding and firm bank maker-checker.
+description: Registration v2 docs/contacts, firm-doc registry, upload validation, contact suggestions
 ---
-
-- Partner onboarding reuses the shared activation-token scheme with a distinct purpose value; never introduce a parallel token table. Migration history is hand-authored SQL files in lib/db/drizzle (0057+ have no _journal entries — don't add them); every schema change needs one even though dev uses drizzle push.
-- **Gotcha:** the shared portal-login provisioning helper stamps the placeholder credential `userManaged: true`, so that flag can NEVER mean "user finished registration". Use a dedicated completion timestamp (here: the firm's registrationCompletedAt, set inside the registration transaction).
-- Firm payable bank details follow the maker-checker discipline: partner submissions land pending, and the approve route is the sole writer of the payable columns. Decisions must atomically claim the pending row (conditional `status = pending` update inside the transaction) — a pre-read + unconditional update lets two reviewers both "win".
-- IBANs are masked on every read and audit surface; raw values live only in the request row and the approved firm columns.
-- Public `/api/auth` routes share ONE per-IP rate limit bucket (10/15min) — probes hitting several auth endpoints must budget total calls.
+- Token purpose partner_registration; pre-auth upload/list/delete endpoints validate the token WITHOUT consuming (consume only at final submit, CAS-protected); rate-limited 10/15min per IP.
+- "Registered" signal is firm.registrationCompletedAt (NOT cred.userManaged); firm bank columns write only via finance approve — registration/portal never touch payable bank details.
+- Firm documents live in atelier_partner_firm_documents (pfdoc_*, reviewStatus pending|accepted|rejected, uploadedVia registration|portal|internal); bytes via partnerDocStorage (`partnerdoc:` prefix); wire never exposes fileRef.
+- Upload validation is server-side: strict base64 (round-trip check) + magic-byte match against declared mime (pdf/png/jpeg only), 10MB cap; downloads set nosniff + shared httpFilename helper. **Why:** client mime labels are attacker-controlled on a pre-auth surface.
+- Big JSON uploads need the path-scoped express.json({limit:"16mb"}) mounted BEFORE the global 100KB parser in app.ts — per-route parsers never see the body otherwise. New upload routes must be added to that path list.
+- Firm-doc expiries surface as read-time pseudo-records in GET /roster/compliance (kind firm_doc:<kind>, personId null, partnerFirmId set → partnerBuckets); never written to compliance_records.
+- Portal contact edits create atelier_partner_contact_suggestions (pending superseded by newer submission); internal approve REPLACES firm contacts (full-list semantics), re-attaching existing ids/personIds by email-then-name so stampContactPersons doesn't duplicate roster promotions.
+- Internal review gate is requirePartnerAdmin (canEditPartnersLens), deliberately wider than the bank-changes finance/leadership gate. Decision literals on the wire: firm docs accepted|rejected, suggestions approved|rejected.
+- Probe: pnpm --filter @workspace/api-server run test:partner-reg-docs (scratch DB, budgets around the pre-auth rate limit).

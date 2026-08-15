@@ -72,7 +72,12 @@ DECLARE
     -- Task #513 — unified partner registry + alliance lifecycle tables.
     'atelier_partner_firms','atelier_partner_firm_resources',
     'atelier_partner_targets','atelier_alliance_joint_pipeline',
-    'atelier_alliance_certifications','atelier_alliance_conflicts'
+    'atelier_alliance_certifications','atelier_alliance_conflicts',
+    -- Task #1172 — partner-firm document library + post-registration
+    -- contact-update suggestions. Org-scoped (deny-all by default);
+    -- per-firm / per-role ACL is enforced in the route layer. Document
+    -- bytes live in object storage and are only served via ACL'd routes.
+    'atelier_partner_firm_documents','atelier_partner_contact_suggestions'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

@@ -33,15 +33,26 @@ import {
   atelierAuthCredentials,
   atelierLoginActivationTokens,
   atelierPartnerFirmBankChangeRequests,
+  atelierPartnerFirmDocuments,
+  atelierPartnerContactSuggestions,
 } from "@workspace/db";
 import { audit } from "./engagementRoutes";
-import { isLeadership, isAlliancePartner } from "./personaRoles";
+import { isLeadership, isAlliancePartner, canEditPartnersLens } from "./personaRoles";
 import { revokeAllSessions } from "../../lib/auth/session.js";
 import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { provisionPortalLogin } from "./rosterLifecycleRoutes";
 import { mintLoginToken } from "../auth/index.js";
 import { sendPartnerRegistrationEmail } from "../../lib/atelier-welcome-email.js";
 import { isFinance } from "./personaRoles";
+import { normalizeContacts, stampContactPersons } from "./partnersRoutes";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  storePartnerDocBytes,
+  loadPartnerDocBytes,
+  dropPartnerDocBytes,
+  decodeBase64Strict,
+  magicBytesMatchMime,
+} from "../../lib/partnerDocStorage.js";
 
 const router: IRouter = Router();
 
@@ -1133,6 +1144,639 @@ router.post("/partners/bank-changes/:id/reject", async (req, res, next) => {
       action: "partner_firm.bank_change.rejected",
       payload: { bankChangeRequestId: reqRow.id },
       summary: `${me.name} rejected a partner-firm bank-details submission.`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================================
+// Task #1172 — Partner firm document library + contact suggestions.
+// =====================================================================
+
+const PARTNER_DOC_KINDS = new Set([
+  "trade_license",
+  "certificate",
+  "insurance",
+  "vat_trn",
+  "signatory_id",
+  "other",
+]);
+const PARTNER_DOC_MIMES = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const PARTNER_DOC_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Serialized firm-document row — never leaks fileRef / sha256. */
+function partnerDocWire(d: typeof atelierPartnerFirmDocuments.$inferSelect) {
+  return {
+    id: d.id,
+    kind: d.kind,
+    title: d.title ?? null,
+    fileName: d.fileName,
+    mime: d.mime,
+    sizeBytes: d.sizeBytes,
+    issuedDate: d.issuedDate ?? null,
+    expiryDate: d.expiryDate ?? null,
+    reviewStatus: d.reviewStatus,
+    reviewNote: d.reviewNote ?? null,
+    reviewedByName: d.reviewedByName ?? null,
+    reviewedAt: d.reviewedAt ? d.reviewedAt.toISOString() : null,
+    uploadedVia: d.uploadedVia,
+    createdAt: d.createdAt.toISOString(),
+  };
+}
+
+function contactSuggestionWire(
+  s: typeof atelierPartnerContactSuggestions.$inferSelect,
+  firmName?: string | null,
+) {
+  return {
+    id: s.id,
+    partnerFirmId: s.partnerFirmId,
+    firmName: firmName ?? undefined,
+    proposedContacts: (s.proposedContacts ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role ?? null,
+      email: c.email ?? null,
+    })),
+    note: s.note ?? null,
+    status: s.status,
+    decidedByName: s.decidedByName ?? null,
+    decidedAt: s.decidedAt ? s.decidedAt.toISOString() : null,
+    decisionNote: s.decisionNote ?? null,
+    createdAt: s.createdAt.toISOString(),
+  };
+}
+
+const isoDate = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const d = new Date(`${t}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : t;
+};
+
+// ---------------------------------------------------------------------
+// Partner-facing (alliance_partner; strictly scoped to me.partnerFirmId)
+// ---------------------------------------------------------------------
+
+// @cli-skip: partner-portal read — external surface (Task #1172)
+router.get("/partner-portal/company-profile", async (req, res, next) => {
+  try {
+    const me = requireAlliancePartner(req, res);
+    if (!me) return;
+    const firm = await resolveAlliancePartnerFirm(me);
+    if (!firm) {
+      res.status(403).json({ error: "partner-firm-unavailable" });
+      return;
+    }
+    const docs = await db
+      .select()
+      .from(atelierPartnerFirmDocuments)
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+          eq(atelierPartnerFirmDocuments.partnerFirmId, firm.id),
+          isNull(atelierPartnerFirmDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPartnerFirmDocuments.createdAt));
+    const [pendingSuggestion] = await db
+      .select()
+      .from(atelierPartnerContactSuggestions)
+      .where(
+        and(
+          eq(atelierPartnerContactSuggestions.orgId, me.orgId),
+          eq(atelierPartnerContactSuggestions.partnerFirmId, firm.id),
+          eq(atelierPartnerContactSuggestions.status, "pending"),
+          isNull(atelierPartnerContactSuggestions.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPartnerContactSuggestions.createdAt));
+    res.json({
+      firm: {
+        id: firm.id,
+        name: firm.name,
+        legalName: firm.legalName ?? null,
+        registrationNumber: firm.registrationNumber ?? null,
+        taxId: firm.taxId ?? null,
+        registeredAddress: firm.registeredAddress ?? null,
+        bankName: firm.bankName ?? null,
+        bankIbanMasked: maskIban(firm.bankIban),
+        bankCurrency: firm.bankCurrency ?? firm.defaultBillingCurrency ?? null,
+        bankDetailsOnFile: Boolean(firm.bankIban),
+      },
+      contacts: (firm.contacts ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        role: c.role ?? null,
+        email: c.email ?? null,
+      })),
+      documents: docs.map(partnerDocWire),
+      pendingContactSuggestion: pendingSuggestion
+        ? contactSuggestionWire(pendingSuggestion)
+        : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal write — external surface (Task #1172)
+router.post(
+  "/partner-portal/company-documents",
+  // Body parsing at 16mb is handled by the path-scoped parser mounted in
+  // app.ts (BEFORE the default 100KB express.json), so no per-route parser.
+  async (req, res, next) => {
+    try {
+      const me = requireAlliancePartner(req, res);
+      if (!me) return;
+      const firm = await resolveAlliancePartnerFirm(me);
+      if (!firm) {
+        res.status(403).json({ error: "partner-firm-unavailable" });
+        return;
+      }
+      const kind = String(req.body?.kind ?? "");
+      if (!PARTNER_DOC_KINDS.has(kind)) {
+        res.status(400).json({ error: "invalid-kind", allowed: [...PARTNER_DOC_KINDS] });
+        return;
+      }
+      const fileName = String(req.body?.fileName ?? "").trim().slice(0, 300);
+      if (!fileName) {
+        res.status(400).json({ error: "invalid-body", message: "fileName is required." });
+        return;
+      }
+      const mime = String(req.body?.mime ?? "").trim().toLowerCase();
+      if (!PARTNER_DOC_MIMES.has(mime)) {
+        res.status(400).json({ error: "invalid-mime", allowed: [...PARTNER_DOC_MIMES] });
+        return;
+      }
+      const buf = decodeBase64Strict(String(req.body?.base64 ?? ""));
+      if (!buf) {
+        res.status(400).json({ error: "invalid-base64" });
+        return;
+      }
+      if (buf.byteLength === 0 || buf.byteLength > PARTNER_DOC_MAX_BYTES) {
+        res.status(400).json({ error: "invalid-size", maxBytes: PARTNER_DOC_MAX_BYTES });
+        return;
+      }
+      if (!magicBytesMatchMime(buf, mime)) {
+        res.status(400).json({ error: "content-mismatch", message: "File content does not match the declared type." });
+        return;
+      }
+      const title = (() => {
+        const t = String(req.body?.title ?? "").trim();
+        return t ? t.slice(0, 300) : null;
+      })();
+      const stored = await storePartnerDocBytes(buf, mime);
+      const docId = rid("pfdoc");
+      const [created] = await db
+        .insert(atelierPartnerFirmDocuments)
+        .values({
+          id: docId,
+          orgId: me.orgId,
+          partnerFirmId: firm.id,
+          kind,
+          title,
+          fileName,
+          mime,
+          fileRef: stored.fileRef,
+          sizeBytes: stored.sizeBytes,
+          sha256: stored.sha256,
+          issuedDate: isoDate(req.body?.issuedDate),
+          expiryDate: isoDate(req.body?.expiryDate),
+          reviewStatus: "pending",
+          uploadedByUserId: me.id,
+          uploadedVia: "portal",
+        })
+        .returning();
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_firm.document.uploaded",
+        payload: { documentId: docId, kind, fileName, sizeBytes: stored.sizeBytes, uploadedVia: "portal" },
+        summary: `${me.name} uploaded ${kind} document "${fileName}" for ${firm.name} via the partner portal.`,
+      });
+      res.status(201).json({ ok: true, document: partnerDocWire(created) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// @cli-skip: partner-portal download — external surface, own-firm only (Task #1172)
+router.get("/partner-portal/company-documents/:id/download", async (req, res, next) => {
+  try {
+    const me = requireAlliancePartner(req, res);
+    if (!me) return;
+    const firm = await resolveAlliancePartnerFirm(me);
+    if (!firm) {
+      res.status(403).json({ error: "partner-firm-unavailable" });
+      return;
+    }
+    const [doc] = await db
+      .select()
+      .from(atelierPartnerFirmDocuments)
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.id, req.params.id),
+          eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+          eq(atelierPartnerFirmDocuments.partnerFirmId, firm.id),
+          isNull(atelierPartnerFirmDocuments.deletedAt),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "document-not-found" });
+      return;
+    }
+    const bytes = await loadPartnerDocBytes(doc.fileRef);
+    if (!bytes) {
+      res.status(404).json({ error: "document-missing" });
+      return;
+    }
+    res.setHeader("Content-Type", doc.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", doc.fileName));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal write — external surface (Task #1172)
+router.post("/partner-portal/contact-suggestions", async (req, res, next) => {
+  try {
+    const me = requireAlliancePartner(req, res);
+    if (!me) return;
+    const firm = await resolveAlliancePartnerFirm(me);
+    if (!firm) {
+      res.status(403).json({ error: "partner-firm-unavailable" });
+      return;
+    }
+    const rawContacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+    if (rawContacts.length === 0 || rawContacts.length > 25) {
+      res.status(400).json({ error: "invalid-body", message: "Provide between 1 and 25 contacts." });
+      return;
+    }
+    const proposed: Array<{ id: string; name: string; role: string | null; email: string | null }> = [];
+    for (const raw of rawContacts) {
+      const c = (raw ?? {}) as Record<string, unknown>;
+      const name = typeof c.name === "string" ? c.name.trim().slice(0, 200) : "";
+      if (!name) {
+        res.status(400).json({ error: "invalid-body", message: "Each contact requires a name." });
+        return;
+      }
+      const email = typeof c.email === "string" ? c.email.trim().slice(0, 320) || null : null;
+      if (email && !email.includes("@")) {
+        res.status(400).json({ error: "invalid-body", message: `Invalid email for contact "${name}".` });
+        return;
+      }
+      const role = typeof c.role === "string" ? c.role.trim().slice(0, 200) || null : null;
+      proposed.push({ id: rid("pfc"), name, role, email });
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) || null : null;
+    const sugId = rid("pfcsug");
+    await db.transaction(async (tx) => {
+      // Supersede any earlier pending suggestion for this firm (latest wins).
+      await tx
+        .update(atelierPartnerContactSuggestions)
+        .set({ status: "rejected", decisionNote: "Superseded by a newer submission.", decidedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(atelierPartnerContactSuggestions.orgId, me.orgId),
+            eq(atelierPartnerContactSuggestions.partnerFirmId, firm.id),
+            eq(atelierPartnerContactSuggestions.status, "pending"),
+            isNull(atelierPartnerContactSuggestions.deletedAt),
+          ),
+        );
+      await tx.insert(atelierPartnerContactSuggestions).values({
+        id: sugId,
+        orgId: me.orgId,
+        partnerFirmId: firm.id,
+        proposedContacts: proposed,
+        note,
+        status: "pending",
+        submittedByUserId: me.id,
+      });
+    });
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.contacts.suggested",
+      payload: { suggestionId: sugId, count: proposed.length },
+      summary: `${me.name} suggested ${proposed.length} contact update(s) for ${firm.name} (pending internal review).`,
+    });
+    res.status(201).json({ ok: true, suggestionId: sugId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------
+// Internal review — firm documents + contact suggestions (audited).
+// Gate: leadership + senior_manager + finance (matches canEditPartnersLens,
+// the partner-admin write gate). Chosen over the narrower finance/leadership
+// bank-changes gate because documents are ops-relevant, not payable-details.
+// ---------------------------------------------------------------------
+
+function requirePartnerAdmin(req: Request, res: Response): Me | null {
+  const me = ensurePersona(req, res);
+  if (!me) return null;
+  if (!canEditPartnersLens(me.role)) {
+    res.status(403).json({ error: "partners-admin-only" });
+    return null;
+  }
+  return me;
+}
+
+// @cli-skip: internal partner-admin review queue — UI-only surface (Task #1172)
+router.get("/partners/firm-documents", async (req, res, next) => {
+  try {
+    const me = requirePartnerAdmin(req, res);
+    if (!me) return;
+    const status = String(req.query.status ?? "pending");
+    const partnerFirmId =
+      typeof req.query.partnerFirmId === "string" ? req.query.partnerFirmId : null;
+    const conds = [
+      eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+      isNull(atelierPartnerFirmDocuments.deletedAt),
+    ];
+    if (status !== "all") conds.push(eq(atelierPartnerFirmDocuments.reviewStatus, status));
+    if (partnerFirmId) conds.push(eq(atelierPartnerFirmDocuments.partnerFirmId, partnerFirmId));
+    const rows = await db
+      .select({ doc: atelierPartnerFirmDocuments, firmName: atelierPartnerFirms.name })
+      .from(atelierPartnerFirmDocuments)
+      .leftJoin(
+        atelierPartnerFirms,
+        eq(atelierPartnerFirms.id, atelierPartnerFirmDocuments.partnerFirmId),
+      )
+      .where(and(...conds))
+      .orderBy(desc(atelierPartnerFirmDocuments.createdAt));
+    res.json({
+      items: rows.map((r) => ({
+        ...partnerDocWire(r.doc),
+        partnerFirmId: r.doc.partnerFirmId,
+        firmName: r.firmName ?? "(deleted firm)",
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal partner-admin document download — UI-only surface (Task #1172)
+router.get("/partners/firm-documents/:id/download", async (req, res, next) => {
+  try {
+    const me = requirePartnerAdmin(req, res);
+    if (!me) return;
+    const [doc] = await db
+      .select()
+      .from(atelierPartnerFirmDocuments)
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.id, req.params.id),
+          eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+          isNull(atelierPartnerFirmDocuments.deletedAt),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "document-not-found" });
+      return;
+    }
+    const bytes = await loadPartnerDocBytes(doc.fileRef);
+    if (!bytes) {
+      res.status(404).json({ error: "document-missing" });
+      return;
+    }
+    res.setHeader("Content-Type", doc.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", doc.fileName));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal partner-admin document review — UI-only write (Task #1172)
+router.post("/partners/firm-documents/:id/review", async (req, res, next) => {
+  try {
+    const me = requirePartnerAdmin(req, res);
+    if (!me) return;
+    const decision = String(req.body?.decision ?? "");
+    if (decision !== "accepted" && decision !== "rejected") {
+      res.status(400).json({ error: "invalid-body", message: "decision must be accepted|rejected." });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
+    const [doc] = await db
+      .select()
+      .from(atelierPartnerFirmDocuments)
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.id, req.params.id),
+          eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+          isNull(atelierPartnerFirmDocuments.deletedAt),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "document-not-found" });
+      return;
+    }
+    if (doc.reviewStatus !== "pending") {
+      res.status(409).json({ error: "already-decided", status: doc.reviewStatus });
+      return;
+    }
+    // Single-decider CAS: only transitions pending → decision.
+    const claimed = await db
+      .update(atelierPartnerFirmDocuments)
+      .set({
+        reviewStatus: decision,
+        reviewNote: note,
+        reviewedByUserId: me.id,
+        reviewedByName: me.name,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.id, doc.id),
+          eq(atelierPartnerFirmDocuments.reviewStatus, "pending"),
+        ),
+      )
+      .returning({ id: atelierPartnerFirmDocuments.id });
+    if (claimed.length === 0) {
+      res.status(409).json({ error: "already-decided" });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: doc.partnerFirmId,
+      actor: me,
+      action: "partner_firm.document.reviewed",
+      payload: { documentId: doc.id, decision, kind: doc.kind },
+      summary: `${me.name} ${decision} the ${doc.kind} document "${doc.fileName}".`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal partner-admin contact-suggestion queue — UI-only surface (Task #1172)
+router.get("/partners/contact-suggestions", async (req, res, next) => {
+  try {
+    const me = requirePartnerAdmin(req, res);
+    if (!me) return;
+    const status = String(req.query.status ?? "pending");
+    const conds = [
+      eq(atelierPartnerContactSuggestions.orgId, me.orgId),
+      isNull(atelierPartnerContactSuggestions.deletedAt),
+    ];
+    if (status !== "all") conds.push(eq(atelierPartnerContactSuggestions.status, status));
+    const rows = await db
+      .select({ sug: atelierPartnerContactSuggestions, firmName: atelierPartnerFirms.name })
+      .from(atelierPartnerContactSuggestions)
+      .leftJoin(
+        atelierPartnerFirms,
+        eq(atelierPartnerFirms.id, atelierPartnerContactSuggestions.partnerFirmId),
+      )
+      .where(and(...conds))
+      .orderBy(desc(atelierPartnerContactSuggestions.createdAt));
+    res.json({ items: rows.map((r) => contactSuggestionWire(r.sug, r.firmName)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: internal partner-admin contact-suggestion decision — UI-only write (Task #1172)
+router.post("/partners/contact-suggestions/:id/decide", async (req, res, next) => {
+  try {
+    const me = requirePartnerAdmin(req, res);
+    if (!me) return;
+    const decision = String(req.body?.decision ?? "");
+    if (decision !== "approved" && decision !== "rejected") {
+      res.status(400).json({ error: "invalid-body", message: "decision must be approved|rejected." });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
+    const [sug] = await db
+      .select()
+      .from(atelierPartnerContactSuggestions)
+      .where(
+        and(
+          eq(atelierPartnerContactSuggestions.id, req.params.id),
+          eq(atelierPartnerContactSuggestions.orgId, me.orgId),
+          isNull(atelierPartnerContactSuggestions.deletedAt),
+        ),
+      );
+    if (!sug) {
+      res.status(404).json({ error: "suggestion-not-found" });
+      return;
+    }
+    if (sug.status !== "pending") {
+      res.status(409).json({ error: "already-decided", status: sug.status });
+      return;
+    }
+    const [firm] = await db
+      .select()
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          eq(atelierPartnerFirms.id, sug.partnerFirmId),
+          eq(atelierPartnerFirms.orgId, me.orgId),
+          isNull(atelierPartnerFirms.deletedAt),
+        ),
+      );
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const won = await db.transaction(async (tx) => {
+      // CAS claim the pending suggestion so two reviewers can't both decide.
+      const claimed = await tx
+        .update(atelierPartnerContactSuggestions)
+        .set({
+          status: decision,
+          decidedByUserId: me.id,
+          decidedByName: me.name,
+          decidedAt: new Date(),
+          decisionNote: note,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(atelierPartnerContactSuggestions.id, sug.id),
+            eq(atelierPartnerContactSuggestions.status, "pending"),
+          ),
+        )
+        .returning({ id: atelierPartnerContactSuggestions.id });
+      if (claimed.length === 0) return false;
+      if (decision === "approved") {
+        // The portal sends the FULL edited contact list; approving REPLACES
+        // the firm's contact list with it. To avoid duplicate person records
+        // and duplicate `pfr_pfc_<id>` roster rows, we re-attach the existing
+        // entry's id + personId when the proposed contact matches an existing
+        // one (by email first, else by exact trimmed name). Matched entries
+        // then carry a personId, so stampContactPersons leaves them untouched.
+        const existing = (firm.contacts ?? []) as Array<{
+          id?: string;
+          name: string;
+          role?: string | null;
+          email?: string | null;
+          personId?: string | null;
+        }>;
+        const byEmail = new Map<string, (typeof existing)[number]>();
+        const byName = new Map<string, (typeof existing)[number]>();
+        for (const e of existing) {
+          const em = (e.email ?? "").trim().toLowerCase();
+          if (em) byEmail.set(em, e);
+          const nm = (e.name ?? "").trim().toLowerCase();
+          if (nm && !byName.has(nm)) byName.set(nm, e);
+        }
+        const replacement = normalizeContacts(
+          (sug.proposedContacts ?? []).map((c) => {
+            const em = (c.email ?? "").trim().toLowerCase();
+            const nm = (c.name ?? "").trim().toLowerCase();
+            const match = (em && byEmail.get(em)) || (nm && byName.get(nm)) || null;
+            return {
+              // Preserve the matched entry's id so the deterministic
+              // pfr_pfc_<id> roster row is reused, not re-created.
+              id: match?.id,
+              name: c.name,
+              role: c.role ?? null,
+              email: c.email ?? null,
+              // Preserve the matched entry's personId so it is not re-promoted.
+              personId: match?.personId ?? null,
+            };
+          }),
+        ) ?? [];
+        const stamped = await stampContactPersons(tx, me, firm.id, replacement);
+        await tx
+          .update(atelierPartnerFirms)
+          .set({ contacts: stamped, updatedAt: new Date() })
+          .where(eq(atelierPartnerFirms.id, firm.id));
+      }
+      return true;
+    });
+    if (!won) {
+      res.status(409).json({ error: "already-decided" });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.contacts_suggestion.decided",
+      payload: { suggestionId: sug.id, decision, count: (sug.proposedContacts ?? []).length },
+      summary:
+        decision === "approved"
+          ? `${me.name} approved ${(sug.proposedContacts ?? []).length} contact update(s) for ${firm.name}.`
+          : `${me.name} rejected a contact-update suggestion for ${firm.name}.`,
     });
     res.json({ ok: true });
   } catch (err) {

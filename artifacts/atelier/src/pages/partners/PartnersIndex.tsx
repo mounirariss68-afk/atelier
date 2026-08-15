@@ -494,6 +494,10 @@ function IdentifyView() {
     meForPortal?.role === "founding_partner" || meForPortal?.role === "partner";
   // Task #874 — bank-detail review is finance OR leadership (mirrors the API).
   const canReviewBankChanges = canManagePortal || meForPortal?.role === "finance";
+  // Task #1172 — firm document/contact review mirrors the API's partner-lens
+  // editor gate (leadership + senior_manager + finance), wider than bank review.
+  const canReviewFirmSubmissions =
+    canReviewBankChanges || meForPortal?.role === "senior_manager";
   // Task #723 — list/card toggle, persisted per page.
   const [viewMode, setViewMode] = useViewMode("partners-directory");
 
@@ -748,6 +752,8 @@ function IdentifyView() {
       </section>
 
       {canReviewBankChanges && <FirmBankChangesSection />}
+      {canReviewFirmSubmissions && <FirmDocumentsReviewSection />}
+      {canReviewFirmSubmissions && <FirmContactSuggestionsSection />}
 
       <TargetsSection firms={firms} />
     </div>
@@ -2978,6 +2984,335 @@ function FirmBankChangesSection() {
               <MonoChip tone={r.status === "approved" ? "green" : "default"}>{r.status}</MonoChip>
               <span className="text-text-faint">
                 {r.newIbanMasked}
+                {r.decidedByName ? ` · ${r.decidedByName}` : ""}
+                {r.decidedAt ? ` · ${r.decidedAt.slice(0, 10)}` : ""}
+              </span>
+              {r.decisionNote && <span className="text-text-faint">{r.decisionNote}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
+    </section>
+  );
+}
+
+// ---- Firm document review (Task #1172) --------------------------------------
+// Leadership/finance review of partner-firm documents uploaded during
+// registration or via the partner portal. Accept/reject with a note; accepted
+// docs with expiries surface in the roster compliance partner section.
+type FirmDocItem = {
+  id: string;
+  partnerFirmId: string;
+  firmName: string;
+  kind: string;
+  title: string | null;
+  fileName: string;
+  sizeBytes: number;
+  issuedDate: string | null;
+  expiryDate: string | null;
+  reviewStatus: "pending" | "accepted" | "rejected";
+  reviewNote?: string | null;
+  uploadedVia: string;
+  createdAt: string;
+};
+
+const FIRM_DOC_KIND_LABELS: Record<string, string> = {
+  trade_license: "Trade license",
+  certificate: "Certificate",
+  insurance: "Insurance",
+  vat_trn: "VAT / TRN registration",
+  signatory_id: "Signatory ID",
+  other: "Other",
+};
+function firmDocKindLabel(kind: string): string {
+  return FIRM_DOC_KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
+}
+
+function FirmDocumentsReviewSection() {
+  const [rows, setRows] = React.useState<FirmDocItem[] | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [forbidden, setForbidden] = React.useState(false);
+  const [notes, setNotes] = React.useState<Record<string, string>>({});
+
+  const load = React.useCallback(() => {
+    void fetch(`${QUALIFY_API}/partners/firm-documents?status=all`, { credentials: "include" })
+      .then(async (r) => {
+        if (r.status === 403 || r.status === 404) {
+          if (r.status === 403) setForbidden(true);
+          return { items: [] };
+        }
+        if (!r.ok) throw new Error(String(r.status));
+        return (await r.json()) as { items: FirmDocItem[] };
+      })
+      .then((j) => setRows(j.items))
+      .catch(() => setMsg("Couldn't load firm documents."));
+  }, []);
+  React.useEffect(() => load(), [load]);
+
+  const decide = (id: string, decision: "accept" | "reject") => {
+    setBusyId(id);
+    setMsg(null);
+    void fetch(`${QUALIFY_API}/partners/firm-documents/${id}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ decision: decision === "accept" ? "accepted" : "rejected", note: notes[id]?.trim() || null }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : `${decision} failed.`);
+        setMsg(decision === "accept" ? "Accepted." : "Rejected.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusyId(null));
+  };
+
+  if (forbidden) return null;
+  const pending = (rows ?? []).filter((r) => r.reviewStatus === "pending");
+  const decided = (rows ?? []).filter((r) => r.reviewStatus !== "pending").slice(0, 8);
+
+  return (
+    <section className="space-y-3" data-testid="section-firm-documents">
+      <div className="text-xs font-mono uppercase tracking-widest text-text-faint">
+        Partner firm documents
+      </div>
+      <p className="text-xs text-text-mute">
+        Trade licenses, certificates, insurance and IDs uploaded by partners. Accepted documents
+        with an expiry date surface in Roster → Compliance. Reviews are org-scoped and audited.
+      </p>
+      {rows == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : pending.length === 0 && decided.length === 0 ? (
+        <p className="text-xs text-text-faint">No documents submitted yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {pending.map((r) => (
+            <Card key={r.id} className="p-3 space-y-2" data-testid={`card-firm-doc-${r.id}`}>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-text font-medium">{r.firmName}</span>
+                <MonoChip tone="amber">pending</MonoChip>
+                <span className="text-text-faint">{r.createdAt.slice(0, 10)}</span>
+              </div>
+              <div className="text-xs text-text-mute">
+                {firmDocKindLabel(r.kind)}
+                {r.title ? ` · ${r.title}` : ""} · {r.fileName}
+                {r.expiryDate ? ` · expires ${r.expiryDate}` : ""}
+                {` · via ${r.uploadedVia}`}
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <a
+                  href={`${QUALIFY_API}/partners/firm-documents/${r.id}/download`}
+                  className="font-mono uppercase tracking-widest text-gold hover:text-gold/80"
+                  data-testid={`link-firm-doc-download-${r.id}`}
+                >
+                  download
+                </a>
+              </div>
+              <input
+                type="text"
+                value={notes[r.id] ?? ""}
+                onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                placeholder="Review note (optional; shown to partner if rejected)"
+                className="w-full glass-surface border border-border-soft rounded px-2 py-1 text-xs"
+                data-testid={`input-firm-doc-note-${r.id}`}
+              />
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "accept")}
+                  data-testid={`button-accept-firm-doc-${r.id}`}
+                >
+                  accept
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "reject")}
+                  data-testid={`button-reject-firm-doc-${r.id}`}
+                >
+                  reject
+                </button>
+              </div>
+            </Card>
+          ))}
+          {decided.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs px-1" data-testid={`row-firm-doc-${r.id}`}>
+              <span className="text-text">{r.firmName}</span>
+              <MonoChip tone={r.reviewStatus === "accepted" ? "green" : "red"}>{r.reviewStatus}</MonoChip>
+              <span className="text-text-faint">
+                {firmDocKindLabel(r.kind)}
+                {r.expiryDate ? ` · expires ${r.expiryDate}` : ""}
+              </span>
+              {r.reviewNote && <span className="text-text-faint">{r.reviewNote}</span>}
+              <a
+                href={`${QUALIFY_API}/partners/firm-documents/${r.id}/download`}
+                className="font-mono uppercase tracking-widest text-gold hover:text-gold/80"
+                data-testid={`link-firm-doc-download-${r.id}`}
+              >
+                download
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
+    </section>
+  );
+}
+
+// ---- Firm contact-suggestion review (Task #1172) ----------------------------
+// Partners can suggest new contact lists via the portal; approving one applies
+// it to the firm's contacts (with roster promotion). Org-scoped + audited.
+type SuggestedContact = { id?: string; name: string; role?: string | null; email?: string | null };
+type ContactSuggestionItem = {
+  id: string;
+  partnerFirmId: string;
+  firmName: string;
+  proposedContacts: SuggestedContact[];
+  currentContacts?: SuggestedContact[];
+  note: string | null;
+  status: "pending" | "approved" | "rejected";
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+  createdAt: string;
+};
+
+function FirmContactSuggestionsSection() {
+  const [rows, setRows] = React.useState<ContactSuggestionItem[] | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [forbidden, setForbidden] = React.useState(false);
+  const [notes, setNotes] = React.useState<Record<string, string>>({});
+
+  const load = React.useCallback(() => {
+    void fetch(`${QUALIFY_API}/partners/contact-suggestions?status=all`, { credentials: "include" })
+      .then(async (r) => {
+        if (r.status === 403 || r.status === 404) {
+          if (r.status === 403) setForbidden(true);
+          return { items: [] };
+        }
+        if (!r.ok) throw new Error(String(r.status));
+        return (await r.json()) as { items: ContactSuggestionItem[] };
+      })
+      .then((j) => setRows(j.items))
+      .catch(() => setMsg("Couldn't load contact suggestions."));
+  }, []);
+  React.useEffect(() => load(), [load]);
+
+  const decide = (id: string, decision: "approve" | "reject") => {
+    setBusyId(id);
+    setMsg(null);
+    void fetch(`${QUALIFY_API}/partners/contact-suggestions/${id}/decide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ decision: decision === "approve" ? "approved" : "rejected", note: notes[id]?.trim() || null }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : `${decision} failed.`);
+        setMsg(decision === "approve" ? "Approved — contacts updated." : "Rejected.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusyId(null));
+  };
+
+  const renderContacts = (list: SuggestedContact[] | undefined) =>
+    !list || list.length === 0 ? (
+      <span className="text-text-faint italic">none</span>
+    ) : (
+      <ul className="space-y-0.5">
+        {list.map((c, i) => (
+          <li key={c.id ?? i}>
+            {c.name}
+            {c.role ? ` · ${c.role}` : ""}
+            {c.email ? ` · ${c.email}` : ""}
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (forbidden) return null;
+  const pending = (rows ?? []).filter((r) => r.status === "pending");
+  const decided = (rows ?? []).filter((r) => r.status !== "pending").slice(0, 5);
+
+  return (
+    <section className="space-y-3" data-testid="section-firm-contact-suggestions">
+      <div className="text-xs font-mono uppercase tracking-widest text-text-faint">
+        Partner contact-change suggestions
+      </div>
+      <p className="text-xs text-text-mute">
+        Contact lists proposed by partners through the portal. Approving replaces the firm's current
+        contacts (and promotes them onto the roster). Org-scoped + audited.
+      </p>
+      {rows == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : pending.length === 0 && decided.length === 0 ? (
+        <p className="text-xs text-text-faint">No suggestions yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {pending.map((r) => (
+            <Card key={r.id} className="p-3 space-y-2" data-testid={`card-contact-suggestion-${r.id}`}>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-text font-medium">{r.firmName}</span>
+                <MonoChip tone="amber">pending</MonoChip>
+                <span className="text-text-faint">{r.createdAt.slice(0, 10)}</span>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 text-xs text-text-mute">
+                <div>
+                  <div className="font-mono uppercase tracking-widest text-text-faint mb-1">Current</div>
+                  {renderContacts(r.currentContacts)}
+                </div>
+                <div>
+                  <div className="font-mono uppercase tracking-widest text-text-faint mb-1">Proposed</div>
+                  {renderContacts(r.proposedContacts)}
+                </div>
+              </div>
+              {r.note && <div className="text-xs text-text-faint">Note: {r.note}</div>}
+              <input
+                type="text"
+                value={notes[r.id] ?? ""}
+                onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                placeholder="Decision note (optional)"
+                className="w-full glass-surface border border-border-soft rounded px-2 py-1 text-xs"
+                data-testid={`input-contact-suggestion-note-${r.id}`}
+              />
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "approve")}
+                  data-testid={`button-approve-contact-suggestion-${r.id}`}
+                >
+                  approve &amp; apply
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "reject")}
+                  data-testid={`button-reject-contact-suggestion-${r.id}`}
+                >
+                  reject
+                </button>
+              </div>
+            </Card>
+          ))}
+          {decided.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs px-1" data-testid={`row-contact-suggestion-${r.id}`}>
+              <span className="text-text">{r.firmName}</span>
+              <MonoChip tone={r.status === "approved" ? "green" : "default"}>{r.status}</MonoChip>
+              <span className="text-text-faint">
+                {r.proposedContacts.length} contact{r.proposedContacts.length === 1 ? "" : "s"}
                 {r.decidedByName ? ` · ${r.decidedByName}` : ""}
                 {r.decidedAt ? ` · ${r.decidedAt.slice(0, 10)}` : ""}
               </span>

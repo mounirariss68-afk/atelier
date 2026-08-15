@@ -3118,6 +3118,84 @@ export const atelierPartnerFirmBankChangeRequests = pgTable(
     index("idx_atelier_pf_bankreq_status").on(t.status),
   ],
 );
+// Task #1172 — Partner firm document library. Trade licenses, certificates,
+// insurance, VAT/TRN, signatory IDs uploaded during registration or via the
+// partner portal (or internally). Bytes live in object storage
+// (partnerDocStorage; fileRef = "partnerdoc:<key>") and are ONLY served
+// through ACL'd download routes. Plain text ids, no FK constraints (matches
+// the rest of the atelier partner tables). Accepted, non-deleted docs with an
+// expiryDate surface read-time in /roster/compliance (never persisted as
+// compliance_records rows).
+export const atelierPartnerFirmDocuments = pgTable(
+  "atelier_partner_firm_documents",
+  {
+    id: text("id").primaryKey(), // pfdoc_...
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    // trade_license | certificate | insurance | vat_trn | signatory_id | other
+    kind: text("kind").notNull(),
+    title: text("title"),
+    fileName: text("file_name").notNull(),
+    mime: text("mime").notNull(),
+    fileRef: text("file_ref").notNull(), // object-storage ref ("partnerdoc:<key>")
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256"),
+    issuedDate: text("issued_date"), // ISO date
+    expiryDate: text("expiry_date"), // ISO date
+    // pending | accepted | rejected
+    reviewStatus: text("review_status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedByUserId: text("reviewed_by_user_id"),
+    reviewedByName: text("reviewed_by_name"),
+    reviewedAt: timestamp("reviewed_at"),
+    uploadedByUserId: text("uploaded_by_user_id"),
+    // registration | portal | internal
+    uploadedVia: text("uploaded_via").notNull(),
+    supersededByDocId: text("superseded_by_doc_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pf_docs_org").on(t.orgId),
+    index("idx_atelier_pf_docs_firm").on(t.partnerFirmId),
+    index("idx_atelier_pf_docs_status").on(t.reviewStatus),
+  ],
+);
+
+// Task #1172 — post-registration portal contact updates are NOT applied
+// directly; they land here as a pending suggestion that an internal reviewer
+// approves (applied via the shared contacts-update path incl. roster
+// promotion) or rejects. Registration-time contacts are applied directly.
+export const atelierPartnerContactSuggestions = pgTable(
+  "atelier_partner_contact_suggestions",
+  {
+    id: text("id").primaryKey(), // pfcsug_...
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    proposedContacts: jsonb("proposed_contacts")
+      .$type<Array<{ id: string; name: string; role?: string | null; email?: string | null }>>()
+      .notNull()
+      .default([]),
+    note: text("note"),
+    // pending | approved | rejected
+    status: text("status").notNull().default("pending"),
+    submittedByUserId: text("submitted_by_user_id"),
+    decidedByUserId: text("decided_by_user_id"),
+    decidedByName: text("decided_by_name"),
+    decisionNote: text("decision_note"),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pf_contact_sug_org").on(t.orgId),
+    index("idx_atelier_pf_contact_sug_firm").on(t.partnerFirmId),
+    index("idx_atelier_pf_contact_sug_status").on(t.status),
+  ],
+);
+
 export const atelierDependents = pgTable(
   "atelier_dependents",
   {

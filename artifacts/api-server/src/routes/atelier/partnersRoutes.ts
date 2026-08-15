@@ -188,7 +188,7 @@ function reconcileStages(
 // Task #538 — contact-list writes back every entry with a person record.
 import { writePersonFromFullName } from "../../lib/atelier-person-sync.js";
 
-function normalizeContacts(
+export function normalizeContacts(
   contacts: z.infer<typeof contactSchema>[] | undefined,
 ): Array<{ id: string; name: string; role?: string | null; email?: string | null; personId?: string | null }> | undefined {
   if (!contacts) return undefined;
@@ -208,9 +208,9 @@ function normalizeContacts(
  * alone; new/unstamped entries get a person parsed from the free-text name
  * plus a deterministic `pfr_pfc_<entryId>` resource row.
  */
-type DbExec = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbExec = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-async function stampContactPersons(
+export async function stampContactPersons(
   exec: DbExec,
   me: Me,
   firmId: string,

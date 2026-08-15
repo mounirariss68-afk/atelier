@@ -18,7 +18,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
-import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling } from "@/pages/PartnerPortal";
+import { PartnerPortalHome, PartnerPortalOpportunity, PartnerPortalContracts, PartnerPortalBilling, PartnerPortalCompany } from "@/pages/PartnerPortal";
 import Activate from "@/pages/Activate";
 import PartnerRegister from "@/pages/PartnerRegister";
 import ResetPassword from "@/pages/ResetPassword";
@@ -347,6 +347,8 @@ function Router() {
         {/* Task #875 — partner contracts & billing hub. */}
         <Route path="/partner/contracts" component={PartnerPortalContracts} />
         <Route path="/partner/billing" component={PartnerPortalBilling} />
+        {/* Task #1172 — partner company profile (firm details, documents, contacts). */}
+        <Route path="/partner/company" component={PartnerPortalCompany} />
         <Route path="/" component={Home} />
         {/* Task #369 — commercial-loop redirects. The lens lives at
             /clients/*; old top-level URLs keep resolving so deep-links

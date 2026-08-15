@@ -44,6 +44,7 @@ import {
   atelierOffboardings,
   atelierOffboardingSteps,
   atelierComplianceRecords,
+  atelierPartnerFirmDocuments,
   atelierPaneAItems,
   atelierRosterReportsTo,
   atelierStudioCandidates,
@@ -2297,6 +2298,49 @@ router.get("/roster/compliance", async (req, res, next) => {
         };
       }),
     );
+    // Task #1172 — firm-document expiries surface read-time here (never
+    // persisted as atelier_compliance_records rows). Only ACCEPTED,
+    // non-deleted firm documents that carry an expiryDate become pseudo
+    // records. They have no personId + a partnerFirmId, so isPartnerRecord
+    // matches and they count into partnerBuckets.
+    const bucketFor = (expiryDate: string | null): typeof enriched[number]["bucket"] => {
+      if (!expiryDate) return "ok";
+      if (expiryDate < todayStr) return "expired";
+      const days = Math.floor((new Date(expiryDate).getTime() - Date.now()) / 86400_000);
+      if (days <= 30) return "expiring_30";
+      if (days <= 60) return "expiring_60";
+      if (days <= 90) return "expiring_90";
+      return "ok";
+    };
+    const firmDocs = await db
+      .select()
+      .from(atelierPartnerFirmDocuments)
+      .where(
+        and(
+          eq(atelierPartnerFirmDocuments.orgId, me.orgId),
+          eq(atelierPartnerFirmDocuments.reviewStatus, "accepted"),
+          isNull(atelierPartnerFirmDocuments.deletedAt),
+        ),
+      );
+    for (const d of firmDocs) {
+      if (!d.expiryDate) continue;
+      enriched.push({
+        id: d.id,
+        kind: `firm_doc:${d.kind}`,
+        jurisdiction: null,
+        personType: null,
+        personId: null,
+        personName: null,
+        partnerFirmId: d.partnerFirmId,
+        referenceNumberRedacted: null,
+        referenceNumberLastFour: null,
+        issuedDate: d.issuedDate ?? null,
+        expiryDate: d.expiryDate,
+        status: "active",
+        metadata: { firmDocument: true, title: d.title ?? null, fileName: d.fileName } as never,
+        bucket: bucketFor(d.expiryDate),
+      });
+    }
     // Roll-ups. Task #1171 — partner-firm records (partner_firm_resource
     // people or firm-level records tied to a partner firm) are counted in
     // their own roll-up so the worker buckets only reflect our own

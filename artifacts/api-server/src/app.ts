@@ -31,6 +31,26 @@ app.use(
 );
 app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
+
+// Firm-document upload endpoints accept base64 payloads (up to ~13.4MB for a
+// 10MB file). They must be parsed with a raised limit BEFORE the default
+// 100KB parser runs — express.json() sets req._body once parsed, so the
+// default parser below is a no-op for these already-parsed requests.
+const LARGE_JSON_UPLOAD_PATHS = [
+  "/api/auth/partner-register-upload",
+  "/api/atelier/partner-portal/company-documents",
+];
+const largeJsonParser = express.json({ limit: "16mb" });
+app.use((req, res, next) => {
+  if (
+    req.method === "POST" &&
+    LARGE_JSON_UPLOAD_PATHS.includes(req.path)
+  ) {
+    return largeJsonParser(req, res, next);
+  }
+  return next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

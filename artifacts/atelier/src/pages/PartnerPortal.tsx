@@ -45,6 +45,7 @@ function PortalNav() {
     { href: "/partner", label: "Opportunities", active: location === "/partner" || location.startsWith("/partner/opportunities") },
     { href: "/partner/contracts", label: "Contracts", active: location.startsWith("/partner/contracts") },
     { href: "/partner/billing", label: "Billing", active: location.startsWith("/partner/billing") },
+    { href: "/partner/company", label: "Company", active: location.startsWith("/partner/company") },
   ];
   return (
     <div className="mb-6 flex gap-2 border-b border-border" data-testid="partner-portal-nav">
@@ -603,6 +604,474 @@ export function PartnerPortalBilling() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Task #1172 — Company profile tab (firm details, documents, contacts).
+// These routes are under /api/atelier/partner/* (not partner-portal).
+// ===========================================================================
+
+const PARTNER_API = `${import.meta.env.BASE_URL}api/atelier/partner-portal`;
+
+type FirmDoc = {
+  id: string;
+  kind: string;
+  title: string | null;
+  fileName: string;
+  sizeBytes: number;
+  issuedDate: string | null;
+  expiryDate: string | null;
+  reviewStatus: "pending" | "accepted" | "rejected";
+  reviewNote?: string | null;
+  createdAt: string;
+};
+type FirmContact = { id?: string; name: string; role?: string | null; email?: string | null };
+type CompanyProfile = {
+  firm: {
+    name: string;
+    legalName: string | null;
+    registrationNumber: string | null;
+    taxId: string | null;
+    registeredAddress: string | null;
+    bankIbanMasked: string | null;
+    bankName: string | null;
+    bankCurrency: string | null;
+  };
+  documents: FirmDoc[];
+  contacts: FirmContact[];
+  pendingContactSuggestion:
+    | { id: string; proposedContacts: FirmContact[]; note: string | null; createdAt: string }
+    | null;
+};
+
+const DOC_KIND_LABELS: Record<string, string> = {
+  trade_license: "Trade license",
+  certificate: "Certificate",
+  insurance: "Insurance",
+  vat_trn: "VAT / TRN registration",
+  signatory_id: "Signatory ID",
+  other: "Other",
+};
+function docKindLabel(kind: string): string {
+  return DOC_KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
+}
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.onload = () => {
+      const res = reader.result;
+      if (typeof res !== "string") return reject(new Error("Could not read the file."));
+      const comma = res.indexOf(",");
+      resolve(comma >= 0 ? res.slice(comma + 1) : res);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+const DOC_MIME_ALLOW = ["application/pdf", "image/png", "image/jpeg"];
+const DOC_KIND_OPTIONS = [
+  { value: "trade_license", label: "Trade license" },
+  { value: "certificate", label: "Certificate" },
+  { value: "insurance", label: "Insurance" },
+  { value: "vat_trn", label: "VAT / TRN registration" },
+  { value: "signatory_id", label: "Signatory ID" },
+  { value: "other", label: "Other" },
+];
+
+function ReviewChip({ status }: { status: FirmDoc["reviewStatus"] }) {
+  const tone =
+    status === "accepted"
+      ? "border-emerald-500/40 text-emerald-600"
+      : status === "rejected"
+        ? "border-destructive/40 text-destructive"
+        : "border-amber-500/40 text-amber-600";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
+export function PartnerPortalCompany() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["partner-portal", "company-profile"],
+    queryFn: async () => {
+      const r = await fetch(`${PARTNER_API}/company-profile`, { credentials: "include" });
+      if (!r.ok) throw new Error(`request-failed:${r.status}`);
+      return (await r.json()) as CompanyProfile;
+    },
+  });
+
+  // ---- document upload ----
+  const [upKind, setUpKind] = React.useState("trade_license");
+  const [upTitle, setUpTitle] = React.useState("");
+  const [upIssued, setUpIssued] = React.useState("");
+  const [upExpiry, setUpExpiry] = React.useState("");
+  const [upFile, setUpFile] = React.useState<File | null>(null);
+  const [upBusy, setUpBusy] = React.useState(false);
+  const [upErr, setUpErr] = React.useState<string | null>(null);
+  const upFileRef = React.useRef<HTMLInputElement>(null);
+
+  const uploadDoc = async () => {
+    setUpErr(null);
+    if (!upFile) return setUpErr("Choose a file to upload.");
+    if (!DOC_MIME_ALLOW.includes(upFile.type)) return setUpErr("Only PDF, PNG or JPEG files are accepted.");
+    if (upFile.size > MAX_DOC_BYTES) return setUpErr("File is larger than 10MB.");
+    setUpBusy(true);
+    try {
+      const base64 = await fileToBase64(upFile);
+      const r = await fetch(`${PARTNER_API}/company-documents`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: upKind,
+          fileName: upFile.name,
+          mime: upFile.type,
+          base64,
+          title: upTitle.trim() || null,
+          issuedDate: upIssued || null,
+          expiryDate: upExpiry || null,
+        }),
+      });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!r.ok || !j?.ok) throw new Error(j?.message ?? `upload-failed:${r.status}`);
+      setUpTitle("");
+      setUpIssued("");
+      setUpExpiry("");
+      setUpFile(null);
+      if (upFileRef.current) upFileRef.current.value = "";
+      void qc.invalidateQueries({ queryKey: ["partner-portal", "company-profile"] });
+    } catch (e) {
+      setUpErr((e as Error).message);
+    } finally {
+      setUpBusy(false);
+    }
+  };
+
+  // ---- contact suggestion editor ----
+  const [editingContacts, setEditingContacts] = React.useState(false);
+  const [draftContacts, setDraftContacts] = React.useState<FirmContact[]>([]);
+  const [suggestNote, setSuggestNote] = React.useState("");
+  const [suggestBusy, setSuggestBusy] = React.useState(false);
+  const [suggestErr, setSuggestErr] = React.useState<string | null>(null);
+
+  const openContactEditor = () => {
+    setDraftContacts((q.data?.contacts ?? []).map((c) => ({ ...c })));
+    setSuggestNote("");
+    setSuggestErr(null);
+    setEditingContacts(true);
+  };
+  const submitSuggestion = async () => {
+    setSuggestErr(null);
+    const contacts = draftContacts
+      .map((c) => ({
+        name: c.name.trim(),
+        role: (c.role ?? "").trim() || null,
+        email: (c.email ?? "").trim() || null,
+      }))
+      .filter((c) => c.name.length > 0);
+    if (contacts.length === 0) return setSuggestErr("Add at least one contact.");
+    setSuggestBusy(true);
+    try {
+      const r = await fetch(`${PARTNER_API}/contact-suggestions`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contacts, note: suggestNote.trim() || null }),
+      });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!r.ok || !j?.ok) throw new Error(j?.message ?? `request-failed:${r.status}`);
+      setEditingContacts(false);
+      void qc.invalidateQueries({ queryKey: ["partner-portal", "company-profile"] });
+    } catch (e) {
+      setSuggestErr((e as Error).message);
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
+  const firm = q.data?.firm;
+  const pending = q.data?.pendingContactSuggestion ?? null;
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-portal-company">
+      <PortalNav />
+      <h1 className="text-2xl font-semibold">Company profile</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Your firm's details on record with Cognirise, plus firm documents and contact people.
+      </p>
+
+      {q.isLoading && <div className="mt-8 text-sm text-muted-foreground">Loading…</div>}
+      {q.isError && (
+        <div className="mt-8 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          We couldn't load your company profile. If this persists, contact your Cognirise counterpart.
+        </div>
+      )}
+
+      {firm && (
+        <>
+          {/* Firm details (read-only) */}
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Firm details</h2>
+          <dl className="mt-3 grid grid-cols-1 gap-4 rounded-lg border border-border p-4 sm:grid-cols-2" data-testid="company-firm-details">
+            <div>
+              <dt className="text-xs uppercase text-muted-foreground">Legal name</dt>
+              <dd className="mt-1">{firm.legalName ?? firm.name}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-muted-foreground">Registration number</dt>
+              <dd className="mt-1">{firm.registrationNumber ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-muted-foreground">Tax / VAT ID</dt>
+              <dd className="mt-1">{firm.taxId ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-muted-foreground">Registered address</dt>
+              <dd className="mt-1 whitespace-pre-wrap">{firm.registeredAddress ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-muted-foreground">Bank</dt>
+              <dd className="mt-1">
+                {firm.bankName ?? "—"}
+                {firm.bankIbanMasked ? ` · ${firm.bankIbanMasked}` : ""}
+                {firm.bankCurrency ? ` · ${firm.bankCurrency}` : ""}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-xs text-muted-foreground">
+            To change bank details, contact your Cognirise counterpart — changes are reviewed by finance.
+          </p>
+
+          {/* Documents */}
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Documents</h2>
+          <div className="mt-3 space-y-2" data-testid="company-documents">
+            {q.data && q.data.documents.length === 0 && (
+              <div className="text-sm text-muted-foreground" data-testid="company-documents-empty">
+                No documents uploaded yet.
+              </div>
+            )}
+            {q.data?.documents.map((d) => (
+              <div key={d.id} className="rounded-lg border border-border p-4" data-testid={`company-doc-${d.id}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{d.title || docKindLabel(d.kind)}</div>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                      {docKindLabel(d.kind)} · {d.fileName} · {fmtBytes(d.sizeBytes)}
+                      {d.expiryDate ? ` · expires ${d.expiryDate}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ReviewChip status={d.reviewStatus} />
+                    <a
+                      href={`${PARTNER_API}/company-documents/${d.id}/download`}
+                      className="text-sm text-primary hover:underline"
+                      data-testid={`link-company-doc-download-${d.id}`}
+                    >
+                      Download
+                    </a>
+                  </div>
+                </div>
+                {d.reviewStatus === "rejected" && d.reviewNote && (
+                  <div className="mt-2 text-xs text-destructive" data-testid={`company-doc-note-${d.id}`}>
+                    Reviewer note: {d.reviewNote}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Upload */}
+          <h3 className="mt-6 text-sm font-semibold text-muted-foreground">Upload a document</h3>
+          <div className="mt-3 space-y-3 rounded-lg border border-border p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <select
+                value={upKind}
+                onChange={(e) => setUpKind(e.target.value)}
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                data-testid="input-company-doc-kind"
+              >
+                {DOC_KIND_OPTIONS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={upTitle}
+                onChange={(e) => setUpTitle(e.target.value)}
+                placeholder="Title (optional)"
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                data-testid="input-company-doc-title"
+              />
+              <input
+                type="date"
+                value={upIssued}
+                onChange={(e) => setUpIssued(e.target.value)}
+                placeholder="Issued"
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                data-testid="input-company-doc-issued"
+              />
+              <input
+                type="date"
+                value={upExpiry}
+                onChange={(e) => setUpExpiry(e.target.value)}
+                placeholder="Expiry"
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                data-testid="input-company-doc-expiry"
+              />
+            </div>
+            <input
+              ref={upFileRef}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+              onChange={(e) => setUpFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm"
+              data-testid="input-company-doc-file"
+            />
+            {upErr && <div className="text-sm text-destructive">{upErr}</div>}
+            <button
+              onClick={uploadDoc}
+              disabled={!upFile || upBusy}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              data-testid="button-company-doc-upload"
+            >
+              {upBusy ? "Uploading…" : "Upload document"}
+            </button>
+          </div>
+
+          {/* Contacts */}
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Contact people</h2>
+          {pending && (
+            <div
+              className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+              data-testid="company-contact-suggestion-pending"
+            >
+              You have a pending contact change awaiting Cognirise review (submitted{" "}
+              {fmtDate(pending.createdAt)}). It will apply once approved.
+            </div>
+          )}
+          <div className="mt-3 space-y-2" data-testid="company-contacts">
+            {q.data && q.data.contacts.length === 0 && (
+              <div className="text-sm text-muted-foreground" data-testid="company-contacts-empty">
+                No contacts on record yet.
+              </div>
+            )}
+            {q.data?.contacts.map((c, i) => (
+              <div key={c.id ?? i} className="rounded-lg border border-border p-3 text-sm" data-testid={`company-contact-${i}`}>
+                <div className="font-medium">{c.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {c.role || "—"}
+                  {c.email ? ` · ${c.email}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!editingContacts ? (
+            <button
+              onClick={openContactEditor}
+              disabled={!!pending}
+              className="mt-3 rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+              data-testid="button-suggest-contacts"
+            >
+              Suggest changes
+            </button>
+          ) : (
+            <div className="mt-3 space-y-3 rounded-lg border border-border p-4" data-testid="company-contact-editor">
+              <div className="text-sm font-medium">Suggest contact changes</div>
+              <p className="text-xs text-muted-foreground">
+                Cognirise reviews your proposed contact list before it replaces the current one.
+              </p>
+              {draftContacts.map((c, i) => (
+                <div key={i} className="space-y-2 rounded-md border border-border p-3" data-testid={`draft-contact-${i}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase text-muted-foreground">Person {i + 1}</span>
+                    <button
+                      onClick={() => setDraftContacts((cs) => cs.filter((_, idx) => idx !== i))}
+                      className="text-xs text-destructive hover:underline"
+                      data-testid={`button-remove-draft-contact-${i}`}
+                    >
+                      remove
+                    </button>
+                  </div>
+                  <input
+                    value={c.name}
+                    onChange={(e) =>
+                      setDraftContacts((cs) => cs.map((x, idx) => (idx === i ? { ...x, name: e.target.value } : x)))
+                    }
+                    placeholder="Full name"
+                    className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                    data-testid={`input-draft-contact-name-${i}`}
+                  />
+                  <input
+                    value={c.role ?? ""}
+                    onChange={(e) =>
+                      setDraftContacts((cs) => cs.map((x, idx) => (idx === i ? { ...x, role: e.target.value } : x)))
+                    }
+                    placeholder="Role / title"
+                    className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                    data-testid={`input-draft-contact-role-${i}`}
+                  />
+                  <input
+                    type="email"
+                    value={c.email ?? ""}
+                    onChange={(e) =>
+                      setDraftContacts((cs) => cs.map((x, idx) => (idx === i ? { ...x, email: e.target.value } : x)))
+                    }
+                    placeholder="Email"
+                    className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                    data-testid={`input-draft-contact-email-${i}`}
+                  />
+                </div>
+              ))}
+              <button
+                onClick={() => setDraftContacts((cs) => [...cs, { name: "", role: "", email: "" }])}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary"
+                data-testid="button-add-draft-contact"
+              >
+                + Add a person
+              </button>
+              <input
+                value={suggestNote}
+                onChange={(e) => setSuggestNote(e.target.value)}
+                placeholder="Note for the reviewer (optional)"
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                data-testid="input-suggest-note"
+              />
+              {suggestErr && <div className="text-sm text-destructive">{suggestErr}</div>}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={submitSuggestion}
+                  disabled={suggestBusy}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  data-testid="button-submit-contact-suggestion"
+                >
+                  {suggestBusy ? "Submitting…" : "Submit for review"}
+                </button>
+                <button
+                  onClick={() => setEditingContacts(false)}
+                  className="rounded-md border border-border px-4 py-2 text-sm"
+                  data-testid="button-cancel-contact-suggestion"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

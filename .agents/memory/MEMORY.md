@@ -124,7 +124,7 @@
 - [api-client-react new-hook wiring](api-client-react-barrel.md) — orval doesn't touch the hand-maintained src/index.ts barrel; add hook names there + rebuild with tsc -b --force.
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
-- [Partner registration flow](atelier-partner-registration.md) — token purpose partner_registration; "registered" signal is firm.registrationCompletedAt (NOT cred.userManaged); firm bank columns write only via finance approve.
+- [Partner registration flow](atelier-partner-registration.md) — token validate-not-consume pre-auth uploads, magic-byte+base64 validation, path-scoped 16mb parser BEFORE global 100KB, contact suggestions REPLACE semantics.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass, alpha fallbacks, LEFT rail; className sweeps must be line-based/tag-aware ([tsx-classname-sweeps.md](tsx-classname-sweeps.md)).
 - [Screen catalog & find_screen](atelier-screen-catalog.md) — catalog.ts is GENERATED from web nav (regenerate, never hand-edit); nav/role-gate changes must re-run generator; find_screen widening is role-sliced.

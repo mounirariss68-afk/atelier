@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type IRouter, type Request, type Response } from "express";
 import {
   db,
   atelierAuthCredentials,
@@ -8,6 +8,7 @@ import {
   atelierAdminSettings,
   atelierPartnerFirms,
   atelierPartnerFirmBankChangeRequests,
+  atelierPartnerFirmDocuments,
 } from "@workspace/db";
 import { eq, ne, and, isNull, gte, lte, desc, sql } from "drizzle-orm";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
@@ -704,6 +705,19 @@ router.get("/partner-register-info", async (req: Request, res: Response) => {
     });
     return;
   }
+  // Task #1172 — surface earlier document uploads + existing declared
+  // contacts so the resumable registration page prefills.
+  const docs = await db
+    .select()
+    .from(atelierPartnerFirmDocuments)
+    .where(
+      and(
+        eq(atelierPartnerFirmDocuments.orgId, ctx.firm.orgId),
+        eq(atelierPartnerFirmDocuments.partnerFirmId, ctx.firm.id),
+        isNull(atelierPartnerFirmDocuments.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierPartnerFirmDocuments.createdAt));
   res.json({
     ok: true,
     email: row.email,
@@ -716,6 +730,12 @@ router.get("/partner-register-info", async (req: Request, res: Response) => {
       registeredAddress: ctx.firm.registeredAddress ?? null,
       defaultCurrency: ctx.firm.bankCurrency ?? ctx.firm.defaultBillingCurrency ?? null,
     },
+    documents: docs.map(partnerDocWire),
+    contacts: (ctx.firm.contacts ?? []).map((c) => ({
+      name: c.name,
+      role: c.role ?? null,
+      email: c.email ?? null,
+    })),
   });
 });
 
@@ -786,6 +806,30 @@ router.post("/partner-register", async (req: Request, res: Response) => {
     res.status(400).json({ error: "invalid-currency", message: "Currency must be a 3-letter code (e.g. AED, USD)." });
     return;
   }
+  // Task #1172 — optional declared contacts. These are the invited
+  // partner's OWN people so they apply directly to the firm's contacts
+  // jsonb (mirrors the internal PATCH /partners/firms contacts path,
+  // including the roster promotion below).
+  const rawContacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+  if (rawContacts.length > 25) {
+    res.status(400).json({ error: "invalid-body", message: "At most 25 contacts may be submitted." });
+    return;
+  }
+  const parsedContacts: Array<{ name: string; role: string | null; email: string | null }> = [];
+  for (const raw of rawContacts) {
+    const c = (raw ?? {}) as Record<string, unknown>;
+    const name = str(c.name, 200);
+    if (!name) {
+      res.status(400).json({ error: "invalid-body", message: "Each contact requires a name." });
+      return;
+    }
+    const email = str(c.email, 320);
+    if (email && !email.includes("@")) {
+      res.status(400).json({ error: "invalid-body", message: `Invalid email for contact "${name}".` });
+      return;
+    }
+    parsedContacts.push({ name, role: str(c.role, 200), email });
+  }
   const { user, firm } = ctx;
   const bankReqId = `pfbankreq_${randomBytes(9).toString("base64url")}`;
   await db.transaction(async (tx) => {
@@ -814,18 +858,35 @@ router.post("/partner-register", async (req: Request, res: Response) => {
         updatedAt: new Date(),
       })
       .where(eq(atelierAuthCredentials.email, row.email));
+    // Task #1172 — merge declared contacts into the firm's contacts jsonb,
+    // stamping each new entry with a person record + promoted PFR row via
+    // the SHARED helper (single source of truth with the internal path).
+    const firmPatch: Record<string, unknown> = {
+      legalName,
+      registrationNumber,
+      taxId,
+      registeredAddress,
+      registrationCompletedAt: new Date(),
+      registrationCompletedByUserId: user.id,
+      updatedAt: new Date(),
+    };
+    if (parsedContacts.length > 0) {
+      const { stampContactPersons } = await import("../atelier/partnersRoutes.js");
+      const existing = firm.contacts ?? [];
+      const additions = parsedContacts.map((c) => ({
+        id: `pfc_${randomBytes(9).toString("base64url")}`,
+        name: c.name,
+        role: c.role,
+        email: c.email,
+        personId: null as string | null,
+      }));
+      const stamped = await stampContactPersons(tx, user, firm.id, additions);
+      firmPatch.contacts = [...existing, ...stamped];
+    }
     // Company legal details write straight to the firm record.
     await tx
       .update(atelierPartnerFirms)
-      .set({
-        legalName,
-        registrationNumber,
-        taxId,
-        registeredAddress,
-        registrationCompletedAt: new Date(),
-        registrationCompletedByUserId: user.id,
-        updatedAt: new Date(),
-      })
+      .set(firmPatch)
       .where(eq(atelierPartnerFirms.id, firm.id));
     // Bank details are NEVER applied directly — pending finance approval.
     // Supersede any earlier pending request from this firm (latest wins).
@@ -860,8 +921,8 @@ router.post("/partner-register", async (req: Request, res: Response) => {
         actorId: user.id,
         actorLabel: user.name,
         action: "partner_firm.registration.completed",
-        payload: { userId: user.id, email: row.email, legalName, registrationNumber, taxId },
-        payloadSummary: `${user.name} completed partner registration for ${firm.name} (company details submitted).`,
+        payload: { userId: user.id, email: row.email, legalName, registrationNumber, taxId, contactsAdded: parsedContacts.length },
+        payloadSummary: `${user.name} completed partner registration for ${firm.name} (company details submitted${parsedContacts.length ? `, ${parsedContacts.length} contact(s)` : ""}).`,
       },
       {
         id: `audit_${randomUUID()}`,
@@ -898,6 +959,237 @@ router.post("/partner-register", async (req: Request, res: Response) => {
     targetUserId: row.userId,
   });
   res.json({ ok: true, email: row.email });
+});
+
+// ---- partner registration document uploads (Task #1172) -----------------
+// Token-gated pre-auth document library for the resumable registration page.
+// The activation token is VALIDATED (never consumed) on every call so the
+// partner can upload/list/delete files across multiple visits before final
+// submit. Bytes land in private object storage; the DB row starts pending
+// and surfaces to internal reviewers. Uploads are rate-limited, capped at
+// 10MB and restricted to a pdf/png/jpeg allowlist. The wire shape NEVER
+// exposes the object-storage fileRef.
+
+const PARTNER_DOC_KINDS = new Set([
+  "trade_license",
+  "certificate",
+  "insurance",
+  "vat_trn",
+  "signatory_id",
+  "other",
+]);
+const PARTNER_DOC_MIMES = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const PARTNER_DOC_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Serialized firm-document row — never leaks fileRef / sha256. */
+function partnerDocWire(d: typeof atelierPartnerFirmDocuments.$inferSelect) {
+  return {
+    id: d.id,
+    kind: d.kind,
+    title: d.title ?? null,
+    fileName: d.fileName,
+    mime: d.mime,
+    sizeBytes: d.sizeBytes,
+    issuedDate: d.issuedDate ?? null,
+    expiryDate: d.expiryDate ?? null,
+    reviewStatus: d.reviewStatus,
+    reviewNote: d.reviewNote ?? null,
+    uploadedVia: d.uploadedVia,
+    createdAt: d.createdAt.toISOString(),
+  };
+}
+
+const isoDateOrNull = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const d = new Date(`${t}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : t;
+};
+
+router.post(
+  "/partner-register-upload",
+  // Body parsing at 16mb is handled by the path-scoped parser mounted in
+  // app.ts (BEFORE the default 100KB express.json), so no per-route parser.
+  async (req: Request, res: Response) => {
+    const ip = req.ip ?? "unknown";
+    if (!rateLimitOk(ip)) {
+      res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+      return;
+    }
+    const row = await lookupActivationToken(String(req.body?.token ?? ""), "partner_registration");
+    const ctx = row ? await partnerRegistrationContext(row) : null;
+    if (!row || !ctx) {
+      res.status(404).json({
+        error: "invalid-or-expired",
+        message: "This registration link is invalid, expired, or already used.",
+      });
+      return;
+    }
+    const kind = String(req.body?.kind ?? "");
+    if (!PARTNER_DOC_KINDS.has(kind)) {
+      res.status(400).json({ error: "invalid-kind", allowed: [...PARTNER_DOC_KINDS] });
+      return;
+    }
+    const fileName = String(req.body?.fileName ?? "").trim().slice(0, 300);
+    if (!fileName) {
+      res.status(400).json({ error: "invalid-body", message: "fileName is required." });
+      return;
+    }
+    const mime = String(req.body?.mime ?? "").trim().toLowerCase();
+    if (!PARTNER_DOC_MIMES.has(mime)) {
+      res.status(400).json({ error: "invalid-mime", allowed: [...PARTNER_DOC_MIMES] });
+      return;
+    }
+    const base64 = String(req.body?.base64 ?? "");
+    if (!base64) {
+      res.status(400).json({ error: "invalid-body", message: "base64 file content is required." });
+      return;
+    }
+    const { storePartnerDocBytes, decodeBase64Strict, magicBytesMatchMime } = await import(
+      "../../lib/partnerDocStorage.js"
+    );
+    const buf = decodeBase64Strict(base64);
+    if (!buf) {
+      res.status(400).json({ error: "invalid-base64" });
+      return;
+    }
+    if (buf.byteLength === 0 || buf.byteLength > PARTNER_DOC_MAX_BYTES) {
+      res.status(400).json({ error: "invalid-size", maxBytes: PARTNER_DOC_MAX_BYTES });
+      return;
+    }
+    if (!magicBytesMatchMime(buf, mime)) {
+      res.status(400).json({ error: "content-mismatch", message: "File content does not match the declared type." });
+      return;
+    }
+    const title = (() => {
+      const t = String(req.body?.title ?? "").trim();
+      return t ? t.slice(0, 300) : null;
+    })();
+    const issuedDate = isoDateOrNull(req.body?.issuedDate);
+    const expiryDate = isoDateOrNull(req.body?.expiryDate);
+    const { user, firm } = ctx;
+    const stored = await storePartnerDocBytes(buf, mime);
+    const docId = `pfdoc_${randomBytes(9).toString("base64url")}`;
+    const [created] = await db
+      .insert(atelierPartnerFirmDocuments)
+      .values({
+        id: docId,
+        orgId: firm.orgId,
+        partnerFirmId: firm.id,
+        kind,
+        title,
+        fileName,
+        mime,
+        fileRef: stored.fileRef,
+        sizeBytes: stored.sizeBytes,
+        sha256: stored.sha256,
+        issuedDate,
+        expiryDate,
+        reviewStatus: "pending",
+        uploadedByUserId: user.id,
+        uploadedVia: "registration",
+      })
+      .returning();
+    await db.insert(atelierAuditEvents).values({
+      id: `audit_${randomUUID()}`,
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actorType: "human",
+      actorId: user.id,
+      actorLabel: user.name,
+      action: "partner_firm.document.uploaded",
+      payload: { documentId: docId, kind, fileName, sizeBytes: stored.sizeBytes, uploadedVia: "registration" },
+      payloadSummary: `${user.name} uploaded ${kind} document "${fileName}" for ${firm.name} during registration.`,
+    });
+    res.status(201).json({ ok: true, document: partnerDocWire(created) });
+  },
+);
+
+router.get("/partner-register-documents", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const row = await lookupActivationToken(String(req.query?.token ?? ""), "partner_registration");
+  const ctx = row ? await partnerRegistrationContext(row) : null;
+  if (!row || !ctx) {
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This registration link is invalid, expired, or already used.",
+    });
+    return;
+  }
+  const docs = await db
+    .select()
+    .from(atelierPartnerFirmDocuments)
+    .where(
+      and(
+        eq(atelierPartnerFirmDocuments.orgId, ctx.firm.orgId),
+        eq(atelierPartnerFirmDocuments.partnerFirmId, ctx.firm.id),
+        isNull(atelierPartnerFirmDocuments.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierPartnerFirmDocuments.createdAt));
+  res.json({ ok: true, documents: docs.map(partnerDocWire) });
+});
+
+router.delete("/partner-register-document", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const row = await lookupActivationToken(String(req.body?.token ?? ""), "partner_registration");
+  const ctx = row ? await partnerRegistrationContext(row) : null;
+  if (!row || !ctx) {
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This registration link is invalid, expired, or already used.",
+    });
+    return;
+  }
+  const documentId = String(req.body?.documentId ?? "");
+  const [doc] = await db
+    .select()
+    .from(atelierPartnerFirmDocuments)
+    .where(
+      and(
+        eq(atelierPartnerFirmDocuments.id, documentId),
+        eq(atelierPartnerFirmDocuments.orgId, ctx.firm.orgId),
+        eq(atelierPartnerFirmDocuments.partnerFirmId, ctx.firm.id),
+        isNull(atelierPartnerFirmDocuments.deletedAt),
+      ),
+    );
+  // Only a still-pending doc that was uploaded via registration may be
+  // removed here — reviewed / portal / internal docs are off-limits.
+  if (!doc || doc.reviewStatus !== "pending" || doc.uploadedVia !== "registration") {
+    res.status(404).json({ error: "document-not-found" });
+    return;
+  }
+  await db
+    .update(atelierPartnerFirmDocuments)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierPartnerFirmDocuments.id, doc.id));
+  try {
+    const { dropPartnerDocBytes } = await import("../../lib/partnerDocStorage.js");
+    await dropPartnerDocBytes(doc.fileRef);
+  } catch {
+    // best-effort blob cleanup; the row is already soft-deleted
+  }
+  await db.insert(atelierAuditEvents).values({
+    id: `audit_${randomUUID()}`,
+    entityType: "partner_firm",
+    entityId: ctx.firm.id,
+    actorType: "human",
+    actorId: ctx.user.id,
+    actorLabel: ctx.user.name,
+    action: "partner_firm.document.uploaded",
+    payload: { documentId: doc.id, removed: true },
+    payloadSummary: `${ctx.user.name} removed a pending registration document (${doc.fileName}) for ${ctx.firm.name}.`,
+  });
+  res.json({ ok: true });
 });
 
 // ---- self-service forgot-password (Task #820) ---------------------------
