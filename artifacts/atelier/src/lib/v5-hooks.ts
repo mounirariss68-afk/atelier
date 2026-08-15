@@ -1610,7 +1610,7 @@ export type VendorInvoiceStatus =
 // Task #430 — real payment runs over atelier_payment_runs.
 export interface PaymentRunItemRow {
   id: string;
-  itemType: "self_billed_invoice" | "expense_reimbursement";
+  itemType: "self_billed_invoice" | "expense_reimbursement" | "partner_firm_invoice";
   refId: string;
   payeeName: string;
   description: string;
@@ -1620,6 +1620,8 @@ export interface PaymentRunItemRow {
   status: "pending" | "paid" | "removed";
   remittanceRef: string | null;
   paidAt: string | null;
+  /** Task #1144 — true when this is an unlinked supplier item with no recorded IBAN */
+  missingBank?: boolean;
 }
 export interface PaymentRunRow {
   id: string;

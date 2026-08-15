@@ -341,7 +341,12 @@ router.post("/finance/payables/self-billing/:id/resolve-dispute", async (req, re
 // Task #430 — real implementation over atelier_payment_runs.
 // ============================================================
 
-function runWire(run: typeof atelierPaymentRuns.$inferSelect, items?: Array<typeof atelierPaymentRunItems.$inferSelect>) {
+function runWire(
+  run: typeof atelierPaymentRuns.$inferSelect,
+  items?: Array<typeof atelierPaymentRunItems.$inferSelect>,
+  /** refIds of partner_firm_invoice items that will export with blank bank details */
+  missingPayeeBankRefIds?: Set<string>,
+) {
   return {
     id: run.id,
     runNumber: run.runNumber,
@@ -373,6 +378,11 @@ function runWire(run: typeof atelierPaymentRuns.$inferSelect, items?: Array<type
       status: it.status,
       remittanceRef: it.remittanceRef,
       paidAt: it.paidAt?.toISOString() ?? null,
+      // Task #1144 — flag unlinked supplier items that will export with blank
+      // bank cells so signatories can spot them before approving the run.
+      missingBank: it.itemType === "partner_firm_invoice"
+        ? Boolean(missingPayeeBankRefIds?.has(it.refId))
+        : false,
     })),
   };
 }
@@ -500,6 +510,17 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
     const skippedMissingBank = partnerInvoices.filter(bankHeld).map((p) => p.id);
     partnerInvoices = partnerInvoices.filter((p) => !bankHeld(p));
 
+    // Task #1144 — among the invoices that DO join the run, identify unlinked
+    // ones (no partnerFirmId) that lack a complete bank record. The CSV export
+    // needs BOTH an IBAN and an account-holder name; missing either produces a
+    // blank bank cell. Surface them so signatories can spot the gap before
+    // approving. Export behaviour is unchanged.
+    const missingPayeeBank = partnerInvoices
+      .filter((p) => !p.partnerFirmId && (
+        !(p.supplierBankIban ?? "").trim() || !(p.supplierBankHolder ?? "").trim()
+      ))
+      .map((p) => p.id);
+
     if (invoices.length === 0 && expenses.length === 0 && partnerInvoices.length === 0) {
       return { error: "no-eligible-items" as const, skippedMissingBank };
     }
@@ -587,22 +608,24 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
         amountUsd: p.usdAmount ?? 0,
       });
     }
-    return { error: null, runId, runNumber, totalUsd, skippedMissingBank, invoices, expenses, partnerInvoices };
+    return { error: null, runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices };
     });
     if (built.error === "no-eligible-items") {
       res.status(409).json({ error: "no-eligible-items", message: "No approved self-billed invoices, partner invoices or unreimbursed approved expenses available." });
       return;
     }
-    const { runId, runNumber, totalUsd, skippedMissingBank, invoices, expenses, partnerInvoices } = built;
+    const { runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices } = built;
     await audit({
       entityType: "payment_run", entityId: runId, actor: me,
       action: "finance.payment_run.build",
-      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), partnerInvoices: partnerInvoices.map((p) => p.id), skippedMissingBank, totalUsd },
+      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), partnerInvoices: partnerInvoices.map((p) => p.id), skippedMissingBank, missingPayeeBank, totalUsd },
       summary: `Built payment run ${runNumber}: ${invoices.length} invoice(s) + ${expenses.length} reimbursement(s) + ${partnerInvoices.length} partner invoice(s), $${totalUsd.toFixed(2)}.`,
     });
     const [run] = await db.select().from(atelierPaymentRuns).where(eq(atelierPaymentRuns.id, runId));
     const items = await db.select().from(atelierPaymentRunItems).where(eq(atelierPaymentRunItems.runId, runId));
-    res.status(201).json({ ok: true, run: runWire(run, items), skippedMissingBank });
+    // Task #1144 — pass the missing-bank set so runWire can flag each item.
+    const missingPayeeBankRefIds = new Set(missingPayeeBank);
+    res.status(201).json({ ok: true, run: runWire(run, items, missingPayeeBankRefIds), skippedMissingBank, missingPayeeBank });
   } catch (err) { next(err); }
 });
 
@@ -631,8 +654,39 @@ router.get("/finance/payables/payment-runs/:id", async (req, res, next) => {
         eq(atelierAuditEvents.entityId, run.id),
       ))
       .orderBy(desc(atelierAuditEvents.createdAt));
+
+    // Task #1144 — compute which partner_firm_invoice items lack bank details
+    // so the run card can warn signatories. Look up the original invoices and
+    // check unlinked ones (no partnerFirmId) for a missing supplierBankIban.
+    const pfItemRefIds = items
+      .filter((it) => it.itemType === "partner_firm_invoice")
+      .map((it) => it.refId);
+    let missingPayeeBankRefIds = new Set<string>();
+    if (pfItemRefIds.length) {
+      const pfInvRows = await db
+        .select({
+          id: atelierPartnerFirmInvoices.id,
+          partnerFirmId: atelierPartnerFirmInvoices.partnerFirmId,
+          supplierBankIban: atelierPartnerFirmInvoices.supplierBankIban,
+          supplierBankHolder: atelierPartnerFirmInvoices.supplierBankHolder,
+        })
+        .from(atelierPartnerFirmInvoices)
+        .where(and(
+          eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+          inArray(atelierPartnerFirmInvoices.id, pfItemRefIds),
+        ));
+      missingPayeeBankRefIds = new Set(
+        pfInvRows
+          .filter((p) => !p.partnerFirmId && (
+            !(p.supplierBankIban ?? "").trim() || !(p.supplierBankHolder ?? "").trim()
+          ))
+          .map((p) => p.id),
+      );
+    }
+
     res.json({
-      run: runWire(run, items),
+      run: runWire(run, items, missingPayeeBankRefIds),
+      missingPayeeBank: [...missingPayeeBankRefIds],
       auditEvents: auditRows.map((a) => ({
         id: a.id,
         action: a.action,

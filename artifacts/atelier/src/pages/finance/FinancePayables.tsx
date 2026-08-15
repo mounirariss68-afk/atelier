@@ -1149,6 +1149,17 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
           ))}
         </ul>
       </div>
+      {/* Task #1144 — warn when any item in this run will export with blank
+          bank details so signatories can act before approving. */}
+      {items.some((it) => it.missingBank) && (
+        <div className="mt-3 flex items-start gap-2 rounded border border-amber-400/40 bg-amber-400/5 px-3 py-2 text-xs" data-testid={`run-missing-bank-warning-${runRow.id}`}>
+          <span className="text-amber-500 font-medium shrink-0">⚠ Missing bank details</span>
+          <span className="text-text-mute">
+            {items.filter((it) => it.missingBank).length} item(s) below have no recorded IBAN and will export with blank bank cells.
+            Finance must key them into the bank file manually or record bank details on the supplier invoice before signing.
+          </span>
+        </div>
+      )}
       {items.length > 0 && (
         <div className="mt-3 text-xs">
           <Eyebrow>Items</Eyebrow>
@@ -1159,9 +1170,14 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
             <tbody>
               {items.map((it) => (
                 <tr key={it.id} className="border-t border-border-soft">
-                  <td className="py-1.5">{it.payeeName}</td>
+                  <td className="py-1.5">
+                    {it.payeeName}
+                    {it.missingBank && (
+                      <MonoChip tone="amber" className="ml-1.5" data-testid={`item-missing-bank-${it.id}`}>no bank</MonoChip>
+                    )}
+                  </td>
                   <td className="text-text-mute">{it.description}</td>
-                  <td className="font-mono">{it.itemType === "self_billed_invoice" ? "invoice" : "reimbursement"}</td>
+                  <td className="font-mono">{it.itemType === "self_billed_invoice" ? "invoice" : it.itemType === "partner_firm_invoice" ? "supplier" : "reimbursement"}</td>
                   <td className="text-right font-mono">{it.currency} {it.amount.toFixed(2)}</td>
                   <td>
                     <MonoChip tone={it.status === "paid" ? "green" : it.status === "removed" ? "red" : "amber"}>
