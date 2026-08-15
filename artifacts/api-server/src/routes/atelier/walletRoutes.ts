@@ -53,6 +53,8 @@ import {
   hasRunningJob,
 } from "../../lib/background-jobs.js";
 import { resolveCategoryPair, policyKeyFor } from "../../lib/atelier-expense-taxonomy.js";
+// Task #1092 — attribution parity for wallet create (incl. pre-formation entities).
+import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, defaultPoliciesForOrg, ensureDefaultExpensePolicies, POLICY_PRINCIPLES } from "../../lib/atelier-expense-policy.js";
 import { assertAuditAction } from "./auditContract.js";
@@ -131,17 +133,17 @@ async function audit(args: {
   });
 }
 
-// =============================================================
+// -------
 // Receipt encryption stub
-// =============================================================
+// -------
 function encryptedReceiptRef(rawKey: string): string {
   // Application-layer indicator only — no live KMS in this build.
   return `enc:wallet:${rawKey}`;
 }
 
-// =============================================================
+// -------
 // Build OCR + contract digest for the Auditor
-// =============================================================
+// -------
 function buildOcrFromExpense(
   expense: typeof atelierExpenses.$inferSelect,
 ): {
@@ -209,9 +211,9 @@ import { contentDispositionFilename } from "../../lib/httpFilename.js";
 // buildContractDigest moved to lib/atelier-contract-digest.ts so it can
 // be reused by the wallet sentinel without creating a route ↔ lib cycle.
 
-// =============================================================
+// -------
 // EXPENSES
-// =============================================================
+// -------
 function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atelierUsers.$inferSelect) {
   return {
     id: e.id,
@@ -285,9 +287,9 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
   };
 }
 
-// =============================================================
+// -------
 // Task #383 — dual-route approval helpers
-// =============================================================
+// -------
 
 /** Resolve a user id to their roster person id (userId link, then email). */
 async function personIdForUser(userId: string): Promise<string | null> {
@@ -663,6 +665,12 @@ interface CreateExpenseBody {
   // Task #1095 — trip context (destination ISO-2 + purpose).
   tripDestinationCountry?: string;
   tripPurpose?: string;
+  // Task #1092 — attribution parity with the Me-lens create path so
+  // internal spend (incl. pre-formation entities) can be tagged at create.
+  contextType?: "bd" | "internal" | "account";
+  accountId?: string | null;
+  entityId?: string | null;
+  costCenter?: string | null;
 }
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -716,11 +724,26 @@ router.post("/wallet/expenses", async (req, res) => {
 
   const fx = await convertToUsd(amount, currency, dateStr);
 
+  // Task #1092 — optional internal attribution at create time (same
+  // shared validator as the Me-lens path; in_formation entities are
+  // valid targets for the pre-formation cost pools). BD/account spend
+  // keeps its existing flow (attribution set post-create via PATCH).
+  const wantContext = b.contextType === "internal";
+  let extras: import("../../lib/atelier-expense-attribution.js").ExpenseExtrasPatch | null = null;
+  if (wantContext) {
+    extras = await resolveExpenseExtras(res, me.orgId, b as Record<string, unknown>, {
+      contextType: "internal",
+      accountId: null,
+    });
+    if (!extras) return; // 4xx already written
+  }
+
   const id = rid("exp");
   const receiptFileRef = b.receiptFileName ? encryptedReceiptRef(b.receiptFileName) : null;
 
   await db.insert(atelierExpenses).values({
     id,
+    ...(wantContext ? { contextType: "internal", ...extras } : {}),
     personId: me.id,
     personType: me.role === "contractor" ? "contractor" : "employee",
     engagementId: b.engagementId ?? null,
@@ -930,9 +953,9 @@ router.post("/wallet/expenses/:id/parse-receipt", async (req, res) => {
   }
 });
 
-// =============================================================
+// -------
 // Task #408 — manual merchant correction (+ "remember this correction")
-// =============================================================
+// -------
 // When a parsed merchant is wrong or unrecognized, the user can correct it
 // here. With remember=true the original→corrected pair is stored as an
 // org-scoped alias consulted first by the matcher on future parses.
@@ -1693,10 +1716,10 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
   res.json({ expense: expenseToWire(final, me) });
 });
 
-// =====================================================================
+// -------
 // POST /wallet/expenses/:id/reimburse — Task #53
 // Finance/leadership marks an APPROVED claim as paid out.
-// =====================================================================
+// -------
 // @cli-skip: finance reimbursement action backing Wallet UI (Task #53)
 router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -1762,9 +1785,9 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
   res.json({ expense: expenseToWire(final, me) });
 });
 
-// =============================================================
+// -------
 // POLICY
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/policy", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -1906,9 +1929,9 @@ router.delete("/wallet/policy/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// =============================================================
+// -------
 // CARDS
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/cards", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -1941,9 +1964,9 @@ router.get("/wallet/cards", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------
 // VAT register
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/vat", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2022,9 +2045,9 @@ router.get("/wallet/vat", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------
 // FX seed (ops)
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/fx/seed", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2048,9 +2071,9 @@ router.get("/wallet/fx", async (req, res) => {
   res.json({ rates: rows.slice(0, 200) });
 });
 
-// =============================================================
+// -------
 // Retention sweep — 90d OCR-payload redaction
-// =============================================================
+// -------
 /**
  * Reusable 90-day OCR-payload redaction sweep. Called both by the manual
  * POST /wallet/retention/run endpoint and by the daily wallet-retention
@@ -2105,9 +2128,9 @@ router.post("/wallet/retention/run", async (req, res) => {
   res.json({ ok: true, ...result });
 });
 
-// =============================================================
+// -------
 // Task #396 — Merchant enrichment (leadership-facing admin loop)
-// =============================================================
+// -------
 // Unknown merchants logged by the matcher can be batch-classified by AI so
 // they match instantly next time. Long LLM batch → async launch + poll.
 
@@ -2223,9 +2246,9 @@ router.get("/wallet/merchants/enrich/:runId", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------
 // Task #260 — Client-billable expenses · /wallet/client-billable
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/client-billable/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2300,9 +2323,9 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
   });
 });
 
-// =============================================================
+// -------
 // Task #260 — Payment Proposals · /wallet/approvals (Partner-only)
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2594,9 +2617,9 @@ router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
   res.json({ ok: true });
 });
 
-// =============================================================
+// -------
 // Task #260 — Invoice-line drafts · /wallet/invoice-drafts/:eid
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -2652,12 +2675,12 @@ router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
   res.json({ engagementId: eid, draft: current ?? null });
 });
 
-// =============================================================
+// -------
 // Task #260 — Publish Sentinel (kind=expense) extension. Routes the
 // expense through the SAME runPublishSentinel agent the v2 deliverable
 // flow uses, but feeds it pre-computed expense checks so the result is
 // recorded as a normal sentinel run on the agent runs page.
-// =============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
   const me = ensurePersona(req, res);

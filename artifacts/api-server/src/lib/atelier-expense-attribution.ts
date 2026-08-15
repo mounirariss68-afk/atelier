@@ -108,7 +108,11 @@ export async function resolveExpenseExtras(
       const entityId = String(b.entityId ?? "");
       if (entityId) {
         const [ent] = await db
-          .select({ id: atelierLegalEntities.id })
+          .select({
+            id: atelierLegalEntities.id,
+            status: atelierLegalEntities.status,
+            formation: atelierLegalEntities.formation,
+          })
           .from(atelierLegalEntities)
           .where(
             and(
@@ -118,6 +122,18 @@ export async function resolveExpenseExtras(
           );
         if (!ent) {
           res.status(400).json({ error: "entity-not-found" });
+          return null;
+        }
+        // Task #1092 — archived entities are no longer valid targets;
+        // in_formation entities ARE (pre-formation cost pools).
+        if (ent.status === "archived") {
+          res.status(400).json({ error: "entity-archived" });
+          return null;
+        }
+        // A settled pre-formation pool is closed for new costs — its
+        // settlement journal has already cleared the clearing account.
+        if (ent.status === "in_formation" && ent.formation?.settlement) {
+          res.status(400).json({ error: "entity-pool-settled" });
           return null;
         }
         patch.entityId = entityId;

@@ -34,6 +34,7 @@ import {
   usePayablesBankAccounts,
   useWhtRegister,
   usePayablesAudit,
+  useLegalEntities,
   postJson,
   API_BASE,
   type PaymentRunRow,
@@ -553,6 +554,10 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
     return () => { alive = false; };
   }, []);
   const selectedFirm = firms.find((f) => f.id === firmId) ?? null;
+  // Task #1092 — optional legal-entity attribution (incl. pre-formation
+  // entities, so market-entry invoices land in their cost pool).
+  const { entities } = useLegalEntities();
+  const [legalEntityId, setLegalEntityId] = React.useState("");
   const [amount, setAmount] = React.useState("");
   const [currency, setCurrency] = React.useState("USD");
   const [reference, setReference] = React.useState("");
@@ -616,6 +621,7 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
       form.append("file", file);
       form.append("supplierName", selectedFirm ? selectedFirm.name : supplierName.trim());
       if (selectedFirm) form.append("partnerFirmId", selectedFirm.id);
+      if (legalEntityId) form.append("legalEntityId", legalEntityId);
       form.append("amount", amount);
       form.append("currency", currency.toUpperCase());
       form.append("reference", reference.trim());
@@ -638,7 +644,7 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
         return;
       }
       setInfo(`Uploaded ${reference.trim()} — awaiting review.`);
-      setFile(null); setSupplierName(""); setFirmId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes(""); setBankIban(""); setBankHolder(""); setBankHint(null); setHintDismissed(false);
+      setFile(null); setSupplierName(""); setFirmId(""); setLegalEntityId(""); setAmount(""); setReference(""); setPeriodLabel(""); setNotes(""); setBankIban(""); setBankHolder(""); setBankHint(null); setHintDismissed(false);
       if (fileRef.current) fileRef.current.value = "";
       onUploaded();
     } catch (err) {
@@ -680,6 +686,22 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
             placeholder="Acme Cloud FZ-LLC"
             data-testid="input-supplier-name"
           />
+        </label>
+        <label className="space-y-1">
+          <span className="text-text-mute">Attribute to entity (optional)</span>
+          <select
+            className={input}
+            value={legalEntityId}
+            onChange={(e) => setLegalEntityId(e.target.value)}
+            data-testid="select-supplier-entity"
+          >
+            <option value="">No entity attribution</option>
+            {entities.map((en) => (
+              <option key={en.id} value={en.id}>
+                {(en.shortName || en.legalNameEn) + (en.status === "in_formation" ? " \u2014 pre-formation" : "")}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-1">
           <span className="text-text-mute">Amount</span>

@@ -65,6 +65,8 @@ interface Claim {
 interface ContextOption {
   id: string;
   name: string;
+  /** Task #1092 — entity is still in formation (pre-formation cost pool). */
+  preFormation?: boolean;
 }
 
 // Task #383 — taxonomy-as-data: categories come from the server, not a
@@ -1338,6 +1340,7 @@ export default function MeExpenses() {
                     {(taxonomy?.entities ?? []).map((en) => (
                       <option key={en.id} value={en.id}>
                         {en.name}
+                        {en.preFormation ? " — pre-formation" : ""}
                       </option>
                     ))}
                   </select>

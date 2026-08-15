@@ -11,7 +11,7 @@
  * Posting rules are documented in prompts/atelier/bookkeeper.v1.md.
  */
 
-import { and, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   db,
   atelierLegalEntities,
@@ -44,9 +44,9 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-// ============================================================
+// -------
 // Default professional-services chart of accounts
-// ============================================================
+// -------
 export interface ChartAccountDef {
   code: string;
   name: string;
@@ -64,6 +64,14 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   // deductions/settlement offsets, never an expense.
   { code: "1150", name: "Salary advances receivable", type: "asset", normalSide: "debit", isSystem: true },
   { code: "1400", name: "VAT receivable", type: "asset", normalSide: "debit", isSystem: true },
+  // Task #1092 — pre-formation cost pools: quarantine clearing account
+  // (asset — stays out of opex/P&L by construction) plus the settlement
+  // receivable/write-off accounts used by the settle flow.
+  { code: "1500", name: "Pre-incorporation costs — recoverable", type: "asset", normalSide: "debit", isSystem: true },
+  // 1550 (NOT 1150 — that is salary advances) carries the settlement
+  // recharge; charts seeded before it existed are backfilled at settle time.
+  { code: "1550", name: "Intercompany receivable — pre-formation recharge", type: "asset", normalSide: "debit", isSystem: true },
+  { code: "1160", name: "Related-party receivable — founders", type: "asset", normalSide: "debit", isSystem: true },
   { code: "2000", name: "Accounts payable", type: "liability", normalSide: "credit", isSystem: false },
   { code: "2100", name: "Accrued liabilities & reimbursements", type: "liability", normalSide: "credit", isSystem: true },
   { code: "2200", name: "Deferred revenue", type: "liability", normalSide: "credit", isSystem: true },
@@ -92,6 +100,8 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   { code: "6500", name: "Marketing & business development", type: "expense", normalSide: "debit", isSystem: false },
   { code: "6600", name: "Bank charges & FX", type: "expense", normalSide: "debit", isSystem: true },
   { code: "6900", name: "Other operating expenses", type: "expense", normalSide: "debit", isSystem: true },
+  // Task #1092 — write-off bucket for abandoned pre-formation pools.
+  { code: "6920", name: "Abandoned market-entry costs", type: "expense", normalSide: "debit", isSystem: true },
   // Task #654 — corporate-tax provision (Dr 6950 / Cr 2400). Kept outside
   // the 6xxx operating range semantics: pre-tax profit computations must
   // exclude this code.
@@ -197,9 +207,9 @@ export async function isGlPeriodLocked(orgId: string, periodLabel: string): Prom
   return !!lock && (lock.lockedModules ?? []).includes("gl");
 }
 
-// ============================================================
+// -------
 // Bookkeeper run
-// ============================================================
+// -------
 export interface BookkeeperInput {
   periodLabel: string; // YYYY-MM
   entityId?: string; // restrict to one entity
@@ -288,6 +298,66 @@ async function executeBookkeeper(
   const entityIds = new Set(entities.map((e) => e.id));
   const defaultEntityId = entities.length === 1 ? entities[0].id : null;
 
+  // Task #1092 — pre-formation entities: costs tagged to them are
+  // quarantined in the home (UAE) entity's ledger on the 1500 clearing
+  // account, with the journal line stamped for per-pool attribution.
+  const preFormationEntities = await db
+    .select({
+      id: atelierLegalEntities.id,
+      shortName: atelierLegalEntities.shortName,
+      legalNameEn: atelierLegalEntities.legalNameEn,
+    })
+    .from(atelierLegalEntities)
+    .where(and(
+      eq(atelierLegalEntities.orgId, orgId),
+      // Quarantine is keyed on the UNSETTLED pool, not just current
+      // status: an entity activated before its tagged costs were
+      // bookkept keeps pre-formation treatment until finance settles
+      // the pool — otherwise pending costs would leak into opex and
+      // settlement could stamp a zero clearing balance.
+      // jsonb: the key may be present with JSON null — treat both
+      // SQL NULL and 'null'::jsonb as "no settlement stamped yet".
+      // A settled pool is NEVER eligible (even while still
+      // in_formation) — new costs must not land in a clearing bucket
+      // whose settlement path is already closed.
+      sql`coalesce(${atelierLegalEntities.formation} -> 'settlement', 'null'::jsonb) = 'null'::jsonb`,
+      or(
+        eq(atelierLegalEntities.status, "in_formation"),
+        isNotNull(atelierLegalEntities.formation),
+      ),
+    ));
+  const preFormationById = new Map(
+    preFormationEntities.map((e) => [e.id, e.shortName || e.legalNameEn]),
+  );
+  // Settled-but-not-yet-active pools: tagging is closed. New costs
+  // surface as exceptions instead of quarantining (stranded balance)
+  // or leaking into opex.
+  const settledPools = await db
+    .select({
+      id: atelierLegalEntities.id,
+      shortName: atelierLegalEntities.shortName,
+      legalNameEn: atelierLegalEntities.legalNameEn,
+    })
+    .from(atelierLegalEntities)
+    .where(and(
+      eq(atelierLegalEntities.orgId, orgId),
+      eq(atelierLegalEntities.status, "in_formation"),
+      sql`coalesce(${atelierLegalEntities.formation} -> 'settlement', 'null'::jsonb) <> 'null'::jsonb`,
+    ));
+  const settledPoolById = new Map(
+    settledPools.map((e) => [e.id, e.shortName || e.legalNameEn]),
+  );
+  const allActive = await db
+    .select({ id: atelierLegalEntities.id, country: atelierLegalEntities.country })
+    .from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.orgId, orgId), eq(atelierLegalEntities.status, "active")));
+  const homeEntityId = allActive.length === 1
+    ? allActive[0].id
+    : (allActive.filter((e) => e.country?.toUpperCase() === "AE").length === 1
+        ? allActive.find((e) => e.country?.toUpperCase() === "AE")!.id
+        : null);
+
+
   // Task #1081 — auto-seed the default chart for any active in-scope
   // entity that has none, before resolving postings. Idempotent; the
   // audit entry is attributed to this run.
@@ -356,6 +426,8 @@ async function executeBookkeeper(
   interface LineSpec {
     code: string;
     engagementId?: string | null;
+    /** Task #1092 — stamps the line as belonging to a pre-formation pool. */
+    preFormationEntityId?: string | null;
     debit?: number;
     credit?: number;
     memo?: string;
@@ -385,7 +457,7 @@ async function executeBookkeeper(
       return false;
     }
     // Resolve accounts, flipping negative amounts to the opposite side.
-    const resolved: Array<{ acct: typeof accounts[number]; engagementId: string | null; debit: number; credit: number; memo: string | null }> = [];
+    const resolved: Array<{ acct: typeof accounts[number]; engagementId: string | null; preFormationEntityId: string | null; debit: number; credit: number; memo: string | null }> = [];
     for (const l of spec.lines) {
       let debit = round2(l.debit ?? 0);
       let credit = round2(l.credit ?? 0);
@@ -402,7 +474,7 @@ async function executeBookkeeper(
         });
         return false;
       }
-      resolved.push({ acct, engagementId: l.engagementId ?? null, debit, credit, memo: l.memo ?? null });
+      resolved.push({ acct, engagementId: l.engagementId ?? null, preFormationEntityId: l.preFormationEntityId ?? null, debit, credit, memo: l.memo ?? null });
     }
     if (resolved.length === 0) return false;
     const totalDebit = round2(resolved.reduce((s, l) => s + l.debit, 0));
@@ -448,7 +520,8 @@ async function executeBookkeeper(
         await tx.insert(atelierGlJournalLine).values({
           id: rid("gljl"), orgId, journalEntryId: entryId,
           accountId: l.acct.id, accountCode: l.acct.code, accountName: l.acct.name,
-          engagementId: l.engagementId, debit: l.debit, credit: l.credit, memo: l.memo,
+          engagementId: l.engagementId, preFormationEntityId: l.preFormationEntityId,
+          debit: l.debit, credit: l.credit, memo: l.memo,
         });
       }
     });
@@ -557,6 +630,46 @@ async function executeBookkeeper(
   ))).filter((x) => tsInPeriod(x.approvedAt, from, to) || (!x.approvedAt && x.expenseDate >= from && x.expenseDate < to));
   for (const x of expenses) {
     sourcesScanned++;
+    // Task #1092 — pre-formation quarantine: an expense tagged to an
+    // in-formation entity posts to the HOME entity's ledger on the
+    // 1500 clearing account (never opex), stamped for the pool. This
+    // runs BEFORE the allocation lifecycle — the explicit pre-formation
+    // tag is the decided allocation.
+    if (x.entityId && settledPoolById.has(x.entityId)) {
+      const pfLbl = `${x.merchant ?? x.category} · ${x.expenseDate}`;
+      exceptions.push({
+        code: "preformation_pool_settled", sourceKind: "expense", sourceRef: x.id,
+        message: `Expense (${pfLbl}) is tagged to "${settledPoolById.get(x.entityId)}", whose pre-formation pool is already settled — retag it before it can post.`,
+        sourceLabel: pfLbl,
+      });
+      continue;
+    }
+    if (x.entityId && preFormationById.has(x.entityId)) {
+      const pfLbl = `${x.merchant ?? x.category} · ${x.expenseDate}`;
+      const poolName = preFormationById.get(x.entityId)!;
+      if (!homeEntityId || !entityIds.has(homeEntityId)) {
+        exceptions.push({
+          code: "untagged_entity", sourceKind: "expense", sourceRef: x.id,
+          message: `Expense (${pfLbl}) is tagged to pre-formation entity "${poolName}" but no home (UAE) ledger entity is resolvable in this run.`,
+          sourceLabel: pfLbl,
+        });
+        continue;
+      }
+      const grossPf = round2(x.usdAmount);
+      if (grossPf <= 0) continue;
+      await postEntry({
+        legalEntityId: homeEntityId, sourceKind: "expense", sourceRef: x.id,
+        sourceLabel: pfLbl,
+        entryDate: (x.approvedAt ?? new Date()).toISOString().slice(0, 10),
+        memo: `Pre-formation (${poolName}) expense ${pfLbl}`,
+        currency: "USD",
+        lines: [
+          { code: "1500", debit: grossPf, preFormationEntityId: x.entityId, memo: `Pre-incorporation \u2014 ${poolName}` },
+          { code: "2100", credit: grossPf, memo: "Owed to submitter / card" },
+        ],
+      });
+      continue;
+    }
     // Task #1095 — post only human-decided allocations. `proposed` /
     // `needs_input` rows surface as an allocation_pending exception (a
     // "needs allocation" queue) instead of silently posting a prefill.
@@ -736,6 +849,42 @@ async function executeBookkeeper(
   ))).filter((p) => tsInPeriod(p.paidAt, from, to) && !coveredProposalIds.has(p.id));
   for (const p of pfis) {
     sourcesScanned++;
+    // Task #1092 — pre-formation quarantine for supplier invoices,
+    // BEFORE the allocation lifecycle (explicit tag = decided).
+    if (p.legalEntityId && settledPoolById.has(p.legalEntityId)) {
+      const pfLbl = `${p.partnerFirmName} · ${p.weekIso}`;
+      exceptions.push({
+        code: "preformation_pool_settled", sourceKind: "partner_firm_invoice", sourceRef: p.id,
+        message: `Supplier invoice (${pfLbl}) is tagged to "${settledPoolById.get(p.legalEntityId)}", whose pre-formation pool is already settled — retag it before it can post.`,
+        sourceLabel: pfLbl,
+      });
+      continue;
+    }
+    if (p.legalEntityId && preFormationById.has(p.legalEntityId)) {
+      const pfLbl = `${p.partnerFirmName} · ${p.weekIso}`;
+      const poolName = preFormationById.get(p.legalEntityId)!;
+      if (!homeEntityId || !entityIds.has(homeEntityId)) {
+        exceptions.push({
+          code: "untagged_entity", sourceKind: "partner_firm_invoice", sourceRef: p.id,
+          message: `Supplier invoice (${pfLbl}) is tagged to pre-formation entity "${poolName}" but no home (UAE) ledger entity is resolvable in this run.`,
+          sourceLabel: pfLbl,
+        });
+        continue;
+      }
+      if (p.usdAmount <= 0) continue;
+      await postEntry({
+        legalEntityId: homeEntityId, sourceKind: "partner_firm_invoice", sourceRef: p.id,
+        sourceLabel: pfLbl,
+        entryDate: p.paidAt!.toISOString().slice(0, 10),
+        memo: `Pre-formation (${poolName}) supplier invoice ${pfLbl}`,
+        currency: "USD",
+        lines: [
+          { code: "1500", debit: p.usdAmount, preFormationEntityId: p.legalEntityId, memo: `Pre-incorporation \u2014 ${poolName}` },
+          { code: "1000", credit: p.usdAmount, memo: "Cash out" },
+        ],
+      });
+      continue;
+    }
     // Task #1095 — see the expense loop: prefis with an undecided
     // allocation queue up instead of posting.
     if (p.allocStatus === "proposed" || p.allocStatus === "needs_input" ||
@@ -921,3 +1070,4 @@ async function executeBookkeeper(
       `${tagsBackfilled} entity tags backfilled, ${openCount} exceptions surfaced for finance review.`,
   };
 }
+

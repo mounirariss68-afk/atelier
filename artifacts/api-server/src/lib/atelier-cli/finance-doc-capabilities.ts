@@ -13,11 +13,9 @@
  *   ingest_supplier_invoice       — attached PDF → AI-prefill → preview
  *                                   card → SAME payables core as the UI
  *                                   upload (dedupe/lock/review states)
- *   import_bank_statement         — attached CSV/Xero export (or, Task
- *                                   #1094, a PDF via guarded row
- *                                   extraction with per-row confidence)
- *                                   → shared importStatementCore +
- *                                   auto-match → recap + link to recon
+ *   import_bank_statement         — attached CSV/Xero export → shared
+ *                                   importStatementCore + auto-match →
+ *                                   recap + link to recon
  *   save_bank_letter_account      — attached bank letter → shared
  *                                   extraction → entity disambiguation →
  *                                   proposal → bank-account create core
@@ -40,10 +38,6 @@ import {
   type FinanceDocKind,
 } from "../atelier-finance-docs.js";
 import {
-  loadAllocationContext,
-  evaluateAllocationRules,
-} from "../atelier-entity-allocation.js";
-import {
   createSupplierInvoiceCore,
   findPartnerFirmByName,
 } from "../../routes/atelier/financePayablesRoutes.js";
@@ -53,49 +47,10 @@ import {
   importStatementCore,
   storeStatementObject,
 } from "../../routes/atelier/bankRoutes.js";
-import {
-  parsePdfStatementText,
-  pdfRowsToCanonicalCsv,
-  PDF_STATEMENT_CONFIDENCE_FLOOR,
-} from "../bank-parsers/pdf-statement.js";
 
 /** Org finance documents are a finance-leadership surface (Task #1090
  * scope: role clamps unchanged — self-only roles keep receipt-only). */
 const FINANCE_DOC_ROLES = ["founding_partner", "partner", "finance"] as const;
-
-// ---------------------------------------------------------------------
-// Commit-token defense (code-review finding): the orchestrator executes
-// any tool call whose input carries `confirm:true`, including one the
-// MODEL fabricates in the first turn — the platform's two-phase confirm
-// relies on the model returning the confirmation envelope. For finance
-// writes we don't rely on model behavior: phase 1 stamps an HMAC token
-// into the server-persisted `pending.input` (the needs_confirmation
-// frame shows only summary+diff, never pending.input, so the model
-// never sees the token), and phase 2 commits ONLY when the token
-// verifies against the committed fields. A fabricated `confirm:true`
-// without the token degrades to the phase-1 preview instead of writing.
-// ---------------------------------------------------------------------
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-const COMMIT_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
-function commitTokenFor(tool: string, input: Record<string, unknown>): string {
-  const keys = Object.keys(input)
-    .filter((k) => k !== "confirm" && k !== "commitToken")
-    .sort();
-  const canonical = JSON.stringify(keys.map((k) => [k, input[k]]));
-  return createHmac("sha256", COMMIT_SECRET).update(`${tool}\n${canonical}`).digest("hex");
-}
-/** True only when `confirm:true` arrives with the phase-1-issued token. */
-function isVerifiedCommit(tool: string, input: Record<string, unknown>): boolean {
-  if (input.confirm !== true) return false;
-  const got = typeof input.commitToken === "string" ? input.commitToken : "";
-  const want = commitTokenFor(tool, input);
-  if (got.length !== want.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(got, "utf8"), Buffer.from(want, "utf8"));
-  } catch {
-    return false;
-  }
-}
 
 /** Classifier confidence below this asks one clarifying question. */
 export const CLASSIFY_CONFIDENCE_FLOOR = 0.6;
@@ -130,9 +85,9 @@ async function loadFinanceAttachment(attachmentId: string, orgId: string) {
   return loaded;
 }
 
-// =====================================================================
+// -------
 // classify_finance_document — deterministic typed classifier.
-// =====================================================================
+// -------
 defineCapability({
   id: "bank.classify_finance_document",
   schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -195,9 +150,9 @@ defineCapability({
   },
 });
 
-// =====================================================================
+// -------
 // ingest_supplier_invoice — chat PDF → payables review flow.
-// =====================================================================
+// -------
 defineCapability({
   id: "bank.ingest_supplier_invoice",
   schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -217,9 +172,6 @@ defineCapability({
       invoiceDate: { type: "string" },
       periodLabel: { type: "string" },
       notes: { type: "string" },
-      // Task #1095 — optional explicit entity allocation (overrides the
-      // engine's proposal shown on the confirm card).
-      legalEntityId: { type: "string" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -260,19 +212,12 @@ defineCapability({
     let periodLabel = str(input.periodLabel, 60);
     const notes = str(input.notes, 2000);
 
-    const verifiedCommit = isVerifiedCommit("ingest_supplier_invoice", input);
     // Phase 1 only: prefill missing fields from the document text via
     // the shared AI parser. Fail-soft — a parse failure degrades to a
     // clarification asking for the fields, never a dead end and never
-    // a guessed value. A model-fabricated `confirm:true` without the
-    // phase-1 commit token lands here too (preview, never a write).
+    // a guessed value.
     let parseConfidence: number | null = null;
-    // Task #1091 — which of the four required fields were supplied by the
-    // AI parser (vs typed by the human). Only when ALL required fields are
-    // parser-originated (the human overrode none) does the commit qualify
-    // as `via:"parsed_doc"` and become eligible for the auto-post engine.
-    const parsedFieldNames = new Set<string>();
-    if (!verifiedCommit) {
+    if (input.confirm !== true) {
       const needParse = !supplierName || amount == null || !currency || !reference;
       const text = (loaded.extracted?.normalizedText ?? "").trim();
       if (needParse && text.length >= 40) {
@@ -282,10 +227,6 @@ defineCapability({
         });
         if (parsed.ok) {
           parseConfidence = parsed.confidence;
-          if (supplierName == null && parsed.fields.supplierName != null) parsedFieldNames.add("supplierName");
-          if (amount == null && parsed.fields.amount != null) parsedFieldNames.add("amount");
-          if (currency == null && parsed.fields.currency != null) parsedFieldNames.add("currency");
-          if (reference == null && parsed.fields.reference != null) parsedFieldNames.add("reference");
           supplierName = supplierName ?? parsed.fields.supplierName;
           amount = amount ?? parsed.fields.amount;
           currency = currency ?? parsed.fields.currency;
@@ -351,64 +292,30 @@ defineCapability({
       // only (same as picking the firm in the UI selector); no fuzzy
       // guessing. New/unmatched suppliers stay unlinked.
       const firm = await findPartnerFirmByName(ctx.persona.orgId, supplierName!);
-      // Task #1095 — preview the entity allocation on the confirm card so
-      // the human can change it (pass legalEntityId) before committing.
-      const userEntityId = str(input.legalEntityId, 100);
-      const allocCtx = await loadAllocationContext(ctx.persona.orgId);
-      const allocPreview = evaluateAllocationRules({
-        kind: "supplier_invoice",
-        explicitEntityId: userEntityId,
-        counterpartyName: firm?.name ?? supplierName,
-        entities: allocCtx.entities,
-        defaultEntityId: allocCtx.defaultEntityId,
-      });
-      const allocEnt = allocPreview
-        ? allocCtx.entities.find((e) => e.id === allocPreview.entityId)
-        : null;
-      const allocLine = allocPreview && allocEnt
-        ? ` Proposed entity allocation: ${allocEnt.shortName} — ${allocPreview.justification} (say the entity name to change it.)`
-        : ` Entity allocation: undecided — it will queue for manual allocation unless you name the entity now.`;
       return {
         ok: true,
-        data: {
-          preview: partial,
-          allocation: allocPreview && allocEnt
-            ? { entityId: allocPreview.entityId, entityName: allocEnt.shortName, ruleId: allocPreview.ruleId, justification: allocPreview.justification, confidence: allocPreview.confidence }
-            : null,
-        },
+        data: { preview: partial },
         confirmation: {
-          summary: `File supplier invoice ${reference} from ${supplierName} — ${currency} ${amount!.toFixed(2)}${firm ? ` (linked to registered firm ${firm.name}${firm.hasBankDetails ? "" : "; approval will hold until firm bank details are on file"})` : " (unregistered supplier — no firm link)"}? It lands in the payables review queue for approval.${allocLine}`,
+          summary: `File supplier invoice ${reference} from ${supplierName} — ${currency} ${amount!.toFixed(2)}${firm ? ` (linked to registered firm ${firm.name}${firm.hasBankDetails ? "" : "; approval will hold until firm bank details are on file"})` : " (unregistered supplier — no firm link)"}? It lands in the payables review queue for approval.`,
           diff: {
             create: {
               table: "atelier_partner_firm_invoices",
               values: {
                 supplierName, reference, amount, currency,
                 invoiceDate, periodLabel, partnerFirmId: firm?.id ?? null,
-                legalEntityId: allocPreview?.entityId ?? null,
                 status: "submitted", source: "internal_upload",
               },
             },
           },
           pending: {
             tool: "ingest_supplier_invoice",
-            input: (() => {
-              const pin: Record<string, unknown> = {
-                attachmentId, supplierName, amount, currency, reference,
-                ...(invoiceDate ? { invoiceDate } : {}),
-                ...(periodLabel ? { periodLabel } : {}),
-                ...(notes ? { notes } : {}),
-                ...(userEntityId ? { legalEntityId: userEntityId } : {}),
-                // Task #1091 — carry the AI parse provenance into phase 2 so
-                // the commit can gate the auto-post engine on the REAL parse
-                // confidence. Included in the signed commit-token below, so a
-                // model cannot forge these to fabricate an auto-approval.
-                ...(parseConfidence != null ? { parseConfidence } : {}),
-                ...(parsedFieldNames.size > 0 ? { parsedFields: [...parsedFieldNames].sort() } : {}),
-                confirm: true,
-              };
-              pin.commitToken = commitTokenFor("ingest_supplier_invoice", pin);
-              return pin;
-            })(),
+            input: {
+              attachmentId, supplierName, amount, currency, reference,
+              ...(invoiceDate ? { invoiceDate } : {}),
+              ...(periodLabel ? { periodLabel } : {}),
+              ...(notes ? { notes } : {}),
+              confirm: true,
+            },
           },
         },
       };
@@ -425,29 +332,6 @@ defineCapability({
       };
     }
     const firm = await findPartnerFirmByName(me.orgId, supplierName);
-    // Task #1091 — auto-post eligibility. The parse provenance rode through
-    // the signed commit token (phase 1 stamped it). The commit qualifies as
-    // `via:"parsed_doc"` — and thus becomes eligible for the auto-post engine
-    // — ONLY when the AI parser produced ALL FOUR required fields (the human
-    // overrode none of them). If the human typed even one required field, the
-    // doc is treated as a manual filing (`via:"chat"`, never auto-advances).
-    const REQUIRED = ["supplierName", "amount", "currency", "reference"] as const;
-    const signedParseConfidence =
-      typeof input.parseConfidence === "number" && Number.isFinite(input.parseConfidence)
-        ? Math.max(0, Math.min(1, input.parseConfidence))
-        : null;
-    const signedParsedFields = Array.isArray(input.parsedFields)
-      ? new Set(input.parsedFields.filter((f): f is string => typeof f === "string"))
-      : new Set<string>();
-    const fullyParsed =
-      signedParseConfidence != null && REQUIRED.every((f) => signedParsedFields.has(f));
-    // One confidence per required field. The parser reports a single overall
-    // confidence for "this is a supplier invoice AND the key fields are
-    // correct"; apply it to each parser-produced required field. (When a
-    // field was human-typed we'd not be on this branch at all.)
-    const fieldConfidences = fullyParsed
-      ? REQUIRED.map(() => signedParseConfidence as number)
-      : undefined;
     const out = await createSupplierInvoiceCore({
       me,
       fileBuffer: bytes,
@@ -460,37 +344,16 @@ defineCapability({
       periodLabel,
       notes,
       partnerFirmId: firm?.id ?? null,
-      explicitLegalEntityId: str(input.legalEntityId, 100),
-      via: fullyParsed ? "parsed_doc" : "chat",
-      fieldConfidences,
-      agentRunId: null,
-      agentName: "Finance Doc Autopilot",
+      via: "chat",
     });
     const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
     if (out.status === 201) {
-      // Task #1095 — surface the entity allocation the engine landed.
-      const item = (out.body as { item?: { legalEntityId?: string | null; allocStatus?: string | null; allocJustification?: string | null; status?: string | null } }).item;
-      // Task #1091 — the core returns autoAdvanced when the auto-post engine
-      // authorised skipping review (high-confidence, known vendor, under the
-      // founder-set ceiling). Reflect the real landed status in the reply.
-      const autoAdvanced = Boolean((out.body as { autoAdvanced?: boolean }).autoAdvanced);
-      const landedStatus = item?.status ?? (autoAdvanced ? "approved" : "submitted");
-      const allocMsg =
-        item?.allocStatus === "proposed"
-          ? ` Proposed entity allocation: ${item.allocJustification ?? "see the review queue"} (finance approves it with the invoice).`
-          : item?.allocStatus === "needs_input"
-            ? " Entity allocation needs manual input — it's queued on the GL allocations list."
-            : "";
-      const statusMsg = autoAdvanced
-        ? `Invoice ${reference} from ${supplierName} cleared autopilot and is approved — ready to pay (status: ${landedStatus}). Founders can still adjust or reject it before the next payment run.`
-        : `Invoice ${reference} from ${supplierName} is in the payables review queue (status: ${landedStatus}).`;
       return {
         ok: true,
         data: {
-          item,
-          autoAdvanced,
+          item: (out.body as { item?: unknown }).item,
           linkedFirm: firm ? { id: firm.id, name: firm.name, hasBankDetails: firm.hasBankDetails } : null,
-          message: `${statusMsg}${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}${allocMsg}`,
+          message: `Invoice ${reference} from ${supplierName} is in the payables review queue (status: submitted).${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}`,
           navigateTo,
         },
       };
@@ -518,16 +381,16 @@ defineCapability({
   },
 });
 
-// =====================================================================
-// import_bank_statement — chat CSV/Xero/PDF export → import + auto-match.
-// =====================================================================
+// -------
+// import_bank_statement — chat CSV/Xero export → import + auto-match.
+// -------
 defineCapability({
   id: "bank.import_bank_statement",
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "bank",
   toolName: "import_bank_statement",
   description:
-    "Import an attached bank statement (CSV, Xero export, or PDF) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDF statements go through guarded table extraction with per-row confidence: the parsed rows are always previewed before import, and a low-confidence PDF is refused with CSV-export guidance instead of guessed. Reconciliation sign-off stays with founders.",
+    "Import an attached bank-statement CSV (or Xero export) into a bank account and auto-run transaction matching — same pipeline as the Cash & Bank import page. PDFs are not supported (ask for a CSV export). Reconciliation sign-off stays with founders.",
   slashAliases: { en: ["/import-statement", "/bank-statement"] },
   inputSchema: {
     type: "object",
@@ -560,33 +423,20 @@ defineCapability({
     if (!bytes || bytes.length === 0) {
       return { ok: false, errorCode: "file_missing", errorMessage: "The attachment bytes could not be loaded." };
     }
-    // Task #1094 — PDF statements are accepted through GUARDED extraction:
-    // date-anchored row segmentation with per-row confidence; rows with
-    // ambiguous amounts or unclear direction are flagged (never guessed); a
-    // low overall confidence refuses with the CSV-export fallback. The
-    // extraction gate runs BEFORE the bank-account clarification so an
-    // unparseable PDF gets the CSV guidance immediately instead of a
-    // pointless account question.
-    const isPdf =
+    if (
       looksLikePdf(bytes) ||
       loaded.attachment.mime === "application/pdf" ||
-      /\.pdf$/i.test(loaded.attachment.fileName);
-    const pdfText = isPdf ? (loaded.extracted?.normalizedText ?? "").trim() : "";
-    let raw = "";
-    if (isPdf) {
-      const gate = parsePdfStatementText(pdfText);
-      if (gate.rows.length === 0 || gate.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
-        return {
-          ok: false,
-          errorCode: "pdf_low_confidence",
-          errorMessage: `I couldn't confidently extract transaction rows from this PDF${gate.flagged.length > 0 ? ` (${gate.flagged.length} candidate row(s) were too ambiguous to trust — I never guess amounts)` : ""} — export a CSV from your bank and attach that instead.`,
-        };
-      }
-    } else {
-      raw = bytes.toString("utf8");
-      if (!raw.trim()) {
-        return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
-      }
+      /\.pdf$/i.test(loaded.attachment.fileName)
+    ) {
+      return {
+        ok: false,
+        errorCode: "unsupported_format",
+        errorMessage: "PDF statements are not supported — export a CSV from your bank and attach that instead.",
+      };
+    }
+    const raw = bytes.toString("utf8");
+    if (!raw.trim()) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "The attached file is empty." };
     }
 
     const accounts = await db
@@ -636,72 +486,15 @@ defineCapability({
       typeof input.statementDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.statementDate)
         ? input.statementDate
         : new Date().toISOString().slice(0, 10);
-    // PDF path: re-parse with the account's currency as default (the parser
-    // is deterministic, so phase 1 and phase 2 see identical rows and the
-    // canonical-CSV dedupe hash is stable), then serialise the importable
-    // rows into the canonical CSV the SHARED importStatementCore consumes —
-    // identical dedupe and audit behavior to a CSV upload.
-    let pdfMeta: {
-      rowsExtracted: number;
-      flaggedRows: number;
-      confidence: number;
-      rows: Array<Record<string, unknown>>;
-      flagged: Array<Record<string, unknown>>;
-    } | null = null;
-    let source: "csv" | "xero";
-    if (isPdf) {
-      const parsed = parsePdfStatementText(pdfText, acct.currency);
-      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
-        // Currency default cannot raise confidence, but keep the guard.
-        return {
-          ok: false,
-          errorCode: "pdf_low_confidence",
-          errorMessage:
-            "I couldn't confidently extract transaction rows from this PDF — export a CSV from your bank and attach that instead.",
-        };
-      }
-      raw = pdfRowsToCanonicalCsv(parsed.rows);
-      source = "csv";
-      pdfMeta = {
-        rowsExtracted: parsed.rows.length,
-        flaggedRows: parsed.flagged.length,
-        confidence: parsed.confidence,
-        rows: parsed.rows.slice(0, 25).map((r) => ({
-          postedDate: r.postedDate,
-          amount: r.amount,
-          currency: r.currency,
-          counterparty: r.counterpartyNameRaw,
-          reference: r.referenceRaw,
-          kind: r.kind,
-          confidence: r.confidence,
-        })),
-        flagged: parsed.flagged.slice(0, 10).map((f) => ({
-          snippet: f.snippet,
-          reason: f.reason,
-        })),
-      };
-    } else {
-      source = detectStatementSource(raw);
-    }
+    const source = detectStatementSource(raw);
     const lineCount = raw.split(/\r?\n/).filter((l) => l.trim()).length;
 
-    if (!isVerifiedCommit("import_bank_statement", input)) {
-      const summary = pdfMeta
-        ? `Import ${loaded.attachment.fileName} (PDF — ${pdfMeta.rowsExtracted} extracted transaction row(s) shown in the preview${pdfMeta.flaggedRows > 0 ? `; ${pdfMeta.flaggedRows} low-confidence row(s) flagged and SKIPPED, not guessed` : ""}) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Review the parsed rows before confirming — reconciliation sign-off stays with you.`
-        : `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`;
+    if (input.confirm !== true) {
       return {
         ok: true,
-        data: {
-          preview: {
-            bankAccountId,
-            statementDate,
-            source: isPdf ? "pdf" : source,
-            lineCount,
-            ...(pdfMeta ? { pdf: pdfMeta } : {}),
-          },
-        },
+        data: { preview: { bankAccountId, statementDate, source, lineCount } },
         confirmation: {
-          summary,
+          summary: `Import ${loaded.attachment.fileName} (~${Math.max(0, lineCount - 1)} rows, ${source} format) into ${acct.accountLabel} (${acct.bankName}, ${acct.currency}) dated ${statementDate}, then auto-match transactions? Reconciliation sign-off stays with you.`,
           diff: {
             create: {
               table: "atelier_bank_statement_import",
@@ -710,15 +503,11 @@ defineCapability({
           },
           pending: {
             tool: "import_bank_statement",
-            input: (() => {
-              const pin: Record<string, unknown> = {
-                attachmentId, bankAccountId, statementDate,
-                ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
-                confirm: true,
-              };
-              pin.commitToken = commitTokenFor("import_bank_statement", pin);
-              return pin;
-            })(),
+            input: {
+              attachmentId, bankAccountId, statementDate,
+              ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
+              confirm: true,
+            },
           },
         },
       };
@@ -732,8 +521,8 @@ defineCapability({
     try {
       stored = await storeStatementObject(
         bytes,
-        loaded.attachment.fileName || (isPdf ? "statement.pdf" : "statement.csv"),
-        loaded.attachment.mime || (isPdf ? "application/pdf" : "text/csv"),
+        loaded.attachment.fileName || "statement.csv",
+        loaded.attachment.mime || "text/csv",
       );
     } catch (err) {
       return {
@@ -765,7 +554,7 @@ defineCapability({
           rowsImported: data.rowsImported ?? 0,
           parseErrors: data.errors ?? [],
           matcher: matcher ?? null,
-          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}.${pdfMeta && pdfMeta.flaggedRows > 0 ? ` ${pdfMeta.flaggedRows} low-confidence PDF row(s) were skipped, not guessed — add them manually or import a CSV export.` : ""} Review and reconcile when ready.`,
+          message: `Imported ${data.rowsImported ?? 0} rows into ${acct.accountLabel} and ran auto-matching${matcher?.status === "failed" ? " (the matcher hit an error — review matches manually)" : ""}. Review and reconcile when ready.`,
           navigateTo,
         },
       };
@@ -792,9 +581,9 @@ defineCapability({
   },
 });
 
-// =====================================================================
+// -------
 // save_bank_letter_account — chat bank letter → entity bank account.
-// =====================================================================
+// -------
 defineCapability({
   id: "bank.save_bank_letter_account",
   schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -846,7 +635,7 @@ defineCapability({
     const str = (v: unknown, max: number): string | null =>
       typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
 
-    if (!isVerifiedCommit("save_bank_letter_account", input)) {
+    if (input.confirm !== true) {
       // Entity disambiguation BEFORE the (slow) extraction call.
       if (!legalEntityId) {
         if (entities.length === 1) {
@@ -939,22 +728,18 @@ defineCapability({
           },
           pending: {
             tool: "save_bank_letter_account",
-            input: (() => {
-              const pin: Record<string, unknown> = {
-                attachmentId,
-                ...(legalEntityId ? { legalEntityId } : {}),
-                bankName,
-                ...(accountHolderName ? { accountHolderName } : {}),
-                ...(iban ? { iban } : {}),
-                ...(accountNumber ? { accountNumber } : {}),
-                ...(swift ? { swift } : {}),
-                ...(currency ? { currency } : {}),
-                accountLabel,
-                confirm: true,
-              };
-              pin.commitToken = commitTokenFor("save_bank_letter_account", pin);
-              return pin;
-            })(),
+            input: {
+              attachmentId,
+              ...(legalEntityId ? { legalEntityId } : {}),
+              bankName,
+              ...(accountHolderName ? { accountHolderName } : {}),
+              ...(iban ? { iban } : {}),
+              ...(accountNumber ? { accountNumber } : {}),
+              ...(swift ? { swift } : {}),
+              ...(currency ? { currency } : {}),
+              accountLabel,
+              confirm: true,
+            },
           },
         },
       };

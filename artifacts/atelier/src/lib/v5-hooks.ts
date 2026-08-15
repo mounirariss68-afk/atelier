@@ -151,6 +151,22 @@ export interface LegalEntityRow {
   lease: LegalEntityLease | null;
   fiscal: LegalEntityFiscal | null;
   cashPolicy: LegalEntityCashPolicy | null;
+  /** Task #1092 — pre-formation ownership record + settlement stamp. */
+  formation: {
+    ownershipType: "cognirise_uae" | "jv" | "founder_partner" | "franchise" | null;
+    jvSplits: Array<{ partnerName: string; sharePct: number }> | null;
+    notes: string | null;
+    settlement: {
+      treatment: string;
+      settledAt: string;
+      settledByUserId: string;
+      settledByName: string;
+      approvalNote: string | null;
+      journalEntryId: string | null;
+      totalUsd: number;
+    } | null;
+  } | null;
+  recommendedTreatment: string | null;
   notes: string | null;
   archivedAt: string | null;
   createdAt: string;

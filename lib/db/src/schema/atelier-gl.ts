@@ -122,6 +122,13 @@ export const atelierGlJournalLine = pgTable(
     accountCode: text("account_code").notNull(), // snapshot for stable reporting
     accountName: text("account_name").notNull(),
     engagementId: text("engagement_id"), // optional dimension
+    /**
+     * Task #1092 — pre-formation cost-pool dimension: set on clearing-account
+     * (and settlement) lines so each in-formation entity's quarantined costs
+     * are attributable per pool. NOT a legal-entity dimension of the entry —
+     * the entry itself posts to the home (UAE) entity's ledger.
+     */
+    preFormationEntityId: text("pre_formation_entity_id"),
     debit: doublePrecision("debit").notNull().default(0),
     credit: doublePrecision("credit").notNull().default(0),
     memo: text("memo"),

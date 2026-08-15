@@ -143,6 +143,13 @@ export interface EntityDraft {
     openingBalance: string; openingBalanceAsOf: string;
     minCashPolicy: string; covenantFloor: string; notes: string;
   };
+  /** Task #1092 — pre-formation ownership structure (drives the
+   * recommended settlement treatment for the cost pool). */
+  formation: {
+    ownershipType: string; // "" | cognirise_uae | jv | founder_partner | franchise
+    jvSplits: Array<{ partnerName: string; sharePct: string }>;
+    notes: string;
+  };
   notes: string;
 }
 
@@ -156,6 +163,7 @@ export function emptyDraft(): EntityDraft {
     lease: { contractNo: "", ejariTenantNo: "", lessorName: "", lessorLicenseNo: "", ownerName: "", startDate: "", endDate: "", annualRentAed: "", securityDepositAed: "", areaSqm: "", registrationFeesAed: "" },
     fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "", ctTaxYearBasis: "", ctFirstPeriodStart: "", ctFirstPeriodEnd: "" },
     cashPolicy: { openingBalance: "", openingBalanceAsOf: "", minCashPolicy: "", covenantFloor: "", notes: "" },
+    formation: { ownershipType: "", jvSplits: [], notes: "" },
     notes: "",
   };
 }
@@ -209,6 +217,13 @@ export function draftFromEntity(e: LegalEntityRow): EntityDraft {
       minCashPolicy: e.cashPolicy?.minCashPolicy?.toString() ?? "",
       covenantFloor: e.cashPolicy?.covenantFloor?.toString() ?? "",
       notes: e.cashPolicy?.notes ?? "",
+    },
+    formation: {
+      ownershipType: e.formation?.ownershipType ?? "",
+      jvSplits: (e.formation?.jvSplits ?? []).map((s) => ({
+        partnerName: s.partnerName, sharePct: s.sharePct?.toString() ?? "",
+      })),
+      notes: e.formation?.notes ?? "",
     },
     notes: e.notes ?? "",
   };
@@ -285,6 +300,15 @@ export function draftToBody(d: EntityDraft): Record<string, unknown> {
       covenantFloor: num(d.cashPolicy.covenantFloor),
       notes: nn(d.cashPolicy.notes),
     },
+    formation: d.formation.ownershipType || d.formation.jvSplits.length || d.formation.notes.trim()
+      ? {
+          ownershipType: nn(d.formation.ownershipType),
+          jvSplits: d.formation.jvSplits
+            .filter((s) => s.partnerName.trim())
+            .map((s) => ({ partnerName: s.partnerName.trim(), sharePct: num(s.sharePct) ?? 0 })),
+          notes: nn(d.formation.notes),
+        }
+      : null,
     notes: nn(d.notes),
   };
 }
@@ -427,14 +451,30 @@ export function validateDraft(d: EntityDraft): Record<string, string> {
   date("cashPolicy.openingBalanceAsOf", d.cashPolicy.openingBalanceAsOf, "As-of date");
   numeric("cashPolicy.minCashPolicy", d.cashPolicy.minCashPolicy, "Minimum cash");
   numeric("cashPolicy.covenantFloor", d.cashPolicy.covenantFloor, "Covenant floor");
+  d.formation.jvSplits.forEach((s, i) => {
+    if (s.sharePct.trim()) {
+      if (!isNumericStr(s.sharePct.trim())) errs[`formation.jvSplits.${i}.sharePct`] = "Share must be a number.";
+      else {
+        const v = Number(s.sharePct.replace(/,/g, ""));
+        if (v < 0 || v > 100) errs[`formation.jvSplits.${i}.sharePct`] = "Share must be between 0 and 100.";
+      }
+    }
+  });
+  if (d.formation.ownershipType === "jv") {
+    const splits = d.formation.jvSplits.filter((s) => s.partnerName.trim());
+    const sum = splits.reduce((t, s) => t + (Number(s.sharePct.replace(/,/g, "")) || 0), 0);
+    if (splits.length === 0) errs["formation.jvSplits"] = "A JV needs at least one partner split.";
+    else if (Math.abs(sum - 100) > 0.01) errs["formation.jvSplits"] = `JV splits must sum to 100% (currently ${sum}%).`;
+  }
   return errs;
 }
 
 type SectionId =
   | "identity" | "registrations" | "activities" | "owners"
-  | "premises" | "fiscal" | "cash" | "notes";
+  | "premises" | "fiscal" | "cash" | "formation" | "notes";
 
 function sectionForKey(key: string): SectionId {
+  if (key.startsWith("formation.")) return "formation";
   if (key.startsWith("registrations.")) return "registrations";
   if (key.startsWith("owners.")) return "owners";
   if (key.startsWith("premises.") || key.startsWith("lease.")) return "premises";
@@ -667,6 +707,7 @@ const SECTION_TITLES: Record<SectionId, string> = {
   premises: "Premises & lease",
   fiscal: "Fiscal calendar",
   cash: "Cash policy",
+  formation: "Pre-formation ownership",
   notes: "Notes",
 };
 
@@ -1057,6 +1098,107 @@ export function EntityFormDialog(props: {
                   <VText ctx={ctx} fieldKey="cashPolicy.covenantFloor" label="Covenant floor (optional)" inputMode="decimal" value={draft.cashPolicy.covenantFloor} onChange={(v) => up({ cashPolicy: { ...draft.cashPolicy, covenantFloor: v } })} testid="input-cash-covenant-floor" />
                   <VText ctx={ctx} fieldKey="cashPolicy.notes" label="Policy notes" value={draft.cashPolicy.notes} onChange={(v) => up({ cashPolicy: { ...draft.cashPolicy, notes: v } })} className="sm:col-span-2" testid="input-cash-policy-notes" />
                 </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Task #1092 — Pre-formation ownership (drives the recommended
+                settlement treatment for the pre-incorporation cost pool). */}
+            <AccordionItem value="formation">
+              <AccordionTrigger className="hover:no-underline py-3">
+                {sectionHeader(
+                  "formation",
+                  draft.formation.ownershipType
+                    ? {
+                        cognirise_uae: "100% Cognirise UAE",
+                        jv: "Joint venture",
+                        founder_partner: "Founder + partner owned",
+                        franchise: "Franchise",
+                      }[draft.formation.ownershipType]
+                    : draft.status === "in_formation"
+                      ? "Recommended for in-formation entities"
+                      : undefined,
+                )}
+              </AccordionTrigger>
+              <AccordionContent className="pb-5">
+                <p className="text-xs text-text-faint mb-3 pt-1">
+                  For entities being set up: the intended ownership structure drives the recommended
+                  settlement of pre-incorporation costs (intercompany recharge, JV split, founder
+                  receivable) once the entity is incorporated.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+                  <FieldShell label="Intended ownership">
+                    <select
+                      className={inputCls}
+                      value={draft.formation.ownershipType}
+                      onChange={(e) => up({ formation: { ...draft.formation, ownershipType: e.target.value } })}
+                      data-testid="select-formation-ownership"
+                    >
+                      <option value="">Not specified</option>
+                      <option value="cognirise_uae">100% Cognirise UAE</option>
+                      <option value="jv">Joint venture with partners</option>
+                      <option value="founder_partner">Founder + partner owned</option>
+                      <option value="franchise">Franchise</option>
+                    </select>
+                  </FieldShell>
+                  <VText ctx={ctx} fieldKey="formation.notes" label="Ownership notes" value={draft.formation.notes} onChange={(v) => up({ formation: { ...draft.formation, notes: v } })} testid="input-formation-notes" />
+                </div>
+                {draft.formation.ownershipType === "jv" && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-medium text-text-mute">JV cost-sharing splits (must sum to 100%)</p>
+                    {ctx.errFor("formation.jvSplits") && (
+                      <p className="text-[11px] text-danger">{ctx.errFor("formation.jvSplits")}</p>
+                    )}
+                    {draft.formation.jvSplits.map((s, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_120px_auto] gap-2 items-start">
+                        <Input
+                          className="h-9"
+                          placeholder="Partner name"
+                          value={s.partnerName}
+                          onChange={(e) => {
+                            const jvSplits = draft.formation.jvSplits.slice();
+                            jvSplits[i] = { ...jvSplits[i], partnerName: e.target.value };
+                            up({ formation: { ...draft.formation, jvSplits } });
+                          }}
+                          data-testid={`input-jv-partner-${i}`}
+                        />
+                        <VText
+                          ctx={ctx}
+                          fieldKey={`formation.jvSplits.${i}.sharePct`}
+                          label=""
+                          inputMode="decimal"
+                          placeholder="Share %"
+                          value={s.sharePct}
+                          onChange={(v) => {
+                            const jvSplits = draft.formation.jvSplits.slice();
+                            jvSplits[i] = { ...jvSplits[i], sharePct: v };
+                            up({ formation: { ...draft.formation, jvSplits } });
+                          }}
+                          testid={`input-jv-share-${i}`}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-0.5"
+                          onClick={() =>
+                            up({ formation: { ...draft.formation, jvSplits: draft.formation.jvSplits.filter((_, j) => j !== i) } })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        up({ formation: { ...draft.formation, jvSplits: [...draft.formation.jvSplits, { partnerName: "", sharePct: "" }] } })
+                      }
+                      data-testid="button-add-jv-split"
+                    >
+                      Add partner split
+                    </Button>
+                  </div>
+                )}
               </AccordionContent>
             </AccordionItem>
 

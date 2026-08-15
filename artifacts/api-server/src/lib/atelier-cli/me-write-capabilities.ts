@@ -34,6 +34,7 @@ import {
   atelierEngagements,
   atelierLeaveRequests,
   atelierExpenses,
+  atelierLegalEntities,
   atelierTimesheetWeeks,
   atelierTimesheetEntries,
   atelierTimesheetSignals,
@@ -415,6 +416,11 @@ defineSelfWriteCapability({
         description: "Spend context — business development (default) or internal.",
       },
       internalProjectLabel: { type: "string" },
+      entityId: {
+        type: "string",
+        description:
+          "For internal spend: legal-entity id to attribute the cost to (pre-formation entities are valid targets).",
+      },
       receiptAttachmentId: {
         type: "string",
         description: "Attachment id of a receipt uploaded in this chat.",
@@ -487,6 +493,41 @@ defineSelfWriteCapability({
       contextType === "internal" && typeof input.internalProjectLabel === "string"
         ? input.internalProjectLabel.slice(0, 200)
         : null;
+    // Task #1092 — optional internal entity attribution, same ACL as the
+    // web surface: any non-archived org entity, including in_formation
+    // (pre-formation cost pools).
+    let entityId: string | null = null;
+    if (contextType === "internal" && typeof input.entityId === "string" && input.entityId.trim()) {
+      const [ent] = await db
+        .select({
+          id: atelierLegalEntities.id,
+          status: atelierLegalEntities.status,
+          formation: atelierLegalEntities.formation,
+        })
+        .from(atelierLegalEntities)
+        .where(and(
+          eq(atelierLegalEntities.id, input.entityId.trim()),
+          eq(atelierLegalEntities.orgId, ctx.persona.orgId),
+        ));
+      if (!ent || ent.status === "archived") {
+        return {
+          ok: false,
+          errorCode: "entity_not_found",
+          errorMessage: "That legal entity was not found (or is archived).",
+        };
+      }
+      // Same guard as the REST attribution resolver: a settled
+      // pre-formation pool is closed for new costs.
+      if (ent.status === "in_formation" && ent.formation?.settlement) {
+        return {
+          ok: false,
+          errorCode: "entity_pool_settled",
+          errorMessage:
+            "That entity's pre-formation cost pool has already been settled — new costs can no longer be tagged to it.",
+        };
+      }
+      entityId = ent.id;
+    }
 
     // Receipt attachment — must belong to THIS caller (uploader) and org.
     let receiptFileRef: string | null = null;
@@ -576,6 +617,7 @@ defineSelfWriteCapability({
       contextType,
       accountId: null,
       internalProjectLabel,
+      entityId,
       receiptFileRef,
       receiptEncryptedAtRest: !!receiptFileRef,
       summary:

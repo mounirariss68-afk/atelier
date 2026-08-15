@@ -131,7 +131,6 @@
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — dual invoice lifecycles keyed on `source`; bank-IBAN gate at approve+run-build; upload/run builds advisory-lock atomic ([atelier-supplier-invoices.md](atelier-supplier-invoices.md)).
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
 - [NEP agreement flow](nep-agreement-flow.md) — roster auto-add NEP-only; v3 template ships via idempotent BOOT seed (no credentials), prod live on next publish.
-- [Stale lib dists](stale-lib-dist-review.md) — gitignored lib dists lag Drizzle edits AND merged commits; `tsc -b --force` after schema edits, before markTaskComplete ([libdb-schema-rebuild.md](libdb-schema-rebuild.md)).
 - [Expo Liquid Glass gating](expo-liquid-glass.md) — isLiquidGlassAvailable() THROWS without the native module (Expo Go/old builds); try/catch fail-closed; cards use translucent wash, not per-card blur.
 - [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); EXPO_PUSH_BASE_URL stub; tap deep-link stash rules in [atelier-push-tap-deeplink.md](atelier-push-tap-deeplink.md).
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic reminder cards, every mutation dismisses stale ones; delegation accept/decline rules in [atelier-task-delegation.md](atelier-task-delegation.md).
@@ -149,8 +148,10 @@
 - [UAE FTA VAT 201 export](atelier-vat201.md) — VAT 201 boxes tie to the calculator via the ONE shared GL collector; data-gap boxes default to zero with notes; exports audit as vat.vat201_exported.
 - [Account-module chat capability gating](atelier-account-chat-caps.md) — account module NOT in restricted-deny; new account.* chat tools need requiredRoles + in-run guard + ACL-filter-before-cap resolution.
 - [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
-- [Me-tab data linkage split](atelier-me-tab-linkage.md) — timesheets/skills key on roster person id; expenses/payments key on user id; self-service quirks in [atelier-selfservice-policy.md](atelier-selfservice-policy.md).
-- [db push blocked by orphaned FK rows](db-push-orphan-fk.md) — delete orphaned child rows before re-push; fresh DBs may miss Drizzle cols → 500s.
-- [Chat person-name scoping](atelier-chat-person-scoping.md) — listPersons is unscoped; filter name matches through roster scope BEFORE disambiguation or options leak out-of-perimeter people; contractor/employee chat = me.* only.
-- [Statutory filings & payroll](atelier-statutory-filings.md) — overdue derived at read time, audited mark-filed/reopen; payroll invariants in [atelier-statutory-payroll.md](atelier-statutory-payroll.md).
-- [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
+- [No demo seeding — production policy](atelier-crm-wipe.md) — ALL dummy data deleted + every seeder removed (2026-07-16); only the boot auth seed remains. Never reintroduce seeding.
+- [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions (no revoked_at); orval may skip response zod consts.
+- [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
+- [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
+- [Self-only chat roles clamp](atelier-selfonly-chat-roles.md) — employee/contractor chat limited to me.* tools via SELF_ONLY_CHAT_ROLES + legacy-registry skip + /cli boundary allowlist.
+- [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, guarded on title IS NULL; stub probes see an extra title call.
+- [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).

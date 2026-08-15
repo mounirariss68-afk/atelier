@@ -27,6 +27,7 @@ import {
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
   atelierPartnerFirms,
+  atelierLegalEntities,
   atelierExpenses,
   atelierEmployees,
   atelierContractors,
@@ -110,7 +111,7 @@ function writeGate(req: Request, res: Response): Me | null {
   return me;
 }
 
-// ============================================================
+// -------
 // Task #1091 (blueprint §6 / D2) — the dead vendor master / purchase-order /
 // 3-way-match / vendor bank-change stub routes were REMOVED here. A
 // two-founder consultancy has no PO discipline to match against; vendor
@@ -125,11 +126,11 @@ function writeGate(req: Request, res: Response): Me | null {
 // There is no vendor-invoice / PWP-link data model behind them; real
 // payables live in Partner invoices, Supplier invoices and Self-billing.
 // Revisit only if a genuine subcontractor pay-when-paid workflow appears.
-// ============================================================
+// -------
 
-// ============================================================
+// -------
 // Self-billed invoices (RCTI) — Task #430
-// ============================================================
+// -------
 
 function invoiceWire(inv: typeof atelierSelfBilledInvoices.$inferSelect) {
   return {
@@ -338,10 +339,10 @@ router.post("/finance/payables/self-billing/:id/resolve-dispute", async (req, re
   } catch (err) { next(err); }
 });
 
-// ============================================================
+// -------
 // Payment runs (maker-checker + dual signatories + bank-file)
 // Task #430 — real implementation over atelier_payment_runs.
-// ============================================================
+// -------
 
 function runWire(
   run: typeof atelierPaymentRuns.$inferSelect,
@@ -1114,9 +1115,9 @@ router.post("/finance/payables/payment-runs/:id/check", (req, res) => {
   res.status(404).json({ error: "not-found" });
 });
 
-// ============================================================
+// -------
 // WHT register
-// ============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/wht", (req, res) => {
   if (!readGate(req, res)) return;
@@ -1141,18 +1142,18 @@ router.post("/finance/payables/wht/:id/acknowledge", (req, res) => {
   res.status(404).json({ error: "not-found" });
 });
 
-// ============================================================
+// -------
 // Audit trail
-// ============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/audit", (req, res) => {
   if (!readGate(req, res)) return;
   res.json({ items: [] });
 });
 
-// ============================================================
+// -------
 // Task #875 — Partner-submitted AP invoices (finance review surface)
-// ============================================================
+// -------
 
 function partnerInvoiceWire(
   row: typeof atelierPartnerFirmInvoices.$inferSelect,
@@ -1289,9 +1290,9 @@ router.post("/finance/payables/partner-invoices/:id/review", async (req, res, ne
   } catch (err) { next(err); }
 });
 
-// ============================================================
+// -------
 // Task #1070 — Internal supplier-invoice upload (source "internal_upload")
-// ============================================================
+// -------
 //
 // Finance-side upload of supplier invoices received outside the partner
 // portal. Rows live in atelier_partner_firm_invoices distinguished by
@@ -1405,6 +1406,7 @@ function supplierInvoiceWire(
     id: row.id,
     supplierName: row.partnerFirmName,
     partnerFirmId: row.partnerFirmId || null,
+    legalEntityId: row.legalEntityId ?? null,
     reference: row.reference,
     periodLabel: row.periodLabel,
     invoiceDate: row.invoiceDate,
@@ -1422,7 +1424,6 @@ function supplierInvoiceWire(
     remittanceRef: row.remittanceRef,
     paidAt: row.paidAt?.toISOString() ?? null,
     // Task #1095 — entity-allocation lifecycle.
-    legalEntityId: row.legalEntityId,
     allocStatus: row.allocStatus,
     allocRuleId: row.allocRuleId,
     allocJustification: row.allocJustification,
@@ -1581,6 +1582,13 @@ export async function createSupplierInvoiceCore(args: {
   supplierBankHolder?: string | null;
   /** Task #1095 — user picked the entity allocation up-front (chat card). */
   explicitLegalEntityId?: string | null;
+  /**
+   * Task #1092 — optional legal-entity attribution (incl. in_formation
+   * entities: pre-formation cost pools quarantined by the Bookkeeper).
+   * Validated (404 on unknown/archived) and fed to the allocation engine
+   * as the explicit user choice.
+   */
+  legalEntityId?: string | null;
   /** Audit provenance: "ui_upload" (default), "chat", or "parsed_doc"
    * (the AI finance-doc pipeline). Only the parsed-doc path can carry the
    * per-field confidences that let the auto-post engine authorise an
@@ -1643,6 +1651,31 @@ export async function createSupplierInvoiceCore(args: {
     if (!supplierBankHolder) return { status: 400, body: { error: "holder-required", message: "Account holder name is required with the IBAN." } };
   }
 
+  // Task #1092 — optional entity attribution (non-archived org entity;
+  // in_formation is explicitly allowed for pre-formation pools).
+  const wantEntityId = bodyStr(args.legalEntityId ?? "", 100);
+  let taggedEntityId: string | null = null;
+  if (wantEntityId) {
+    const [ent] = await db.select({
+      id: atelierLegalEntities.id,
+      status: atelierLegalEntities.status,
+      formation: atelierLegalEntities.formation,
+    })
+      .from(atelierLegalEntities)
+      .where(and(
+        eq(atelierLegalEntities.id, wantEntityId),
+        eq(atelierLegalEntities.orgId, me.orgId),
+      ));
+    if (!ent || ent.status === "archived") {
+      return { status: 404, body: { error: "entity-not-found" } };
+    }
+    // A settled pre-formation pool is closed for new costs.
+    if (ent.status === "in_formation" && ent.formation?.settlement) {
+      return { status: 400, body: { error: "entity-pool-settled" } };
+    }
+    taggedEntityId = ent.id;
+  }
+
   const now = new Date();
   // Hash BEFORE storing anything — the blob is only persisted once
   // dedupe has passed (no orphan blobs on 409).
@@ -1684,6 +1717,9 @@ export async function createSupplierInvoiceCore(args: {
       // is the sentinel for "not a registered partner firm".
       partnerFirmId: firm?.id ?? "",
       partnerFirmName: firm?.name ?? supplierName,
+      // Task #1092 — explicit tag stamped up-front so pre-formation
+      // quarantine holds even if the allocation proposal fails soft.
+      legalEntityId: taggedEntityId,
       engagementId: null,
       weekIso: periodLabel ?? invoiceDate ?? now.toISOString().slice(0, 10),
       hours: 0,
@@ -1729,7 +1765,7 @@ export async function createSupplierInvoiceCore(args: {
   // resolved cleanly (an unresolved allocation blocks auto-advance).
   await proposeSupplierInvoiceAllocation(id, {
     actorId: me.id,
-    explicitEntityId: args.explicitLegalEntityId ?? null,
+    explicitEntityId: args.explicitLegalEntityId ?? taggedEntityId ?? null,
     aiText: [`supplier: ${firm?.name ?? supplierName}`, `reference: ${reference}`, notes ? `notes: ${notes}` : null]
       .filter(Boolean).join("\n"),
   }).catch(() => {});
@@ -1845,6 +1881,7 @@ router.post("/finance/payables/supplier-invoices", (req, res, next) => {
         invoiceDate: typeof req.body?.invoiceDate === "string" ? req.body.invoiceDate : null,
         notes: typeof req.body?.notes === "string" ? req.body.notes : null,
         partnerFirmId: typeof req.body?.partnerFirmId === "string" ? req.body.partnerFirmId : null,
+        legalEntityId: typeof req.body?.legalEntityId === "string" ? req.body.legalEntityId : null,
         supplierBankIban: typeof req.body?.supplierBankIban === "string" ? req.body.supplierBankIban : null,
         supplierBankHolder: typeof req.body?.supplierBankHolder === "string" ? req.body.supplierBankHolder : null,
         via: "ui_upload",
@@ -2096,9 +2133,9 @@ router.post("/finance/payables/supplier-invoices/:id/review", async (req, res, n
   } catch (err) { next(err); }
 });
 
-// ============================================================
+// -------
 // Dashboard tile + inbox producers (Wave-1 wiring)
-// ============================================================
+// -------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/dashboard/expected-disbursements", (req, res) => {
   if (!readGate(req, res)) return;

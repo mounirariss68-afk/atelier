@@ -108,6 +108,7 @@ import partnersRoutes from "./partnersRoutes";
 import partnerPortalRoutes from "./partnerPortalRoutes";
 import partnerBillingRoutes from "./partnerBillingRoutes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
+import preformationRoutes from "./preformationRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
@@ -438,6 +439,8 @@ router.use(partnerPortalRoutes);
 // Task #875 — partner contracts & billing hub (portal + internal surfaces).
 router.use(partnerBillingRoutes);
 router.use(financeEntitiesRoutes);
+// Task #1092 — pre-formation entity cost pools (dashboard + settlement).
+router.use(preformationRoutes);
 // Task #383 — expense taxonomy, categorization suggestions, GL/VAT
 // mappings, bank signatory register, client-ready exports.
 router.use(expenseTaxonomyRoutes);

@@ -31,6 +31,8 @@ import { extractFirstJsonObject } from "../../lib/atelier-agents/runner.js";
 import { extractBankLetterFields } from "../../lib/atelier-finance-docs.js";
 // Task #655 — auto-attach statutory payroll filings on entity create.
 import { ensureStatutoryFilings } from "../../lib/atelier-payroll/payrollRun.js";
+// Task #1092 — ownership type → recommended settlement treatment.
+import { recommendedTreatment } from "../../lib/atelier-preformation.js";
 
 const router: IRouter = Router();
 
@@ -220,6 +222,18 @@ const statutorySchema = z.object({
   notes: optStr(2000),
 });
 
+const formationSchema = z.object({
+  ownershipType: z.enum(["cognirise_uae", "jv", "founder_partner", "franchise"]).nullish(),
+  jvSplits: z
+    .array(z.object({
+      partnerName: str(200).min(1),
+      sharePct: z.number().finite().min(0).max(100),
+    }))
+    .max(20)
+    .nullish(),
+  notes: optStr(2000),
+});
+
 const entityBody = z.object({
   legalNameEn: str(400).min(1),
   legalNameAr: optStr(400),
@@ -249,6 +263,7 @@ const entityBody = z.object({
   statutory: statutorySchema.nullish(),
   /** Task #1095 — head/default entity for firm-wide cost allocation. */
   isHeadEntity: z.boolean().optional(),
+  formation: formationSchema.nullish(),
   notes: optStr(4000),
 });
 
@@ -342,6 +357,29 @@ function normalizeStatutory(s: z.infer<typeof statutorySchema> | null | undefine
   return hasValue ? shaped : null;
 }
 
+/**
+ * Task #1092 — normalize the formation payload, always preserving the
+ * existing settlement stamp (clients can never write or clear it).
+ */
+function normalizeFormation(
+  f: z.infer<typeof formationSchema> | null | undefined,
+  existingSettlement: NonNullable<EntityRow["formation"]>["settlement"] | null,
+) {
+  if (!f) {
+    return existingSettlement ? { ownershipType: null, jvSplits: null, notes: null, settlement: existingSettlement } : null;
+  }
+  const shaped = {
+    ownershipType: f.ownershipType ?? null,
+    jvSplits: f.jvSplits && f.jvSplits.length > 0
+      ? f.jvSplits.map((s) => ({ partnerName: s.partnerName, sharePct: s.sharePct }))
+      : null,
+    notes: f.notes ?? null,
+    settlement: existingSettlement ?? null,
+  };
+  const hasValue = shaped.ownershipType !== null || shaped.jvSplits !== null || shaped.notes !== null || shaped.settlement !== null;
+  return hasValue ? shaped : null;
+}
+
 function nullishObj<T extends Record<string, unknown>>(o: T | null | undefined): T | null {
   if (!o) return null;
   const hasValue = Object.values(o).some((v) => v !== null && v !== undefined && v !== "");
@@ -374,6 +412,9 @@ function entityShape(e: EntityRow) {
     cashPolicy: e.cashPolicy ?? null,
     statutory: e.statutory ?? null,
     isHeadEntity: e.isHeadEntity ?? false,
+    formation: e.formation ?? null,
+    // Task #1092 — ownership type drives the recommended settlement.
+    recommendedTreatment: recommendedTreatment(e.formation?.ownershipType ?? null),
     notes: e.notes,
     archivedAt: e.archivedAt,
     createdAt: e.createdAt,
@@ -810,6 +851,8 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.cashPolicy !== undefined) assign("cashPolicy", normalizeCashPolicy(b.cashPolicy));
   if (b.statutory !== undefined) assign("statutory", normalizeStatutory(b.statutory));
   if (b.isHeadEntity !== undefined) assign("isHeadEntity", b.isHeadEntity);
+  if (b.formation !== undefined)
+    assign("formation", normalizeFormation(b.formation, existing.formation?.settlement ?? null));
   if (b.notes !== undefined) assign("notes", b.notes ?? null);
   if (Object.keys(changes).length === 0) {
     res.json({ entity: entityShape(existing) });

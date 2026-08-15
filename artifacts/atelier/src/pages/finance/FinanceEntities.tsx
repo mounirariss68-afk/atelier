@@ -375,6 +375,13 @@ export default function FinanceEntities() {
           Show archived
         </label>
         <div className="flex-1" />
+        <Link
+          href="/finance/pre-formation"
+          className="text-xs text-text-mute hover:text-gold inline-flex items-center gap-1 mr-2"
+          data-testid="link-preformation-pools"
+        >
+          Pre-formation cost pools <ArrowUpRight className="w-3 h-3" />
+        </Link>
         {canWrite && (
           <>
             <Button size="sm" variant="outline" onClick={() => setExtractOpen(true)} data-testid="button-open-extract">

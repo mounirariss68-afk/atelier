@@ -151,6 +151,30 @@ export interface EntityStatutory {
   notes?: string | null;
 }
 
+/**
+ * Task #1092 — pre-formation cost pools. An `in_formation` entity captures
+ * its intended ownership structure here; the ownership type drives the
+ * recommended settlement treatment when the pool is settled on
+ * incorporation (or abandonment). `settlement` is written ONLY by the
+ * settle route — never via the registry PATCH.
+ */
+export interface EntityFormation {
+  /** cognirise_uae | jv | founder_partner | franchise */
+  ownershipType?: "cognirise_uae" | "jv" | "founder_partner" | "franchise" | null;
+  /** JV cost-sharing splits; percentages should sum to 100. */
+  jvSplits?: Array<{ partnerName: string; sharePct: number }> | null;
+  notes?: string | null;
+  /** Stamped by the settlement flow; null until settled. */
+  settlement?: {
+    treatment: "recharge" | "jv_split" | "founder_receivable" | "absorb" | "write_off";
+    settledAt: string;
+    settledByUserId: string;
+    settledByName: string;
+    approvalNote: string | null;
+    journalEntryId: string | null;
+    totalUsd: number;
+  } | null;
+}
 export const atelierLegalEntities = pgTable(
   "atelier_legal_entities",
   {
@@ -189,6 +213,8 @@ export const atelierLegalEntities = pgTable(
      * one active entity per org should be flagged (write path enforces).
      */
     isHeadEntity: boolean("is_head_entity").notNull().default(false),
+    /** Task #1092 — pre-formation ownership + settlement stamp. */
+    formation: jsonb("formation").$type<EntityFormation | null>(),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

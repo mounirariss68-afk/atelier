@@ -209,6 +209,7 @@ import PeopleSkills from "@/pages/people/PeopleSkills";
 import PeopleComposition from "@/pages/people/PeopleComposition";
 import PeopleCompliance from "@/pages/people/PeopleCompliance";
 import PeopleTime from "@/pages/people/PeopleTime";
+import FinancePreFormation from "@/pages/finance/FinancePreFormation";
 
 /**
  * Permanent client-side redirect — used for the legacy /studio, /roster
@@ -762,6 +763,7 @@ function Router() {
             those roles). */}
         <Route path="/finance/approvals" component={FinanceApprovals} />
         <Route path="/finance/entities" component={FinanceEntities} />
+        <Route path="/finance/pre-formation" component={FinancePreFormation} />
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/billing/worklist" component={BillingWorklist} />
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>

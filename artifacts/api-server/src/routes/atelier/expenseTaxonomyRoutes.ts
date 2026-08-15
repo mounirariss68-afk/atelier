@@ -117,10 +117,17 @@ router.get("/wallet/expense-taxonomy", async (req, res) => {
       id: atelierLegalEntities.id,
       legalNameEn: atelierLegalEntities.legalNameEn,
       shortName: atelierLegalEntities.shortName,
+      status: atelierLegalEntities.status,
     })
     .from(atelierLegalEntities)
     .where(and(eq(atelierLegalEntities.orgId, me.orgId), isNull(atelierLegalEntities.archivedAt)));
-  const ents = entRows.map((e) => ({ id: e.id, name: e.shortName || e.legalNameEn }));
+  // Task #1092 — in_formation entities are valid attribution targets
+  // (pre-formation cost pools); the flag lets selectors label them.
+  const ents = entRows.map((e) => ({
+    id: e.id,
+    name: e.shortName || e.legalNameEn,
+    preFormation: e.status === "in_formation",
+  }));
   // Active company bank accounts (id + display label only) so any submitter
   // can pick the paying account for company_account spend.
   const bankRows = await db
