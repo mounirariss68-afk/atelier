@@ -21,6 +21,7 @@
     "test:contract-salary": "NODE_ENV=test tsx ./tests/contract-salary/run.ts",
     "test:gl-autoseed": "tsx ./tests/gl-autoseed/run.ts",
     "test:expense-policy-seed": "NODE_ENV=test tsx ./tests/expense-policy-seed/run.ts",
+    "test:prep-card": "NODE_ENV=test tsx ./tests/prep-card/run.ts",
     "test:meeting-link": "tsx ./tests/meeting-link/run.ts",
     "test:meeting-chat": "tsx ./tests/meeting-chat/run.ts",
     "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",

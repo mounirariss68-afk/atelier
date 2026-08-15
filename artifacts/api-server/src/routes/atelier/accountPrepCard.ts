@@ -15,11 +15,13 @@
 // ============================================================
 import type { Request, Response } from "express";
 import { and, eq, isNull, desc } from "drizzle-orm";
-import { db, atelierAccounts, atelierUsers, atelierContacts } from "@workspace/db";
+import { db, atelierAccounts, atelierContacts } from "@workspace/db";
 import {
   renderPrepCardHtml,
   type PrepCardContact,
 } from "../../lib/atelier-prepcard-html.js";
+import { distillBriefView } from "../../lib/atelier-brief-view.js";
+import { getWatchOutTalkingPoints } from "../../lib/atelier-prepcard-talking-points.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 
@@ -96,15 +98,23 @@ export async function accountPrepCardHandler(
   const focusRow = focusId ? contactRows.find((c) => c.id === focusId) : undefined;
   const focusContact = focusRow ? toPrepContact(focusRow) : null;
 
-  // Preparer display name (best-effort, org-scoped).
-  let preparedBy: string | null = me.name ?? null;
-  if (me.id && me.orgId) {
-    const [u] = await db
-      .select({ name: atelierUsers.name })
-      .from(atelierUsers)
-      .where(and(eq(atelierUsers.id, me.id), eq(atelierUsers.orgId, me.orgId)));
-    if (u?.name) preparedBy = u.name;
-  }
+  // Task #1188 — suggested talking points for the "Our view" watch-outs,
+  // cached inside the researchBrief blob (regeneration is free until the
+  // Cartographer rewrites the research). Fail-soft: {} renders the
+  // watch-outs without guidance.
+  const view = distillBriefView(account.researchBrief ?? {});
+  const watchOutAnswers = await getWatchOutTalkingPoints(
+    {
+      accountId: account.id,
+      accountName: account.name,
+      sector: account.sector,
+      country: account.country,
+      ourView: view.ourView,
+      hypothesis: account.cogniriseHypothesis ?? null,
+      researchBrief: account.researchBrief ?? null,
+    },
+    view.watchOuts,
+  );
 
   const html = renderPrepCardHtml({
     accountName: account.name,
@@ -118,7 +128,7 @@ export async function accountPrepCardHandler(
     researchBrief: account.researchBrief ?? null,
     contacts,
     focusContact,
-    preparedBy,
+    watchOutAnswers,
   });
 
   res.setHeader("content-type", "text/html; charset=utf-8");

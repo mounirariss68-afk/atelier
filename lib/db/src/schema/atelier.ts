@@ -309,6 +309,14 @@ export const atelierAccounts = pgTable(
         // The tightened one-sentence hypothesis after stress-testing.
         revisedHypothesis: string;
       };
+      // Task #1188 — cached suggested talking points for the prep card's
+      // watch-outs. Derived at card build time (keyed on the distilled
+      // watch-out list) and invalidated implicitly whenever the Cartographer
+      // rewrites the whole researchBrief blob. Optional/display-only.
+      watchOutTalkingPoints?: {
+        key: string;
+        points: Array<{ watchOut: string; answer: string }>;
+      };
     }>(),
     // Task #566 — Cognirise-authored account strategy. Distinct from the
     // AI-generated `cogniriseHypothesis`/`researchBrief`: this is the

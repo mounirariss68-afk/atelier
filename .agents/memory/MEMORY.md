@@ -154,4 +154,5 @@
 - [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
 - [Self-only chat roles clamp](atelier-selfonly-chat-roles.md) — employee/contractor chat limited to me.* tools via SELF_ONLY_CHAT_ROLES + legacy-registry skip + /cli boundary allowlist.
 - [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, guarded on title IS NULL; stub probes see an extra title call.
+- [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).

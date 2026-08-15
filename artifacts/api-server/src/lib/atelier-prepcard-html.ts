@@ -7,12 +7,19 @@ import { distillBriefView } from "./atelier-brief-view.js";
 // Stress-Test, deep person profiles) into a single, self-contained
 // HTML document a Partner can download and walk into a first
 // meeting with. No external CSS/JS — everything is inlined, so the
-// file works offline. The ONLY network dependency is the client
-// logo (Brandfetch CDN), which degrades gracefully to a text
-// wordmark via an inline onerror handler.
+// file works fully offline (Task #1188: the old Brandfetch CDN logo
+// guess is gone — it served Brandfetch's own wordmark on a missed
+// guess. The header now renders the account name in brand type, with
+// an optional real client logo only when the caller actually has one).
+//
+// Branding mirrors the shared Cognirise PDF brand kit
+// (atelier-pdf-brand.ts): navy + magenta palette, the signature
+// blue→purple→magenta→coral gradient rule, Plus Jakarta Sans type,
+// and a "Prepared by Riser" byline (the assistant, never the
+// requesting user).
 //
 // The 9 sections follow the account-research skill's prep-card spec:
-//   1. Header with client logo (+ Cognirise wordmark)
+//   1. Header with client wordmark (+ Cognirise wordmark)
 //   2. Account snapshot
 //   3. Group / business-unit structure (visual map)
 //   4. What's changing right now
@@ -114,7 +121,12 @@ export interface RenderPrepCardInput {
   contacts: PrepCardContact[];
   /** When set, the named contact is spotlighted at the top of section 9. */
   focusContact?: PrepCardContact | null;
-  preparedBy?: string | null;
+  /** A REAL client logo asset (https or data:image URI) — rendered only
+   *  when provided; never guessed from the account name. */
+  clientLogoUrl?: string | null;
+  /** Suggested talking points keyed by the verbatim watch-out text
+   *  (Task #1188). Watch-outs without an entry render without guidance. */
+  watchOutAnswers?: Record<string, string>;
   generatedAt?: string;
 }
 
@@ -140,16 +152,12 @@ function safeHref(url: string): string | null {
   return u;
 }
 
-/** Best-effort domain guess for the Brandfetch logo CDN. Unreliable by
- *  design — the <img onerror> falls back to a text wordmark when the guess
- *  (or Brandfetch) does not resolve, so a wrong guess never breaks the card. */
-function guessDomain(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
-  return slug ? `${slug}.com` : "";
+/** Only render a client logo we genuinely have: https URL or an inline
+ *  data:image URI. No guessing, no third-party CDN lookups (Task #1188). */
+function safeLogoSrc(url: string | null | undefined): string | null {
+  const u = (url ?? "").trim();
+  if (/^https:\/\//i.test(u) || /^data:image\//i.test(u)) return u;
+  return null;
 }
 
 function evidencePill(evidence?: string): string {
@@ -244,10 +252,7 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     month: "long",
     year: "numeric",
   });
-  const domain = guessDomain(brand);
-  const logoUrl = domain
-    ? `https://cdn.brandfetch.io/${domain}/w/600/h/200/theme/dark/logo.png`
-    : "";
+  const logoUrl = safeLogoSrc(input.clientLogoUrl);
 
   // ---- Section 2: account snapshot (4 data points + a strategic-interest line) ----
   const facts = [
@@ -364,7 +369,15 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
         ${
           view.watchOuts.length
             ? `<div class="rtw-label" style="margin-top:10px">What could change our view</div>
-               <ul class="rows">${view.watchOuts.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+               <ul class="rows">${view.watchOuts
+                 .map((x) => {
+                   const answer = input.watchOutAnswers?.[x]?.trim();
+                   const guidance = answer
+                     ? `<div class="wo-answer"><span class="wo-answer-label">If they raise it</span>${escapeHtml(answer)}</div>`
+                     : "";
+                   return `<li>${escapeHtml(x)}${guidance}</li>`;
+                 })
+                 .join("")}</ul>`
             : ""
         }`
       : emptyNote("This hypothesis has not been stress-tested yet — re-run the Account Cartographer to surface watch-outs.");
@@ -380,12 +393,9 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     sectionShell(9, "Our view", watchInner),
   ].join("");
 
-  const preparedLine = [
-    input.preparedBy ? `Prepared by ${escapeHtml(input.preparedBy)}` : null,
-    dateLabel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // Byline mirrors the shared PDF brand kit: prepared by the assistant
+  // (Riser), never the requesting user's personal name.
+  const preparedLine = `Prepared by Riser · ${dateLabel}`;
 
   return `<!doctype html>
 <html lang="en">
@@ -396,10 +406,16 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
 <style>
   /* --gold name kept for stability but resolves to the Cognirise magenta
      accent — never amber/golden hues (mirrors atelier-pdf-brand.ts). */
-  :root { --navy:#0E1F3D; --gold:#A6348F; --ink:#26303f; --mute:#6b7480; --soft:#f5f6f8; --rule:#e2e6ec; --paper:#ffffff; }
+  /* Palette mirrors atelier-pdf-brand.ts BRAND tokens. */
+  :root { --navy:#0E1F3D; --gold:#A6348F; --ink:#1F2A3D; --mute:#5B6B7C; --soft:#f5f6f8; --rule:#e2e6ec; --paper:#ffffff;
+    --blue:#5B7CFF; --purple:#8A5BD6; --magenta:#C45BB8; --coral:#FF7B5A; }
   *,*::before,*::after { box-sizing:border-box; }
   html,body { margin:0; padding:0; background:#eef1f5; color:var(--ink);
-    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55; }
+    font-family:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55; }
+  /* Cognirise brand chrome: navy strip + signature gradient hairline
+     (blue→purple→magenta→coral), same as every generated PDF page. */
+  .brand-strip { height:8px; background:var(--navy); }
+  .brand-rule { height:2px; background:linear-gradient(90deg, var(--blue) 0%, var(--purple) 35%, var(--magenta) 65%, var(--coral) 100%); }
   .sheet { max-width:880px; margin:0 auto; padding:0 18px 64px; }
   header.top { display:flex; align-items:flex-start; justify-content:space-between; gap:24px;
     padding:36px 4px 24px; }
@@ -470,6 +486,8 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   .profile-src { color:var(--gold); text-decoration:none; font-size:12px; font-weight:600; white-space:nowrap; }
   .muted { color:var(--mute); }
   .empty { color:var(--mute); font-style:italic; margin:0; }
+  .wo-answer { margin-top:6px; padding:8px 12px; background:#faeef7; border-left:2px solid var(--gold); border-radius:0 6px 6px 0; font-size:13.5px; }
+  .wo-answer-label { display:block; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gold); font-weight:700; margin-bottom:2px; }
   footer.foot { text-align:center; padding:34px 0 0; color:var(--mute); }
   footer.foot .fmark { font-size:13px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:var(--navy); }
   footer.foot .fmark .dot { color:var(--gold); }
@@ -482,6 +500,8 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
 </style>
 </head>
 <body>
+<div class="brand-strip"></div>
+<div class="brand-rule"></div>
 <div class="sheet">
   <header class="top">
     <div class="client">
@@ -496,14 +516,14 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     <div class="corner">
       <div class="cognirise-mark">Cognirise<span class="dot">.</span></div>
       <div class="doctype">First-meeting prep</div>
-      ${preparedLine ? `<div class="prepared">${preparedLine}</div>` : ""}
+      <div class="prepared">${preparedLine}</div>
     </div>
   </header>
   ${sections}
   <footer class="foot">
     <div class="fmark">Cognirise<span class="dot">.</span></div>
     <div class="ftag">${escapeHtml(COGNIRISE_TAGLINE)}</div>
-    <div class="fnote">Confidential — outside-in research from public sources. Verify before acting.</div>
+    <div class="fnote">Confidential — prepared by Riser from outside-in public-source research. AI generated and may contain errors — verify key facts before relying on it.</div>
   </footer>
 </div>
 </body>
