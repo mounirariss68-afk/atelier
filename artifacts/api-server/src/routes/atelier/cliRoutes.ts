@@ -21,13 +21,14 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, gt, gte, isNull, lte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import {
   db,
   atelierCliSessions,
   atelierCliTurns,
   atelierUsers,
   atelierAuditEvents,
+  atelierCliAttachments,
 } from "@workspace/db";
 import { assertAuditAction, V3_AUDIT_ACTIONS } from "./auditContract.js";
 import {
@@ -192,12 +193,46 @@ router.post("/cli/turn", async (req, res) => {
   // feedback before the (potentially queued + LLM-bound) turn starts.
   emit({ type: "progress", data: { pct: 2, message: "Working on it…" } });
 
+  // Task #1197 — validate submitted attachmentIds before handing them to
+  // the orchestrator. Filter to org-scoped rows with status="extracted" so
+  // a crafted request cannot reference another org's attachment, a rejected
+  // upload, or a deleted blob. Invalid ids are dropped with a visible narration
+  // note; we never silently pass a cross-org document to the model.
+  const rawAttachmentIds: string[] = Array.isArray(body.attachmentIds)
+    ? body.attachmentIds.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, 20)
+    : [];
+  let validatedAttachmentIds: string[] = [];
+  if (rawAttachmentIds.length > 0) {
+    const rows = await db
+      .select({ id: atelierCliAttachments.id })
+      .from(atelierCliAttachments)
+      .where(
+        and(
+          inArray(atelierCliAttachments.id, rawAttachmentIds),
+          eq(atelierCliAttachments.orgId, me.orgId),
+          eq(atelierCliAttachments.status, "extracted"),
+          isNull(atelierCliAttachments.deletedAt),
+        ),
+      );
+    const validSet = new Set(rows.map((r) => r.id));
+    validatedAttachmentIds = rawAttachmentIds.filter((id) => validSet.has(id));
+    const droppedIds = rawAttachmentIds.filter((id) => !validSet.has(id));
+    if (droppedIds.length > 0 && !closed) {
+      emit({
+        type: "narration",
+        data: {
+          text: `Note: ${droppedIds.length} attachment${droppedIds.length === 1 ? "" : "s"} could not be loaded and ${droppedIds.length === 1 ? "was" : "were"} skipped.`,
+        },
+      });
+    }
+  }
+
   try {
     await runTurn(
       {
         sessionId,
         prompt,
-        attachmentIds: body.attachmentIds ?? [],
+        attachmentIds: validatedAttachmentIds,
         pageContext: body.pageContext ?? null,
         dryRun: body.dryRun === true,
         cancelInflight: body.cancelInflight === true,
