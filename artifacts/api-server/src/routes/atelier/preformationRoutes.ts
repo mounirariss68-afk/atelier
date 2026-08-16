@@ -94,7 +94,7 @@ interface PoolItem {
   posted: boolean;
 }
 
-async function buildPools(orgId: string, displayCurrency: string) {
+export async function buildPools(orgId: string, displayCurrency: string) {
   const entities = await db
     .select()
     .from(atelierLegalEntities)

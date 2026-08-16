@@ -129,6 +129,7 @@ import "./finance-doc-capabilities.js";
 // restricted / self-only / alliance personas at the catalog gate, above
 // each entry's finance-leadership requiredRoles.
 import "./finance-autopilot-capabilities.js";
+import "./preformation-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

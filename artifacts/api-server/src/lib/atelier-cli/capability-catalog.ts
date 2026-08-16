@@ -157,7 +157,9 @@ export type ResultCard =
   | "statement_of_account"
   | "pending_invoices"
   // Task #1163 — account research brief (distilled view + executive tensions).
-  | "account_brief";
+  | "account_brief"
+  // Task #1183 — pre-formation cost pool summary card.
+  | "preformation_pool";
 
 export type SurfaceContext =
   | "engagement_dashboard"
