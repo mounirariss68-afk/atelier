@@ -1311,6 +1311,9 @@ export const AtelierContactCriticalRole = {
   head_of_transformation: "head_of_transformation",
   head_of_pmo: "head_of_pmo",
   head_of_vro: "head_of_vro",
+  gov_it_lead: "gov_it_lead",
+  gov_cyber_lead: "gov_cyber_lead",
+  gov_customer_care_lead: "gov_customer_care_lead",
 } as const;
 
 /**
@@ -4957,6 +4960,10 @@ export interface AtelierMyPayBank {
   canRequestChange: boolean;
 }
 
+/**
+ * Aggregated salary-advance outstanding balance for the signed-in employee. Employees only; contractors never have this field.
+
+ */
 export interface AtelierAdvanceBalance {
   /** Sum of outstanding balances across all active advances. */
   totalOutstanding: number;
@@ -4966,9 +4973,15 @@ export interface AtelierAdvanceBalance {
   monthlyInstallment: number;
   /** Number of active advances contributing to this balance. */
   count: number;
-  /** Issuance date of the most-recent advance (ISO date). @nullable */
+  /**
+   * Issuance date of the most-recent advance (ISO date).
+   * @nullable
+   */
   issuedOn?: string | null;
-  /** First payroll period the deduction applies to (YYYY-MM). @nullable */
+  /**
+   * First payroll period the deduction applies to (YYYY-MM).
+   * @nullable
+   */
   startPeriod?: string | null;
 }
 
@@ -4979,9 +4992,7 @@ export interface AtelierMyPay {
   insurance?: AtelierPersonInsurance | null;
   bank?: AtelierMyPayBank | null;
   bankRequests: AtelierBankChangeRequest[];
-  /**
-   * Per-currency salary-advance outstanding balances. Empty for contractors
-   * or when the employee has no active advances. One entry per currency.
+  /** Per-currency salary-advance outstanding balances. Empty for contractors or when the employee has no active advances. One entry per currency — the common case is a single AED entry.
    */
   advanceBalance?: AtelierAdvanceBalance[];
 }

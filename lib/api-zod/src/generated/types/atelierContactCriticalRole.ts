@@ -29,4 +29,7 @@ export const AtelierContactCriticalRole = {
   head_of_transformation: "head_of_transformation",
   head_of_pmo: "head_of_pmo",
   head_of_vro: "head_of_vro",
+  gov_it_lead: "gov_it_lead",
+  gov_cyber_lead: "gov_cyber_lead",
+  gov_customer_care_lead: "gov_customer_care_lead",
 } as const;

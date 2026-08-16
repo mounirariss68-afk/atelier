@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAdvanceBalance } from "./atelierAdvanceBalance";
 import type { AtelierBankChangeRequest } from "./atelierBankChangeRequest";
 import type { AtelierCompSummary } from "./atelierCompSummary";
 import type { AtelierMyPayBank } from "./atelierMyPayBank";
@@ -19,4 +20,7 @@ export interface AtelierMyPay {
   insurance?: AtelierPersonInsurance | null;
   bank?: AtelierMyPayBank | null;
   bankRequests: AtelierBankChangeRequest[];
+  /** Per-currency salary-advance outstanding balances. Empty for contractors or when the employee has no active advances. One entry per currency — the common case is a single AED entry.
+   */
+  advanceBalance?: AtelierAdvanceBalance[];
 }

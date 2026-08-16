@@ -7843,7 +7843,7 @@ components:
         # never stored or hand-edited.
         criticalRole:
           type: ["string", "null"]
-          enum: [ceo, cfo, coo, caio, cto, cio, cdo, head_of_ai, cmo, cpo_product, cco_commercial, cpo_procurement, head_of_transformation, head_of_pmo, head_of_vro, null]
+          enum: [ceo, cfo, coo, caio, cto, cio, cdo, head_of_ai, cmo, cpo_product, cco_commercial, cpo_procurement, head_of_transformation, head_of_pmo, head_of_vro, gov_it_lead, gov_cyber_lead, gov_customer_care_lead, null]
         # Entity-scope fix — surfaced as a "Group" vs "Subsidiary · X" badge so a
         # subsidiary executive is never read as group leadership.
         entityName: { type: ["string", "null"] }

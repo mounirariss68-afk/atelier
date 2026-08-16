@@ -1672,8 +1672,10 @@ async function buildWorkspace(
     contacts: await (async () => {
       // Task #538 — batch-resolve linked person rows for structured names.
       const persons = await loadPersonsByIds(contacts.map((c) => c.personId));
+      // Task #1200 — gov-mode so ministry contacts get gov_*_lead badges.
+      const acctGov = isGovernmentAccount({ sector: a.sector, name: a.name });
       return contacts.map((c) =>
-        toContactWire(c, ownerName(c.contactOwnerId), persons.get(c.personId ?? "") ?? null),
+        toContactWire(c, ownerName(c.contactOwnerId), persons.get(c.personId ?? "") ?? null, { government: acctGov }),
       );
     })(),
     relationships: rels.map((r) => ({
@@ -5702,11 +5704,18 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     });
   });
   const [updated] = await db.select().from(atelierContacts).where(eq(atelierContacts.id, c.id));
+  // Task #1200 — derive gov mode from the parent account so the badge is correct.
+  const [dispAcct] = await db
+    .select({ name: atelierAccounts.name, sector: atelierAccounts.sector })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, updated.accountId));
+  const dispGov = isGovernmentAccount({ sector: dispAcct?.sector ?? null, name: dispAcct?.name ?? "" });
   res.json(
     toContactWire(
       updated,
       await resolveOwnerName(updated.contactOwnerId, updated.orgId),
       (await loadPersonsByIds([updated.personId])).get(updated.personId ?? "") ?? null,
+      { government: dispGov },
     ),
   );
 });
@@ -5726,6 +5735,7 @@ function toContactWire(
   c: typeof atelierContacts.$inferSelect,
   ownerName?: string | null,
   person?: PersonRow | null,
+  opts?: { government?: boolean },
 ) {
   return {
     id: c.id,
@@ -5757,7 +5767,9 @@ function toContactWire(
     // Task #208 — derived on read from the verbatim title by the shared
     // deterministic classifier so approved-proposal tags survive onto the
     // contact and stay accurate whenever the title changes.
-    criticalRole: classifyCriticalRole(c.title),
+    // Task #1200 — pass government mode so ministry contacts get gov_*_lead
+    // badges rather than always being classified in corporate mode.
+    criticalRole: classifyCriticalRole(c.title, { government: opts?.government ?? false }),
     influenceScore: c.influenceScore ?? 3,
     disposition: c.disposition as
       | "champion"
@@ -5988,11 +6000,14 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
     return row;
   });
   const createdPersons = await loadPersonsByIds([created.personId]);
+  // Task #1200 — gov mode from the parent account for the badge.
+  const createGov = isGovernmentAccount({ sector: account.sector ?? null, name: account.name });
   res.status(201).json(
     toContactWire(
       created,
       await resolveOwnerName(created.contactOwnerId, created.orgId),
       createdPersons.get(created.personId ?? "") ?? null,
+      { government: createGov },
     ),
   );
 });
@@ -6015,6 +6030,13 @@ router.patch("/contacts/:contactId", async (req, res) => {
     res.status(403).json({ error: "account-forbidden" });
     return;
   }
+  // Task #1200 — derive gov mode once so both response paths (no-change and
+  // updated) return the correct gov_*_lead criticalRole badge.
+  const [patchAcct] = await db
+    .select({ name: atelierAccounts.name, sector: atelierAccounts.sector })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, c.accountId));
+  const patchGov = isGovernmentAccount({ sector: patchAcct?.sector ?? null, name: patchAcct?.name ?? "" });
   const parsed = AtelierUpdateContactInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
@@ -6113,6 +6135,7 @@ router.patch("/contacts/:contactId", async (req, res) => {
         c,
         await resolveOwnerName(c.contactOwnerId, c.orgId),
         (await loadPersonsByIds([c.personId])).get(c.personId ?? "") ?? null,
+        { government: patchGov },
       ),
     );
     return;
@@ -6168,6 +6191,7 @@ router.patch("/contacts/:contactId", async (req, res) => {
       updated,
       await resolveOwnerName(updated.contactOwnerId, updated.orgId),
       (await loadPersonsByIds([updated.personId])).get(updated.personId ?? "") ?? null,
+      { government: patchGov },
     ),
   );
 });

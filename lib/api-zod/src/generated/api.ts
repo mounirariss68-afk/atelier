@@ -6033,15 +6033,6 @@ export const atelierGetMyPayResponsePersonOneCellPhonesItemCountryMax = 60;
 export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMin = 3;
 export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMax = 40;
 
-export const AtelierAdvanceBalance = zod.object({
-  totalOutstanding: zod.number(),
-  currency: zod.string(),
-  monthlyInstallment: zod.number(),
-  count: zod.number().int(),
-  issuedOn: zod.string().nullish(),
-  startPeriod: zod.string().nullish(),
-});
-
 export const AtelierGetMyPayResponse = zod.object({
   person: zod
     .union([
@@ -6166,7 +6157,49 @@ export const AtelierGetMyPayResponse = zod.object({
       })
       .describe("Self-scope view of a bank-detail change request (masked)."),
   ),
-  advanceBalance: zod.array(AtelierAdvanceBalance).optional(),
+  advanceBalance: zod
+    .array(
+      zod
+        .object({
+          totalOutstanding: zod
+            .number()
+            .describe(
+              "Sum of outstanding balances across all active advances.",
+            ),
+          currency: zod
+            .string()
+            .describe(
+              "Currency code (all active advances share a single currency).",
+            ),
+          monthlyInstallment: zod
+            .number()
+            .describe(
+              "Total scheduled monthly deduction (sum across all active advances).",
+            ),
+          count: zod
+            .number()
+            .describe(
+              "Number of active advances contributing to this balance.",
+            ),
+          issuedOn: zod
+            .string()
+            .nullish()
+            .describe("Issuance date of the most-recent advance (ISO date)."),
+          startPeriod: zod
+            .string()
+            .nullish()
+            .describe(
+              "First payroll period the deduction applies to (YYYY-MM).",
+            ),
+        })
+        .describe(
+          "Aggregated salary-advance outstanding balance for the signed-in employee. Employees only; contractors never have this field.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "Per-currency salary-advance outstanding balances. Empty for contractors or when the employee has no active advances. One entry per currency — the common case is a single AED entry.\n",
+    ),
 });
 
 /**
@@ -12152,6 +12185,9 @@ export const AtelierMergeAccountsResponse = zod.object({
             zod.literal("head_of_transformation"),
             zod.literal("head_of_pmo"),
             zod.literal("head_of_vro"),
+            zod.literal("gov_it_lead"),
+            zod.literal("gov_cyber_lead"),
+            zod.literal("gov_customer_care_lead"),
             zod.literal(null),
           ])
           .nullish(),
@@ -13343,6 +13379,9 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -14786,6 +14825,9 @@ export const AtelierUpdateAccountResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -16076,6 +16118,9 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -16433,6 +16478,9 @@ export const AtelierListAccountContactsResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -16813,6 +16861,9 @@ export const AtelierUpdateContactResponse = zod.object({
       zod.literal("head_of_transformation"),
       zod.literal("head_of_pmo"),
       zod.literal("head_of_vro"),
+      zod.literal("gov_it_lead"),
+      zod.literal("gov_cyber_lead"),
+      zod.literal("gov_customer_care_lead"),
       zod.literal(null),
     ])
     .nullish(),
@@ -17973,6 +18024,9 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -19168,6 +19222,9 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -20374,6 +20431,9 @@ export const AtelierCreateAccountInsightResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -21579,6 +21639,9 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -22768,6 +22831,9 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -23966,6 +24032,9 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -25164,6 +25233,9 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -26355,6 +26427,9 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -27558,6 +27633,9 @@ export const AtelierCreateAccountActionResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -28758,6 +28836,9 @@ export const AtelierUpdateAccountActionResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -29947,6 +30028,9 @@ export const AtelierDeleteAccountActionResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -31145,6 +31229,9 @@ export const AtelierCreateAccountRiskResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -32344,6 +32431,9 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -33533,6 +33623,9 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -34730,6 +34823,9 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
           zod.literal("head_of_transformation"),
           zod.literal("head_of_pmo"),
           zod.literal("head_of_vro"),
+          zod.literal("gov_it_lead"),
+          zod.literal("gov_cyber_lead"),
+          zod.literal("gov_customer_care_lead"),
           zod.literal(null),
         ])
         .nullish(),
@@ -35539,6 +35635,9 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
       zod.literal("head_of_transformation"),
       zod.literal("head_of_pmo"),
       zod.literal("head_of_vro"),
+      zod.literal("gov_it_lead"),
+      zod.literal("gov_cyber_lead"),
+      zod.literal("gov_customer_care_lead"),
       zod.literal(null),
     ])
     .nullish(),

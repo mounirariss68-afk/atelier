@@ -85,6 +85,7 @@ export * from "./atelierAddJoinerResponse";
 export * from "./atelierAddJoinerResponseWelcomeEmail";
 export * from "./atelierAdminSettings";
 export * from "./atelierAdminSettingsUpdate";
+export * from "./atelierAdvanceBalance";
 export * from "./atelierAgentDecisionInput";
 export * from "./atelierAgentDecisionInputDecision";
 export * from "./atelierAgentDesign";
