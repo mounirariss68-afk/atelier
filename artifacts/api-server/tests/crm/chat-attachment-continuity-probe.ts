@@ -59,6 +59,9 @@ const stubState = {
   primerSeenOnReceiptTurn: false,
   primerIdOnReceiptTurn: null as string | null,
   primerLinesOnPassportTurn: [] as string[],
+  // Task #1260 — the full primer text, so the anti-"files are missing"
+  // instruction can be asserted verbatim.
+  primerTextOnPassportTurn: "" as string,
   cDocIdSeen: null as string | null,
 };
 
@@ -272,6 +275,7 @@ async function main() {
         stubState.primerLinesOnPassportTurn = primerBlock
           ? primerBlock.split("\n").filter((l: string) => l.startsWith("- "))
           : [];
+        stubState.primerTextOnPassportTurn = primerBlock ?? "";
         if (!primerId) {
           send([{ type: "text", text: "I can't find the attachment." }], "end_turn");
           return;
@@ -458,6 +462,16 @@ async function main() {
     const t2 = await postTurn(FP, { prompt: "It's my passport — save it to my documents", sessionId: t1Session });
     check("A: primer present on answer turn", stubState.primerSeenOnPassportTurn, stubState);
     check("A: primer carries the uploaded attachment id", stubState.primerIdOnPassportTurn === attA, stubState);
+    // Task #1260 — the primer must explicitly forbid the model from
+    // claiming the files are missing or asking for a re-upload while
+    // validated ids exist in the session window.
+    check(
+      "A: primer forbids claiming files are missing / re-upload",
+      /STILL AVAILABLE/.test(stubState.primerTextOnPassportTurn) &&
+        /[Nn]ever tell me the files are missing/.test(stubState.primerTextOnPassportTurn) &&
+        /re-upload/.test(stubState.primerTextOnPassportTurn),
+      stubState.primerTextOnPassportTurn.slice(0, 400),
+    );
     const conf = t2.frames.find((f) => f.event === "needs_confirmation");
     check("A: save_my_document → needs_confirmation", Boolean(conf), t2.raw.slice(0, 1200));
     const t2TurnId = String(

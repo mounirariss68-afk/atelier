@@ -785,11 +785,17 @@ function ShapeBody({
     case "raid_batch":
     case "pov_card":
     case "expense_card":
-    case "expense_batch":
     case "timesheet_card":
     case "profile_update_decision":
     case "cartographer_run":
       return <CrmEntityCard shape={shape} data={data} locale={locale} />;
+    // Task #1260 — expense batch renders the drafted preview rows
+    // (merchant/amount/date per file), never the generic "No details".
+    case "expense_batch":
+      return <ExpenseBatchCard data={data} locale={locale} />;
+    // Task #1260 — document search hits (previously raw JSON fallback).
+    case "document_search":
+      return <DocumentSearchCard data={data} locale={locale} />;
     case "qualification_rubric":
       return <QualificationRubric data={data} locale={locale} />;
     // Task #994 — /recap renders the same tidy card as the proactive
@@ -802,6 +808,141 @@ function ShapeBody({
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────── Task #1260 — expense batch + document search result cards ─────── */
+
+function ExpenseBatchCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const preview = asArr(data.preview).map(asObj);
+  const committedCount = asNum(data.count);
+  // Committed shape carries {ids,count}; preview carries drafts.
+  if (preview.length === 0) {
+    if (committedCount != null) {
+      return (
+        <div className="text-xs text-text-mute" data-testid="cli-expense-batch-card">
+          <Receipt className="w-4 h-4 text-gold inline mr-1.5 align-text-bottom" aria-hidden />
+          {ar
+            ? `تم إنشاء ${committedCount} مسودة مصروفات.`
+            : `${committedCount} expense draft${committedCount === 1 ? "" : "s"} created.`}
+        </div>
+      );
+    }
+    return (
+      <EmptyState
+        icon={Receipt}
+        title={ar ? "لا توجد مسودات مصروفات" : "No expense drafts"}
+      />
+    );
+  }
+  const needsReview = preview.filter((p) => p.needsReview === true).length;
+  return (
+    <div className="space-y-2" data-testid="cli-expense-batch-card">
+      <div className="flex items-center gap-1.5 text-[11px] font-mono">
+        <Receipt className="w-4 h-4 text-gold shrink-0" aria-hidden />
+        <span className="text-text-mute uppercase tracking-wider">
+          {ar ? "مصروفات" : "Expenses"}
+        </span>
+        <span className="text-text">
+          {ar
+            ? `${preview.length} مسودة`
+            : `${preview.length} draft${preview.length === 1 ? "" : "s"}`}
+          {needsReview > 0 &&
+            (ar ? ` · ${needsReview} تحتاج مراجعة` : ` · ${needsReview} need review`)}
+        </span>
+      </div>
+      <div className="space-y-1">
+        {preview.map((p, i) => {
+          const merchant = asStr(p.merchant) || asStr(p.attachmentId) || `#${i + 1}`;
+          const amount = asNum(p.amount);
+          const currency = asStr(p.currency);
+          const date = asStr(p.expenseDate);
+          const flagged = p.needsReview === true;
+          const reason = asStr(p.reviewReason);
+          return (
+            <div
+              key={`${asStr(p.attachmentId) || i}`}
+              className="bg-bg-deep border border-border-soft rounded px-2 py-1.5 text-[11px] font-mono"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-text truncate" title={merchant}>{merchant}</span>
+                <span className="text-gold shrink-0">
+                  {amount != null ? `${currency || ""} ${amount.toLocaleString()}`.trim() : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-text-faint">
+                <span>{date || (ar ? "بدون تاريخ" : "no date")}</span>
+                {flagged && (
+                  <span className="text-warning" title={reason || undefined}>
+                    {ar ? "تحتاج مراجعة" : "needs review"}
+                  </span>
+                )}
+              </div>
+              {flagged && reason && (
+                <div className="text-text-mute mt-0.5 whitespace-normal">{reason}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DocumentSearchCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const query = asStr(data.query);
+  const results = asArr(data.results).map(asObj);
+  return (
+    <div className="space-y-2" data-testid="cli-document-search-card">
+      <div className="flex items-center gap-1.5 text-[11px] font-mono">
+        <FileText className="w-4 h-4 text-gold shrink-0" aria-hidden />
+        <span className="text-text-mute uppercase tracking-wider">
+          {ar ? "بحث المستندات" : "Document search"}
+        </span>
+        <span className="text-text">
+          {ar ? `${results.length} نتيجة` : `${results.length} result${results.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {query && (
+        <div className="text-[11px] font-mono text-text-faint truncate" title={query}>
+          “{query}”
+        </div>
+      )}
+      {results.length === 0 ? (
+        <div className="text-xs text-text-mute italic">
+          {ar ? "لا توجد مقاطع مطابقة." : "No matching passages found."}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {results.map((r, i) => {
+            const score = asNum(r.score);
+            return (
+              <div
+                key={asStr(r.chunkId) || i}
+                className="bg-bg-deep border border-border-soft rounded px-2 py-1.5 text-[11px] font-mono"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-text truncate" title={asStr(r.fileName)}>
+                    {asStr(r.fileName) || asStr(r.attachmentId)}
+                  </span>
+                  {score != null && (
+                    <span className="text-text-faint shrink-0">
+                      {(score * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 text-text-faint">
+                  <span className="truncate">{asStr(r.citation)}</span>
+                  {asStr(r.kind) && <span className="shrink-0">{asStr(r.kind)}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────── Task #994 — /recap result card (proactive parity) ─────────── */
@@ -1702,7 +1843,9 @@ function AgentRunCard({ data, locale }: { data: Json; locale: CliLocale }) {
 
       {!hasAnyDraft ? (
         <div className="text-xs text-text-mute italic">
-          {ar ? "لم يُرجع المتخصص أي مسودة." : "Specialist returned no draft."}
+          {ar
+            ? "أنهى المتخصص التشغيل دون مسودة — لم يجد شيئًا يتطلب إجراءً في هذه المستندات، ولم يتم تغيير أي شيء."
+            : "The specialist finished without producing a draft — it found nothing in these documents that needed action, and no changes were made. If you expected a result, try rephrasing or check the documents apply to this specialist."}
         </div>
       ) : (
         <>

@@ -800,11 +800,266 @@ async function main() {
     check("letter: extraction ran through the shared prompt exactly once per phase-1 call", stubState.letterCalls >= 1);
   }
 
+  // =============== 6) Task #1260 — receipt pays an ALREADY-ingested invoice ===============
+  {
+    const attach = findByToolName("attach_payment_receipt")!;
+    check("attach: capability registered", !!attach);
+
+    // File an UNPAID supplier invoice first (the bill arrived last week).
+    const lateRef = `LATE-${String(Date.now()).slice(-6)}`;
+    stubState.invoiceFields = {
+      supplierName: "Oasis Catering LLC",
+      amount: 777.25,
+      currency: "AED",
+      reference: lateRef,
+      invoiceDate: "2026-08-10",
+      periodLabel: null,
+      notes: null,
+      lineItems: null,
+    };
+    const lateInvPdf = await makePdf([
+      "TAX INVOICE",
+      "Oasis Catering LLC",
+      `Invoice No: ${lateRef}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      "Due Date: 2026-09-10   Payment Terms: Net 30",
+      "Amount Due: AED 777.25",
+    ]);
+    const lateInvAtt = await ingest(`late-invoice-${TAG}.pdf`, "application/pdf", lateInvPdf);
+    const li1: any = await ingestInv.run({ attachmentId: lateInvAtt }, mkCtx() as any);
+    check("attach: unpaid invoice phase 1 previews", !!li1.confirmation, li1);
+    const li2: any = await ingestInv.run(li1.confirmation.pending.input, mkCtx() as any);
+    check("attach: unpaid invoice committed", li2.ok === true, li2);
+    stubState.invoiceFields = null;
+    const [lateRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, lateRef),
+    ));
+    check("attach: invoice row is NOT paid yet", lateRow && lateRow.status !== "paid", lateRow?.status);
+
+    // The receipt for it arrives LATER as its own upload.
+    const lateRcptPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Oasis Catering LLC — thank you for your payment",
+      `Ref: ${lateRef}`,
+      "Paid from company account ****9911",
+      "Amount Paid: AED 777.25",
+    ]);
+    const lateRcptAtt = await ingest(`late-receipt-${TAG}.pdf`, "application/pdf", lateRcptPdf);
+
+    // classify recommends attach_payment_receipt with the matching invoice.
+    const c: any = await classify.run({ attachmentIds: [lateRcptAtt] }, mkCtx() as any);
+    const rcptRes = (c.data?.results ?? [])[0];
+    check(
+      "attach: classify recommends attach_payment_receipt for the receipt",
+      rcptRes?.recommendedTool === "attach_payment_receipt" &&
+        rcptRes?.matchesExistingInvoice?.invoiceId === lateRow?.id,
+      rcptRes,
+    );
+
+    // Amount-only receipt (same amount, different ref) never matches.
+    const amtOnlyPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Someone Else LLC",
+      "Ref: TOTALLY-DIFFERENT-1",
+      "Amount Paid: AED 777.25",
+    ]);
+    const amtOnlyAtt = await ingest(`amt-only-receipt-${TAG}.pdf`, "application/pdf", amtOnlyPdf);
+    const amtOnly: any = await attach.run({ receiptAttachmentId: amtOnlyAtt }, mkCtx() as any);
+    check(
+      "attach: amount-only receipt → no_matching_invoice (amounts never pair)",
+      amtOnly.ok === false && amtOnly.errorCode === "no_matching_invoice",
+      amtOnly,
+    );
+
+    // Wrong explicit invoiceId is re-verified against the receipt text.
+    const otherInvoiceId = (await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, "INV-2026-0815"),
+    )))[0]?.id;
+    if (otherInvoiceId) {
+      const wrong: any = await attach.run(
+        { receiptAttachmentId: lateRcptAtt, invoiceId: otherInvoiceId },
+        mkCtx() as any,
+      );
+      check("attach: wrong explicit invoiceId → receipt_mismatch", wrong.ok === false && wrong.errorCode === "receipt_mismatch", wrong);
+    }
+
+    // A non-receipt (the invoice itself) is never payment evidence.
+    const notRcpt: any = await attach.run({ receiptAttachmentId: lateInvAtt }, mkCtx() as any);
+    check("attach: non-receipt document refused", notRcpt.ok === false && notRcpt.errorCode === "receipt_mismatch", notRcpt);
+
+    // Phase 1 resolves THE one invoice + previews with a commit token.
+    const a1: any = await attach.run({ receiptAttachmentId: lateRcptAtt }, mkCtx() as any);
+    check(
+      "attach: phase 1 previews the matched invoice with PAID summary",
+      !!a1.confirmation && a1.confirmation.pending?.input?.invoiceId === lateRow?.id &&
+        /PAID/.test(a1.confirmation?.summary ?? "") &&
+        typeof a1.confirmation.pending?.input?.commitToken === "string",
+      a1,
+    );
+
+    // Forged confirm:true WITHOUT the token re-previews, never commits.
+    const forged: any = await attach.run(
+      { receiptAttachmentId: lateRcptAtt, invoiceId: lateRow?.id, confirm: true },
+      mkCtx() as any,
+    );
+    check("attach: forged confirm without token re-previews", !!forged.confirmation, forged);
+    const [stillUnpaid] = await db.select().from(atelierPartnerFirmInvoices).where(
+      eq(atelierPartnerFirmInvoices.id, lateRow!.id),
+    );
+    check("attach: row still unpaid after forged confirm", stillUnpaid?.status !== "paid", stillUnpaid?.status);
+
+    // Verified commit flips the row to paid with the receipt attached.
+    const a2: any = await attach.run(a1.confirmation.pending.input, mkCtx() as any);
+    check(
+      "attach: commit records PAID with navigateTo",
+      a2.ok === true && /PAID/.test(a2.data?.message ?? "") && !!a2.data?.navigateTo,
+      a2,
+    );
+    const [paidRow] = await db.select().from(atelierPartnerFirmInvoices).where(
+      eq(atelierPartnerFirmInvoices.id, lateRow!.id),
+    );
+    check(
+      "attach: DB row paid + paymentReceipt stored + never enters payment runs",
+      paidRow?.status === "paid" && !!paidRow?.paymentReceipt && !paidRow?.paymentRunId,
+      { status: paidRow?.status, hasReceipt: !!paidRow?.paymentReceipt },
+    );
+
+    // Idempotent repeat: same receipt again is a success, not a double-book.
+    const again: any = await attach.run({ receiptAttachmentId: lateRcptAtt }, mkCtx() as any);
+    check(
+      "attach: repeat with the same receipt → alreadyAttached success, no re-confirm",
+      again.ok === true && again.data?.alreadyAttached === true && !again.confirmation,
+      again,
+    );
+
+    // One receipt can NEVER pay two bills: a SECOND invoice printing the
+    // same reference exists, but attaching the already-used receipt to it
+    // by explicit invoiceId is refused org-wide on the receipt hash.
+    stubState.invoiceFields = {
+      supplierName: "Oasis Catering LLC",
+      amount: 777.25,
+      currency: "AED",
+      reference: `${lateRef}B`,
+      invoiceDate: "2026-08-12",
+      periodLabel: null, notes: null, lineItems: null,
+    };
+    const twinInvPdf = await makePdf([
+      "TAX INVOICE",
+      "Oasis Catering LLC",
+      `Invoice No: ${lateRef}B`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      "Amount Due: AED 777.25",
+    ]);
+    const twinInvAtt = await ingest(`twin-invoice-${TAG}.pdf`, "application/pdf", twinInvPdf);
+    const ti1: any = await ingestInv.run({ attachmentId: twinInvAtt }, mkCtx() as any);
+    const ti2: any = await ingestInv.run(ti1.confirmation.pending.input, mkCtx() as any);
+    check("attach: second bill filed unpaid", ti2.ok === true, ti2);
+    stubState.invoiceFields = null;
+    const [twinRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, `${lateRef}B`),
+    ));
+    // Direct core call with explicit invoiceId — the strongest bypass
+    // (skips classify + phase-1 matching entirely).
+    const { attachReceiptToSupplierInvoiceCore } = await import(
+      "../../src/routes/atelier/financePayablesRoutes.js"
+    );
+    const [fpUser] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, IDS.fp));
+    const { loadAttachmentBytes: loadBytes } = await import(
+      "../../src/lib/atelier-cli/attachments/index.js"
+    );
+    const rcptLoaded = await (await import("../../src/lib/atelier-cli/attachments/index.js")).loadAttachment(lateRcptAtt, ORG);
+    const rcptBytes = await loadBytes(rcptLoaded!.attachment.encryptedRef!);
+    const reuse = await attachReceiptToSupplierInvoiceCore({
+      me: fpUser as any, invoiceId: twinRow!.id,
+      fileBuffer: rcptBytes!, fileName: "late-receipt.pdf", mime: "application/pdf",
+      matchedBy: "reference",
+    });
+    check(
+      "attach: same receipt bytes on a SECOND matching invoice → 409 receipt-already-used",
+      reuse.status === 409 && (reuse.body as any).error === "receipt-already-used",
+      reuse,
+    );
+    const [twinAfter] = await db.select().from(atelierPartnerFirmInvoices).where(
+      eq(atelierPartnerFirmInvoices.id, twinRow!.id),
+    );
+    check("attach: second bill stays unpaid after the reuse attempt", twinAfter?.status !== "paid", twinAfter?.status);
+
+    // Concurrency: two different receipts confirmed simultaneously for the
+    // same invoice — exactly one wins, the loser gets a clean 409.
+    const rcA = await makePdf(["PAYMENT RECEIPT", "Oasis Catering LLC", `Ref: ${lateRef}B`, "Amount Paid: AED 777.25", "Channel: transfer A"]);
+    const rcB = await makePdf(["PAYMENT RECEIPT", "Oasis Catering LLC", `Ref: ${lateRef}B`, "Amount Paid: AED 777.25", "Channel: transfer B"]);
+    const [resA, resB] = await Promise.all([
+      attachReceiptToSupplierInvoiceCore({ me: fpUser as any, invoiceId: twinRow!.id, fileBuffer: rcA, fileName: "rcA.pdf", mime: "application/pdf", matchedBy: "reference" }),
+      attachReceiptToSupplierInvoiceCore({ me: fpUser as any, invoiceId: twinRow!.id, fileBuffer: rcB, fileName: "rcB.pdf", mime: "application/pdf", matchedBy: "reference" }),
+    ]);
+    const statuses = [resA.status, resB.status].sort();
+    check(
+      "attach: concurrent different-receipt confirms → exactly one 200 + one 409",
+      statuses[0] === 200 && statuses[1] === 409,
+      { a: resA.status, b: resB.status, aBody: resA.body, bBody: resB.body },
+    );
+    const [twinFinal] = await db.select().from(atelierPartnerFirmInvoices).where(
+      eq(atelierPartnerFirmInvoices.id, twinRow!.id),
+    );
+    const winnerFile = (resA.status === 200 ? "rcA.pdf" : "rcB.pdf");
+    check(
+      "attach: stored proof belongs to the single winner (never overwritten)",
+      twinFinal?.status === "paid" && twinFinal?.paymentReceipt?.fileName === winnerFile,
+      { status: twinFinal?.status, file: twinFinal?.paymentReceipt?.fileName, winnerFile },
+    );
+    // Same-bytes concurrent double-confirm on ANOTHER fresh invoice:
+    // advisory lock on the receipt hash serializes them — one attaches,
+    // the other reports idempotent alreadyAttached (both 200, ONE write).
+    const dupPair = await Promise.all([
+      attachReceiptToSupplierInvoiceCore({ me: fpUser as any, invoiceId: twinRow!.id, fileBuffer: winnerFile === "rcA.pdf" ? rcA : rcB, fileName: winnerFile, mime: "application/pdf", matchedBy: "reference" }),
+      attachReceiptToSupplierInvoiceCore({ me: fpUser as any, invoiceId: twinRow!.id, fileBuffer: winnerFile === "rcA.pdf" ? rcA : rcB, fileName: winnerFile, mime: "application/pdf", matchedBy: "reference" }),
+    ]);
+    check(
+      "attach: concurrent same-bytes re-confirms → both idempotent alreadyAttached",
+      dupPair.every((r) => r.status === 200 && (r.body as any).alreadyAttached === true),
+      dupPair.map((r) => ({ s: r.status, b: r.body })),
+    );
+
+    // Scenario 5 — invoice + receipt in one batch with NO shared reference:
+    // classify flags the mismatch and steers to an UNPAID ingest.
+    const mmInvPdf = await makePdf([
+      "TAX INVOICE",
+      "Dune Logistics LLC",
+      `Invoice No: MM-${String(Date.now()).slice(-6)}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      "Amount Due: AED 2,000.00",
+    ]);
+    const mmRcptPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Dune Logistics LLC",
+      "Ref: UNRELATED-777",
+      "Amount Paid: AED 2,000.00",
+    ]);
+    const [mmInvAtt, mmRcptAtt] = await Promise.all([
+      ingest(`mm-invoice-${TAG}.pdf`, "application/pdf", mmInvPdf),
+      ingest(`mm-receipt-${TAG}.pdf`, "application/pdf", mmRcptPdf),
+    ]);
+    const mm: any = await classify.run({ attachmentIds: [mmInvAtt, mmRcptAtt] }, mkCtx() as any);
+    check(
+      "mismatch: classify emits pairMismatch steering to UNPAID ingest + explanation",
+      (mm.data?.pairs ?? []).length === 0 &&
+        typeof mm.data?.pairMismatch?.explanation === "string" &&
+        /UNPAID/.test(mm.data.pairMismatch.explanation) &&
+        /ingest_supplier_invoice/.test(mm.data.pairMismatch.explanation),
+      mm.data?.pairMismatch,
+    );
+  }
+
   // =============== 5) role clamps ===============
   {
     const TOOLS = [
       "classify_finance_document", "ingest_supplier_invoice",
       "import_bank_statement", "save_bank_letter_account",
+      // Task #1260 — receipt-pays-existing-invoice pairing tool.
+      "attach_payment_receipt",
     ];
     const sliceFor = (role: string) =>
       capabilitiesForPersona({ id: "x", name: "x", role, orgId: ORG } as any)

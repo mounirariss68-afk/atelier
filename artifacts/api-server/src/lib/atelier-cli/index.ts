@@ -130,6 +130,7 @@ import { selfServiceExclusionGuidance } from "./me-chat-parity.js";
 // Task #339 — single bootstrap entry point. Imports cli-only entries,
 // attachment+rubric capabilities, and walks the agent registry.
 import "./bootstrap-capabilities.js";
+import { financeDocKindsForAttachments } from "./finance-doc-capabilities.js";
 import { isValidOrgOwner } from "../atelier-owner-validate.js";
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
@@ -4061,8 +4062,10 @@ export async function runTurn(
             role: "user",
             content:
               `[earlier attachments] Files attached earlier in this conversation — when my message refers to them ` +
-              `("it's my passport", "that receipt", …), pass these ids to the attachment tools:\n` +
-              lines.join("\n"),
+              `("it's my passport", "that receipt", "the invoice I sent", …), pass these ids to the attachment tools:\n` +
+              lines.join("\n") +
+              `\nThese files are STILL AVAILABLE under the ids above. Never tell me the files are missing, ` +
+              `never ask me to re-upload them, and never invent a different id — use these ids directly.`,
           });
           history.push({ role: "assistant", content: "(noted)" });
         }
@@ -5637,6 +5640,36 @@ export async function runTurn(
         data: { step, tool: tc.name, input: tc.input },
       });
 
+      // Task #1260 — finance-doc specialist guard. Uploaded invoices /
+      // receipts / statements belong to the finance-doc tools, never a
+      // specialist agent run: deterministically block agent-sourced tools
+      // when this turn's attachments classify confidently as finance
+      // documents, and steer the model to classify_finance_document.
+      let financeDocAgentGuard: string | null = null;
+      if (
+        findByToolName(tc.name)?.source === "agent" &&
+        (input.attachmentIds ?? []).length > 0
+      ) {
+        try {
+          const kinds = await financeDocKindsForAttachments(
+            input.attachmentIds ?? [],
+            persona.orgId,
+          );
+          if (kinds.length > 0) {
+            financeDocAgentGuard =
+              `The attached file(s) classify as finance documents (${[...new Set(kinds)].join(", ")}) — ` +
+              `specialist agents are not the right flow for them. Run classify_finance_document on the ` +
+              `attachment ids instead and follow its recommended tool (supplier-invoice ingest, receipt ` +
+              `pairing, or expense drafting). Do not launch a specialist for these documents.`;
+            console.log(
+              `[cli-telemetry] ${JSON.stringify({ evt: "finance_doc_agent_guard", turnId, tool: tc.name, kinds })}`,
+            );
+          }
+        } catch {
+          // Guard is best-effort: never let it break a legitimate agent run.
+        }
+      }
+
       // Idempotency for write-tools that reach the commit phase: one job
       // row per (turnId, step) so a retry never double-writes.
       let toolResult: ToolResult;
@@ -5656,7 +5689,13 @@ export async function runTurn(
       ) => ctx.progress?.(pct, message, data);
       const isCommit = tool.isWrite && tc.input.confirm === true;
       const idemKey = `${turnId}:${step}`;
-      if (isCommit) {
+      if (financeDocAgentGuard) {
+        toolResult = {
+          ok: false,
+          errorCode: "finance_doc_attachments",
+          errorMessage: financeDocAgentGuard,
+        };
+      } else if (isCommit) {
         toolResult = await runIdempotentJob({
           idemKey,
           orgId: persona.orgId,

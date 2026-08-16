@@ -1928,6 +1928,128 @@ export async function findPartnerFirmByName(
     : null;
 }
 
+/** Task #1260 — attach a verified proof-of-payment receipt to an ALREADY
+ * ingested supplier invoice, marking it paid so it exits the review/
+ * approval/payment-run path. Callers MUST have verified the receipt
+ * visibly prints the invoice reference (verifyPairedReceipt) before
+ * calling — this core enforces lifecycle safety + the one-receipt-one-
+ * invoice invariant, all inside ONE transaction:
+ *   - a per-org advisory lock on the receipt sha serializes concurrent
+ *     attaches of the SAME receipt bytes; the target row is read FOR
+ *     UPDATE so concurrent confirmations of DIFFERENT receipts on the
+ *     same invoice serialize too (the loser sees `paid` and 409s);
+ *   - same receipt bytes on the same already-paid row → 200
+ *     alreadyAttached (idempotent re-run, nothing written);
+ *   - the same receipt bytes attached to ANY OTHER live invoice in the
+ *     org → 409 receipt-already-used (one proof of payment can never
+ *     pay two bills);
+ *   - paid with a DIFFERENT receipt, scheduled, in a payment run, or
+ *     rejected → 409;
+ *   - otherwise: store the receipt blob + flip the row to paid via a
+ *     status-conditioned update (zero rows updated → conflict), with an
+ *     audit row in the same transaction. */
+export async function attachReceiptToSupplierInvoiceCore(args: {
+  me: Me;
+  invoiceId: string;
+  fileBuffer: Buffer;
+  fileName: string;
+  mime?: string | null;
+  matchedBy: "reference";
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { me } = args;
+  if (!args.fileBuffer || args.fileBuffer.length === 0) {
+    return { status: 400, body: { error: "file-required" } };
+  }
+  const sha256 = createHash("sha256").update(args.fileBuffer).digest("hex");
+  // Blob storage happens OUTSIDE the tx (object store is not
+  // transactional anyway); an aborted tx just leaves an unreferenced blob.
+  const stored = await storeContractBytes(args.fileBuffer);
+  return await db.transaction(async (tx) => {
+    // Serialize concurrent attaches of the same receipt bytes org-wide.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`receipt-attach:${me.orgId}:${sha256}`}))`,
+    );
+    const [row] = await tx.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.id, args.invoiceId),
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+    )).for("update");
+    if (!row) return { status: 404, body: { error: "not-found" } };
+    if (row.paymentReceipt && row.paymentReceipt.sha256 === sha256) {
+      // Idempotent: the exact same receipt is already attached to THIS row.
+      return {
+        status: 200,
+        body: { alreadyAttached: true, item: supplierInvoiceWire(row, undefined, null, me) },
+      };
+    }
+    // One proof of payment can never pay two bills: the same receipt
+    // bytes attached to ANY other live invoice in the org is a conflict,
+    // even when the reference also matches this one.
+    const [usedElsewhere] = await tx.select({
+      id: atelierPartnerFirmInvoices.id,
+      reference: atelierPartnerFirmInvoices.reference,
+      partnerFirmName: atelierPartnerFirmInvoices.partnerFirmName,
+    }).from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+      ne(atelierPartnerFirmInvoices.id, row.id),
+      sql`${atelierPartnerFirmInvoices.paymentReceipt} ->> 'sha256' = ${sha256}`,
+    )).limit(1);
+    if (usedElsewhere) {
+      return { status: 409, body: {
+        error: "receipt-already-used",
+        message: `This receipt is already attached as proof of payment to invoice ${usedElsewhere.reference ?? usedElsewhere.id} from ${usedElsewhere.partnerFirmName} — one receipt can only ever pay one bill.`,
+      } };
+    }
+    if (row.status === "paid") {
+      return { status: 409, body: { error: "already-paid", message: `Invoice ${row.reference ?? row.id} is already recorded as paid${row.paymentReceipt ? " with a different receipt attached" : ""} — nothing to pair.` } };
+    }
+    if (row.status === "rejected") {
+      return { status: 409, body: { error: "invoice-rejected", message: "This invoice was rejected — a payment receipt can't be attached to it." } };
+    }
+    if (row.paymentRunId || row.status === "scheduled") {
+      return { status: 409, body: { error: "in-payment-run", message: "This invoice is already in a payment run — cancel the run before recording an out-of-band payment." } };
+    }
+    const now = new Date();
+    // Status-conditioned transition: belt-and-braces on top of the row
+    // lock — zero rows updated means the row changed under us → conflict.
+    const updated = await tx.update(atelierPartnerFirmInvoices).set({
+      status: "paid",
+      paidAt: now,
+      paidByUserId: me.id,
+      paymentReceipt: {
+        fileName: args.fileName.slice(0, 300),
+        mime: args.mime ?? null,
+        sizeBytes: args.fileBuffer.length,
+        sha256,
+        blobRef: stored.blobRef,
+        attachedAt: now.toISOString(),
+        attachedByUserId: me.id,
+        matchedBy: args.matchedBy,
+      },
+      updatedAt: now,
+    }).where(and(
+      eq(atelierPartnerFirmInvoices.id, row.id),
+      eq(atelierPartnerFirmInvoices.status, row.status),
+      isNull(atelierPartnerFirmInvoices.paymentRunId),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+    )).returning({ id: atelierPartnerFirmInvoices.id });
+    if (updated.length === 0) {
+      return { status: 409, body: { error: "conflict", message: "The invoice changed while attaching the receipt — reload and try again." } };
+    }
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"), orgId: me.orgId,
+      entityType: "partner_firm_invoice", entityId: row.id,
+      actorType: "human", actorId: me.id, actorLabel: me.name,
+      action: "finance.supplier_invoice.receipt_attached",
+      payload: { supplierName: row.partnerFirmName, reference: row.reference, matchedBy: args.matchedBy, receiptFileName: args.fileName.slice(0, 300), priorStatus: row.status },
+      payloadSummary: `${me.name} attached a payment receipt to invoice ${row.reference ?? row.id} from ${row.partnerFirmName} — recorded as paid.`,
+    });
+    const [fresh] = await tx.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, row.id));
+    return { status: 200, body: { item: supplierInvoiceWire(fresh ?? row, undefined, null, me) } };
+  });
+}
+
 // @cli-skip: Task #1070 multipart upload; chat parity via ingest_supplier_invoice capability (Task #1090)
 router.post("/finance/payables/supplier-invoices", (req, res, next) => {
   // Gate BEFORE multipart parsing: unauthorized callers must never cause

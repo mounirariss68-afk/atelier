@@ -27,8 +27,14 @@
  * successful, idempotent outcome — never as an error.
  */
 
-import { and, eq, isNull } from "drizzle-orm";
-import { db, atelierUsers, atelierBankAccount, atelierLegalEntities } from "@workspace/db";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import {
+  db,
+  atelierUsers,
+  atelierBankAccount,
+  atelierLegalEntities,
+  atelierPartnerFirmInvoices,
+} from "@workspace/db";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
 import {
@@ -37,10 +43,12 @@ import {
   extractBankLetterFields,
   normalizeParsedLineItems,
   parseSupplierInvoiceText,
+  receiptMatchesInvoice,
   verifyPairedReceipt,
   type FinanceDocKind,
 } from "../atelier-finance-docs.js";
 import {
+  attachReceiptToSupplierInvoiceCore,
   createSupplierInvoiceCore,
   findPartnerFirmByName,
 } from "../../routes/atelier/financePayablesRoutes.js";
@@ -182,6 +190,33 @@ async function loadVerifiedPairedReceipt(args: {
   };
 }
 
+/** Task #1260 — find live already-ingested supplier invoices whose printed
+ * reference the receipt text visibly matches (receiptMatchesInvoice: exact
+ * delimiter-aware reference match; amounts alone deliberately never pair).
+ * Shared by classify (recommendation) and attach_payment_receipt (both
+ * phases) so preview and commit always agree. Rejected rows are excluded;
+ * paid rows are kept so a duplicate re-attach reports idempotently. */
+async function findInvoicesMatchingReceipt(
+  orgId: string,
+  receiptText: string,
+): Promise<Array<typeof atelierPartnerFirmInvoices.$inferSelect>> {
+  const rows = await db
+    .select()
+    .from(atelierPartnerFirmInvoices)
+    .where(
+      and(
+        eq(atelierPartnerFirmInvoices.orgId, orgId),
+        inArray(atelierPartnerFirmInvoices.source, ["partner_submitted", "internal_upload"]),
+        ne(atelierPartnerFirmInvoices.status, "rejected"),
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+      ),
+    );
+  return rows.filter(
+    (r) =>
+      receiptMatchesInvoice(receiptText, { reference: r.reference, amount: r.costAmount }).match,
+  );
+}
+
 // -------
 // classify_finance_document — deterministic typed classifier.
 // -------
@@ -271,9 +306,51 @@ defineCapability({
         r.nextStep = "Paired with the supplier invoice above — handled by the combined ingest, no standalone action.";
       }
     }
+    // Task #1260 — an UNPAIRED receipt may pay an ALREADY-ingested supplier
+    // invoice: check the payables ledger for a visible reference match
+    // (amounts alone never pair). Exactly one match ⇒ recommend the attach
+    // tool; several ⇒ ask which; none ⇒ the receipt stays on the expense path.
+    const unpairedReceipts = classifiedDocs.filter(
+      (d) => d.kind === "receipt" && !pairedReceipts.has(d.attachmentId),
+    );
+    for (const rcpt of unpairedReceipts) {
+      const matches = await findInvoicesMatchingReceipt(ctx.persona.orgId, rcpt.text);
+      if (matches.length === 0) continue;
+      const r = results.find((x) => x.attachmentId === rcpt.attachmentId);
+      if (!r) continue;
+      const describe = (m: (typeof matches)[number]) =>
+        `${m.reference ?? m.id} from ${m.partnerFirmName} (${m.costCurrency} ${m.costAmount}, status ${m.status})`;
+      if (matches.length === 1) {
+        const m = matches[0];
+        r.recommendedTool = "attach_payment_receipt";
+        r.matchesExistingInvoice = { invoiceId: m.id, reference: m.reference, supplierName: m.partnerFirmName, status: m.status };
+        r.nextStep =
+          m.status === "paid"
+            ? `This receipt prints the reference of ALREADY-PAID invoice ${describe(m)} — run attach_payment_receipt with receiptAttachmentId=${rcpt.attachmentId} and invoiceId=${m.id}; it will report idempotently if this proof is already on file. Do NOT draft a personal expense for it.`
+            : `This receipt visibly prints the reference of already-filed invoice ${describe(m)} — run attach_payment_receipt with receiptAttachmentId=${rcpt.attachmentId} and invoiceId=${m.id} to record that bill as paid with this receipt as proof. Do NOT draft a personal expense for it.`;
+      } else {
+        r.recommendedTool = null;
+        r.matchesExistingInvoice = null;
+        r.nextStep = `This receipt matches the reference of ${matches.length} filed invoices (${matches.map(describe).join("; ")}) — ask the user which ONE bill it pays before running attach_payment_receipt (a receipt pairs to exactly one invoice).`;
+      }
+    }
+    // Task #1260 — invoice + receipt in the SAME batch with NO reference
+    // match must never pair silently: file the invoice unpaid and tell the
+    // user WHY the receipt didn't count as proof of payment.
+    let pairMismatch: { explanation: string } | null = null;
+    const hasInvoice = classifiedDocs.some((d) => d.kind === "supplier_invoice");
+    const mismatchedReceipts = unpairedReceipts.filter(
+      (d) => !results.some((x) => x.attachmentId === d.attachmentId && x.recommendedTool === "attach_payment_receipt"),
+    );
+    if (hasInvoice && pairs.length === 0 && mismatchedReceipts.length > 0) {
+      pairMismatch = {
+        explanation:
+          "The uploaded receipt does not visibly print the invoice's reference, so it can't be treated as proof of payment for that bill (matching totals alone are never enough). File the invoice UNPAID into the payables review queue via ingest_supplier_invoice (no receiptAttachmentId), and tell the user the references didn't match — they can re-send the correct receipt or attach it later.",
+      };
+    }
     // Task #1248 — shape-tagged payload so web + mobile render a
     // friendly classification card instead of a raw JSON dump.
-    return { ok: true, data: { shape: "doc_classification_card", results, pairs } };
+    return { ok: true, data: { shape: "doc_classification_card", results, pairs, ...(pairMismatch ? { pairMismatch } : {}) } };
   },
 });
 
@@ -599,6 +676,245 @@ defineCapability({
       errorCode: String((out.body as { error?: string }).error ?? "failed"),
       errorMessage: String(
         (out.body as { message?: string }).message ?? "The invoice could not be filed.",
+      ),
+    };
+  },
+});
+
+/** Task #1260 — orchestrator guard helper: classify the turn's attachments
+ * and report which are org finance documents (invoice/receipt/statement/
+ * letter/client billing). Used to deterministically stop specialist agent
+ * launches on finance-doc turns — those documents belong to the finance-doc
+ * tools, never a specialist run. Confident classifications only. */
+export async function financeDocKindsForAttachments(
+  attachmentIds: string[],
+  orgId: string,
+): Promise<FinanceDocKind[]> {
+  const out: FinanceDocKind[] = [];
+  for (const id of attachmentIds.slice(0, 10)) {
+    const loaded = await loadFinanceAttachment(String(id), orgId);
+    if (!loaded) continue;
+    const cls = classifyFinanceDocument({
+      text: loaded.extracted?.normalizedText ?? "",
+      fileName: loaded.attachment.fileName,
+      mime: loaded.attachment.mime,
+    });
+    if (cls.kind !== "unknown" && cls.confidence >= CLASSIFY_CONFIDENCE_FLOOR) {
+      out.push(cls.kind);
+    }
+  }
+  return out;
+}
+
+// -------
+// attach_payment_receipt — Task #1260: a receipt-only upload that pays an
+// ALREADY-ingested supplier invoice. Same dual gate as pairing at ingest
+// (classifies as a receipt AND visibly prints the invoice reference —
+// amount-only match is deliberately insufficient), two-phase confirm, and
+// the commit runs through attachReceiptToSupplierInvoiceCore so the row
+// flips to paid exactly like a receipt paired at ingest time.
+// -------
+defineCapability({
+  id: "bank.attach_payment_receipt",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "bank",
+  toolName: "attach_payment_receipt",
+  description:
+    "Attach an uploaded payment receipt to an already-filed supplier invoice as proof of payment, recording that bill as paid so it never enters a payment run. The receipt must visibly print the invoice reference (amounts alone never pair, and a receipt pairs to exactly one invoice). Use classify_finance_document first — it recommends this tool with the matching invoiceId.",
+  slashAliases: { en: ["/attach-receipt"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      receiptAttachmentId: { type: "string" },
+      invoiceId: {
+        type: "string",
+        description: "The already-filed supplier invoice this receipt pays (from classify_finance_document's matchesExistingInvoice).",
+      },
+      confirm: { type: "boolean" },
+    },
+    required: ["receiptAttachmentId"],
+  },
+  isWrite: true,
+  twoPhaseConfirm: true,
+  irreversible: false,
+  outboundChannel: null,
+  resultCard: null,
+  requiredRoles: [...FINANCE_DOC_ROLES],
+  surfaceOn: ["global"],
+  examplePhrases: { en: ["this receipt pays the invoice I filed earlier", "/attach-receipt"] },
+  async run(input, ctx) {
+    const receiptAttachmentId = String(input.receiptAttachmentId ?? "");
+    const rcpt = await loadFinanceAttachment(receiptAttachmentId, ctx.persona.orgId);
+    if (!rcpt) {
+      return { ok: false, errorCode: "not_found", errorMessage: "Receipt attachment not found." };
+    }
+    const receiptText = rcpt.extracted?.normalizedText ?? "";
+    // Gate 1 — the document must classify as a receipt: arbitrary
+    // reference-bearing text is not payment evidence.
+    const cls = classifyFinanceDocument({
+      text: receiptText,
+      fileName: rcpt.attachment.fileName,
+      mime: rcpt.attachment.mime,
+    });
+    if (cls.kind !== "receipt") {
+      return {
+        ok: false,
+        errorCode: "receipt_mismatch",
+        errorMessage:
+          "That attachment doesn't look like a payment receipt (it classifies as a different document type), so it can't be used as proof of payment.",
+      };
+    }
+    // Resolve THE one invoice this receipt pays. An explicit invoiceId is
+    // still re-verified against the receipt text; without one, the ledger
+    // is searched and exactly one visible reference match is required.
+    const requestedInvoiceId = typeof input.invoiceId === "string" && input.invoiceId.trim() ? input.invoiceId.trim() : null;
+    let invoice: typeof atelierPartnerFirmInvoices.$inferSelect | null = null;
+    if (requestedInvoiceId) {
+      const [row] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+        eq(atelierPartnerFirmInvoices.id, requestedInvoiceId),
+        eq(atelierPartnerFirmInvoices.orgId, ctx.persona.orgId),
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+      ));
+      if (!row) return { ok: false, errorCode: "not_found", errorMessage: "That supplier invoice was not found." };
+      const m = receiptMatchesInvoice(receiptText, { reference: row.reference, amount: row.costAmount });
+      if (!m.match) {
+        return {
+          ok: false,
+          errorCode: "receipt_mismatch",
+          errorMessage: `That receipt doesn't visibly print the invoice reference ${row.reference ?? row.id}, so I can't treat it as proof of payment for this bill (matching totals alone aren't enough).`,
+        };
+      }
+      invoice = row;
+    } else {
+      const matches = await findInvoicesMatchingReceipt(ctx.persona.orgId, receiptText);
+      if (matches.length === 0) {
+        return {
+          ok: false,
+          errorCode: "no_matching_invoice",
+          errorMessage:
+            "No filed supplier invoice prints a reference this receipt visibly matches — if this was a personal or company-card spend, use the expense flow instead; if the bill hasn't been filed yet, attach the invoice too.",
+        };
+      }
+      if (matches.length > 1) {
+        return {
+          ok: true,
+          data: { partial: { receiptAttachmentId } },
+          clarification: {
+            field: "invoiceId",
+            question: `This receipt matches ${matches.length} filed invoices — which ONE bill does it pay? ${matches.map((m) => `${m.reference ?? m.id} from ${m.partnerFirmName} (${m.costCurrency} ${m.costAmount})`).join("; ")}. A receipt pairs to exactly one invoice.`,
+            tool: "attach_payment_receipt",
+            partial: { receiptAttachmentId },
+            fields: [{ field: "invoiceId", label: "Invoice", hint: "the invoice id or reference" }],
+            suggestions: matches.slice(0, 6).map((m) => ({
+              id: m.id,
+              label: `${m.reference ?? m.id} — ${m.partnerFirmName} (${m.costCurrency} ${m.costAmount}, ${m.status})`,
+            })),
+          },
+        };
+      }
+      invoice = matches[0];
+    }
+
+    const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
+    if (!isVerifiedCommit("attach_payment_receipt", input)) {
+      // Idempotent preview: the same receipt already attached is a
+      // successful outcome — say so without a pointless confirm.
+      const receiptSha = rcpt.attachment.sha256 ?? null;
+      if (invoice.status === "paid" && invoice.paymentReceipt && receiptSha && invoice.paymentReceipt.sha256 === receiptSha) {
+        return {
+          ok: true,
+          data: {
+            shape: "supplier_invoice_card",
+            stage: "committed",
+            alreadyAttached: true,
+            supplierName: invoice.partnerFirmName,
+            reference: invoice.reference,
+            amount: invoice.costAmount,
+            currency: invoice.costCurrency,
+            status: "paid",
+            message: `Invoice ${invoice.reference ?? invoice.id} from ${invoice.partnerFirmName} is already recorded as paid with this exact receipt attached — nothing new to do.`,
+            navigateTo: null,
+          },
+        };
+      }
+      if (invoice.status === "paid") {
+        return { ok: false, errorCode: "already_paid", errorMessage: `Invoice ${invoice.reference ?? invoice.id} from ${invoice.partnerFirmName} is already recorded as paid — this receipt wasn't attached (the bill can't be paid twice).` };
+      }
+      const pin: Record<string, unknown> = {
+        receiptAttachmentId,
+        invoiceId: invoice.id,
+        confirm: true,
+      };
+      pin.commitToken = commitTokenFor("attach_payment_receipt", pin);
+      return {
+        ok: true,
+        data: {
+          shape: "supplier_invoice_card",
+          stage: "preview",
+          supplierName: invoice.partnerFirmName,
+          reference: invoice.reference,
+          amount: invoice.costAmount,
+          currency: invoice.costCurrency,
+          status: "pending confirmation",
+          receiptFileName: rcpt.attachment.fileName,
+        },
+        confirmation: {
+          summary: `Attach receipt ${rcpt.attachment.fileName} as proof of payment to invoice ${invoice.reference ?? invoice.id} from ${invoice.partnerFirmName} — ${invoice.costCurrency} ${invoice.costAmount}? The bill will be recorded as PAID and will leave the approval/payment queue.`,
+          diff: {
+            update: {
+              table: "atelier_partner_firm_invoices",
+              id: invoice.id,
+              values: { status: "paid", paymentReceipt: rcpt.attachment.fileName },
+            },
+          },
+          pending: { tool: "attach_payment_receipt", input: pin },
+        },
+      };
+    }
+
+    // Phase 2 — re-verify + commit through the shared core.
+    const me = await loadFullUser(ctx.persona.id, ctx.persona.orgId);
+    if (!me) return { ok: false, errorCode: "not_found", errorMessage: "User not found." };
+    const bytes = rcpt.attachment.encryptedRef
+      ? await loadAttachmentBytes(rcpt.attachment.encryptedRef)
+      : null;
+    if (!bytes) return { ok: false, errorCode: "not_found", errorMessage: "Receipt file bytes not found." };
+    const out = await attachReceiptToSupplierInvoiceCore({
+      me,
+      invoiceId: invoice.id,
+      fileBuffer: bytes,
+      fileName: rcpt.attachment.fileName,
+      mime: rcpt.attachment.mime ?? null,
+      matchedBy: "reference",
+    });
+    if (out.status === 200) {
+      const already = (out.body as { alreadyAttached?: boolean }).alreadyAttached === true;
+      const closingLine = already
+        ? `Invoice ${invoice.reference ?? invoice.id} from ${invoice.partnerFirmName} was already recorded as paid with this receipt — nothing new was written.`
+        : `Recorded invoice ${invoice.reference ?? invoice.id} from ${invoice.partnerFirmName} — ${invoice.costCurrency} ${invoice.costAmount} as PAID, with the receipt attached as proof. It won't enter the payment queue.`;
+      return {
+        ok: true,
+        data: {
+          shape: "supplier_invoice_card",
+          stage: "committed",
+          ...(already ? { alreadyAttached: true } : {}),
+          supplierName: invoice.partnerFirmName,
+          reference: invoice.reference,
+          amount: invoice.costAmount,
+          currency: invoice.costCurrency,
+          status: "paid",
+          item: (out.body as { item?: unknown }).item,
+          message: closingLine,
+          closingLine,
+          navigateTo,
+        },
+      };
+    }
+    return {
+      ok: false,
+      errorCode: String((out.body as { error?: string }).error ?? "failed"),
+      errorMessage: String(
+        (out.body as { message?: string }).message ?? "The receipt could not be attached.",
       ),
     };
   },
