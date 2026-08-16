@@ -128,6 +128,7 @@
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
 - [Atelier glassmorphism theme](atelier-glass-theme.md) — knob-driven color-mix glass, alpha fallbacks, LEFT rail; className sweeps must be line-based/tag-aware ([tsx-classname-sweeps.md](tsx-classname-sweeps.md)).
 - [Screen catalog & find_screen](atelier-screen-catalog.md) — catalog.ts is GENERATED from web nav (regenerate, never hand-edit); nav/role-gate changes must re-run generator; find_screen widening is role-sliced.
+- [Invoice↔receipt pairing](atelier-invoice-receipt-pairing.md) — receipt pairs only on visible ref/amount match; paired invoice is born paid (never enters payment runs); receipt never becomes its own payable.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — dual invoice lifecycles keyed on `source`; bank-IBAN gate at approve+run-build; upload/run builds advisory-lock atomic ([atelier-supplier-invoices.md](atelier-supplier-invoices.md)).
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
 - [NEP agreement flow](nep-agreement-flow.md) — roster auto-add NEP-only; v3 template ships via idempotent BOOT seed (no credentials), prod live on next publish.

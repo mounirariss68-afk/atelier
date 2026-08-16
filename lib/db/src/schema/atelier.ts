@@ -4360,6 +4360,20 @@ export const atelierContractorPayments = pgTable(
  * weekIso) bucket. Partner approval is ALWAYS required (per spec:
  * any partner-firm proposal needs Partner sign-off).
  */
+/** Task #1250 — a printed invoice line row parsed at chat ingest time. */
+export interface SupplierInvoiceLineItem {
+  description: string;
+  qty: number | null;
+  unitAmount: number | null;
+  amount: number | null;
+}
+
+/**
+ * Weekly partner-firm invoice proposals. Composed from
+ * atelier_partner_firm_hours rows for a (partnerFirmId, engagementId,
+ * weekIso) bucket. Partner approval is ALWAYS required (per spec:
+ * any partner-firm proposal needs Partner sign-off).
+ */
 /**
  * Task #1251 — vendor invoice line-item mining extraction payload. Stored
  * on atelier_partner_firm_invoices.line_items for detected tooling vendors
@@ -4433,6 +4447,13 @@ export const atelierPartnerFirmInvoices = pgTable(
     supplierBankHolder: text("supplier_bank_holder"),
     // Task #875 — partner-submitted invoice metadata + PDF blob.
     reference: text("reference"),
+    // Task #1250 — parsed invoice line items (chat ingest captures them
+    // when the document prints an itemization; null = not itemizable).
+    lineItems: jsonb("line_items").$type<SupplierInvoiceLineItem[]>(),
+    // Task #1250 — proof-of-payment receipt paired at ingest time. When
+    // set, the invoice was recorded already-paid (status "paid") so it
+    // never enters a payment run and the same bill can't be paid twice.
+    paymentReceipt: jsonb("payment_receipt").$type<SupplierInvoicePaymentReceipt>(),
     periodLabel: text("period_label"),
     invoiceDate: text("invoice_date"),
     // Task #1251 — vendor invoice line-item mining. Extraction payload for
@@ -5689,3 +5710,17 @@ export const atelierLetterIssuances = pgTable(
     uniqueIndex("uq_atelier_letter_issuances_ref").on(t.orgId, t.refNumber),
   ],
 );
+
+/** Task #1250 — proof-of-payment receipt paired with the invoice at ingest. */
+export interface SupplierInvoicePaymentReceipt {
+  fileName: string;
+  mime: string | null;
+  sizeBytes: number;
+  sha256: string;
+  blobRef: string;
+  attachedAt: string;
+  attachedByUserId: string;
+  /** Pairing basis — reference-only by design: identical amounts across
+   * unrelated bills are common, so amounts alone never mark a bill paid. */
+  matchedBy: "reference";
+}

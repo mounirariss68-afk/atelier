@@ -473,6 +473,10 @@ type SupplierInvoiceRow = {
   rejectedReason: string | null;
   paymentRunId: string | null;
   paidAt: string | null;
+  // Task #1250 — chat invoice+receipt pairing: parsed line items and
+  // proof-of-payment receipt metadata (download via downloadPath).
+  lineItems: { description: string; qty: number | null; unitAmount: number | null; amount: number | null }[] | null;
+  paymentReceipt: { fileName: string; sizeBytes: number; attachedAt: string; matchedBy: string; downloadPath: string } | null;
   hasBankDetails: boolean;
   // Task #1075 — recorded one-off supplier bank details (unlinked
   // suppliers). IBAN/holder are server-redacted outside fp/partner/finance.
@@ -1023,6 +1027,18 @@ export function FinancePayablesSupplierInvoices() {
                 {inv.status === "rejected" && inv.rejectedReason && (
                   <div className="text-xs text-danger mt-1">Rejected: {inv.rejectedReason}</div>
                 )}
+                {/* Task #1250 — printed line items captured at ingest */}
+                {inv.lineItems && inv.lineItems.length > 0 && (
+                  <div className="text-xs mt-2 font-mono" data-testid={`supplier-invoice-items-${inv.id}`}>
+                    <div className="text-text-mute mb-0.5">Line items</div>
+                    {inv.lineItems.map((li, i) => (
+                      <div key={i} className="flex justify-between gap-4">
+                        <span>{li.description}{li.qty != null && li.qty !== 1 ? ` ×${li.qty}` : ""}</span>
+                        {li.amount != null && <span>{inv.currency} {li.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <MonoChip tone={partnerInvoiceTone(inv.status)} data-testid={`supplier-invoice-status-${inv.id}`}>{inv.status.replace(/_/g, " ")}</MonoChip>
@@ -1047,6 +1063,21 @@ export function FinancePayablesSupplierInvoices() {
                   >
                     download PDF
                   </a>
+                )}
+                {/* Task #1250 — proof-of-payment receipt attached at ingest */}
+                {inv.paymentReceipt && (
+                  <>
+                    <MonoChip tone="green" data-testid={`supplier-receipt-chip-${inv.id}`}>
+                      paid · receipt attached ({inv.paymentReceipt.matchedBy} match)
+                    </MonoChip>
+                    <a
+                      href={`${API_BASE}${inv.paymentReceipt.downloadPath}`}
+                      className="text-xs text-gold hover:text-gold/80"
+                      data-testid={`link-supplier-receipt-${inv.id}`}
+                    >
+                      download receipt
+                    </a>
+                  </>
                 )}
               </div>
             </div>

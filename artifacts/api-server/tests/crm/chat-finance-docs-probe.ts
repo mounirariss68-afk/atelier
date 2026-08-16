@@ -51,6 +51,9 @@ const stubState = {
   invoiceConfidence: 0.95,
   invoiceCalls: 0,
   letterCalls: 0,
+  // Task #1250 — per-section override of the parsed invoice fields
+  // (incl. lineItems); null = the default Gulf Office Supplies payload.
+  invoiceFields: null as Record<string, unknown> | null,
 };
 
 async function main() {
@@ -78,7 +81,7 @@ async function main() {
         stubState.invoiceCalls++;
         reply(JSON.stringify({
           confidence: stubState.invoiceConfidence,
-          fields: {
+          fields: stubState.invoiceFields ?? {
             supplierName: "Gulf Office Supplies LLC",
             amount: 4725.5,
             currency: "AED",
@@ -86,6 +89,7 @@ async function main() {
             invoiceDate: "2026-08-01",
             periodLabel: null,
             notes: null,
+            lineItems: null,
           },
         }));
         return;
@@ -295,6 +299,227 @@ async function main() {
     const pl: any = await ingestInv.run({ attachmentId: lowAtt }, mkCtx() as any);
     check("invoice: low-confidence parse → clarification, no confirmation", !!pl.clarification && !pl.confirmation, pl);
     stubState.invoiceConfidence = 0.95;
+  }
+
+  // =============== 2b) Task #1250 — invoice+receipt pairing ===============
+  {
+    const pairRef = `YBJGOJ-${String(Date.now()).slice(-6)}`;
+    const pairInvoicePdf = await makePdf([
+      "TAX INVOICE",
+      "Desert Print Co LLC",
+      `TRN: 100987654320003  Invoice No: ${pairRef}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      "Due Date: 2026-09-01   Payment Terms: Net 15",
+      "Item 1: Banner printing x2 @ AED 500.00 = AED 1,000.00",
+      "Item 2: Design fee x1 @ AED 175.74 = AED 175.74",
+      "Subtotal: AED 1,175.74   VAT (5%): AED 58.76",
+      "Amount Due: AED 1,234.50",
+    ]);
+    const pairReceiptPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Desert Print Co LLC — thank you for your purchase",
+      `Ref: ${pairRef}`,
+      "Card ****4242",
+      "Amount Paid: AED 1,234.50",
+    ]);
+    const [pairInvAtt, pairRcptAtt] = await Promise.all([
+      ingest(`pair-invoice-${TAG}.pdf`, "application/pdf", pairInvoicePdf),
+      ingest(`payment-receipt-${TAG}.pdf`, "application/pdf", pairReceiptPdf),
+    ]);
+    stubState.invoiceFields = {
+      supplierName: "Desert Print Co LLC",
+      amount: 1234.5,
+      currency: "AED",
+      reference: pairRef,
+      invoiceDate: "2026-08-14",
+      periodLabel: null,
+      notes: null,
+      lineItems: [
+        { description: "Banner printing", qty: 2, unitAmount: 500, amount: 1000 },
+        { description: "Design fee", qty: 1, unitAmount: 175.74, amount: 175.74 },
+      ],
+    };
+
+    // Pair detection during classification (ingest preview routing).
+    const c: any = await classify.run({ attachmentIds: [pairInvAtt, pairRcptAtt] }, mkCtx() as any);
+    const pair = (c.data?.pairs ?? [])[0];
+    check(
+      "pair: classifier detects same-reference invoice+receipt as ONE combined action",
+      !!pair && pair.invoiceAttachmentId === pairInvAtt && pair.receiptAttachmentId === pairRcptAtt &&
+        /receiptAttachmentId/.test(pair.nextStep ?? "") && /twice/i.test(pair.nextStep ?? ""),
+      c.data,
+    );
+    const rcptResult = (c.data?.results ?? []).find((r: any) => r.attachmentId === pairRcptAtt);
+    check(
+      "pair: receipt result loses its standalone ingest recommendation",
+      rcptResult?.recommendedTool == null && rcptResult?.pairedInvoiceAttachmentId === pairInvAtt,
+      rcptResult,
+    );
+
+    // Mismatched receipt (bank letter — no shared ref/amount) is refused.
+    const bad: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: letterAtt },
+      mkCtx() as any,
+    );
+    check("pair: non-matching receipt → receipt_mismatch, no pairing", bad.ok === false && bad.errorCode === "receipt_mismatch", bad);
+
+    // Same AMOUNT but different reference must NOT pair or mark paid —
+    // identical totals across unrelated bills are common.
+    const sameAmtReceiptPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Some Other Vendor LLC — thank you for your purchase",
+      "Ref: OTHER-99999",
+      "Amount Paid: AED 1,234.50",
+    ]);
+    const sameAmtAtt = await ingest(`other-receipt-${TAG}.pdf`, "application/pdf", sameAmtReceiptPdf);
+    const badAmt: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: sameAmtAtt },
+      mkCtx() as any,
+    );
+    check(
+      "pair: same-amount/different-reference receipt → refused, never paired",
+      badAmt.ok === false && badAmt.errorCode === "receipt_mismatch",
+      badAmt,
+    );
+    const cAmt: any = await classify.run({ attachmentIds: [pairInvAtt, sameAmtAtt] }, mkCtx() as any);
+    check(
+      "pair: classifier never pairs on amount alone",
+      (cAmt.data?.pairs ?? []).length === 0,
+      cAmt.data?.pairs,
+    );
+
+    // Prefix/suffix reference collision: a receipt printing a LONGER
+    // reference that merely contains this one must never pair.
+    const collisionReceiptPdf = await makePdf([
+      "PAYMENT RECEIPT",
+      "Desert Print Co LLC — thank you for your purchase",
+      `Ref: ${pairRef}6`,
+      "Card ****4242",
+      "Amount Paid: AED 1,234.50",
+    ]);
+    const collisionAtt = await ingest(`collision-receipt-${TAG}.pdf`, "application/pdf", collisionReceiptPdf);
+    const badCollision: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: collisionAtt },
+      mkCtx() as any,
+    );
+    check(
+      "pair: receipt with a longer superstring reference → refused (exact match only)",
+      badCollision.ok === false && badCollision.errorCode === "receipt_mismatch",
+      badCollision,
+    );
+
+    // Self-pairing: the invoice can never be its own proof of payment.
+    const selfPair: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: pairInvAtt },
+      mkCtx() as any,
+    );
+    check(
+      "pair: invoice as its own receipt → refused",
+      selfPair.ok === false && selfPair.errorCode === "receipt_mismatch",
+      selfPair,
+    );
+
+    // A SECOND INVOICE printing the same reference is not payment evidence:
+    // it classifies as an invoice, not a receipt, so pairing is refused.
+    const secondInvoicePdf = await makePdf([
+      "TAX INVOICE",
+      "Desert Print Co LLC",
+      `TRN: 100987654320003  Invoice No: ${pairRef}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      "Due Date: 2026-09-01   Payment Terms: Net 15",
+      "Subtotal: AED 1,175.74   VAT (5%): AED 58.76",
+      "Amount Due: AED 1,234.50",
+    ]);
+    const secondInvAtt = await ingest(`pair-invoice-copy-${TAG}.pdf`, "application/pdf", secondInvoicePdf);
+    const notReceipt: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: secondInvAtt },
+      mkCtx() as any,
+    );
+    check(
+      "pair: reference-bearing NON-receipt (a second invoice) as receipt → refused",
+      notReceipt.ok === false && notReceipt.errorCode === "receipt_mismatch" &&
+        /doesn't look like a payment receipt/i.test(notReceipt.errorMessage ?? ""),
+      notReceipt,
+    );
+
+    // Combined phase 1: line items captured + paid summary + pinned pair.
+    const p1: any = await ingestInv.run(
+      { attachmentId: pairInvAtt, receiptAttachmentId: pairRcptAtt },
+      mkCtx() as any,
+    );
+    check("pair: phase 1 returns combined confirmation", !!p1.confirmation, p1);
+    check(
+      "pair: summary announces line items + proof of payment + PAID",
+      /2 printed line item/.test(p1.confirmation?.summary ?? "") &&
+        /proof of payment/i.test(p1.confirmation?.summary ?? "") &&
+        /PAID/.test(p1.confirmation?.summary ?? ""),
+      p1.confirmation?.summary,
+    );
+    check(
+      "pair: pending input pins receipt + line items",
+      p1.confirmation?.pending?.input?.receiptAttachmentId === pairRcptAtt &&
+        (p1.confirmation?.pending?.input?.lineItems ?? []).length === 2,
+      p1.confirmation?.pending?.input,
+    );
+
+    const p2: any = await ingestInv.run(p1.confirmation.pending.input, mkCtx() as any);
+    check("pair: confirm commits ok with paid message", p2.ok === true && /PAID/.test(p2.data?.message ?? ""), p2);
+    const rows = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, pairRef),
+    ));
+    check("pair: exactly ONE record for the bill", rows.length === 1, rows.length);
+    const row = rows[0];
+    check(
+      "pair: row is paid with receipt attached + line items stored",
+      row?.status === "paid" && !!row?.paidAt && row?.paymentReceipt?.blobRef &&
+        row?.paymentReceipt?.matchedBy === "reference" &&
+        (row?.lineItems ?? []).length === 2 &&
+        row?.lineItems?.[0]?.description === "Banner printing",
+      { status: row?.status, receipt: row?.paymentReceipt, lineItems: row?.lineItems },
+    );
+
+    // No-duplicate defense: ingesting the RECEIPT as its own invoice with
+    // the same supplier+reference dedupes to alreadyFiled (never a 2nd row).
+    const d1: any = await ingestInv.run(
+      { attachmentId: pairRcptAtt, supplierName: "Desert Print Co LLC", amount: 1234.5, currency: "AED", reference: pairRef },
+      mkCtx() as any,
+    );
+    check("pair: receipt-as-invoice phase 1 still previews", !!d1.confirmation, d1);
+    const d2: any = await ingestInv.run(d1.confirmation.pending.input, mkCtx() as any);
+    check("pair: receipt-as-invoice confirm → alreadyFiled, no duplicate", d2.ok === true && d2.data?.alreadyFiled === true, d2);
+    const rowsAfter = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, pairRef),
+    ));
+    check("pair: still exactly ONE record after the duplicate attempt", rowsAfter.length === 1, rowsAfter.length);
+
+    // Itemization transparency: a document with NO printed line rows says why.
+    stubState.invoiceFields = {
+      supplierName: "Flat Fee Consulting FZE",
+      amount: 900,
+      currency: "AED",
+      reference: `FLAT-${String(Date.now()).slice(-6)}`,
+      invoiceDate: "2026-08-15",
+      periodLabel: null,
+      notes: null,
+      lineItems: null,
+    };
+    const flatPdf = await makePdf([
+      "TAX INVOICE",
+      "Flat Fee Consulting FZE",
+      "Invoice No: (as agreed)  Bill To: Cognirise",
+      "Due Date: 2026-09-15  Subtotal VAT",
+      "Amount Due: AED 900.00",
+    ]);
+    const flatAtt = await ingest(`flat-${TAG}.pdf`, "application/pdf", flatPdf);
+    const f1: any = await ingestInv.run({ attachmentId: flatAtt }, mkCtx() as any);
+    check(
+      "no-items: summary explains why there is no itemization",
+      !!f1.confirmation && /No itemizable line rows/i.test(f1.confirmation?.summary ?? ""),
+      f1.confirmation?.summary,
+    );
+    stubState.invoiceFields = null;
   }
 
   // =============== 3) bank statement pipeline ===============

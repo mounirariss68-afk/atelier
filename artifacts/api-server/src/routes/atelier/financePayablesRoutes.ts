@@ -1425,6 +1425,19 @@ function supplierInvoiceWire(
     paymentRunId: row.paymentRunId,
     remittanceRef: row.remittanceRef,
     paidAt: row.paidAt?.toISOString() ?? null,
+    // Task #1250 — parsed line items + proof-of-payment receipt metadata
+    // (blob ref stays server-side; the wire carries descriptive fields only).
+    lineItems: row.lineItems ?? null,
+    paymentReceipt: row.paymentReceipt
+      ? {
+          fileName: row.paymentReceipt.fileName,
+          sizeBytes: row.paymentReceipt.sizeBytes,
+          attachedAt: row.paymentReceipt.attachedAt,
+          matchedBy: row.paymentReceipt.matchedBy,
+          // Authenticated download path for the stored proof of payment.
+          downloadPath: `/finance/payables/supplier-invoices/${row.id}/receipt`,
+        }
+      : null,
     // Task #1095 — entity-allocation lifecycle.
     allocStatus: row.allocStatus,
     allocRuleId: row.allocRuleId,
@@ -1582,6 +1595,20 @@ export async function createSupplierInvoiceCore(args: {
    * Registered partner firms keep bank details on the firm registry. */
   supplierBankIban?: string | null;
   supplierBankHolder?: string | null;
+  /** Task #1250 — printed line items parsed from the document (chat
+   * ingest); stored verbatim, null when the invoice has no itemization. */
+  lineItems?: Array<{ description: string; qty: number | null; unitAmount: number | null; amount: number | null }> | null;
+  /** Task #1250 — proof-of-payment receipt paired at ingest time. When
+   * set, the invoice is recorded already-paid (status "paid"): it never
+   * enters the review→approve→payment-run path, so the same bill can't
+   * be paid twice. Callers MUST have verified the receipt visibly
+   * matches the invoice (reference or exact amount) before passing it. */
+  paymentReceipt?: {
+    fileBuffer: Buffer;
+    fileName: string;
+    mime?: string | null;
+    matchedBy: "reference";
+  } | null;
   /** Task #1095 — user picked the entity allocation up-front (chat card). */
   explicitLegalEntityId?: string | null;
   /**
@@ -1718,6 +1745,23 @@ export async function createSupplierInvoiceCore(args: {
     )).limit(1);
     if (dupe) return { dupe } as const;
     const { blobRef } = await storeContractBytes(args.fileBuffer);
+    // Task #1250 — paired proof-of-payment receipt: store the receipt
+    // blob and record the invoice already-paid, all in the same insert,
+    // so there is never a moment where the bill looks payable.
+    let paymentReceipt: typeof atelierPartnerFirmInvoices.$inferInsert["paymentReceipt"] = null;
+    if (args.paymentReceipt) {
+      const stored = await storeContractBytes(args.paymentReceipt.fileBuffer);
+      paymentReceipt = {
+        fileName: args.paymentReceipt.fileName.slice(0, 300),
+        mime: args.paymentReceipt.mime ?? null,
+        sizeBytes: args.paymentReceipt.fileBuffer.length,
+        sha256: createHash("sha256").update(args.paymentReceipt.fileBuffer).digest("hex"),
+        blobRef: stored.blobRef,
+        attachedAt: now.toISOString(),
+        attachedByUserId: me.id,
+        matchedBy: args.paymentReceipt.matchedBy,
+      };
+    }
     await tx.insert(atelierPartnerFirmInvoices).values({
       id,
       orgId: me.orgId,
@@ -1735,7 +1779,11 @@ export async function createSupplierInvoiceCore(args: {
       costCurrency: currency,
       fxRate: fx.rate,
       usdAmount: +fx.usdAmount.toFixed(2),
-      status: "submitted",
+      // Task #1250 — a receipt-paired invoice is recorded already-paid so
+      // it never enters review/approval/payment-run (no double payment).
+      status: paymentReceipt ? "paid" : "submitted",
+      ...(paymentReceipt ? { paidAt: now, paidByUserId: me.id, paymentReceipt } : {}),
+      ...(args.lineItems && args.lineItems.length > 0 ? { lineItems: args.lineItems } : {}),
       source: "internal_upload",
       reference,
       periodLabel,
@@ -1814,7 +1862,12 @@ export async function createSupplierInvoiceCore(args: {
   // even when the engine said auto — money never moves on a guessed entity.
   let autoAdvanced = false;
   const autoReasons = [...policy.reasons];
-  if (policy.auto) {
+  // Task #1250 — a receipt-paired invoice is already paid: never
+  // auto-advance it into the approval/payment path.
+  if (policy.auto && args.paymentReceipt) {
+    autoReasons.push("already paid at ingest (proof-of-payment receipt attached) — no approval path");
+  }
+  if (policy.auto && !args.paymentReceipt) {
     const allocResolvable = row.allocStatus === "proposed" || row.allocStatus === "approved" || row.allocStatus === "overridden";
     if (!allocResolvable) {
       autoReasons.push(`held for review: allocation ${row.allocStatus ?? "unset"} needs a human decision`);
@@ -1842,6 +1895,8 @@ export async function createSupplierInvoiceCore(args: {
     payload: {
       supplierName: firm?.name ?? supplierName, partnerFirmId: firm?.id ?? null,
       reference, amount, currency, periodLabel, sha256, via,
+      ...(args.paymentReceipt ? { paidOnIngest: true, receiptFileName: args.paymentReceipt.fileName, receiptMatchedBy: args.paymentReceipt.matchedBy } : {}),
+      ...(args.lineItems && args.lineItems.length > 0 ? { lineItemCount: args.lineItems.length } : {}),
       ...(supplierBankIban ? { supplierBank: { ibanMasked: maskIban(supplierBankIban), holder: supplierBankHolder } } : {}),
       autopilot: { auto: policy.auto, autoAdvanced, finalStatus: row.status, reasons: autoReasons },
     },
@@ -1930,6 +1985,24 @@ router.get("/finance/payables/supplier-invoices/:id/file", async (req, res, next
     res.setHeader(
       "Content-Disposition",
       contentDispositionFilename("attachment", row.fileName ?? `${row.id}.pdf`),
+    );
+    res.send(bytes);
+  } catch (err) { next(err); }
+});
+
+// @cli-skip: Task #1250 binary download (proof-of-payment receipt); not CLI-exposable
+router.get("/finance/payables/supplier-invoices/:id/receipt", async (req, res, next) => {
+  try {
+    const me = readGate(req, res);
+    if (!me) return;
+    const row = await loadSupplierInvoice(me.orgId, req.params.id);
+    if (!row || !row.paymentReceipt?.blobRef) { res.status(404).json({ error: "not-found" }); return; }
+    const bytes = await loadContractBytes(row.paymentReceipt.blobRef);
+    if (!bytes) { res.status(404).json({ error: "file-missing" }); return; }
+    res.setHeader("Content-Type", row.paymentReceipt.mime ?? "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      contentDispositionFilename("attachment", row.paymentReceipt.fileName ?? `${row.id}-receipt.pdf`),
     );
     res.send(bytes);
   } catch (err) { next(err); }

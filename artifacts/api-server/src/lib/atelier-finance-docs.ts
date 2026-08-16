@@ -160,9 +160,17 @@ Return a single JSON object with this exact shape (all keys present):
     "reference": string|null (invoice number / reference as printed),
     "invoiceDate": string|null (YYYY-MM-DD),
     "periodLabel": string|null (billing period if stated, e.g. "2026-07" or "Jul 2026"),
-    "notes": string|null (one short line of anything a reviewer should know, else null)
+    "notes": string|null (one short line of anything a reviewer should know, else null),
+    "lineItems": array|null (the printed itemization when the invoice shows line rows; each item {"description": string, "qty": number|null, "unitAmount": number|null, "amount": number|null}. Copy rows as printed — never invent, split, or merge lines. null when the document prints no itemization)
   }
 }`;
+
+export interface SupplierInvoiceLineItemParsed {
+  description: string;
+  qty: number | null;
+  unitAmount: number | null;
+  amount: number | null;
+}
 
 export interface SupplierInvoiceFields {
   supplierName: string | null;
@@ -172,6 +180,8 @@ export interface SupplierInvoiceFields {
   invoiceDate: string | null;
   periodLabel: string | null;
   notes: string | null;
+  /** Printed line rows, as parsed; null when the document has none. */
+  lineItems: SupplierInvoiceLineItemParsed[] | null;
 }
 
 export type SupplierInvoiceParseResult =
@@ -231,6 +241,7 @@ export async function parseSupplierInvoiceText(args: {
         invoiceDate: str(f.invoiceDate),
         periodLabel: str(f.periodLabel),
         notes: str(f.notes),
+        lineItems: normalizeParsedLineItems(f.lineItems),
       },
     };
   } catch (err) {
@@ -241,6 +252,129 @@ export async function parseSupplierInvoiceText(args: {
       errorMessage: err instanceof Error ? err.message : "AI parse error",
     };
   }
+}
+
+/** Sanitize a model-returned (or user/pin-supplied) lineItems payload.
+ * Deterministic, shared by parse-time and commit-time consumers so the
+ * phase-1 preview and the phase-2 write see identical rows. */
+export function normalizeParsedLineItems(v: unknown): SupplierInvoiceLineItemParsed[] | null {
+  if (!Array.isArray(v)) return null;
+  const num = (x: unknown): number | null =>
+    typeof x === "number" && Number.isFinite(x) ? x : null;
+  const out: SupplierInvoiceLineItemParsed[] = [];
+  for (const raw of v.slice(0, 50)) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const description =
+      typeof r.description === "string" && r.description.trim()
+        ? r.description.trim().slice(0, 300)
+        : null;
+    if (!description) continue;
+    out.push({ description, qty: num(r.qty), unitAmount: num(r.unitAmount), amount: num(r.amount) });
+  }
+  return out.length > 0 ? out : null;
+}
+
+// ---------------------------------------------------------------------------
+// Invoice ↔ receipt pairing (deterministic — no model call, probe-friendly).
+// ---------------------------------------------------------------------------
+
+/** Reference-like tokens: letters+digits with a separator or a long
+ * alphanumeric run containing a digit (e.g. "YBJGOJ-00078", "INV-2026-0815"). */
+export function extractReferenceTokens(text: string): Set<string> {
+  const out = new Set<string>();
+  const re = /\b[A-Z0-9]+(?:[-_/][A-Z0-9]+)+\b|\b(?=[A-Z0-9]*\d)[A-Z0-9]{6,}\b/gi;
+  for (const m of (text ?? "").matchAll(re)) {
+    const tok = m[0].toUpperCase();
+    // Skip pure dates (2026-08-01) and pure numbers shorter than 6 digits.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(tok)) continue;
+    if (!/\d/.test(tok)) continue;
+    if (tok.length < 6) continue;
+    out.add(tok);
+  }
+  return out;
+}
+
+/** True ONLY when the receipt text visibly prints the invoice reference.
+ * Amounts alone are deliberately NOT sufficient — identical totals across
+ * unrelated bills are common, and a false pairing would persist a false
+ * paid state that bypasses the approval/payment lifecycle. */
+export function receiptMatchesInvoice(
+  receiptText: string,
+  invoice: { reference: string | null; amount: number | null },
+): { match: boolean; matchedBy: "reference" | null } {
+  const text = (receiptText ?? "").toUpperCase();
+  const refChars = (invoice.reference ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (refChars.length >= 5) {
+    // Delimiter-aware EXACT match: formatting characters (dashes, slashes,
+    // spaces…) may vary between the two documents, but the alphanumeric
+    // reference must match in full at token boundaries — a substring match
+    // would let INV-12345 pair against a receipt printing INV-123456.
+    const inner = refChars.split("").map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^A-Z0-9]?");
+    const re = new RegExp(`(^|[^A-Z0-9])${inner}([^A-Z0-9]|$)`);
+    if (re.test(text)) return { match: true, matchedBy: "reference" };
+  }
+  return { match: false, matchedBy: null };
+}
+
+/** Commit-grade verification that a paired attachment really is a payment
+ * receipt for THIS invoice. Two independent gates, both required:
+ *  1. the document classifies as a receipt (not an invoice, statement,
+ *     letter…) — arbitrary reference-bearing text is not payment evidence;
+ *  2. its text visibly prints the invoice reference.
+ * Used by BOTH the preview and the commit phase so they always agree. */
+export function verifyPairedReceipt(args: {
+  receiptText: string;
+  receiptFileName: string | null;
+  invoice: { reference: string | null; amount: number | null };
+}): { ok: true; matchedBy: "reference" } | { ok: false; reason: "not_a_receipt" | "no_reference_match" } {
+  const cls = classifyFinanceDocument({ text: args.receiptText, fileName: args.receiptFileName });
+  if (cls.kind !== "receipt") return { ok: false, reason: "not_a_receipt" };
+  const m = receiptMatchesInvoice(args.receiptText, args.invoice);
+  if (!m.match || !m.matchedBy) return { ok: false, reason: "no_reference_match" };
+  return { ok: true, matchedBy: m.matchedBy };
+}
+
+export interface InvoiceReceiptPair {
+  invoiceAttachmentId: string;
+  receiptAttachmentId: string;
+  sharedReference: string;
+  matchedBy: "reference";
+}
+
+/** Detect same-bill invoice+receipt pairs among a classified batch:
+ * an invoice and a receipt-looking document sharing a reference token.
+ * Reference-only by design (amounts alone never pair). Deterministic. */
+export function detectInvoiceReceiptPairs(
+  docs: Array<{ attachmentId: string; kind: FinanceDocKind; fileName?: string | null; text: string }>,
+): InvoiceReceiptPair[] {
+  const invoices = docs.filter((d) => d.kind === "supplier_invoice");
+  // Strictly kind === "receipt": a reference-bearing document that
+  // classifies as anything else (e.g. a second invoice) never pairs,
+  // matching the commit-time verifyPairedReceipt gate.
+  const receipts = docs.filter((d) => d.attachmentId && d.kind === "receipt");
+  const pairs: InvoiceReceiptPair[] = [];
+  const used = new Set<string>();
+  for (const inv of invoices) {
+    const invTokens = extractReferenceTokens(inv.text);
+    for (const rcpt of receipts) {
+      if (rcpt.attachmentId === inv.attachmentId || used.has(rcpt.attachmentId)) continue;
+      const shared = [...extractReferenceTokens(rcpt.text)].filter((t) => invTokens.has(t));
+      if (shared.length > 0) {
+        // Prefer the most reference-looking shared token (has a separator).
+        shared.sort((a, b) => Number(b.includes("-")) - Number(a.includes("-")) || b.length - a.length);
+        pairs.push({
+          invoiceAttachmentId: inv.attachmentId,
+          receiptAttachmentId: rcpt.attachmentId,
+          sharedReference: shared[0],
+          matchedBy: "reference",
+        });
+        used.add(rcpt.attachmentId);
+        break;
+      }
+    }
+  }
+  return pairs;
 }
 
 // ---------------------------------------------------------------------------
