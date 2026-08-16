@@ -111,6 +111,7 @@ import type {
   AtelierDealPricingComputed,
   AtelierDealPricingEnvelope,
   AtelierDealPricingInput,
+  AtelierDeleteAccountLogo200,
   AtelierDeleteDocument200,
   AtelierDeliverable,
   AtelierDeliverableDetail,
@@ -357,6 +358,8 @@ import type {
   AtelierUpdateMyEmergencyContact200,
   AtelierUpdateOpportunityInput,
   AtelierUpdatePovInput,
+  AtelierUploadAccountLogo201,
+  AtelierUploadAccountLogoBody,
   AtelierUploadCandidateDocumentBody,
   AtelierUploadDocumentVersion201,
   AtelierUploadDocumentVersionBody,
@@ -18939,6 +18942,279 @@ export const useAtelierUpdateAccount = <
   TContext
 > => {
   return useMutation(getAtelierUpdateAccountMutationOptions(options));
+};
+
+/**
+ * Task #1191. Accepts image/jpeg, image/png, image/webp, image/gif, or
+image/svg+xml up to 2 MB. Replaces any previously uploaded logo.
+Gated to the same partner/senior-manager personas as account PATCH.
+
+ * @summary Upload / replace the client logo for an account (partner only)
+ */
+export const getAtelierUploadAccountLogoUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/logo`;
+};
+
+export const atelierUploadAccountLogo = async (
+  accountId: string,
+  atelierUploadAccountLogoBody: AtelierUploadAccountLogoBody,
+  options?: RequestInit,
+): Promise<AtelierUploadAccountLogo201> => {
+  const formData = new FormData();
+  formData.append(`logo`, atelierUploadAccountLogoBody.logo);
+
+  return customFetch<AtelierUploadAccountLogo201>(
+    getAtelierUploadAccountLogoUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getAtelierUploadAccountLogoMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadAccountLogo>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUploadAccountLogoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUploadAccountLogo>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUploadAccountLogoBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUploadAccountLogo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUploadAccountLogo>>,
+    { accountId: string; data: BodyType<AtelierUploadAccountLogoBody> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierUploadAccountLogo(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUploadAccountLogoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUploadAccountLogo>>
+>;
+export type AtelierUploadAccountLogoMutationBody =
+  BodyType<AtelierUploadAccountLogoBody>;
+export type AtelierUploadAccountLogoMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Upload / replace the client logo for an account (partner only)
+ */
+export const useAtelierUploadAccountLogo = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadAccountLogo>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUploadAccountLogoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUploadAccountLogo>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUploadAccountLogoBody> },
+  TContext
+> => {
+  return useMutation(getAtelierUploadAccountLogoMutationOptions(options));
+};
+
+/**
+ * @summary Stream the uploaded client logo image bytes
+ */
+export const getAtelierGetAccountLogoUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/logo`;
+};
+
+export const atelierGetAccountLogo = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getAtelierGetAccountLogoUrl(accountId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetAccountLogoQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/logo`] as const;
+};
+
+export const getAtelierGetAccountLogoQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountLogo>>,
+  TError = ErrorType<AtelierError>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountLogo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccountLogoQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountLogo>>
+  > = ({ signal }) =>
+    atelierGetAccountLogo(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountLogo>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountLogoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountLogo>>
+>;
+export type AtelierGetAccountLogoQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary Stream the uploaded client logo image bytes
+ */
+
+export function useAtelierGetAccountLogo<
+  TData = Awaited<ReturnType<typeof atelierGetAccountLogo>>,
+  TError = ErrorType<AtelierError>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountLogo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountLogoQueryOptions(accountId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Remove the uploaded client logo from an account
+ */
+export const getAtelierDeleteAccountLogoUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/logo`;
+};
+
+export const atelierDeleteAccountLogo = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierDeleteAccountLogo200> => {
+  return customFetch<AtelierDeleteAccountLogo200>(
+    getAtelierDeleteAccountLogoUrl(accountId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteAccountLogoMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountLogo>>,
+    TError,
+    { accountId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteAccountLogo>>,
+  TError,
+  { accountId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteAccountLogo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteAccountLogo>>,
+    { accountId: string }
+  > = (props) => {
+    const { accountId } = props ?? {};
+
+    return atelierDeleteAccountLogo(accountId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteAccountLogoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteAccountLogo>>
+>;
+
+export type AtelierDeleteAccountLogoMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Remove the uploaded client logo from an account
+ */
+export const useAtelierDeleteAccountLogo = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountLogo>>,
+    TError,
+    { accountId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteAccountLogo>>,
+  TError,
+  { accountId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteAccountLogoMutationOptions(options));
 };
 
 /**

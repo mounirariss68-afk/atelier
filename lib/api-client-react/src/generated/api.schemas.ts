@@ -1152,6 +1152,8 @@ only while `executiveMapperStatus` is `running`; `null` otherwise.
    * @nullable
    */
   executiveMapperPhase?: string | null;
+  /** @nullable */
+  clientLogoUrl?: string | null;
 }
 
 export type AtelierAccountHealthBand =
@@ -9944,6 +9946,19 @@ export const AtelierListAccountsStatus = {
   archived: "archived",
   all: "all",
 } as const;
+
+export type AtelierUploadAccountLogoBody = {
+  logo: Blob;
+};
+
+export type AtelierUploadAccountLogo201 = {
+  ok: boolean;
+  clientLogoUrl: string;
+};
+
+export type AtelierDeleteAccountLogo200 = {
+  ok: boolean;
+};
 
 export type AtelierUpdateAccountProcurement200 = {
   ok: boolean;

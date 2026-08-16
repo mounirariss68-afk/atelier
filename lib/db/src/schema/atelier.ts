@@ -340,6 +340,11 @@ export const atelierAccounts = pgTable(
         points: Array<{ watchOut: string; answer: string }>;
       };
     }>(),
+    // Task #1191 — uploaded client logo (private object-storage ref).
+    // Null until a partner uploads a real logo via POST /accounts/:id/logo.
+    // Bytes served through an authenticated endpoint and embedded as a data
+    // URI in downloaded prep cards.
+    clientLogoRef: text("client_logo_ref"),
     // Task #566 — Cognirise-authored account strategy. Distinct from the
     // AI-generated `cogniriseHypothesis`/`researchBrief`: this is the
     // partner's deliberate plan of record. Nullable until a partner fills

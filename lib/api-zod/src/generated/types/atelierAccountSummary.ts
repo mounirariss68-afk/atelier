@@ -91,4 +91,6 @@ only while `executiveMapperStatus` is `running`; `null` otherwise.
    * @nullable
    */
   executiveMapperPhase?: string | null;
+  /** @nullable */
+  clientLogoUrl?: string | null;
 }

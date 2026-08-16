@@ -70,6 +70,72 @@ export function EditAccountProfileDialog({ account, accountId, open, onOpenChang
   const { toast } = useToast();
   const update = useAtelierUpdateAccount();
 
+  // Task #1191 — client logo upload state
+  const [logoUploading, setLogoUploading] = React.useState(false);
+  const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
+
+  // Hydrate logoPreview from the account on each open.
+  React.useEffect(() => {
+    if (open) {
+      setLogoPreview(account.clientLogoUrl ?? null);
+    }
+  }, [open, account.clientLogoUrl]);
+
+  async function handleLogoFile(file: File) {
+    const LOGO_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!LOGO_MIMES.includes(file.type)) {
+      toast({ title: "Unsupported file type", description: "Use JPEG, PNG, WebP, GIF or SVG.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Logo must be under 2 MB.", variant: "destructive" });
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const form = new FormData();
+      form.append("logo", file);
+      const res = await fetch(`/api/atelier/accounts/${accountId}/logo`, {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { reason?: string }).reason ?? `Upload failed (${res.status})`);
+      }
+      const data = (await res.json()) as { clientLogoUrl: string };
+      // Show a cache-busted preview immediately.
+      setLogoPreview(`${data.clientLogoUrl}?v=${Date.now()}`);
+      qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      toast({ title: "Logo uploaded", description: "The client logo will appear on future prep cards." });
+    } catch (err) {
+      toast({ title: "Logo upload failed", description: (err as Error)?.message ?? String(err), variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setLogoUploading(true);
+    try {
+      const res = await fetch(`/api/atelier/accounts/${accountId}/logo`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Remove failed (${res.status})`);
+      setLogoPreview(null);
+      qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      toast({ title: "Logo removed" });
+    } catch (err) {
+      toast({ title: "Could not remove logo", description: (err as Error)?.message ?? String(err), variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   // Task #613 — annual revenue is a money surface gated by the same account-
   // financials authority that governs viewing it. Personas without that
   // authority see the figure as "Restricted" and must not be able to edit (or
@@ -233,6 +299,64 @@ export function EditAccountProfileDialog({ account, accountId, open, onOpenChang
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="grid gap-5 py-3">
+          {/* Task #1191 — client logo upload */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs uppercase tracking-widest font-mono text-text-faint">
+              Client logo
+            </Label>
+            <p className="text-xs text-text-mute -mt-0.5">
+              Appears on the meeting prep card header. JPEG, PNG, WebP or GIF · max 2 MB.
+            </p>
+            <div className="flex items-center gap-3">
+              {logoPreview ? (
+                <img
+                  src={logoPreview}
+                  alt="Client logo"
+                  className="h-12 max-w-[140px] object-contain rounded border border-border bg-bg-deep p-1"
+                  data-testid="img-account-client-logo-preview"
+                />
+              ) : (
+                <div
+                  className="h-12 w-24 rounded border border-border border-dashed bg-bg-deep flex items-center justify-center text-xs text-text-faint"
+                  data-testid="div-account-client-logo-empty"
+                >
+                  No logo
+                </div>
+              )}
+              <label className="cursor-pointer">
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded border border-border bg-bg-deep hover:bg-bg-elevate text-text transition-colors"
+                  data-testid="button-upload-account-logo"
+                >
+                  {logoUploading ? "Uploading…" : logoPreview ? "Replace" : "Upload"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  disabled={logoUploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleLogoFile(file);
+                    e.target.value = "";
+                  }}
+                  data-testid="input-upload-account-logo-file"
+                />
+              </label>
+              {logoPreview && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveLogo()}
+                  disabled={logoUploading}
+                  className="text-xs text-danger hover:underline disabled:opacity-50"
+                  data-testid="button-remove-account-logo"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+
           <RevenueProfileFields
             canEditFinancials={canEditFinancials}
             employeeCount={employeeCount}

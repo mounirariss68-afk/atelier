@@ -4687,6 +4687,100 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/accounts/{accountId}/logo:
+    post:
+      operationId: atelierUploadAccountLogo
+      tags: [atelier]
+      summary: Upload / replace the client logo for an account (partner only)
+      description: |
+        Task #1191. Accepts image/jpeg, image/png, image/webp, or image/gif
+        up to 2 MB (SVG is rejected to prevent stored XSS). Magic bytes are
+        validated server-side; the client-supplied MIME type is ignored.
+        Replaces any previously uploaded logo. Gated to the same
+        partner/senior-manager personas as account PATCH.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Logo stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, clientLogoUrl]
+                properties:
+                  ok: { type: boolean }
+                  clientLogoUrl: { type: string }
+        "400":
+          description: Missing or invalid file
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "403":
+          description: Not allowed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+    get:
+      operationId: atelierGetAccountLogo
+      tags: [atelier]
+      summary: Stream the uploaded client logo image bytes
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Logo image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No logo uploaded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+    delete:
+      operationId: atelierDeleteAccountLogo
+      tags: [atelier]
+      summary: Remove the uploaded client logo from an account
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Logo removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "403":
+          description: Not allowed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/accounts/{accountId}/procurement:
     patch:
       operationId: atelierUpdateAccountProcurement
@@ -7814,6 +7908,9 @@ components:
           description: |
             Live phase label of an in-flight Executive Mapper sweep. Present
             only while `executiveMapperStatus` is `running`; `null` otherwise.
+        # Task #1191 — URL of the uploaded client logo image, served through an
+        # authenticated endpoint. Null when no logo has been uploaded yet.
+        clientLogoUrl: { type: ["string", "null"] }
 
     AtelierContact:
       type: object

@@ -10722,6 +10722,7 @@ export const AtelierListAccountsResponseItem = zod.object({
     .describe(
       "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
     ),
+  clientLogoUrl: zod.string().nullish(),
 });
 export const AtelierListAccountsResponse = zod.array(
   AtelierListAccountsResponseItem,
@@ -11560,6 +11561,7 @@ export const AtelierMergeAccountsResponse = zod.object({
           .describe(
             "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
           ),
+        clientLogoUrl: zod.string().nullish(),
       })
       .and(
         zod.object({
@@ -12760,6 +12762,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -14210,6 +14213,7 @@ export const AtelierUpdateAccountResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -15120,6 +15124,39 @@ export const AtelierUpdateAccountResponse = zod.object({
 });
 
 /**
+ * Task #1191. Accepts image/jpeg, image/png, image/webp, image/gif, or
+image/svg+xml up to 2 MB. Replaces any previously uploaded logo.
+Gated to the same partner/senior-manager personas as account PATCH.
+
+ * @summary Upload / replace the client logo for an account (partner only)
+ */
+export const AtelierUploadAccountLogoParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierUploadAccountLogoBody = zod.object({
+  logo: zod.instanceof(File),
+});
+
+/**
+ * @summary Stream the uploaded client logo image bytes
+ */
+export const AtelierGetAccountLogoParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+/**
+ * @summary Remove the uploaded client logo from an account
+ */
+export const AtelierDeleteAccountLogoParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierDeleteAccountLogoResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * Task #722 — Partner-tier / Senior Manager only. Edits the human-owned
 procurement registration tracking fields (status + notes). The
 agent-researched guide itself is written only via the Procurement
@@ -15499,6 +15536,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -17405,6 +17443,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -18603,6 +18642,7 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -19812,6 +19852,7 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -21020,6 +21061,7 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -22212,6 +22254,7 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -23413,6 +23456,7 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -24614,6 +24658,7 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -25808,6 +25853,7 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -27014,6 +27060,7 @@ export const AtelierCreateAccountActionResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -28217,6 +28264,7 @@ export const AtelierUpdateAccountActionResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -29409,6 +29457,7 @@ export const AtelierDeleteAccountActionResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -30610,6 +30659,7 @@ export const AtelierCreateAccountRiskResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -31812,6 +31862,7 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -33004,6 +33055,7 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({
@@ -34204,6 +34256,7 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
         .describe(
           "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
+      clientLogoUrl: zod.string().nullish(),
     })
     .and(
       zod.object({

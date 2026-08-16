@@ -24,6 +24,7 @@ import { distillBriefView } from "../../lib/atelier-brief-view.js";
 import { getWatchOutTalkingPoints } from "../../lib/atelier-prepcard-talking-points.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
+import { logoRefToDataUri } from "../../lib/accountLogoStorage.js";
 
 type Persona = { id: string; role: string; name: string; orgId?: string };
 
@@ -116,6 +117,10 @@ export async function accountPrepCardHandler(
     view.watchOuts,
   );
 
+  // Task #1191 — embed the client logo as a data URI so the downloaded HTML
+  // works fully offline (no authenticated endpoint needed in the saved file).
+  const clientLogoUrl = await logoRefToDataUri(account.clientLogoRef ?? null);
+
   const html = renderPrepCardHtml({
     accountName: account.name,
     brandName: account.brandName ?? null,
@@ -128,6 +133,7 @@ export async function accountPrepCardHandler(
     researchBrief: account.researchBrief ?? null,
     contacts,
     focusContact,
+    clientLogoUrl,
     watchOutAnswers,
   });
 

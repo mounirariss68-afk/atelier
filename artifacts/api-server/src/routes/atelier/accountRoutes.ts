@@ -170,6 +170,12 @@ import {
   getExecutiveMapperLaunch,
 } from "../../lib/atelier-agents/executive-mapper-chain.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import multer from "multer";
+import {
+  storeAccountLogoBytes,
+  loadAccountLogoBytes,
+  dropAccountLogoBytes,
+} from "../../lib/accountLogoStorage.js";
 import {
   createBriefDoc,
   buildAccountResearchBriefPdf,
@@ -608,6 +614,9 @@ async function summariseAccount(
     cartographerPhase,
     executiveMapperStatus: execMapper.status,
     executiveMapperPhase: execMapper.phase,
+    // Task #1191 — expose a served-URL for the uploaded logo so the web UI
+    // can display it via <img>. Null when no logo has been uploaded.
+    clientLogoUrl: a.clientLogoRef ? `/api/atelier/accounts/${a.id}/logo` : null,
   };
 }
 
@@ -6716,6 +6725,175 @@ router.delete("/credentials/:credentialId", async (req, res) => {
     });
   });
   res.status(204).send();
+});
+
+// -------------------------------------------------------------------
+// Task #1191 — Account client logo upload / serve / delete
+// -------------------------------------------------------------------
+
+// SVG is intentionally excluded: an SVG with embedded script would be stored
+// and served as same-origin content, creating a stored XSS vector.
+const LOGO_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/**
+ * Validate image magic bytes rather than trusting the client-supplied
+ * Content-Type / multer MIME string.  Returns the canonical MIME string for a
+ * recognised raster format, or null when the bytes don't match any allowlisted
+ * signature.  Only raster formats (JPEG, PNG, WebP, GIF) are accepted — SVG is
+ * rejected regardless of declared MIME type.
+ */
+function sniffImageMime(buf: Buffer): string | null {
+  if (buf.length < 12) return null;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  ) return "image/png";
+  // GIF: GIF87a or GIF89a
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38 &&
+      (buf[4] === 0x37 || buf[4] === 0x39) && buf[5] === 0x61) return "image/gif";
+  // WebP: RIFF????WEBP
+  if (
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+  ) return "image/webp";
+  return null;
+}
+
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: LOGO_MAX_BYTES, files: 1 },
+});
+
+function logoMulterWrapped(
+  handler: ReturnType<typeof logoUpload.single>,
+): (req: Request, res: Response, next: (err?: unknown) => void) => void {
+  return (req, res, next) => {
+    handler(req, res, (err?: unknown) => {
+      if (!err) return next();
+      if (err instanceof multer.MulterError) {
+        const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        res.status(status).json({ error: err.code.toLowerCase().replace(/_/g, "-"), message: err.message });
+        return;
+      }
+      res.status(400).json({ error: "upload-error", message: String(err) });
+    });
+  };
+}
+
+// POST /accounts/:accountId/logo — upload / replace client logo
+// @cli-skip: binary upload
+router.post(
+  "/accounts/:accountId/logo",
+  logoMulterWrapped(logoUpload.single("logo")),
+  async (req: Request, res: Response) => {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!CREATE_ROLES.has(me.role)) {
+      res.status(403).json({ error: "partner-only", reason: "Only Partner or Senior Manager personas can upload a client logo." });
+      return;
+    }
+    const accountId = String(req.params.accountId ?? "");
+    const access = await accessibleEngagementIds(me);
+    if (!(await canSeeAccount(access, me, accountId))) {
+      res.status(403).json({ error: "account-forbidden" });
+      return;
+    }
+    const account = await loadAccount(accountId);
+    if (!account) { res.status(404).json({ error: "not-found" }); return; }
+
+    const file = (req as Request & { file?: Express.Multer.File }).file;
+    if (!file) { res.status(400).json({ error: "missing-file", reason: "No file attached (field name: logo)." }); return; }
+
+    // Validate magic bytes rather than trusting the client-supplied MIME type.
+    // This rejects forged Content-Type headers and SVG files even when the
+    // client declares them as image/png.  SVG is never accepted because
+    // inline scripts in SVG would create a stored XSS vector when served
+    // same-origin.
+    const sniffed = sniffImageMime(file.buffer);
+    if (!sniffed) {
+      res.status(400).json({ error: "invalid-mime", reason: "File must be a JPEG, PNG, WebP or GIF image (SVG is not accepted)." });
+      return;
+    }
+
+    // Store new bytes, then drop the old blob (in that order for safety).
+    const { fileRef } = await storeAccountLogoBytes(file.buffer, sniffed);
+    const oldRef = account.clientLogoRef ?? null;
+
+    await db
+      .update(atelierAccounts)
+      .set({ clientLogoRef: fileRef, updatedAt: new Date() })
+      .where(eq(atelierAccounts.id, accountId));
+
+    if (oldRef) {
+      await dropAccountLogoBytes(oldRef).catch(() => { /* non-fatal */ });
+    }
+
+    res.status(201).json({ ok: true, clientLogoUrl: `/api/atelier/accounts/${accountId}/logo` });
+  },
+);
+
+// GET /accounts/:accountId/logo — stream the logo bytes
+// @cli-skip: binary image stream
+router.get("/accounts/:accountId/logo", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const { accountId } = req.params;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const account = await loadAccount(accountId);
+  if (!account || !account.clientLogoRef) {
+    res.status(404).json({ error: "no-logo" });
+    return;
+  }
+  const result = await loadAccountLogoBytes(account.clientLogoRef);
+  if (!result) { res.status(404).json({ error: "no-logo" }); return; }
+
+  // Defense-in-depth headers: nosniff prevents the browser from re-sniffing
+  // the content type; the restrictive CSP blocks any script/embed within the
+  // image response even if a non-raster asset somehow reached storage; the
+  // inline disposition allows <img> rendering while discouraging navigation.
+  res.setHeader("Content-Type", result.contentType);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'");
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.send(result.buf);
+});
+
+// DELETE /accounts/:accountId/logo — remove the client logo
+// @cli-skip: destructive image removal
+router.delete("/accounts/:accountId/logo", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const { accountId } = req.params;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const account = await loadAccount(accountId);
+  if (!account) { res.status(404).json({ error: "not-found" }); return; }
+
+  const oldRef = account.clientLogoRef ?? null;
+  if (!oldRef) { res.json({ ok: true }); return; }
+
+  await db
+    .update(atelierAccounts)
+    .set({ clientLogoRef: null, updatedAt: new Date() })
+    .where(eq(atelierAccounts.id, accountId));
+
+  await dropAccountLogoBytes(oldRef).catch(() => { /* non-fatal */ });
+  res.json({ ok: true });
 });
 
 // -------------------------------------------------------------------
