@@ -1013,6 +1013,16 @@ defineCapability({
     if (!acc) {
       return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
     }
+    // Task #1170 — apply canSeeAccount for BOTH the direct-accountId path and
+    // the accountQuery path (the latter is already gated by resolveAccount, but
+    // we enforce here too so the capability is safe regardless of call path).
+    const acl0 = await accessibleEngagementIds({
+      id: ctx.persona.id,
+      role: ctx.persona.role,
+    } as Parameters<typeof accessibleEngagementIds>[0]);
+    if (!(await canSeeAccount(acl0, { id: ctx.persona.id }, accountId))) {
+      return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
+    }
     const [contacts, opps, engs] = await Promise.all([
       db
         .select({ id: atelierContacts.id })
