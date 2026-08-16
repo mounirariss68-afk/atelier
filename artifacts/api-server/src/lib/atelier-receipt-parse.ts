@@ -13,9 +13,16 @@
  * route surfaces verbatim (422/502), never a silent guess.
  */
 
-import { eq } from "drizzle-orm";
-import { db, atelierExpenses, atelierAuditEvents, type atelierUsers } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
+import {
+  db,
+  atelierExpenses,
+  atelierAuditEvents,
+  atelierCliAttachments,
+  type atelierUsers,
+} from "@workspace/db";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage.js";
+import { loadAttachmentBytes, CLI_ENC_PREFIX } from "./atelier-cli/attachments/storage.js";
 import { isHeicPayload, convertHeicToJpeg } from "./atelier-heic.js";
 import { extractPdfText, renderPdfPageImage } from "./atelier-merchant/pdf.js";
 import { matchMerchant } from "./atelier-merchant/matcher.js";
@@ -516,6 +523,16 @@ export type ReceiptParseResult =
     }
   | { ok: false; status: number; body: Record<string, unknown> };
 
+/** Magic-byte sniff for blobs stored without a useful content type. */
+function sniffMediaType(bytes: Buffer): string {
+  if (bytes.length >= 4 && bytes.toString("latin1", 0, 4) === "%PDF") return "application/pdf";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes.length >= 12 && bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP") return "image/webp";
+  if (bytes.length >= 4 && bytes.toString("latin1", 0, 4) === "GIF8") return "image/gif";
+  return "application/octet-stream";
+}
+
 /**
  * Full parse pipeline for an expense with an attached receipt/invoice.
  * Caller is responsible for AUTH (self-scope or wallet ACL) — this function
@@ -527,7 +544,8 @@ export async function parseReceiptForExpense(args: {
   via: string;
 }): Promise<ReceiptParseResult> {
   const { row, me, via } = args;
-  if (!row.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
+  const ref = row.receiptFileRef ?? "";
+  if (!ref || (!ref.startsWith("/objects/") && !ref.startsWith(CLI_ENC_PREFIX))) {
     return {
       ok: false,
       status: 400,
@@ -535,19 +553,51 @@ export async function parseReceiptForExpense(args: {
     };
   }
 
-  const svc = new ObjectStorageService();
   let bytes: Buffer;
   let mediaType: string;
-  try {
-    const file = await svc.getObjectEntityFile(row.receiptFileRef);
-    const dl = await svc.downloadObject(file, 60);
-    mediaType = (dl.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-    bytes = Buffer.from(await dl.arrayBuffer());
-  } catch (err) {
-    if (err instanceof ObjectNotFoundError) {
+  if (ref.startsWith(CLI_ENC_PREFIX)) {
+    // Task #1263 — chat-created expenses store `enc:cli:<attachmentId>`
+    // (the CLI attachment id, whose row carries the actual blob pointer).
+    // Resolve attachment row → blob; fall back to treating the ref itself
+    // as a raw blob key for defensiveness.
+    const key = ref.slice(CLI_ENC_PREFIX.length);
+    const [att] = await db
+      .select()
+      .from(atelierCliAttachments)
+      .where(
+        and(
+          eq(atelierCliAttachments.id, key),
+          eq(atelierCliAttachments.orgId, me.orgId),
+        ),
+      );
+    let loaded: Buffer | null = null;
+    if (att?.encryptedRef) {
+      loaded = await loadAttachmentBytes(att.encryptedRef);
+    }
+    if (!loaded) {
+      loaded = await loadAttachmentBytes(ref);
+    }
+    if (!loaded) {
       return { ok: false, status: 404, body: { error: "no-receipt" } };
     }
-    throw err;
+    bytes = loaded;
+    mediaType = (att?.mime ?? "").split(";")[0].trim().toLowerCase();
+    if (!mediaType || mediaType === "application/octet-stream") {
+      mediaType = sniffMediaType(bytes);
+    }
+  } else {
+    const svc = new ObjectStorageService();
+    try {
+      const file = await svc.getObjectEntityFile(ref);
+      const dl = await svc.downloadObject(file, 60);
+      mediaType = (dl.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      bytes = Buffer.from(await dl.arrayBuffer());
+    } catch (err) {
+      if (err instanceof ObjectNotFoundError) {
+        return { ok: false, status: 404, body: { error: "no-receipt" } };
+      }
+      throw err;
+    }
   }
   // Task #554 — iPhone photos arrive as HEIC (sometimes with a generic
   // content type from object storage): convert to JPEG before the vision

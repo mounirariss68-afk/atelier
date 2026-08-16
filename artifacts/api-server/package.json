@@ -53,6 +53,7 @@
     "test:chat-suite": "export CRM_TEST_DB_NAME=crm_test_chat && tsx ./tests/cli-turn/narration-contract.ts && tsx ./tests/chat/replay-probe.ts && tsx ./tests/chat/recap-probe.ts && tsx ./tests/chat/session-facts-probe.ts && tsx ./tests/chat/clarification-resolver-probe.ts && tsx ./tests/chat/reducer-parity-probe.ts && tsx ./tests/chat/streaming-probe.ts && tsx ./tests/chat/conversation-probe.ts && tsx ./tests/crm/chat-attachment-continuity-probe.ts && tsx ./tests/cli-turn/confirm-forgery.ts && tsx ./tests/cli-turn/async-approval-gate.ts && tsx ./tests/cli-turn/clarification-approval-smuggle.ts && tsx ./tests/crm/chat-account-brief-probe.ts && tsx ./tests/crm/classify-narration-probe.ts",
     "chat:telemetry-rollup": "tsx ./tests/chat/telemetry-rollup.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
+    "test:pdf-receipt-fallback": "NODE_ENV=test tsx ./tests/cli-attachments/pdf-receipt-fallback.ts",
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
     "test:cli-parity": "tsx ./tests/cli-parity/run.ts",
     "test:cli-smoke": "tsx ./tests/cli-smoke/run.ts",

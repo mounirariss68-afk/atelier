@@ -104,7 +104,19 @@ import {
   defineCapability,
   summarizeSessionDraft,
 } from "./capability-catalog.js";
-import { loadAttachment, loadChunk, purgeAttachment, type DocChunk } from "./attachments/index.js";
+import {
+  loadAttachment,
+  loadChunk,
+  purgeAttachment,
+  loadAttachmentBytes,
+  type DocChunk,
+  type LoadedAttachment,
+} from "./attachments/index.js";
+import { extractPdfText, renderPdfPageImage } from "../atelier-merchant/pdf.js";
+import {
+  extractReceiptFromText,
+  extractReceiptWithVision,
+} from "../atelier-receipt-parse.js";
 import { searchDocumentChunks, setChunkScope } from "./attachments/retrieval.js";
 import { wrapAttachment } from "./prompt-guard.js";
 import {
@@ -115,6 +127,72 @@ import {
 } from "../atelier-entity-allocation.js";
 import { scoreRubric, type RubricChunk } from "./qualification-rubric.js";
 import { entityNavPath } from "./orchestrator-capabilities.js";
+
+/**
+ * Task #1263 — shared receipt-parse fallback for chat-attached PDF
+ * invoices. Fixture/vision-extracted attachments carry `merchant:` /
+ * `total:` headers in their extracted text; real PDF invoices never do.
+ * When header parsing misses on a PDF, run the SAME pipeline the manual
+ * "Parse receipt" button uses (pdf text layer → OCR → vision on a
+ * rendered page) and translate the result into the header form. The
+ * headers are persisted back onto the extracted-document row so the
+ * confirm pass (and any later re-run) regex-matches deterministically
+ * without a second model call.
+ *
+ * Fail-soft: any error returns null and the caller degrades to the
+ * existing manual-entry draft.
+ */
+async function parsePdfReceiptViaSharedPipeline(
+  loaded: LoadedAttachment,
+): Promise<{ headerText: string; lowConfidence: boolean } | null> {
+  const att = loaded.attachment;
+  if (!att.encryptedRef) return null;
+  const bytes = await loadAttachmentBytes(att.encryptedRef);
+  if (!bytes) return null;
+  const pdf = await extractPdfText(new Uint8Array(bytes));
+  const vx = pdf.quality.isUsable
+    ? await extractReceiptFromText(pdf.text)
+    : await extractReceiptWithVision(
+        await renderPdfPageImage(new Uint8Array(bytes), 1, 200),
+        "image/png",
+      );
+  const total = Number(vx.total);
+  if (vx.unreadable || !vx.merchant || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  const lines = [
+    `merchant: ${vx.merchant}`,
+    `category: ${vx.category ?? "other"}`,
+    `currency: ${(vx.currency ?? "USD").toUpperCase()} country: ${vx.country ?? "-"}`,
+    `total: ${total} tax: ${Number.isFinite(Number(vx.tax)) ? Number(vx.tax) : 0}`,
+  ];
+  if (vx.date && /^\d{4}-\d{2}-\d{2}$/.test(vx.date)) lines.push(`date: ${vx.date}`);
+  const headerText = lines.join("\n");
+  const lowConfidence = !!vx.confidence && vx.confidence !== "green";
+  if (loaded.extracted) {
+    const prevText = loaded.extracted.normalizedText ?? "";
+    const prevWarnings = (loaded.extracted.warnings ?? []) as string[];
+    const warnings =
+      lowConfidence && !prevWarnings.some((w) => w.startsWith("ocr-confidence:"))
+        ? [...prevWarnings, `ocr-confidence:${vx.confidence}`]
+        : prevWarnings;
+    try {
+      await db
+        .update(atelierExtractedDocuments)
+        .set({
+          normalizedText: `${headerText}\n--- raw ---\n${prevText}`.slice(0, 1_000_000),
+          warnings,
+        })
+        .where(eq(atelierExtractedDocuments.id, loaded.extracted.id));
+    } catch (err) {
+      // Persisting the headers is an optimization; the draft still works.
+      console.warn(
+        `[CLI receipts] failed to persist parsed headers for ${att.id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+  return { headerText, lowConfidence };
+}
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -634,13 +712,32 @@ defineCapability({
     for (const aid of attachmentIds) {
       const loaded = await loadAttachment(aid, ctx.persona.orgId);
       if (!loaded?.extracted) continue;
-      const text = loaded.extracted.normalizedText ?? "";
+      let text = loaded.extracted.normalizedText ?? "";
       // Receipt text carries `merchant:`/`total:`/`currency:` headers —
       // either from a deterministic fixture or from the vision OCR pass
       // (see extractors.extractImage). Parse them; non-image attachments
       // fall back to "scan as text".
-      const merchantMatch = text.match(/merchant:\s*([^\n]+)/i);
-      const totalMatch = text.match(/total:\s*([\d.]+)/i);
+      let merchantMatch = text.match(/merchant:\s*([^\n]+)/i);
+      let totalMatch = text.match(/total:\s*([\d.]+)/i);
+      // Task #1263 — real PDF invoices carry no fixture-style headers.
+      // Run the shared receipt-parse pipeline (text layer → OCR → vision)
+      // before flagging the draft unreadable. Fail-soft on any error.
+      let sharedParseLow = false;
+      if (loaded.extracted.kind === "pdf" && (!merchantMatch || !totalMatch)) {
+        try {
+          const fb = await parsePdfReceiptViaSharedPipeline(loaded);
+          if (fb) {
+            text = `${fb.headerText}\n${text}`;
+            merchantMatch = text.match(/merchant:\s*([^\n]+)/i);
+            totalMatch = text.match(/total:\s*([\d.]+)/i);
+            sharedParseLow = fb.lowConfidence;
+          }
+        } catch (err) {
+          console.warn(
+            `[CLI receipts] shared PDF parse failed for ${aid}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
       const currencyMatch = text.match(/currency:\s*([A-Z]{3})/i);
       const categoryMatch = text.match(/category:\s*(\w+)/i);
       const taxMatch = text.match(/tax:\s*([\d.]+)/i);
@@ -659,7 +756,8 @@ defineCapability({
             w.startsWith("ocr-failed:") ||
             w.startsWith("no-ocr-fixture:"),
         );
-      const lowConfidence = warnings.some((w) => w.startsWith("ocr-confidence:"));
+      const lowConfidence =
+        sharedParseLow || warnings.some((w) => w.startsWith("ocr-confidence:"));
       drafts.push({
         attachmentId: aid,
         merchant: merchantMatch?.[1].trim() ?? loaded.attachment.fileName,
