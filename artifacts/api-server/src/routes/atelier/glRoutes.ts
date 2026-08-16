@@ -61,7 +61,14 @@ import {
   completeBackgroundJob,
   failBackgroundJob,
   reapStaleRunningJob,
+  heartbeatBackgroundJob,
 } from "../../lib/background-jobs.js";
+import {
+  ENTITY_ALLOC_LOCK_KEY,
+  ENTITY_ALLOC_MANUAL_JOB_KIND,
+  ENTITY_ALLOC_JOB_KIND,
+  ENTITY_ALLOC_STALE_MS,
+} from "../../lib/atelier-agents/entityAllocationAuto.js";
 
 /**
  * Task #1073 — drill-through: resolve a journal/exception source to the
@@ -684,78 +691,126 @@ router.get("/gl/allocations/pending", async (req, res) => {
 // Founder/finance-triggered sweep: run the allocation engine over existing
 // untagged / never-allocated expenses and supplier invoices. Deterministic
 // by default; pass { allowAi: true } to let the AI fallback run.
+//
+// Task #1202 — this route now claims the SAME org-scoped durable background-
+// job lock (lockKey ENTITY_ALLOC_LOCK_KEY, targetId = orgId) that the daily
+// scheduled AI sweep uses. A manual trigger and an auto tick can therefore
+// never run concurrently; the caller gets 409 when a sweep is already live.
 // @cli-skip: UI-workflow bulk write; founder-triggered from the GL surface
 router.post("/gl/allocations/sweep", async (req, res) => {
   const me = denyRead(req, res); if (!me) return;
   const allowAi = (req.body ?? {}).allowAi === true;
-  const [expenses, pfis, invoices, cps, txns] = await Promise.all([
-    db.select({ id: atelierExpenses.id }).from(atelierExpenses).where(and(
-      eq(atelierExpenses.orgId, me.orgId),
-      isNull(atelierExpenses.allocStatus),
-      isNull(atelierExpenses.entityId),
-      inArray(atelierExpenses.status, ["draft", "submitted", "approved", "reimbursed"]),
-      isNull(atelierExpenses.deletedAt))).limit(100),
-    db.select({ id: atelierPartnerFirmInvoices.id }).from(atelierPartnerFirmInvoices).where(and(
-      eq(atelierPartnerFirmInvoices.orgId, me.orgId),
-      isNull(atelierPartnerFirmInvoices.allocStatus),
-      isNull(atelierPartnerFirmInvoices.legalEntityId),
-      isNull(atelierPartnerFirmInvoices.deletedAt))).limit(100),
-    // Task #1199 — remaining untagged kinds join the sweep. needs_input
-    // rows are retried here too when the AI fallback is on (rules alone
-    // could not decide them; AI may now, still landing as proposed).
-    db.select({ id: atelierInvoice.id }).from(atelierInvoice).where(and(
-      eq(atelierInvoice.orgId, me.orgId),
-      allowAi
-        ? or(isNull(atelierInvoice.allocStatus), eq(atelierInvoice.allocStatus, "needs_input"))
-        : isNull(atelierInvoice.allocStatus),
-      isNull(atelierInvoice.legalEntityId),
-      inArray(atelierInvoice.status, ["issued", "paid"]),
-      isNull(atelierInvoice.deletedAt))).limit(100),
-    db.select({ id: atelierContractorPayments.id }).from(atelierContractorPayments).where(and(
-      eq(atelierContractorPayments.orgId, me.orgId),
-      allowAi
-        ? or(isNull(atelierContractorPayments.allocStatus), eq(atelierContractorPayments.allocStatus, "needs_input"))
-        : isNull(atelierContractorPayments.allocStatus),
-      isNull(atelierContractorPayments.legalEntityId),
-      eq(atelierContractorPayments.status, "paid"),
-      isNull(atelierContractorPayments.deletedAt))).limit(100),
-    db.select({ id: atelierBankTransaction.id }).from(atelierBankTransaction).where(and(
-      eq(atelierBankTransaction.orgId, me.orgId),
-      allowAi
-        ? or(isNull(atelierBankTransaction.allocStatus), eq(atelierBankTransaction.allocStatus, "needs_input"))
-        : isNull(atelierBankTransaction.allocStatus),
-      isNull(atelierBankTransaction.legalEntityId),
-      isNull(atelierBankTransaction.deletedAt))).limit(100),
-  ]);
+
+  // Free any dead auto/manual run before attempting to claim the lock.
+  // { useUpdatedAt: true } — both sweep kinds heartbeat via setInterval so a
+  // still-active run keeps its updatedAt fresh and is never incorrectly reaped.
+  await reapStaleRunningJob(
+    [ENTITY_ALLOC_JOB_KIND, ENTITY_ALLOC_MANUAL_JOB_KIND],
+    me.orgId, me.orgId, ENTITY_ALLOC_STALE_MS,
+    { useUpdatedAt: true },
+  );
+  const jobId = await startBackgroundJob({
+    orgId: me.orgId,
+    userId: me.id,
+    kind: ENTITY_ALLOC_MANUAL_JOB_KIND,
+    lockKey: ENTITY_ALLOC_LOCK_KEY,
+    targetType: "org",
+    targetId: me.orgId,
+    label: `Entity allocation sweep (manual${allowAi ? " + AI" : ""})`,
+    resultHref: "/finance/ledger",
+  });
+  if (!jobId) {
+    return res.status(409).json({
+      error: "sweep_in_progress",
+      message: "An entity allocation sweep is already running for your organisation — it will complete shortly.",
+    });
+  }
+
+  // Heartbeat timer: renews the lease every 3 min independently of record
+  // throughput so a slow AI call never causes the job to be reaped mid-sweep.
+  // Cleared in finally so it always stops regardless of outcome.
+  const heartbeatTimer = setInterval(() => {
+    heartbeatBackgroundJob(jobId).catch(() => null);
+  }, 3 * 60 * 1000);
+
   let proposed = 0, needsInput = 0;
-  for (const e of expenses) {
-    const r = await proposeExpenseAllocation(e.id, { allowAi, actorId: me.id }).catch(() => null);
-    if (r?.status === "proposed") proposed++;
-    else if (r?.status === "needs_input") needsInput++;
-  }
-  for (const p of pfis) {
-    const r = await proposeSupplierInvoiceAllocation(p.id, { allowAi, actorId: me.id }).catch(() => null);
-    if (r?.status === "proposed") proposed++;
-    else if (r?.status === "needs_input") needsInput++;
-  }
-  const glKindRows: Array<[GlProposeKind, Array<{ id: string }>]> = [
-    ["invoice", invoices], ["contractor_payment", cps], ["bank_transaction", txns],
-  ];
-  for (const [kind, rows] of glKindRows) {
-    for (const row of rows) {
-      const r = await proposeGlRecordAllocation(kind, row.id, { allowAi, actorId: me.id }).catch(() => null);
+  try {
+    const [expenses, pfis, invoices, cps, txns] = await Promise.all([
+      db.select({ id: atelierExpenses.id }).from(atelierExpenses).where(and(
+        eq(atelierExpenses.orgId, me.orgId),
+        isNull(atelierExpenses.allocStatus),
+        isNull(atelierExpenses.entityId),
+        inArray(atelierExpenses.status, ["draft", "submitted", "approved", "reimbursed"]),
+        isNull(atelierExpenses.deletedAt))).limit(100),
+      db.select({ id: atelierPartnerFirmInvoices.id }).from(atelierPartnerFirmInvoices).where(and(
+        eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+        isNull(atelierPartnerFirmInvoices.allocStatus),
+        isNull(atelierPartnerFirmInvoices.legalEntityId),
+        isNull(atelierPartnerFirmInvoices.deletedAt))).limit(100),
+      // Task #1199 — remaining untagged kinds join the sweep. needs_input
+      // rows are retried here too when the AI fallback is on (rules alone
+      // could not decide them; AI may now, still landing as proposed).
+      db.select({ id: atelierInvoice.id }).from(atelierInvoice).where(and(
+        eq(atelierInvoice.orgId, me.orgId),
+        allowAi
+          ? or(isNull(atelierInvoice.allocStatus), eq(atelierInvoice.allocStatus, "needs_input"))
+          : isNull(atelierInvoice.allocStatus),
+        isNull(atelierInvoice.legalEntityId),
+        inArray(atelierInvoice.status, ["issued", "paid"]),
+        isNull(atelierInvoice.deletedAt))).limit(100),
+      db.select({ id: atelierContractorPayments.id }).from(atelierContractorPayments).where(and(
+        eq(atelierContractorPayments.orgId, me.orgId),
+        allowAi
+          ? or(isNull(atelierContractorPayments.allocStatus), eq(atelierContractorPayments.allocStatus, "needs_input"))
+          : isNull(atelierContractorPayments.allocStatus),
+        isNull(atelierContractorPayments.legalEntityId),
+        eq(atelierContractorPayments.status, "paid"),
+        isNull(atelierContractorPayments.deletedAt))).limit(100),
+      db.select({ id: atelierBankTransaction.id }).from(atelierBankTransaction).where(and(
+        eq(atelierBankTransaction.orgId, me.orgId),
+        allowAi
+          ? or(isNull(atelierBankTransaction.allocStatus), eq(atelierBankTransaction.allocStatus, "needs_input"))
+          : isNull(atelierBankTransaction.allocStatus),
+        isNull(atelierBankTransaction.legalEntityId),
+        isNull(atelierBankTransaction.deletedAt))).limit(100),
+    ]);
+    for (const e of expenses) {
+      const r = await proposeExpenseAllocation(e.id, { allowAi, actorId: me.id }).catch(() => null);
       if (r?.status === "proposed") proposed++;
       else if (r?.status === "needs_input") needsInput++;
     }
+    for (const p of pfis) {
+      const r = await proposeSupplierInvoiceAllocation(p.id, { allowAi, actorId: me.id }).catch(() => null);
+      if (r?.status === "proposed") proposed++;
+      else if (r?.status === "needs_input") needsInput++;
+    }
+    const glKindRows: Array<[GlProposeKind, Array<{ id: string }>]> = [
+      ["invoice", invoices], ["contractor_payment", cps], ["bank_transaction", txns],
+    ];
+    for (const [kind, rows] of glKindRows) {
+      for (const row of rows) {
+        const r = await proposeGlRecordAllocation(kind, row.id, { allowAi, actorId: me.id }).catch(() => null);
+        if (r?.status === "proposed") proposed++;
+        else if (r?.status === "needs_input") needsInput++;
+      }
+    }
+    const scanned = expenses.length + pfis.length + invoices.length + cps.length + txns.length;
+    await audit({
+      entityType: "gl", entityId: "allocation_sweep", actor: me,
+      action: "allocation.propose",
+      payload: { scanned, proposed, needsInput, allowAi },
+      summary: `Allocation sweep: ${proposed} proposed, ${needsInput} need input (of ${scanned} scanned).`,
+    });
+    await completeBackgroundJob(jobId, { result: { scanned, proposed, needsInput } });
+    return res.json({ ok: true, data: { scanned, proposed, needsInput } });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await failBackgroundJob(jobId, msg).catch(() => null);
+    throw err;
+  } finally {
+    // Always stop the heartbeat timer so it doesn't fire after job completion.
+    clearInterval(heartbeatTimer);
   }
-  const scanned = expenses.length + pfis.length + invoices.length + cps.length + txns.length;
-  await audit({
-    entityType: "gl", entityId: "allocation_sweep", actor: me,
-    action: "allocation.propose",
-    payload: { scanned, proposed, needsInput, allowAi },
-    summary: `Allocation sweep: ${proposed} proposed, ${needsInput} need input (of ${scanned} scanned).`,
-  });
-  res.json({ ok: true, data: { scanned, proposed, needsInput } });
 });
 
 // Approve / override the allocation on a queue item (period-lock aware).

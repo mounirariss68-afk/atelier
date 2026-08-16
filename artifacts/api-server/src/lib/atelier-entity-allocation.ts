@@ -502,6 +502,14 @@ export async function writeAllocationAudit(args: {
     | "contractor_payment"
     | "bank_transaction";
   entityId: string;
+  /**
+   * Explicit org tenancy. Always supply this in background-job contexts
+   * (scheduled sweeps, agent runs without an active request) — without it the
+   * row's `org_id` column falls back to the session-level `app.org_id` GUC
+   * which defaults to `'aico'` on pooled connections, mis-attributing the
+   * audit event to the wrong tenant.
+   */
+  orgId?: string;
   actorId: string | null;
   actorLabel: string;
   action: "allocation.propose" | "allocation.approve" | "allocation.override" | "allocation.needs_input";
@@ -514,6 +522,7 @@ export async function writeAllocationAudit(args: {
 }): Promise<void> {
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
+    ...(args.orgId ? { orgId: args.orgId } : {}),
     entityType: args.entityType,
     entityId: args.entityId,
     actorType: args.actorId ? "human" : "agent",
@@ -645,7 +654,7 @@ export async function proposeExpenseAllocation(
       updatedAt: now,
     }).where(eq(atelierExpenses.id, row.id));
     await writeAllocationAudit({
-      entityType: "expense", entityId: row.id,
+      entityType: "expense", entityId: row.id, orgId: row.orgId,
       actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
       action: "allocation.needs_input",
       changes: [{ field: "allocStatus", from: row.allocStatus, to: "needs_input" }],
@@ -665,7 +674,7 @@ export async function proposeExpenseAllocation(
     updatedAt: now,
   }).where(eq(atelierExpenses.id, row.id));
   await writeAllocationAudit({
-    entityType: "expense", entityId: row.id,
+    entityType: "expense", entityId: row.id, orgId: row.orgId,
     actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
     action: "allocation.propose",
     changes: [
@@ -709,10 +718,20 @@ export async function proposeSupplierInvoiceAllocation(
     defaultEntityId: ctx.defaultEntityId,
   };
   let decision = evaluateAllocationRules(baseInput);
-  if (!decision && opts.allowAi !== false && opts.aiText) {
+  // Build AI text from the row's own fields when the caller doesn't supply it
+  // (e.g. scheduled sweep) — this ensures allowAi:true actually fires for
+  // supplier invoices regardless of the call site.
+  if (!decision && opts.allowAi !== false) {
+    const aiText = opts.aiText ?? [
+      `supplier: ${row.partnerFirmName}`,
+      row.reference ? `reference: ${row.reference}` : null,
+      `week: ${row.weekIso}`,
+      row.engagementId ? `engagement: ${row.engagementId}` : null,
+      row.notes,
+    ].filter(Boolean).join("\n");
     const ai = await aiAllocateEntity({
       contextLabel: `Supplier invoice from ${row.partnerFirmName}, ${row.costCurrency} ${row.costAmount}.`,
-      text: opts.aiText,
+      text: aiText,
       entities: ctx.entities,
     });
     if (ai?.entityId && ai.confidence >= AI_CONFIDENCE_FLOOR) {
@@ -735,7 +754,7 @@ export async function proposeSupplierInvoiceAllocation(
       updatedAt: now,
     }).where(eq(atelierPartnerFirmInvoices.id, row.id));
     await writeAllocationAudit({
-      entityType: "partner_firm_invoice", entityId: row.id,
+      entityType: "partner_firm_invoice", entityId: row.id, orgId: row.orgId,
       actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
       action: "allocation.needs_input",
       changes: [{ field: "allocStatus", from: row.allocStatus, to: "needs_input" }],
@@ -754,7 +773,7 @@ export async function proposeSupplierInvoiceAllocation(
     updatedAt: now,
   }).where(eq(atelierPartnerFirmInvoices.id, row.id));
   await writeAllocationAudit({
-    entityType: "partner_firm_invoice", entityId: row.id,
+    entityType: "partner_firm_invoice", entityId: row.id, orgId: row.orgId,
     actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
     action: "allocation.propose",
     changes: [
@@ -918,7 +937,7 @@ export async function proposeGlRecordAllocation(
       updatedAt: now,
     }).where(eq(table.id, id));
     await writeAllocationAudit({
-      entityType: kind, entityId: id,
+      entityType: kind, entityId: id, orgId: r.orgId,
       actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
       action: "allocation.needs_input",
       changes: [{ field: "allocStatus", from: r.allocStatus, to: "needs_input" }],
@@ -938,7 +957,7 @@ export async function proposeGlRecordAllocation(
     updatedAt: now,
   }).where(eq(table.id, id));
   await writeAllocationAudit({
-    entityType: kind, entityId: id,
+    entityType: kind, entityId: id, orgId: r.orgId,
     actorId: opts.actorId ?? null, actorLabel: "Entity Allocator",
     action: "allocation.propose",
     changes: [
@@ -1035,6 +1054,7 @@ export async function decideAllocation(args: DecideArgs): Promise<DecideResult> 
       : args.kind === "supplier_invoice" ? "partner_firm_invoice"
       : args.kind,
     entityId: args.id,
+    orgId: args.orgId,
     actorId: args.actor.id, actorLabel: args.actor.name,
     action: isOverride ? "allocation.override" : "allocation.approve",
     changes: [

@@ -698,7 +698,7 @@ async function executeBookkeeper(
         allocConfidence: 1, updatedAt: new Date(),
       }).where(and(eq(atelierExpenses.id, x.id), isNull(atelierExpenses.allocStatus)));
       await writeAllocationAudit({
-        entityType: "expense", entityId: x.id, actorId: null, actorLabel: "Bookkeeper",
+        entityType: "expense", entityId: x.id, orgId: x.orgId, actorId: null, actorLabel: "Bookkeeper",
         action: "allocation.approve",
         changes: [{ field: "allocStatus", from: null, to: "approved" }],
         ruleId: "legacy_tag", justification: "Legacy entity tag honored as approved.",
@@ -911,7 +911,7 @@ async function executeBookkeeper(
         allocConfidence: 1, updatedAt: new Date(),
       }).where(and(eq(atelierPartnerFirmInvoices.id, p.id), isNull(atelierPartnerFirmInvoices.allocStatus)));
       await writeAllocationAudit({
-        entityType: "partner_firm_invoice", entityId: p.id, actorId: null, actorLabel: "Bookkeeper",
+        entityType: "partner_firm_invoice", entityId: p.id, orgId: p.orgId, actorId: null, actorLabel: "Bookkeeper",
         action: "allocation.approve",
         changes: [{ field: "allocStatus", from: null, to: "approved" }],
         ruleId: "legacy_tag", justification: "Legacy entity tag honored as approved.",

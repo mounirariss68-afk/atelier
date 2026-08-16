@@ -121,20 +121,39 @@ export async function getJobById(id: string, orgId?: string): Promise<Background
   return row ?? null;
 }
 
+export interface ReapStaleOptions {
+  /**
+   * When true, use `updatedAt` for stale detection instead of `createdAt`.
+   * Pass this for jobs that emit periodic heartbeats via
+   * `heartbeatBackgroundJob` — the heartbeat keeps `updatedAt` fresh, so the
+   * job's lease is naturally extended while it is actively making progress.
+   *
+   * Default (false) uses `createdAt`, which is appropriate for short-lived
+   * jobs that do not heartbeat (e.g. Bookkeeper runs bounded by test data).
+   */
+  useUpdatedAt?: boolean;
+}
+
 /**
  * Watchdog helper: mark a still-"running" job failed when it has been
- * running longer than `staleMs`. Needed before relaunch attempts, because
- * the running-unique index would otherwise block the new insert forever.
+ * running longer than `staleMs`. By default checks `createdAt`; pass
+ * `{ useUpdatedAt: true }` for jobs that renew their lease via
+ * `heartbeatBackgroundJob` so an active heartbeating sweep is never
+ * incorrectly reaped mid-run.
  */
 export async function reapStaleRunningJob(
   kinds: string[],
   targetId: string,
   orgId: string | null | undefined,
   staleMs: number,
+  opts: ReapStaleOptions = {},
 ): Promise<void> {
   if (kinds.length === 0) return;
   const cutoff = new Date(Date.now() - staleMs);
   const now = new Date();
+  const ageCol = opts.useUpdatedAt
+    ? atelierBackgroundJobs.updatedAt
+    : atelierBackgroundJobs.createdAt;
   await db
     .update(atelierBackgroundJobs)
     .set({
@@ -148,10 +167,27 @@ export async function reapStaleRunningJob(
         inArray(atelierBackgroundJobs.kind, kinds),
         eq(atelierBackgroundJobs.targetId, targetId),
         eq(atelierBackgroundJobs.status, "running"),
-        lt(atelierBackgroundJobs.createdAt, cutoff),
+        lt(ageCol, cutoff),
         ...(orgId ? [eq(atelierBackgroundJobs.orgId, orgId)] : []),
       ),
     );
+}
+
+/**
+ * Renew the lease on a running job by bumping its `updatedAt` timestamp.
+ * Call this periodically from long-running sweeps so `reapStaleRunningJob`
+ * does not expire the job while it is still actively making progress.
+ * Only transitions rows still in "running" state — a boot-swept or
+ * externally failed row is left alone.
+ */
+export async function heartbeatBackgroundJob(id: string): Promise<void> {
+  await db
+    .update(atelierBackgroundJobs)
+    .set({ updatedAt: new Date() })
+    .where(and(
+      eq(atelierBackgroundJobs.id, id),
+      eq(atelierBackgroundJobs.status, "running"),
+    ));
 }
 
 /** True when the latest job for (kinds, targetId) is still running. */

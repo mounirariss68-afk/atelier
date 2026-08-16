@@ -12,6 +12,7 @@ import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { startBookkeeperAutoJob } from "./lib/atelier-agents/bookkeeperAuto";
+import { startEntityAllocationAutoJob } from "./lib/atelier-agents/entityAllocationAuto";
 import { startEsignPolling } from "./lib/atelier-esign";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 import { warmEmbedder } from "./lib/atelier-cli/embeddings";
@@ -295,6 +296,13 @@ app.listen(port, (err) => {
   // per org for the current + previous period (period-lock aware, guarded
   // by the durable background-job registry against overlapping runs).
   startBookkeeperAutoJob();
+  // Task #1202 — daily AI-backed entity-allocation sweep: run the
+  // allocation engine with the AI fallback enabled over all untagged /
+  // needs_input records so proposals are ready before finance opens the
+  // Needs Attention tab. Results land only as proposed/needs_input —
+  // nothing auto-applies. Guarded by the durable background-job registry
+  // (lockKey gl_entity_allocation_sweep) against overlapping runs.
+  startEntityAllocationAutoJob();
   // Task #62 — polling fallback that reconciles open signature requests
   // against DocuSeal (webhooks can't always reach the dev environment).
   startEsignPolling();
