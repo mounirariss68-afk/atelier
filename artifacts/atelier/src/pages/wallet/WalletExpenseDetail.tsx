@@ -149,7 +149,7 @@ function AllocationCard({
   if (!expense.allocStatus && !expense.entityId) return null;
   const overriding = pick && pick !== (expense.entityId ?? "");
   return (
-    <Card data-testid="card-entity-allocation">
+    <Card className="p-4" data-testid="card-entity-allocation">
       <h2 className="font-serif text-lg">Entity allocation</h2>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <div>
@@ -432,8 +432,11 @@ export default function WalletExpenseDetail() {
 
   return (
     <div className="space-y-6 p-6">
-      <PageHero>
-        <BackLink href="/wallet/expenses" className="mb-4" data-testid="link-back">
+      {/* Task #1262 — compact hero: this page nests the hero inside an
+          already-padded container, so the default clamp() band reads
+          oversized. Override to a tight vertical rhythm here only. */}
+      <PageHero className="!py-5">
+        <BackLink href="/wallet/expenses" className="mb-3" data-testid="link-back">
           Back to expenses
         </BackLink>
         <SectionHead
@@ -459,7 +462,7 @@ export default function WalletExpenseDetail() {
 
       {expense ? (
         <>
-          <Card>
+          <Card className="p-4">
             <h2 className="font-serif text-lg">Amounts</h2>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div><dt className="text-stone-500">Original</dt><dd>{expense.currency} {expense.amount.toFixed(2)}</dd></div>
@@ -518,7 +521,7 @@ export default function WalletExpenseDetail() {
           />
 
           {expense.receiptFileRef?.startsWith("/objects/") ? (
-            <Card>
+            <Card className="p-4">
               <h2 className="font-serif text-lg">Receipt</h2>
               <div className="mt-3">
                 <ReceiptPreview src={`/api/atelier/wallet/expenses/${expense.id}/receipt`} />
@@ -527,7 +530,7 @@ export default function WalletExpenseDetail() {
           ) : null}
 
           {expense.policyFindings.length > 0 ? (
-            <Card>
+            <Card className="p-4">
               <h2 className="font-serif text-lg">Policy findings</h2>
               <ul className="mt-2 space-y-2 text-sm">
                 {expense.policyFindings.map((f, i) => (
@@ -543,7 +546,7 @@ export default function WalletExpenseDetail() {
           ) : null}
 
           {expense.auditorProposal ? (
-            <Card>
+            <Card className="p-4">
               <h2 className="font-serif text-lg">Auditor proposal</h2>
               <pre className="mt-2 overflow-auto rounded bg-stone-50 p-3 text-xs">{JSON.stringify(expense.auditorProposal, null, 2)}</pre>
               {expense.auditorRunId ? <p className="mt-2 text-xs text-stone-500">Run {expense.auditorRunId}</p> : null}
@@ -551,7 +554,7 @@ export default function WalletExpenseDetail() {
           ) : null}
 
           {expense.rejectedReason ? (
-            <Card>
+            <Card className="p-4">
               <h2 className="font-serif text-lg text-red-700">Rejected</h2>
               <p className="mt-2 text-sm">{expense.rejectedReason}</p>
             </Card>
