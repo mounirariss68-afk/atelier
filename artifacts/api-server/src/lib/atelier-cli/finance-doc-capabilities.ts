@@ -189,7 +189,9 @@ defineCapability({
               : "No automated pipeline matches — ask the user what they'd like done with it.",
       });
     }
-    return { ok: true, data: { results } };
+    // Task #1248 — shape-tagged payload so web + mobile render a
+    // friendly classification card instead of a raw JSON dump.
+    return { ok: true, data: { shape: "doc_classification_card", results } };
   },
 });
 
@@ -340,7 +342,21 @@ defineCapability({
       const firm = await findPartnerFirmByName(ctx.persona.orgId, supplierName!);
       return {
         ok: true,
-        data: { preview: partial },
+        // Task #1248 — shape-tagged friendly preview (no raw ids). The
+        // legacy `preview` key is kept for session-fact ingestion.
+        data: {
+          shape: "supplier_invoice_card",
+          stage: "preview",
+          supplierName,
+          amount,
+          currency,
+          reference,
+          ...(invoiceDate ? { invoiceDate } : {}),
+          ...(periodLabel ? { periodLabel } : {}),
+          linkedFirm: firm ? { name: firm.name, hasBankDetails: firm.hasBankDetails } : null,
+          status: "pending confirmation",
+          preview: partial,
+        },
         confirmation: {
           summary: `File supplier invoice ${reference} from ${supplierName} — ${currency} ${amount!.toFixed(2)}${firm ? ` (linked to registered firm ${firm.name}${firm.hasBankDetails ? "" : "; approval will hold until firm bank details are on file"})` : " (unregistered supplier — no firm link)"}? It lands in the payables review queue for approval.`,
           diff: {
@@ -398,12 +414,26 @@ defineCapability({
     });
     const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
     if (out.status === 201) {
+      // Task #1248 — shape-tagged friendly commit card + a closing
+      // narration line the confirm path emits after the card, so the
+      // turn never ends on a bare card (or raw JSON with spi_* ids).
+      const closingLine = `Recorded supplier invoice from ${supplierName} — ${currency} ${amount.toFixed(2)}${periodLabel ? `, ${periodLabel}` : ""}. It's in the payables review queue.${firm && !firm.hasBankDetails ? " Approval will hold until the firm's bank details are on file." : ""}`;
       return {
         ok: true,
         data: {
+          shape: "supplier_invoice_card",
+          stage: "committed",
+          supplierName,
+          amount,
+          currency,
+          reference,
+          ...(invoiceDate ? { invoiceDate } : {}),
+          ...(periodLabel ? { periodLabel } : {}),
+          status: "submitted",
           item: (out.body as { item?: unknown }).item,
           linkedFirm: firm ? { id: firm.id, name: firm.name, hasBankDetails: firm.hasBankDetails } : null,
           message: `Invoice ${reference} from ${supplierName} is in the payables review queue (status: submitted).${firm && !firm.hasBankDetails ? " Note: approval will hold until the firm's bank details are on file." : ""}`,
+          closingLine,
           navigateTo,
         },
       };
@@ -411,12 +441,22 @@ defineCapability({
     if (out.status === 409) {
       // Idempotent outcome, not an error: the invoice is already filed.
       const body = out.body as { message?: string; existing?: unknown };
+      const message = body.message ?? "This invoice was already filed — nothing new was created.";
       return {
         ok: true,
         data: {
+          shape: "supplier_invoice_card",
+          stage: "committed",
           alreadyFiled: true,
+          supplierName,
+          amount,
+          currency,
+          reference,
+          ...(periodLabel ? { periodLabel } : {}),
+          status: "already filed",
           existing: body.existing ?? null,
-          message: body.message ?? "This invoice was already filed — nothing new was created.",
+          message,
+          closingLine: message,
           navigateTo,
         },
       };

@@ -1371,6 +1371,166 @@ function FallbackGrid({ data, lang }: { data: Json; lang: string }) {
   return <FieldGrid entries={entries} currency={asStr(data.currency) || null} lang={lang} />;
 }
 
+/* ────────── Task #1248 — finance-document ingest/classify (mobile) ────────── */
+
+// Friendly supplier-invoice card (preview + committed phases of
+// ingest_supplier_invoice): supplier, amount+currency, reference,
+// period and status — never raw ids or JSON.
+function SupplierInvoiceBody({ data, lang }: { data: Json; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const supplier = asStr(data.supplierName) || "—";
+  const amount = asNum(data.amount);
+  const currency = asStr(data.currency) || "";
+  const committed = asStr(data.stage) === "committed";
+  const status = asStr(data.status) || (data.alreadyFiled === true ? "already filed" : "");
+  const firmName = asStr(asObj(data.linkedFirm).name);
+  const message = asStr(data.message);
+  const entries: [string, unknown][] = [];
+  if (asStr(data.reference)) entries.push(["reference", asStr(data.reference)]);
+  if (asStr(data.invoiceDate)) entries.push(["invoiceDate", asStr(data.invoiceDate)]);
+  if (asStr(data.periodLabel)) entries.push(["period", asStr(data.periodLabel)]);
+  if (firmName) entries.push(["linkedFirm", firmName]);
+  if (status) entries.push(["status", status]);
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: rtl.row, alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <Text
+          numberOfLines={2}
+          style={{
+            flex: 1,
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_700Bold",
+            fontSize: 14.5,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {supplier}
+        </Text>
+        <Text
+          style={{
+            color: committed ? c.success : c.foreground,
+            fontFamily: "PlusJakartaSans_700Bold",
+            fontSize: 15,
+          }}
+        >
+          {amount != null ? `${currency} ${amount.toFixed(2)}` : "—"}
+        </Text>
+      </View>
+      <FieldGrid entries={entries} currency={currency || null} lang={lang} />
+      {committed && !!message && (
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 12,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {message}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+const CLASSIFY_KIND_LABEL_M: Record<string, { en: string; ar: string }> = {
+  supplier_invoice: { en: "Supplier invoice", ar: "فاتورة مورد" },
+  bank_statement: { en: "Bank statement", ar: "كشف حساب بنكي" },
+  bank_letter: { en: "Bank letter", ar: "خطاب بنكي" },
+  receipt: { en: "Receipt", ar: "إيصال" },
+  client_billing: { en: "Client billing", ar: "فوترة عميل" },
+  unknown: { en: "Unrecognised document", ar: "مستند غير معروف" },
+};
+
+// Friendly classification rows (classify_finance_document): file name,
+// detected kind, confidence — no attachment ids, no raw JSON.
+function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const results = asArr(data.results).map((r) => asObj(r));
+  if (results.length === 0) {
+    return (
+      <Text
+        style={{
+          color: c.mutedForeground,
+          fontFamily: "PlusJakartaSans_500Medium",
+          fontSize: 13,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {ar ? "لا توجد مستندات لتصنيفها." : "No documents to classify."}
+      </Text>
+    );
+  }
+  return (
+    <View style={{ gap: 8 }}>
+      {results.map((r, i) => {
+        const fileName = asStr(r.fileName) || (ar ? "مرفق" : "Attachment");
+        if (r.error) {
+          return (
+            <Text
+              key={i}
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 12.5,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {fileName} — {ar ? "تعذّر العثور على المرفق." : "attachment not found."}
+            </Text>
+          );
+        }
+        const kind = asStr(r.kind);
+        const kl = CLASSIFY_KIND_LABEL_M[kind];
+        const kindLabel = kl ? (ar ? kl.ar : kl.en) : humanLabel(kind || "document");
+        const confidence = asNum(r.confidence);
+        const low = r.lowConfidence === true;
+        return (
+          <View key={i} style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 13,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {fileName}
+              </Text>
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontSize: 11.5,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {kindLabel}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: low ? c.warning ?? c.mutedForeground : c.success,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 11,
+              }}
+            >
+              {confidence != null ? `${Math.round(confidence * 100)}%` : "—"}
+              {low ? (ar ? " — يحتاج تأكيدًا" : " — needs confirmation") : ""}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 /* ────────── Task #1163 — account research brief (mobile) ────────── */
 
 // Mobile rendering of the account.brief payload: distilled "Our view"
@@ -1862,6 +2022,9 @@ const SHAPE_ICON: Record<string, React.ComponentProps<typeof Feather>["name"]> =
   pending_invoices: "alert-circle",
   pov_card: "feather",
   ar_aging_grid: "grid",
+  // Task #1248 — finance-document ingest/classify.
+  supplier_invoice_card: "file-text",
+  doc_classification_card: "file",
 };
 
 /* ────────── Task #853 — statement of account / pending invoices ────────── */
@@ -2092,6 +2255,13 @@ export function ToolResultCards({
             // Task #853 — AR rollup cards (universal chat lookups).
             case "statement_of_account":
               body = <StatementOfAccountBody data={dataObj} lang={lang} />;
+              break;
+            // Task #1248 — finance-document ingest/classify friendly cards.
+            case "supplier_invoice_card":
+              body = <SupplierInvoiceBody data={dataObj} lang={lang} />;
+              break;
+            case "doc_classification_card":
+              body = <DocClassificationBody data={dataObj} lang={lang} />;
               break;
             case "pending_invoices":
               body = <PendingInvoicesBody data={dataObj} lang={lang} />;

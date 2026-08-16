@@ -744,6 +744,11 @@ function ShapeBody({
       return <DeliverableAcceptanceCard data={data} locale={locale} />;
     case "invoice_card":
       return <InvoiceCard data={data} locale={locale} />;
+    // Task #1248 — finance-document ingest/classify friendly cards.
+    case "supplier_invoice_card":
+      return <SupplierInvoiceIngestCard data={data} locale={locale} />;
+    case "doc_classification_card":
+      return <DocClassificationCard data={data} locale={locale} />;
     case "ar_aging_grid":
       return <ArAgingGrid data={data} locale={locale} />;
     case "dunning_card":
@@ -2108,6 +2113,154 @@ function ChangeOrderCard({ data, locale }: { data: Json; locale: CliLocale }) {
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ────────── Task #1248 — finance-document ingest/classify cards ────────── */
+
+// Friendly supplier-invoice card for both the preview and committed
+// phases of `ingest_supplier_invoice`. Renders supplier, amount+currency,
+// reference, dates/period and status — never raw ids (spi_*, firm ids).
+function SupplierInvoiceIngestCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const supplier = asStr(data.supplierName) || "—";
+  const amount = asNum(data.amount);
+  const currency = asStr(data.currency) || "";
+  const reference = asStr(data.reference);
+  const invoiceDate = asStr(data.invoiceDate);
+  const period = asStr(data.periodLabel);
+  const status = asStr(data.status) || (data.alreadyFiled === true ? "already filed" : "");
+  const committed = asStr(data.stage) === "committed";
+  const firm = asObj(data.linkedFirm);
+  const firmName = asStr(firm.name);
+  const message = asStr(data.message);
+  const rows: Array<[string, string]> = [];
+  if (reference) rows.push([ar ? "المرجع" : "Reference", reference]);
+  if (invoiceDate) rows.push([ar ? "تاريخ الفاتورة" : "Invoice date", fmtDate(invoiceDate, locale)]);
+  if (period) rows.push([ar ? "الفترة" : "Period", period]);
+  if (firmName) rows.push([ar ? "الشركة المسجلة" : "Linked firm", firmName]);
+  return (
+    <div className="space-y-2" data-testid="cli-supplier-invoice-card">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{supplier}</div>
+          <div className="text-[11px] text-text-mute">
+            {ar ? "فاتورة مورد" : "Supplier invoice"}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="font-display text-lg">
+            {amount != null ? `${currency} ${fmtNum(amount)}` : "—"}
+          </div>
+          {status && (
+            <div
+              className={cn(
+                "text-[10px] font-mono uppercase tracking-wider",
+                committed ? "text-success" : "text-text-faint",
+              )}
+            >
+              {status}
+            </div>
+          )}
+        </div>
+      </div>
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+          {rows.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+                {k}
+              </dt>
+              <dd className="text-text truncate" title={v}>
+                {v}
+              </dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      )}
+      {committed && message && (
+        <div className="text-[11px] text-text-mute leading-relaxed">{message}</div>
+      )}
+    </div>
+  );
+}
+
+const CLASSIFY_KIND_LABEL: Record<string, { en: string; ar: string }> = {
+  supplier_invoice: { en: "Supplier invoice", ar: "فاتورة مورد" },
+  bank_statement: { en: "Bank statement", ar: "كشف حساب بنكي" },
+  bank_letter: { en: "Bank letter", ar: "خطاب بنكي" },
+  receipt: { en: "Receipt", ar: "إيصال" },
+  client_billing: { en: "Client billing", ar: "فوترة عميل" },
+  unknown: { en: "Unrecognised document", ar: "مستند غير معروف" },
+};
+
+// Friendly classification card for `classify_finance_document`: one row
+// per attachment with file name, detected kind and confidence — no
+// attachment ids, no orchestrator instructions, no raw JSON.
+function DocClassificationCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const results = asArr(data.results).map(asObj);
+  if (results.length === 0) {
+    return (
+      <div className="text-xs text-text-mute">
+        {ar ? "لا توجد مستندات لتصنيفها." : "No documents to classify."}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2" data-testid="cli-doc-classification-card">
+      {results.map((r, i) => {
+        const fileName = asStr(r.fileName);
+        if (r.error) {
+          return (
+            <div key={i} className="text-xs text-text-mute">
+              {fileName || (ar ? "مرفق" : "Attachment")} —{" "}
+              {ar ? "تعذّر العثور على المرفق." : "attachment not found."}
+            </div>
+          );
+        }
+        const kind = asStr(r.kind);
+        const kindLabel = CLASSIFY_KIND_LABEL[kind]
+          ? ar
+            ? CLASSIFY_KIND_LABEL[kind].ar
+            : CLASSIFY_KIND_LABEL[kind].en
+          : humanLabel(kind || "document");
+        const confidence = asNum(r.confidence);
+        const low = r.lowConfidence === true;
+        const runnerUp = asStr(r.runnerUp);
+        return (
+          <div key={i} className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[12px] text-text truncate" title={fileName}>
+                {fileName || (ar ? "مرفق" : "Attachment")}
+              </div>
+              <div className="text-[11px] text-text-mute">
+                {kindLabel}
+                {low && runnerUp && CLASSIFY_KIND_LABEL[runnerUp] && (
+                  <>
+                    {" "}
+                    {ar
+                      ? `(أو ربما ${CLASSIFY_KIND_LABEL[runnerUp].ar})`
+                      : `(or possibly ${CLASSIFY_KIND_LABEL[runnerUp].en.toLowerCase()})`}
+                  </>
+                )}
+              </div>
+            </div>
+            <span
+              className={cn(
+                "text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0",
+                low
+                  ? "bg-warning/10 text-warning border-warning/30"
+                  : "bg-success/10 text-success border-success/30",
+              )}
+            >
+              {confidence != null ? `${Math.round(confidence * 100)}%` : "—"}
+              {low && (ar ? " — يحتاج تأكيدًا" : " — needs confirmation")}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

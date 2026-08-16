@@ -6513,6 +6513,19 @@ export async function confirmPendingWrite(
     },
   });
 
+  // Task #1248 — a committed write must never end on a bare card: when
+  // the tool stamps a `closingLine` on its commit payload, emit it as a
+  // narration frame right after the success card (the confirm path runs
+  // OUTSIDE runTurn, so no model prose ever follows the card here).
+  const closingLine =
+    result.ok &&
+    typeof (result.data as { closingLine?: unknown } | null)?.closingLine === "string"
+      ? ((result.data as { closingLine: string }).closingLine || "").trim()
+      : "";
+  if (closingLine) {
+    emit({ type: "narration", data: { text: closingLine, step: stepIdx } });
+  }
+
   // Task #340 — record write metadata on session draft so the next
   // /undo or recap call can find this commit. Without this, the
   // standard two-phase confirmed write would never reach undo_last
@@ -6628,6 +6641,11 @@ export async function confirmPendingWrite(
         confirmed: true,
       },
     },
+    // Task #1248 — persist the closing narration so historical turn
+    // replays also end with the confirmation sentence, not a bare card.
+    ...(closingLine
+      ? [{ type: "narration" as const, data: { text: closingLine, step: stepIdx } }]
+      : []),
     { type: "final" as const, data: { status: newStatus, confirmed: true } },
     // Task #24 — persist the deferred follow-up outcome (scout status)
     // so historical turn replays show it too.
