@@ -382,6 +382,10 @@ function ProfileTab({
       {person.workerType === "employee" && viewerCanSeeComp && (
         <PayrollAdvancesCard personId={person.id} personName={person.fullName} />
       )}
+      {/* Task #1159 — comp-change history timeline for viewers with comp access. */}
+      {viewerCanSeeComp && person.workerType === "employee" && (
+        <CompHistorySection personId={person.id} />
+      )}
       {person.notes && (
         <Card className="p-4 md:col-span-2">
           <h3 className="font-mono text-xs uppercase text-text-mute mb-2">
@@ -396,6 +400,88 @@ function ProfileTab({
   );
 }
 
+/**
+ * Task #1159 — Comp-change history section shown on the employee profile for
+ * viewers who pass the canSeeComp gate (founding_partner | hr | finance).
+ * Read-only: fetches GET /finance/payroll/comp-changes?employeeId=…
+ */
+function CompHistorySection({ personId }: { personId: string }) {
+  type CompChangeRow = {
+    id: string;
+    effectiveFrom: string;
+    reason: string;
+    baseCompensation: number;
+    baseCurrency: string;
+    basicWageMonthly: number | null;
+    note: string | null;
+  };
+  const [items, setItems] = React.useState<CompChangeRow[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setLoading(true);
+    fetch(
+      `/api/atelier/finance/payroll/comp-changes?employeeId=${encodeURIComponent(personId)}`,
+      { credentials: "include" },
+    )
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: { items: CompChangeRow[] }) => setItems(d.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [personId]);
+
+  const reasonLabels: Record<string, string> = {
+    promotion: "Promotion",
+    raise: "Merit raise",
+    adjustment: "Adjustment",
+    correction: "Correction",
+    initial: "Initial",
+  };
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+  return (
+    <Card className="p-4 md:col-span-2" data-testid="comp-history-section">
+      <h3 className="font-mono text-xs uppercase text-text-mute mb-3">
+        Comp history
+      </h3>
+      {loading && <p className="text-sm text-text-mute">Loading…</p>}
+      {!loading && items.length === 0 && (
+        <p className="text-sm text-text-mute">No comp changes recorded yet.</p>
+      )}
+      {!loading && items.length > 0 && (
+        <table className="w-full text-sm" data-testid="comp-history-table">
+          <thead>
+            <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+              <th className="py-2 pr-3">Effective</th>
+              <th className="py-2 pr-3">Reason</th>
+              <th className="py-2 pr-3 text-right">Annual gross</th>
+              <th className="py-2 pr-3 text-right">Basic / mo</th>
+              <th className="py-2">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((h) => (
+              <tr key={h.id} className="border-b border-border/50">
+                <td className="py-2 pr-3 font-mono">{h.effectiveFrom}</td>
+                <td className="py-2 pr-3">
+                  <MonoChip>{reasonLabels[h.reason] ?? h.reason}</MonoChip>
+                </td>
+                <td className="py-2 pr-3 text-right font-mono">
+                  {fmt(h.baseCompensation)} {h.baseCurrency}
+                </td>
+                <td className="py-2 pr-3 text-right font-mono">
+                  {h.basicWageMonthly != null ? fmt(h.basicWageMonthly) : "—"}
+                </td>
+                <td className="py-2 text-xs text-text-mute">{h.note ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  );
+}
 /**
  * Task #412 — HR/Partner-only inline editor for the demographic columns
  * surfaced by the People Lens Composition dashboard. Renders as plain

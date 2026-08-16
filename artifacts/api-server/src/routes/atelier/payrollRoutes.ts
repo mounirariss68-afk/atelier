@@ -360,8 +360,20 @@ router.post("/finance/payroll/eosb/settlements/:id/settle", async (req, res) => 
 
 // @cli-skip: finance payroll read; REST-only surface (Task #1135)
 // Task #1146 — comp-change history for the payroll edit dialog.
+// Task #1159 — also readable by HR (who can see comp but aren't finance
+// leadership). Gate = union of COMP_VIEWERS (founding_partner | hr | finance)
+// and the existing ensureFinanceLeadership set (partner | senior_manager).
+function ensureCompHistoryReader(req: Request, res: Response): Me | null {
+  const me = req.atelierPersona ?? null;
+  if (!me) { res.status(401).json({ error: "no-active-persona" }); return null; }
+  if (!["founding_partner", "hr", "finance", "partner", "senior_manager"].includes(me.role)) {
+    res.status(403).json({ error: "forbidden", message: "Comp history — HR / Finance / Leadership only." });
+    return null;
+  }
+  return me;
+}
 router.get("/finance/payroll/comp-changes", async (req, res) => {
-  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const me = ensureCompHistoryReader(req, res); if (!me) return;
   const employeeId = String(req.query.employeeId ?? "");
   if (!employeeId) { res.status(400).json({ error: "employeeId-required" }); return; }
   const items = await db
