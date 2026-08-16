@@ -756,6 +756,32 @@ export default function FinanceEntityDetail() {
           onChanged={refresh}
         />
 
+        {/* Task #1165 — WPS config read-only display. */}
+        {e.statutory?.wps && (
+          <section data-testid="entity-wps-config">
+            <SectionLabel>WPS / Statutory payroll</SectionLabel>
+            <div className="mt-4 card-flat p-4 space-y-2">
+              {e.statutory.wps.applicable === true && (
+                <InfoRow label="WPS applicability" value="Applicable (mainland WPS)" />
+              )}
+              {e.statutory.wps.applicable === false && (
+                <InfoRow label="WPS applicability" value="Exempt (DIFC / ADGM or non-AE)" />
+              )}
+              {e.statutory.wps.employerUniqueId && (
+                <CopyInfoRow label="MOHRE Employer Unique ID" value={e.statutory.wps.employerUniqueId} />
+              )}
+              {e.statutory.wps.agentBankRoutingCode && (
+                <CopyInfoRow label="Agent-bank routing code" value={e.statutory.wps.agentBankRoutingCode} />
+              )}
+              {!e.statutory.wps.employerUniqueId && !e.statutory.wps.agentBankRoutingCode && e.statutory.wps.applicable !== false && (
+                <p className="text-xs text-warn" data-testid="text-wps-missing-ids">
+                  WPS employer ID and agent-bank routing code are not set — SIF export will be blocked until they are filled in.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
         {e.notes && <p className="text-xs text-text-faint italic">{e.notes}</p>}
       </div>
 

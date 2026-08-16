@@ -151,6 +151,25 @@ export interface LegalEntityRow {
   lease: LegalEntityLease | null;
   fiscal: LegalEntityFiscal | null;
   cashPolicy: LegalEntityCashPolicy | null;
+  /** Task #655 / #1165 — per-entity statutory-payroll overrides including WPS config. */
+  statutory: {
+    freeZoneRegime?: string | null;
+    optOut?: string[] | null;
+    employerPctOverride?: Record<string, number> | null;
+    employeePctOverride?: Record<string, number> | null;
+    ceilingOverride?: Record<string, number> | null;
+    eosbCapPerYearOverride?: number | null;
+    wps?: {
+      applicable?: boolean | null;
+      /** 13-digit MOHRE Employer Unique ID. */
+      employerUniqueId?: string | null;
+      /** 9-digit agent-bank routing code. */
+      agentBankRoutingCode?: string | null;
+    } | null;
+    notes?: string | null;
+  } | null;
+  /** Task #1095 — head/default entity for firm-wide cost allocation. */
+  isHeadEntity: boolean;
   /** Task #1092 — pre-formation ownership record + settlement stamp. */
   formation: {
     ownershipType: "cognirise_uae" | "jv" | "founder_partner" | "franchise" | null;

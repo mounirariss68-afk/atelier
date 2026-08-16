@@ -150,6 +150,32 @@ export interface EntityDraft {
     jvSplits: Array<{ partnerName: string; sharePct: string }>;
     notes: string;
   };
+  /**
+   * Task #1165 — WPS (UAE Wage Protection System) employer config.
+   * Flat strings; converted to statutory.wps on save.
+   */
+  statutory: {
+    /** "" | "true" | "false" */
+    wpsApplicable: string;
+    /** 13-digit MOHRE Employer Unique ID */
+    wpsEmployerUniqueId: string;
+    /** 9-digit agent-bank routing code */
+    wpsAgentBankRoutingCode: string;
+  };
+  /**
+   * Pass-through: the non-WPS statutory fields from the existing entity.
+   * Never shown in the UI — carried through untouched so that saving the
+   * entity form never wipes freeZoneRegime, optOut, override maps, etc.
+   */
+  _statutoryBase: {
+    freeZoneRegime?: string | null;
+    optOut?: string[] | null;
+    employerPctOverride?: Record<string, number> | null;
+    employeePctOverride?: Record<string, number> | null;
+    ceilingOverride?: Record<string, number> | null;
+    eosbCapPerYearOverride?: number | null;
+    notes?: string | null;
+  } | null;
   notes: string;
 }
 
@@ -164,6 +190,8 @@ export function emptyDraft(): EntityDraft {
     fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "", ctTaxYearBasis: "", ctFirstPeriodStart: "", ctFirstPeriodEnd: "" },
     cashPolicy: { openingBalance: "", openingBalanceAsOf: "", minCashPolicy: "", covenantFloor: "", notes: "" },
     formation: { ownershipType: "", jvSplits: [], notes: "" },
+    statutory: { wpsApplicable: "", wpsEmployerUniqueId: "", wpsAgentBankRoutingCode: "" },
+    _statutoryBase: null,
     notes: "",
   };
 }
@@ -225,6 +253,27 @@ export function draftFromEntity(e: LegalEntityRow): EntityDraft {
       })),
       notes: e.formation?.notes ?? "",
     },
+    statutory: {
+      wpsApplicable:
+        e.statutory?.wps?.applicable === true ? "true"
+        : e.statutory?.wps?.applicable === false ? "false"
+        : "",
+      wpsEmployerUniqueId: e.statutory?.wps?.employerUniqueId ?? "",
+      wpsAgentBankRoutingCode: e.statutory?.wps?.agentBankRoutingCode ?? "",
+    },
+    // Carry the non-WPS fields through untouched so saving the form never
+    // clobbers freeZoneRegime, optOut, contribution-rate overrides, etc.
+    _statutoryBase: e.statutory
+      ? {
+          freeZoneRegime: e.statutory.freeZoneRegime ?? null,
+          optOut: (e.statutory.optOut && e.statutory.optOut.length > 0) ? e.statutory.optOut : null,
+          employerPctOverride: e.statutory.employerPctOverride ?? null,
+          employeePctOverride: e.statutory.employeePctOverride ?? null,
+          ceilingOverride: e.statutory.ceilingOverride ?? null,
+          eosbCapPerYearOverride: e.statutory.eosbCapPerYearOverride ?? null,
+          notes: e.statutory.notes ?? null,
+        }
+      : null,
     notes: e.notes ?? "",
   };
 }
@@ -309,6 +358,24 @@ export function draftToBody(d: EntityDraft): Record<string, unknown> {
           notes: nn(d.formation.notes),
         }
       : null,
+    statutory: (() => {
+      const uid = nn(d.statutory.wpsEmployerUniqueId);
+      const rc = nn(d.statutory.wpsAgentBankRoutingCode);
+      const applicable =
+        d.statutory.wpsApplicable === "true" ? true
+        : d.statutory.wpsApplicable === "false" ? false
+        : null;
+      const hasWps = applicable !== null || !!uid || !!rc;
+      const wps = hasWps
+        ? { applicable, employerUniqueId: uid, agentBankRoutingCode: rc }
+        : null;
+      // Merge WPS onto the existing base so freeZoneRegime, optOut, override
+      // maps and EOSB cap are never silently wiped by an edit via this form.
+      const base = d._statutoryBase;
+      const hasBase = !!base && Object.values(base).some((v) => v !== null && v !== undefined);
+      if (!hasWps && !hasBase) return null;
+      return { ...(base ?? {}), wps };
+    })(),
     notes: nn(d.notes),
   };
 }
@@ -466,12 +533,17 @@ export function validateDraft(d: EntityDraft): Record<string, string> {
     if (splits.length === 0) errs["formation.jvSplits"] = "A JV needs at least one partner split.";
     else if (Math.abs(sum - 100) > 0.01) errs["formation.jvSplits"] = `JV splits must sum to 100% (currently ${sum}%).`;
   }
+  // Task #1165 — WPS field format validation.
+  const uid = d.statutory.wpsEmployerUniqueId.trim();
+  if (uid && !/^\d{13}$/.test(uid)) errs["statutory.wps.employerUniqueId"] = "Must be exactly 13 digits (MOHRE Employer Unique ID).";
+  const rc = d.statutory.wpsAgentBankRoutingCode.trim();
+  if (rc && !/^\d{9}$/.test(rc)) errs["statutory.wps.agentBankRoutingCode"] = "Must be exactly 9 digits (agent-bank routing code).";
   return errs;
 }
 
 type SectionId =
   | "identity" | "registrations" | "activities" | "owners"
-  | "premises" | "fiscal" | "cash" | "formation" | "notes";
+  | "premises" | "fiscal" | "cash" | "formation" | "statutory" | "notes";
 
 function sectionForKey(key: string): SectionId {
   if (key.startsWith("formation.")) return "formation";
@@ -480,6 +552,7 @@ function sectionForKey(key: string): SectionId {
   if (key.startsWith("premises.") || key.startsWith("lease.")) return "premises";
   if (key.startsWith("fiscal.")) return "fiscal";
   if (key.startsWith("cashPolicy.")) return "cash";
+  if (key.startsWith("statutory.")) return "statutory";
   if (key === "notes") return "notes";
   return "identity";
 }
@@ -708,6 +781,7 @@ const SECTION_TITLES: Record<SectionId, string> = {
   fiscal: "Fiscal calendar",
   cash: "Cash policy",
   formation: "Pre-formation ownership",
+  statutory: "WPS / Statutory payroll",
   notes: "Notes",
 };
 
@@ -1199,6 +1273,62 @@ export function EntityFormDialog(props: {
                     </Button>
                   </div>
                 )}
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Task #1165 — WPS / Statutory payroll */}
+            <AccordionItem value="statutory">
+              <AccordionTrigger className="hover:no-underline py-3">
+                {sectionHeader(
+                  "statutory",
+                  draft.statutory.wpsApplicable === "true"
+                    ? draft.statutory.wpsEmployerUniqueId.trim()
+                      ? `Employer ID ${draft.statutory.wpsEmployerUniqueId.trim()}`
+                      : "WPS applicable — ID not set"
+                    : draft.statutory.wpsApplicable === "false"
+                      ? "WPS exempt"
+                      : undefined,
+                )}
+              </AccordionTrigger>
+              <AccordionContent className="pb-5">
+                <p className="text-xs text-text-faint mb-3 pt-1">
+                  UAE Wage Protection System config for the SIF export. AE entities on the mainland WPS
+                  regime must set their 13-digit MOHRE Employer Unique ID and 9-digit agent-bank routing
+                  code before generating a SIF file. DIFC / ADGM entities that file outside MOHRE WPS
+                  should be marked exempt.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
+                  <FieldShell label="WPS applicability">
+                    <select
+                      className={inputCls}
+                      value={draft.statutory.wpsApplicable}
+                      onChange={(e) => up({ statutory: { ...draft.statutory, wpsApplicable: e.target.value } })}
+                      data-testid="select-wps-applicable"
+                    >
+                      <option value="">Not set</option>
+                      <option value="true">Applicable (mainland WPS)</option>
+                      <option value="false">Exempt (DIFC / ADGM or non-AE)</option>
+                    </select>
+                  </FieldShell>
+                  <VText
+                    ctx={ctx}
+                    fieldKey="statutory.wps.employerUniqueId"
+                    label="MOHRE Employer Unique ID"
+                    placeholder="13 digits"
+                    value={draft.statutory.wpsEmployerUniqueId}
+                    onChange={(v) => up({ statutory: { ...draft.statutory, wpsEmployerUniqueId: v.replace(/\D/g, "") } })}
+                    testid="input-wps-employer-id"
+                  />
+                  <VText
+                    ctx={ctx}
+                    fieldKey="statutory.wps.agentBankRoutingCode"
+                    label="Agent-bank routing code"
+                    placeholder="9 digits"
+                    value={draft.statutory.wpsAgentBankRoutingCode}
+                    onChange={(v) => up({ statutory: { ...draft.statutory, wpsAgentBankRoutingCode: v.replace(/\D/g, "") } })}
+                    testid="input-wps-routing-code"
+                  />
+                </div>
               </AccordionContent>
             </AccordionItem>
 
