@@ -1024,18 +1024,46 @@ function ProfileTab({
                         <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
                           {BRIEF_VIEW_LABELS.watchOuts[briefLocale]}
                         </span>
-                        <ul className="mt-1 space-y-1">
-                          {view.watchOuts.map((w, i) => (
-                            <li
-                              key={i}
-                              className="text-text-mute text-sm flex items-start gap-2"
-                              data-testid={`row-watch-out-${i}`}
-                            >
-                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gold" />
-                              <span>{w}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        {(() => {
+                          // Build talking-points map from the prep-card cache.
+                          // The server validates the cache key before sending the
+                          // brief (stripStaleWatchOutCache in buildWorkspace), so
+                          // the presence of watchOutTalkingPoints here already
+                          // implies it matches the current watch-out list.
+                          type TpCache = {
+                            points?: Array<{ watchOut?: string; answer?: string }>;
+                          } | null | undefined;
+                          const tpCache = (brief as { watchOutTalkingPoints?: TpCache }).watchOutTalkingPoints;
+                          const tpMap: Record<string, string> = {};
+                          if (tpCache && Array.isArray(tpCache.points)) {
+                            for (const p of tpCache.points) {
+                              if (typeof p?.watchOut === "string" && typeof p?.answer === "string" && p.watchOut && p.answer) {
+                                tpMap[p.watchOut] = p.answer;
+                              }
+                            }
+                          }
+                          return (
+                            <ul className="mt-1 space-y-1">
+                              {view.watchOuts.map((w, i) => (
+                                <li
+                                  key={i}
+                                  className="text-text-mute text-sm flex items-start gap-2"
+                                  data-testid={`row-watch-out-${i}`}
+                                >
+                                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                                  <span>
+                                    {w}
+                                    {tpMap[w] && (
+                                      <span className="block text-xs text-text-faint italic mt-0.5">
+                                        {tpMap[w]}
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>

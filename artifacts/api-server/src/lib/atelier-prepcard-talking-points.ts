@@ -17,6 +17,7 @@
 import { createHash } from "node:crypto";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db, atelierAccounts } from "@workspace/db";
+import { distillBriefView } from "./atelier-brief-view.js";
 
 const TALKING_POINTS_MODEL = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
 const TIMEOUT_MS = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
@@ -41,6 +42,33 @@ export function watchOutCacheKey(watchOuts: string[]): string {
 
 function cleanAnswer(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * Strip `watchOutTalkingPoints` from a research brief when its cache key no
+ * longer matches the distilled watch-out list. Call this server-side before
+ * sending the brief to the client so the client never needs a crypto
+ * dependency for validation. Handles both legacy { key, points } records and
+ * newer { key, watchOuts, points } records identically (both validated by key).
+ * Returns the same object reference when the cache is absent or still valid.
+ */
+export function stripStaleWatchOutCache<
+  T extends {
+    whyNowHypothesis?: string | null;
+    stressTest?: unknown;
+    watchOutTalkingPoints?: unknown;
+  },
+>(brief: T): T {
+  const cached = brief.watchOutTalkingPoints as
+    | { key?: unknown }
+    | null
+    | undefined;
+  if (!cached || typeof cached.key !== "string") return brief; // nothing to validate
+  const { watchOuts } = distillBriefView(brief as Parameters<typeof distillBriefView>[0]);
+  if (watchOuts.length === 0 || cached.key === watchOutCacheKey(watchOuts)) return brief;
+  // Key mismatch — strip the stale cache.
+  const { watchOutTalkingPoints: _omit, ...rest } = brief as Record<string, unknown>;
+  return rest as T;
 }
 
 /**
@@ -113,7 +141,9 @@ export async function getWatchOutTalkingPoints(
     // by our stale snapshot — the new brief survives, its watch-outs won't
     // match this key, and the points regenerate on the next card build.
     try {
-      const cachePayload = JSON.stringify({ key, points });
+      // Include the watchOuts array so browser-side consumers can validate the
+      // cache without a crypto dependency (JSON.stringify equality check).
+      const cachePayload = JSON.stringify({ key, watchOuts, points });
       await db
         .update(atelierAccounts)
         .set({

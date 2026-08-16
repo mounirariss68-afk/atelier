@@ -180,6 +180,7 @@ import {
   createBriefDoc,
   buildAccountResearchBriefPdf,
 } from "../../lib/atelier-brief-pdf.js";
+import { stripStaleWatchOutCache } from "../../lib/atelier-prepcard-talking-points.js";
 import { CRITICAL_ROLES } from "../../lib/atelier-agents/critical-roles.js";
 import {
   runAccountCartographer,
@@ -1643,7 +1644,10 @@ async function buildWorkspace(
       // Task #699 — free-text partner guidance on the strategy.
       strategyGuidance: a.strategyGuidance ?? null,
       competitors: a.competitors ?? [],
-      researchBrief: a.researchBrief ?? null,
+      // Validate the talking-points cache key server-side before the brief
+      // reaches the client (strips stale entries so the client never needs
+      // a crypto dependency for validation).
+      researchBrief: a.researchBrief ? stripStaleWatchOutCache(a.researchBrief) : null,
       // Task #9 — deterministic research-quality signals over the persisted
       // brief: completeness checklist/score, narrative→evidence links, age.
       researchQuality: {
