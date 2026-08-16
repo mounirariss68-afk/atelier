@@ -198,6 +198,18 @@ async function main() {
     return { status: res.status, body: parsed };
   };
 
+  // Poll the status route until the run is no longer "running" or "idle".
+  const pollStatus = async (acctId: string, tries = 120) => {
+    let s: any = null;
+    for (let i = 0; i < tries; i++) {
+      const r = await api("GET", `/accounts/${acctId}/executive-mapper/status`);
+      s = r.body;
+      if (s?.status !== "running" && s?.status !== "idle") return s;
+      await new Promise((r2) => setTimeout(r2, 250));
+    }
+    return s;
+  };
+
   try {
     await db.insert(atelierUsers).values({
       id: userId,
@@ -219,15 +231,15 @@ async function main() {
       partnerOwnerId: userId,
     } as any);
 
-    // ---- run the Mapper through the real route ----
+    // ---- run the Mapper through the real route (async start-then-poll) ----
     const run = await api("POST", `/accounts/${acctId}/executive-mapper/run`, {});
-    check("run -> 200", run.status === 200, run.status);
-    check(
-      "route response carries code-computed coverage",
-      Array.isArray(run.body?.criticalRoleCoverage) &&
-        run.body.criticalRoleCoverage.length === 15,
-      run.body?.criticalRoleCoverage?.length,
-    );
+    check("run -> 202", run.status === 202, run.status);
+    check("run body says running", run.body?.status === "running", run.body);
+
+    // Poll until the background job settles (stub responds immediately, so this
+    // should resolve within a few seconds).
+    const settled = await pollStatus(acctId);
+    check("status settles to succeeded", settled?.status === "succeeded", settled);
 
     // ---- stored run output: guard applied ----
     const rows: any = await db.execute(
