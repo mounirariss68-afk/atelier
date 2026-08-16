@@ -67,8 +67,8 @@ export function ShareIntentHandler() {
       ready,
       token,
       mustChangePassword,
-      seg0: segments[0] as string | undefined,
-      seg1: segments[1] as string | undefined,
+      seg0: (segments as string[])[0] as string | undefined,
+      seg1: (segments as string[])[1] as string | undefined,
       pending: hasPendingShare(),
     });
     if (action === "navigate") router.push("/expense/new?fromShare=1");
