@@ -22,6 +22,10 @@ import {
   writeBrandFooters,
   block,
 } from "../atelier-pdf-brand.js";
+import {
+  emitSelfNotification,
+  resolveUserIdForPerson,
+} from "../../routes/atelier/meRoutes.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -116,13 +120,14 @@ export async function generateRunPayslips(args: {
   for (const line of args.lines) {
     if (have.has(line.employeeId)) continue;
     const pdf = await renderPayslipPdf({ run: args.run, line });
+    const docTitle = `Payslip ${args.run.periodLabel}`;
     await db.insert(atelierPayDocuments).values({
       id: rid("paydoc"),
       orgId: args.orgId,
       personType: "employee",
       personId: line.employeeId,
       category: "payslip",
-      title: `Payslip ${args.run.periodLabel}`,
+      title: docTitle,
       periodDate,
       published: true,
       publishedAt: new Date(),
@@ -136,6 +141,19 @@ export async function generateRunPayslips(args: {
       createdByUserId: args.createdByUserId,
     });
     created++;
+    // Me-home card + device push for the employee (best-effort: person may
+    // have no login yet, in which case resolveUserIdForPerson returns null).
+    const ownerUserId = await resolveUserIdForPerson(args.orgId, line.employeeId);
+    if (ownerUserId) {
+      await emitSelfNotification({
+        orgId: args.orgId,
+        userId: ownerUserId,
+        kind: "pay_document",
+        title: "New payslip available",
+        body: docTitle,
+        href: "/me/pay",
+      });
+    }
   }
   return { created };
 }
