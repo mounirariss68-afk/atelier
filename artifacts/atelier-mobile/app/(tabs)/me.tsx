@@ -1184,7 +1184,7 @@ const PAY_CATEGORY_LABEL: Record<string, string> = {
   insurance: "Insurance",
 };
 
-function PaySection() {
+function PaySection({ isContractor }: { isContractor: boolean }) {
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
@@ -1249,8 +1249,8 @@ function PaySection() {
 
   return (
     <View style={{ gap: 16 }}>
-      {/* Advance balance cards — one per currency, employees only */}
-      {advances.map((advance) => {
+      {/* Advance balance cards — one per currency, employees only (never shown for contractors) */}
+      {!isContractor && advances.map((advance) => {
         const estimatedMonths =
           advance.monthlyInstallment > 0
             ? Math.ceil(advance.totalOutstanding / advance.monthlyInstallment)
@@ -1352,14 +1352,14 @@ function PaySection() {
           textAlign: rtl.textAlign,
         }}
       >
-        {t("me.pay.payslips")}
+        {isContractor ? t("me.pay.remittances") : t("me.pay.payslips")}
       </Text>
 
       {docs.length === 0 ? (
         <EmptyState
           icon="file-text"
-          title={t("me.pay.noPayslips")}
-          body={t("me.pay.noPayslipsBody")}
+          title={isContractor ? t("me.pay.noRemittances") : t("me.pay.noPayslips")}
+          body={isContractor ? t("me.pay.noRemittancesBody") : t("me.pay.noPayslipsBody")}
         />
       ) : (
         <View style={{ gap: 10 }}>
@@ -1450,6 +1450,11 @@ export default function MeScreen() {
   const profile = useAtelierGetMyProfile();
   const docs = useAtelierListMyDocuments();
   const uploadPhoto = useAtelierUploadMyPhoto();
+  // Used only to derive workerType for the Pay tab label + PaySection props.
+  // The data is cached by useAtelierGetMyPay inside PaySection so this does
+  // not trigger an extra network request.
+  const payMeta = useAtelierGetMyPay();
+  const isContractor = payMeta.data?.person?.workerType === "contractor";
 
   // Task #828 — refetch the document list whenever the Me tab regains
   // focus, so out-of-band changes (chat writes, another device) surface
@@ -1931,7 +1936,7 @@ export default function MeScreen() {
               { key: "tasks", label: t("me.tabTasks") },
               { key: "documents", label: t("me.tabDocuments") },
               { key: "letters", label: t("me.tabLetters") },
-              { key: "pay", label: t("me.tabPay") },
+              { key: "pay", label: isContractor ? t("me.tabPayContractor") : t("me.tabPay") },
             ] as const
           ).map((tab) => {
             const active = meTab === tab.key;
@@ -2134,7 +2139,7 @@ export default function MeScreen() {
         {meTab === "pay" ? (
           <>
             {/* Task #1147 — payslips, pay documents and advance balance. */}
-            <PaySection />
+            <PaySection isContractor={isContractor} />
           </>
         ) : null}
 
