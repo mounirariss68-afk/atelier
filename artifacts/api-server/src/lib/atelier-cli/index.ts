@@ -5531,7 +5531,7 @@ export async function runTurn(
           data: {
             step,
             reason: isAlliancePartnerChat
-              ? "That isn't available in the partner portal — here I can only show the opportunities shared with your firm and their client overview."
+              ? "That isn't available in the partner portal — here I can show the opportunities, delivery, contracts, invoices, documents and notifications shared with your firm, your firm profile, and help you request a change to your own company details."
               : "That isn't something I can help with from your workspace — here I can only work with your own timesheets, expenses, leave, documents, payslips and profile.",
             closestCapabilityId: null,
             pageHref: fallbackHref,

@@ -27,3 +27,9 @@ description: Security model for external alliance_partner logins (grant-scoped o
 - Documents shared to a firm are byte-COPY snapshots into firm-scoped storage keys; dedupe and unreference-deletion are per-firm only — org-global dedupe would be an existence side-channel.
 - Partner uploads are multipart, parsed route-LOCALLY (multer memoryStorage) only AFTER firm resolution + preview refusal — never via a path-scoped pre-parser, which consumes bytes before preview auth. Upload statuses: pending_review|accepted|rejected; review decisions use the full words.
 - Internal reviewers need a leadership byte-download surface for uploads/shares (completion review rejects accept/reject UIs with no way to inspect the file).
+
+## Self-service change requests (partner portal)
+- Partner change requests reuse the firm pendingUpdates proposal queue (no new table); entries are flagged partner-submitted and a resubmit for the same field supersedes the prior pending one. **Why:** review gating — nothing partner-writable applies directly.
+- REST route and the chat write tool share ONE allowlist + write helper; bank fields always hard-reject to the finance bank-change flow. **Why:** a single write path prevents allowlist drift between surfaces.
+- The alliance_partner catalog gate admits exactly one write tool; widening it further must be deliberate + ratchet-updated.
+- Change-request toValue is NOT always a string on the wire (capabilities = string[]); portal renderers must format unknown values defensively, and company-profile capabilityProfile is an object, not a string.

@@ -571,10 +571,15 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   if (role === "alliance_partner") {
     // Task #939 — meta.find_screen is allowed: its catalog slice for
     // alliance_partner contains ONLY the partner-portal screens.
+    // Task #1175 — deliberately admit the SINGLE partner-portal write
+    // tool (partnerportal.request_change): partners may PROPOSE a
+    // review-gated change to their own firm profile. Every OTHER write
+    // stays excluded (no me.*, no CRM, no entity writes — ever).
     return REGISTRY.filter(
       (e) =>
-        !e.isWrite &&
-        (e.id.startsWith("partnerportal.") || e.id === "meta.find_screen"),
+        (!e.isWrite &&
+          (e.id.startsWith("partnerportal.") || e.id === "meta.find_screen")) ||
+        e.id === "partnerportal.request_change",
     );
   }
   if (SELF_ONLY_CHAT_ROLES.has(role)) {

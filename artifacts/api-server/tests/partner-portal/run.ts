@@ -338,19 +338,31 @@ async function main(): Promise<void> {
         // slice for alliance_partner is only partner-safe screens (the
         // partner portal + the chat screen itself — verified against
         // @workspace/screen-catalog screensForRole("alliance_partner")).
-        "alliance_partner catalog slice is exactly the partnerportal.* reads + meta.find_screen",
+        // Task #1175 — the slice is the partnerportal.* reads + the ONE
+        // partnerportal write (request_change) + meta.find_screen.
+        "alliance_partner catalog slice is exactly the partnerportal.* reads + request_change + meta.find_screen",
         JSON.stringify(ids) ===
           JSON.stringify([
             "meta.find_screen",
             "partnerportal.account_overview",
+            "partnerportal.contracts",
+            "partnerportal.delivery",
+            "partnerportal.documents",
+            "partnerportal.firm_profile",
+            "partnerportal.invoices",
+            "partnerportal.notifications",
             "partnerportal.opportunities",
             "partnerportal.opportunity_detail",
+            "partnerportal.request_change",
           ]),
         ids.join(","),
       );
       check(
-        "no surfaced tool is a write",
-        caps.every((c: any) => !c.isWrite),
+        // Task #1175 — exactly one write is surfaced (request_change); the
+        // rest are reads.
+        "exactly one surfaced tool is a write (partnerportal.request_change)",
+        caps.filter((c: any) => c.isWrite).length === 1 &&
+          caps.find((c: any) => c.isWrite)?.id === "partnerportal.request_change",
       );
 
       const all = cat.listCapabilities ? cat.listCapabilities() : null;
@@ -426,13 +438,13 @@ async function main(): Promise<void> {
       } as any);
       const names = tools.map((t: any) => t.name).sort();
       check(
-        // Task #939 — the 3 partnerportal tools PLUS find_screen (a
-        // navigation read whose screen slice for this role is partner-safe
-        // only); no legacy TOOL_REGISTRY fallthrough beyond that.
-        "getToolsForPersona = the 3 partnerportal tools + find_screen (no legacy fallthrough)",
-        names.length === 4 &&
-          names.filter((n: string) => n.startsWith("partner_")).length === 3 &&
-          names.includes("find_screen"),
+        // Task #1175 — the partnerportal tools (9 reads + 1 write) PLUS
+        // find_screen; no legacy TOOL_REGISTRY fallthrough beyond that.
+        "getToolsForPersona = the partnerportal tools + find_screen (no legacy fallthrough)",
+        names.length === 11 &&
+          names.filter((n: string) => n.startsWith("partner_")).length === 10 &&
+          names.includes("find_screen") &&
+          names.includes("partner_portal_request_change"),
         names.join(","),
       );
       // Dispatch-time clamp: hallucinated tool names must NOT resolve via
@@ -499,8 +511,13 @@ async function main(): Promise<void> {
         `slice=${sliceIds.join(",")} expected=${expectedSlice.join(",")}`,
       );
       check(
-        "ratchet: every registered partnerportal.* capability is a read",
-        all.filter((c: any) => c.id.startsWith("partnerportal.")).every((c: any) => !c.isWrite),
+        // Task #1175 — the ONLY registered partnerportal.* write is
+        // request_change; everything else stays read-only.
+        "ratchet: the only partnerportal.* write is request_change",
+        all
+          .filter((c: any) => c.id.startsWith("partnerportal.") && c.isWrite)
+          .map((c: any) => c.id)
+          .join(",") === "partnerportal.request_change",
       );
       // find_screen must be read-only too (it may return navigateTo, but
       // never mutates) — the widening is only safe for a read.
@@ -513,8 +530,15 @@ async function main(): Promise<void> {
       const PINNED = [
         "meta.find_screen",
         "partnerportal.account_overview",
+        "partnerportal.contracts",
+        "partnerportal.delivery",
+        "partnerportal.documents",
+        "partnerportal.firm_profile",
+        "partnerportal.invoices",
+        "partnerportal.notifications",
         "partnerportal.opportunities",
         "partnerportal.opportunity_detail",
+        "partnerportal.request_change",
       ];
       check(
         "ratchet: slice matches the pinned snapshot (update deliberately)",

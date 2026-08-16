@@ -145,17 +145,23 @@ export function AllianceEvaluationPanel({
     }
   };
 
-  const decide = async (proposalId: string, action: "approve" | "reject") => {
+  const decide = async (
+    proposalId: string,
+    action: "approve" | "reject",
+    note?: string | null,
+  ) => {
     setErr(null);
     setDeciding(proposalId);
     try {
+      const body: { action: "approve" | "reject"; note?: string } = { action };
+      if (note && note.trim()) body.note = note.trim();
       const r = await fetch(
         `${API}/partners/firms/${firm.id}/proposals/${proposalId}/decide`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ action }),
+          body: JSON.stringify(body),
         },
       );
       if (!r.ok) {
@@ -383,11 +389,14 @@ export function AllianceEvaluationPanel({
             // Task #971 — an enrichment of a known contact must read as an
             // update to that person, never a new-person suggestion.
             const meta = p.meta as
-              | { updateKind?: string; existingContactName?: string }
+              | { updateKind?: string; existingContactName?: string; partnerSubmitted?: boolean }
               | null
               | undefined;
             const isEnrichment =
               p.field === "contact" && meta?.updateKind === "enrichment";
+            // Task #1175 — partner-portal submissions land in the same queue.
+            const isPartnerSubmitted =
+              meta?.partnerSubmitted === true || p.proposedBy === "partner_portal";
             const chip =
               p.field === "contact"
                 ? isEnrichment
@@ -403,6 +412,11 @@ export function AllianceEvaluationPanel({
               <div className="min-w-0">
                 <div className="text-text">
                   <MonoChip>{chip}</MonoChip>
+                  {isPartnerSubmitted && (
+                    <span data-testid={`badge-partner-submitted-${p.id}`}>
+                      <MonoChip tone="gold">From partner portal</MonoChip>
+                    </span>
+                  )}
                   {isEnrichment && meta?.existingContactName && (
                     <span className="text-text-faint ml-2">
                       updates {meta.existingContactName}
@@ -430,7 +444,19 @@ export function AllianceEvaluationPanel({
                   <button
                     className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1 disabled:opacity-50"
                     disabled={deciding === p.id}
-                    onClick={() => void decide(p.id!, "reject")}
+                    onClick={() => {
+                      if (isPartnerSubmitted) {
+                        const note = window.prompt(
+                          "Add a note for the partner about why this change is being rejected (optional):",
+                          "",
+                        );
+                        // Cancel (null) aborts; empty string proceeds without a note.
+                        if (note === null) return;
+                        void decide(p.id!, "reject", note);
+                      } else {
+                        void decide(p.id!, "reject");
+                      }
+                    }}
                     data-testid={`button-reject-${p.id}`}
                   >
                     <X className="w-3 h-3" /> reject

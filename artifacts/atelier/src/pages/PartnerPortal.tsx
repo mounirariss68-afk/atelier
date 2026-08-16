@@ -17,7 +17,7 @@ import * as React from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-const API = `${import.meta.env.BASE_URL}api/atelier/partner-portal`;
+const API = `${import.meta.env?.BASE_URL ?? "/"}api/atelier/partner-portal`;
 
 /**
  * Task #1173 — preview-as-partner. Internal leadership can open a firm's
@@ -905,7 +905,7 @@ export function PartnerPortalBilling() {
 // These routes are under /api/atelier/partner/* (not partner-portal).
 // ===========================================================================
 
-const PARTNER_API = `${import.meta.env.BASE_URL}api/atelier/partner-portal`;
+const PARTNER_API = `${import.meta.env?.BASE_URL ?? "/"}api/atelier/partner-portal`;
 
 type FirmDoc = {
   id: string;
@@ -927,6 +927,13 @@ type CompanyProfile = {
     registrationNumber: string | null;
     taxId: string | null;
     registeredAddress: string | null;
+    country?: string | null;
+    capabilityProfile?: {
+      summary: string | null;
+      domains?: { label: string; description?: string | null; evidence?: string | null }[];
+    } | null;
+    capabilities?: string[] | null;
+    speciality?: string | null;
     bankIbanMasked: string | null;
     bankName: string | null;
     bankCurrency: string | null;
@@ -937,6 +944,53 @@ type CompanyProfile = {
     | { id: string; proposedContacts: FirmContact[]; note: string | null; createdAt: string }
     | null;
 };
+
+/** Task #1175 — partner self-service change requests. */
+type ChangeRequestField =
+  | "legalName"
+  | "registrationNumber"
+  | "taxId"
+  | "registeredAddress"
+  | "capabilityProfile"
+  | "speciality"
+  | "country";
+type ChangeRequest = {
+  id: string;
+  field: string;
+  toValue: unknown;
+  rationale: string | null;
+  status: "pending" | "approved" | "rejected";
+  submittedAt: string;
+  decidedAt: string | null;
+  decisionNote: string | null;
+};
+const CHANGE_FIELD_OPTIONS: { value: ChangeRequestField; label: string }[] = [
+  { value: "legalName", label: "Legal name" },
+  { value: "registrationNumber", label: "Registration number" },
+  { value: "taxId", label: "Tax / VAT ID" },
+  { value: "registeredAddress", label: "Registered address" },
+  { value: "capabilityProfile", label: "Capability summary" },
+  { value: "speciality", label: "Speciality" },
+  { value: "country", label: "Country" },
+];
+const CHANGE_FIELD_LABELS: Record<string, string> = Object.fromEntries(
+  CHANGE_FIELD_OPTIONS.map((o) => [o.value, o.label]),
+);
+export function changeFieldLabel(field: string): string {
+  return CHANGE_FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+const MULTILINE_CHANGE_FIELDS = new Set<ChangeRequestField>(["registeredAddress", "capabilityProfile"]);
+export function truncateValue(v: unknown, n = 120): string {
+  // toValue may be a string OR structured (e.g. `capabilities` submitted via
+  // chat arrives as a string array) — never assume string methods exist.
+  let t: string;
+  if (typeof v === "string") t = v.trim();
+  else if (Array.isArray(v)) t = v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ");
+  else if (v == null) t = "";
+  else if (typeof v === "object") t = JSON.stringify(v);
+  else t = String(v);
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+}
 
 const DOC_KIND_LABELS: Record<string, string> = {
   trade_license: "Trade license",
@@ -988,6 +1042,23 @@ function ReviewChip({ status }: { status: FirmDoc["reviewStatus"] }) {
         : "border-amber-500/40 text-amber-600";
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
+function ChangeStatusChip({ id, status }: { id: string; status: ChangeRequest["status"] }) {
+  const tone =
+    status === "approved"
+      ? "border-emerald-500/40 text-emerald-600"
+      : status === "rejected"
+        ? "border-destructive/40 text-destructive"
+        : "border-amber-500/40 text-amber-600";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
+      data-testid={`change-status-${id}`}
+    >
       {status}
     </span>
   );
@@ -1084,8 +1155,72 @@ export function PartnerPortalCompany() {
     }
   };
 
+  // ---- change requests (Task #1175) ----
+  const crQuery = useQuery({
+    queryKey: ["partner-portal", api.previewFirmId, "change-requests"],
+    queryFn: async (): Promise<{ items: ChangeRequest[] }> => {
+      try {
+        return await api.getJson<{ items: ChangeRequest[] }>("/change-requests");
+      } catch {
+        // Read failures degrade to empty (server may not ship this yet).
+        return { items: [] };
+      }
+    },
+  });
+  const changeRequests = crQuery.data?.items ?? [];
+
+  const [crField, setCrField] = React.useState<ChangeRequestField>("legalName");
+  const [crValue, setCrValue] = React.useState("");
+  const [crReason, setCrReason] = React.useState("");
+  const [crBusy, setCrBusy] = React.useState(false);
+  const [crErr, setCrErr] = React.useState<string | null>(null);
+
   const firm = q.data?.firm;
   const pending = q.data?.pendingContactSuggestion ?? null;
+
+  const currentValueFor = (field: ChangeRequestField): string => {
+    if (!firm) return "";
+    switch (field) {
+      case "legalName":
+        return firm.legalName ?? firm.name ?? "";
+      case "registrationNumber":
+        return firm.registrationNumber ?? "";
+      case "taxId":
+        return firm.taxId ?? "";
+      case "registeredAddress":
+        return firm.registeredAddress ?? "";
+      case "capabilityProfile":
+        return firm.capabilityProfile?.summary ?? "";
+      case "speciality":
+        return firm.speciality ?? "";
+      case "country":
+        return firm.country ?? "";
+      default:
+        return "";
+    }
+  };
+
+  const submitChangeRequest = async () => {
+    setCrErr(null);
+    const toValue = crValue.trim();
+    if (!toValue) return setCrErr("Enter the new value you'd like on record.");
+    setCrBusy(true);
+    try {
+      await api.postJson<{ ok?: boolean; message?: string }>("/change-requests", {
+        field: crField,
+        toValue,
+        rationale: crReason.trim() || null,
+      });
+      setCrValue("");
+      setCrReason("");
+      void qc.invalidateQueries({ queryKey: ["partner-portal", api.previewFirmId, "company-profile"] });
+      void qc.invalidateQueries({ queryKey: ["partner-portal", api.previewFirmId, "change-requests"] });
+    } catch (e) {
+      setCrErr((e as Error).message);
+    } finally {
+      setCrBusy(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8" data-testid="partner-portal-company">
@@ -1135,6 +1270,164 @@ export function PartnerPortalCompany() {
           <p className="mt-2 text-xs text-muted-foreground">
             To change bank details, contact your Cognirise counterpart — changes are reviewed by finance.
           </p>
+
+          {/* Capability summary (read-only, Task #1175) */}
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Capabilities</h2>
+          <div
+            className="mt-3 space-y-3 rounded-lg border border-border p-4"
+            data-testid="company-capability-summary"
+          >
+            <div className="text-sm font-medium">Capabilities we have on file</div>
+            {firm.capabilities && firm.capabilities.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {firm.capabilities.map((cap, i) => (
+                  <span
+                    key={`${cap}-${i}`}
+                    className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-xs font-medium"
+                  >
+                    {cap}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No capabilities recorded yet.</p>
+            )}
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">Capability summary</div>
+              {firm.capabilityProfile?.summary && firm.capabilityProfile.summary.trim() ? (
+                <p className="mt-1 whitespace-pre-wrap text-sm">{firm.capabilityProfile.summary}</p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No capability summary on record. Propose one below to help us match you to the right work.
+                </p>
+              )}
+            </div>
+            <div>
+              <span className="text-xs uppercase text-muted-foreground">Speciality: </span>
+              <span className="text-sm">
+                {firm.speciality && firm.speciality.trim() ? firm.speciality : "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* Request a change (Task #1175) — hidden entirely in preview */}
+          {!api.isPreview && (
+            <>
+              <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Request a change
+              </h2>
+              <div className="mt-3 space-y-3 rounded-lg border border-border p-4">
+                <p className="text-xs text-muted-foreground">
+                  Propose an update to your firm's details. Cognirise reviews each request before it
+                  applies. Bank details are handled separately by finance (see above).
+                </p>
+                <div>
+                  <label className="text-xs uppercase text-muted-foreground">Field to change</label>
+                  <select
+                    value={crField}
+                    onChange={(e) => {
+                      setCrField(e.target.value as ChangeRequestField);
+                      setCrValue("");
+                      setCrErr(null);
+                    }}
+                    className="mt-1 block w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                    data-testid="select-change-field"
+                  >
+                    {CHANGE_FIELD_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Current value</div>
+                  <div className="mt-1 whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-sm">
+                    {currentValueFor(crField) || "—"}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs uppercase text-muted-foreground">New value</label>
+                  {MULTILINE_CHANGE_FIELDS.has(crField) ? (
+                    <textarea
+                      value={crValue}
+                      onChange={(e) => setCrValue(e.target.value)}
+                      rows={3}
+                      placeholder="What it should say"
+                      className="mt-1 block w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                      data-testid="input-change-value"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={crValue}
+                      onChange={(e) => setCrValue(e.target.value)}
+                      placeholder="What it should say"
+                      className="mt-1 block w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                      data-testid="input-change-value"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs uppercase text-muted-foreground">Reason (optional)</label>
+                  <input
+                    type="text"
+                    value={crReason}
+                    onChange={(e) => setCrReason(e.target.value)}
+                    placeholder="Why this change is needed"
+                    className="mt-1 block w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                    data-testid="input-change-reason"
+                  />
+                </div>
+                {crErr && <div className="text-sm text-destructive">{crErr}</div>}
+                <button
+                  onClick={submitChangeRequest}
+                  disabled={crBusy || !crValue.trim()}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  data-testid="button-submit-change"
+                >
+                  {crBusy ? "Submitting…" : "Submit change request"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Your change requests (read; visible in preview too) */}
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Your change requests
+          </h2>
+          <div className="mt-3 space-y-2" data-testid="change-requests-list">
+            {changeRequests.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No change requests yet.</div>
+            ) : (
+              changeRequests.map((cr) => (
+                <div
+                  key={cr.id}
+                  className="rounded-lg border border-border p-4 text-sm"
+                  data-testid={`change-request-${cr.id}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">{changeFieldLabel(cr.field)}</div>
+                      <div className="mt-1 truncate text-xs text-muted-foreground">
+                        Proposed: {truncateValue(cr.toValue) || "—"}
+                      </div>
+                    </div>
+                    <ChangeStatusChip id={cr.id} status={cr.status} />
+                  </div>
+                  {cr.rationale && (
+                    <div className="mt-2 text-xs text-muted-foreground">Reason: {cr.rationale}</div>
+                  )}
+                  {cr.status !== "pending" && cr.decidedAt && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Decided {fmtDate(cr.decidedAt)}
+                      {cr.decisionNote ? ` — ${cr.decisionNote}` : ""}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
 
           {/* Documents */}
           <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Documents</h2>

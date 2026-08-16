@@ -446,6 +446,277 @@ export async function grantedEngScopeForFirm(
 // __resetPortalRateLimit is re-exported for existing test importers.
 export { __resetPortalRateLimit } from "./portalFirmResolver";
 
+// =====================================================================
+// Task #1175 — Partner self-service change requests.
+//
+// A partner may PROPOSE (never write) a small, safe subset of their own
+// firm profile fields. Every submission lands on the SAME
+// atelier_partner_firms.pendingUpdates proposal queue the alliance
+// agents use, so internal leadership approves/rejects it through the
+// existing decide route. Bank details are HARD-rejected here (they have
+// a dedicated finance maker-checker path); everything outside the safe
+// subset is rejected too (tier/archetype/scorecards are internal;
+// contacts go via /partner-portal/contact-suggestions).
+//
+// This helper is the SINGLE write path shared by the REST route
+// (POST /partner-portal/change-requests) and the chat write tool
+// (partnerportal.request_change) so both enforce one allowlist +
+// supersede + append semantics.
+// =====================================================================
+
+/** The ONLY firm fields a partner may propose a change to. */
+export const PARTNER_CHANGE_FIELDS = new Set([
+  "legalName",
+  "registrationNumber",
+  "taxId",
+  "registeredAddress",
+  "capabilityProfile",
+  "capabilities",
+  "speciality",
+  "country",
+]);
+
+/** Bank-related fields: never proposable here — pointed to finance path. */
+const PARTNER_CHANGE_BANK_FIELDS = new Set([
+  "bankName",
+  "iban",
+  "bankIban",
+  "swift",
+  "bankSwift",
+  "currency",
+  "bankCurrency",
+]);
+
+const CHANGE_TEXT_MAX: Record<string, number> = {
+  legalName: 300,
+  registrationNumber: 120,
+  taxId: 120,
+  registeredAddress: 1000,
+  speciality: 400,
+  country: 120,
+  capabilityProfile: 4000,
+};
+
+export type ChangeRequestOutcome =
+  | { ok: false; code: 400; error: string; message: string }
+  | {
+      ok: true;
+      proposalId: string;
+      field: string;
+      fromValue: unknown;
+      toValue: unknown;
+      supersededId: string | null;
+    };
+
+/**
+ * Normalise + validate a partner-submitted field/value into the shape
+ * stored on pendingUpdates.toValue. Returns a 400 outcome on any invalid
+ * or out-of-scope field (bank fields carry the finance-path message).
+ */
+function normalizeChangeValue(
+  field: string,
+  rawValue: unknown,
+):
+  | { ok: false; code: 400; error: string; message: string }
+  | { ok: true; toValue: unknown } {
+  if (PARTNER_CHANGE_BANK_FIELDS.has(field)) {
+    return {
+      ok: false,
+      code: 400,
+      error: "bank-field-not-allowed",
+      message:
+        "Bank details can't be changed here. Use the secure bank-change request in the Billing tab so Finance can verify and approve them.",
+    };
+  }
+  if (!PARTNER_CHANGE_FIELDS.has(field)) {
+    return {
+      ok: false,
+      code: 400,
+      error: "field-not-allowed",
+      message:
+        "That field isn't editable from the partner portal. You can request changes to your firm's legal name, registration number, tax ID, registered address, capability summary, capabilities, speciality or country. For contacts, use the contact-suggestions form.",
+    };
+  }
+  if (field === "capabilities") {
+    if (!Array.isArray(rawValue)) {
+      return {
+        ok: false,
+        code: 400,
+        error: "invalid-value",
+        message: "Provide capabilities as a list of short text labels.",
+      };
+    }
+    const items = rawValue
+      .map((v) => (typeof v === "string" ? v.trim().slice(0, 120) : ""))
+      .filter((v) => v.length > 0)
+      .slice(0, 50);
+    if (items.length === 0) {
+      return {
+        ok: false,
+        code: 400,
+        error: "invalid-value",
+        message: "Provide at least one capability label.",
+      };
+    }
+    return { ok: true, toValue: items };
+  }
+  // All remaining fields are simple scalar text (capabilityProfile is a
+  // capability summary string; it is wrapped into the structured column
+  // shape at apply time).
+  const text = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!text) {
+    return {
+      ok: false,
+      code: 400,
+      error: "invalid-value",
+      message: "Provide a non-empty value.",
+    };
+  }
+  const max = CHANGE_TEXT_MAX[field] ?? 500;
+  return { ok: true, toValue: text.slice(0, max) };
+}
+
+/** The current firm value we record as fromValue for a proposed field. */
+function currentChangeValue(
+  firm: typeof atelierPartnerFirms.$inferSelect,
+  field: string,
+): unknown {
+  switch (field) {
+    case "legalName":
+      return firm.legalName ?? null;
+    case "registrationNumber":
+      return firm.registrationNumber ?? null;
+    case "taxId":
+      return firm.taxId ?? null;
+    case "registeredAddress":
+      return firm.registeredAddress ?? null;
+    case "speciality":
+      return firm.speciality ?? null;
+    case "country":
+      return firm.country ?? null;
+    case "capabilities":
+      return firm.capabilities ?? {};
+    case "capabilityProfile":
+      return firm.capabilityProfile?.summary ?? null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Submit ONE partner change request. Row-locks the firm, supersedes any
+ * prior PENDING partner-submitted proposal for the same field, and
+ * appends a new pending proposal to pendingUpdates. Pure DB write (no
+ * audit / no HTTP): callers add their own audit + response.
+ */
+export async function submitPartnerChangeRequest(args: {
+  orgId: string;
+  firmId: string;
+  field: string;
+  toValueRaw: unknown;
+  rationale: string | null;
+  submittedByUserId: string;
+  submittedByName: string;
+}): Promise<ChangeRequestOutcome> {
+  const norm = normalizeChangeValue(args.field, args.toValueRaw);
+  if (!norm.ok) return norm;
+  return db.transaction(async (tx) => {
+    const [firm] = await tx
+      .select()
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          eq(atelierPartnerFirms.id, args.firmId),
+          eq(atelierPartnerFirms.orgId, args.orgId),
+          isNull(atelierPartnerFirms.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!firm) {
+      return {
+        ok: false as const,
+        code: 400 as const,
+        error: "firm-unavailable",
+        message: "Your firm record is not available right now.",
+      };
+    }
+    const nowIso = new Date().toISOString();
+    const queue = [...(firm.pendingUpdates ?? [])];
+    let supersededId: string | null = null;
+    for (const p of queue) {
+      const meta = (p.meta ?? {}) as { partnerSubmitted?: unknown };
+      if (
+        p.status === "pending" &&
+        p.field === args.field &&
+        meta.partnerSubmitted === true
+      ) {
+        p.status = "rejected";
+        p.decidedAt = nowIso;
+        p.meta = {
+          ...(p.meta ?? {}),
+          decisionNote: "Superseded by a newer partner submission",
+          superseded: true,
+        };
+        supersededId = p.id;
+      }
+    }
+    const proposalId = rid("prop");
+    const fromValue = currentChangeValue(firm, args.field);
+    queue.push({
+      id: proposalId,
+      proposedBy: "partner_portal",
+      proposedAt: nowIso,
+      field: args.field,
+      fromValue,
+      toValue: norm.toValue,
+      rationale: args.rationale ?? "",
+      status: "pending",
+      meta: {
+        partnerSubmitted: true,
+        partnerFirmId: args.firmId,
+        submittedByUserId: args.submittedByUserId,
+        submittedByName: args.submittedByName,
+      },
+    });
+    await tx
+      .update(atelierPartnerFirms)
+      .set({ pendingUpdates: queue, updatedAt: new Date() })
+      .where(eq(atelierPartnerFirms.id, firm.id));
+    return {
+      ok: true as const,
+      proposalId,
+      field: args.field,
+      fromValue,
+      toValue: norm.toValue,
+      supersededId,
+    };
+  });
+}
+
+/** Partner-facing serialization of one of the firm's own proposals. */
+function partnerChangeRequestWire(p: {
+  id: string;
+  field: string;
+  toValue: unknown;
+  rationale: string;
+  status: string;
+  proposedAt: string;
+  decidedAt?: string;
+  meta?: Record<string, unknown>;
+}) {
+  const meta = (p.meta ?? {}) as { decisionNote?: unknown };
+  return {
+    id: p.id,
+    field: p.field,
+    toValue: p.toValue,
+    rationale: p.rationale || null,
+    status: p.status,
+    submittedAt: p.proposedAt,
+    decidedAt: p.decidedAt ?? null,
+    decisionNote: typeof meta.decisionNote === "string" ? meta.decisionNote : null,
+  };
+}
+
 // ---------------------------------------------------------------------
 // Partner-facing reads (/partner-portal/*)
 // ---------------------------------------------------------------------
@@ -1912,6 +2183,21 @@ router.get("/partner-portal/company-profile", async (req, res, next) => {
         bankIbanMasked: maskIban(firm.bankIban),
         bankCurrency: firm.bankCurrency ?? firm.defaultBillingCurrency ?? null,
         bankDetailsOnFile: Boolean(firm.bankIban),
+        // Task #1175 — capability summary Cognirise holds, so the partner
+        // can see what to request changes to.
+        speciality: firm.speciality ?? null,
+        country: firm.country ?? null,
+        capabilities: Object.keys(firm.capabilities ?? {}),
+        capabilityProfile: firm.capabilityProfile
+          ? {
+              summary: firm.capabilityProfile.summary ?? null,
+              domains: (firm.capabilityProfile.domains ?? []).map((d) => ({
+                label: d.label,
+                description: d.description,
+                evidence: d.evidence,
+              })),
+            }
+          : null,
       },
       contacts: (firm.contacts ?? []).map((c) => ({
         id: c.id,
@@ -2107,6 +2393,87 @@ router.post("/partner-portal/contact-suggestions", async (req, res, next) => {
       summary: `${me.name} suggested ${proposed.length} contact update(s) for ${firm.name} (pending internal review).`,
     });
     res.status(201).json({ ok: true, suggestionId: sugId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------
+// Task #1175 — Partner self-service change requests (review-gated).
+// ---------------------------------------------------------------------
+
+// @cli-skip: partner-portal write — external surface; chat parity via partnerportal.request_change (Task #1175)
+router.post("/partner-portal/change-requests", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    // Reject preview BEFORE any effect: leadership preview is read-only.
+    if (refuseIfPreview(req, res)) return;
+    const { me, firm } = resolved;
+    const field = typeof req.body?.field === "string" ? req.body.field.trim() : "";
+    if (!field) {
+      res.status(400).json({ error: "invalid-body", message: "A field is required." });
+      return;
+    }
+    const rationale =
+      typeof req.body?.rationale === "string" ? req.body.rationale.trim().slice(0, 1000) || null : null;
+    const outcome = await submitPartnerChangeRequest({
+      orgId: me.orgId,
+      firmId: firm.id,
+      field,
+      toValueRaw: req.body?.toValue,
+      rationale,
+      submittedByUserId: me.id,
+      submittedByName: me.name,
+    });
+    if (!outcome.ok) {
+      res.status(outcome.code).json({ error: outcome.error, message: outcome.message });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.change_request.submitted",
+      payload: {
+        proposalId: outcome.proposalId,
+        field: outcome.field,
+        supersededId: outcome.supersededId,
+        via: "portal",
+      },
+      summary: `${me.name} requested a change to ${firm.name}'s ${outcome.field} (pending internal review).`,
+    });
+    res.status(201).json({
+      ok: true,
+      changeRequest: {
+        id: outcome.proposalId,
+        field: outcome.field,
+        toValue: outcome.toValue,
+        rationale,
+        status: "pending",
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: partner-portal read — external surface (Task #1175)
+router.get("/partner-portal/change-requests", async (req, res, next) => {
+  try {
+    const resolved = await resolvePortalFirm(req, res);
+    if (!resolved) return;
+    const { firm } = resolved;
+    // Only this firm's own partner-submitted proposals — never internal
+    // agent proposals, and never the decider identity.
+    const items = (firm.pendingUpdates ?? [])
+      .filter((p) => {
+        const meta = (p.meta ?? {}) as { partnerSubmitted?: unknown };
+        return meta.partnerSubmitted === true;
+      })
+      .map(partnerChangeRequestWire)
+      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+    res.json({ items });
   } catch (err) {
     next(err);
   }

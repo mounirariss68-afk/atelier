@@ -57,6 +57,7 @@ import {
   refreshPartnerFirmRag,
   removePartnerFirmRag,
 } from "../../lib/atelier-cli/partner-capability-rag.js";
+import { notifyPartnerFirm } from "../../lib/partnerNotify.js";
 import {
   ALLIANCE_FIT_DIMENSIONS,
   computeFitTotals,
@@ -2138,6 +2139,17 @@ function applyPartnerProposal(
 ): Partial<typeof atelierPartnerFirms.$inferInsert> {
   const v = proposal.toValue;
   switch (proposal.field) {
+    // Task #1175 — partner-submitted simple scalar profile fields.
+    // Length-clamped defensively even though the submit path validated
+    // them (a decide could apply an older queued proposal).
+    case "legalName":
+      return { legalName: typeof v === "string" ? v.slice(0, 300) : null };
+    case "registrationNumber":
+      return { registrationNumber: typeof v === "string" ? v.slice(0, 120) : null };
+    case "taxId":
+      return { taxId: typeof v === "string" ? v.slice(0, 120) : null };
+    case "registeredAddress":
+      return { registeredAddress: typeof v === "string" ? v.slice(0, 1000) : null };
     case "archetype":
       return { archetype: typeof v === "string" ? v : null };
     case "tier": {
@@ -2165,12 +2177,40 @@ function applyPartnerProposal(
       return { riskRegister: (v ?? []) as (typeof firm)["riskRegister"] };
     case "phasing":
       return { phasing: v as (typeof firm)["phasing"] };
-    case "capabilities":
+    case "capabilities": {
+      // Task #1175 — a partner submits capabilities as a string[]; convert
+      // to the firm's Record<string, number> shape (default score 3,
+      // "supplied"). An agent proposal already carries a Record and is
+      // passed through unchanged.
+      if (Array.isArray(v)) {
+        const rec: Record<string, number> = {};
+        for (const raw of v) {
+          if (typeof raw !== "string") continue;
+          const label = raw.trim().slice(0, 120);
+          if (label) rec[label] = 3;
+        }
+        return { capabilities: rec };
+      }
       return { capabilities: (v ?? {}) as Record<string, number> };
-    case "capabilityProfile":
+    }
+    case "capabilityProfile": {
       // Task #871 — approved capability profile; the decide route
       // refreshes the firm's RAG chunks after the row update.
+      // Task #1175 — a partner submits just a summary string; wrap it into
+      // the structured column shape (preserving any existing domains).
+      if (typeof v === "string") {
+        const existing = firm.capabilityProfile ?? null;
+        return {
+          capabilityProfile: {
+            summary: v.slice(0, 4000),
+            domains: existing?.domains ?? [],
+            researchedAt: existing?.researchedAt ?? new Date().toISOString(),
+            researchedBy: existing?.researchedBy ?? "partner_portal",
+          } as (typeof firm)["capabilityProfile"],
+        };
+      }
       return { capabilityProfile: v as (typeof firm)["capabilityProfile"] };
+    }
     case "speciality":
       return { speciality: typeof v === "string" ? v : null };
     case "kind":
@@ -2234,11 +2274,18 @@ router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res,
       if (proposal.status !== "pending") {
         return { code: 200 as const, proposal, idempotent: true };
       }
+      // Task #1175 — optional decision note stored on the proposal meta
+      // (shown to the partner for partner-submitted change requests).
+      const decisionNote =
+        typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) : "";
       const decided = {
         ...proposal,
         status: (action === "approve" ? "approved" : "rejected") as "approved" | "rejected",
         decidedAt: new Date().toISOString(),
         decidedByUserId: me.id,
+        ...(decisionNote
+          ? { meta: { ...(proposal.meta ?? {}), decisionNote } }
+          : {}),
       };
       queue[idx] = decided;
       let patch: Partial<typeof atelierPartnerFirms.$inferInsert> = {};
@@ -2314,6 +2361,32 @@ router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res,
         },
         summary: `${me.name} ${action === "approve" ? "approved" : "rejected"} an agent proposal (${result.proposal?.field}).`,
       });
+    }
+    // Task #1175 — notify the partner firm AFTER commit when the decided
+    // proposal was a partner-submitted change request. Never surfaces the
+    // decider identity; the optional decision note is included for context.
+    if (!("idempotent" in result && result.idempotent) && result.proposal) {
+      const meta = (result.proposal.meta ?? {}) as {
+        partnerSubmitted?: unknown;
+        decisionNote?: unknown;
+      };
+      if (meta.partnerSubmitted === true) {
+        const field = result.proposal.field;
+        const approved = action === "approve";
+        const note = typeof meta.decisionNote === "string" ? meta.decisionNote : "";
+        await notifyPartnerFirm({
+          orgId: me.orgId,
+          partnerFirmId: req.params.id,
+          kind: "change_request_decided",
+          title: approved
+            ? `Your requested change to ${field} was approved`
+            : `Your requested change to ${field} was not approved`,
+          body: approved
+            ? `Your requested update to ${field} has been applied to your firm profile.${note ? ` Note: ${note}` : ""}`
+            : `Your requested update to ${field} was reviewed and not applied.${note ? ` Note: ${note}` : ""}`,
+          href: "/partner/company",
+        });
+      }
     }
     res.json({ ok: true, proposal: result.proposal });
   } catch (err) {

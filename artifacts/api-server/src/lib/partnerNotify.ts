@@ -31,7 +31,9 @@ export type PartnerNotificationKind =
   // Task #1174 — partner delivery view + shared documents.
   | "engagement_shared"
   | "engagement_revoked"
-  | "document_shared";
+  | "document_shared"
+  // Task #1175 — a partner-submitted profile change request was decided.
+  | "change_request_decided";
 
 export interface NotifyPartnerFirmArgs {
   orgId: string;
