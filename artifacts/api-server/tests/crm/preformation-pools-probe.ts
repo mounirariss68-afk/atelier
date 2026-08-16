@@ -38,6 +38,7 @@ async function main() {
     db, pool, atelierUsers, atelierLegalEntities, atelierExpenses,
     atelierGlAccount, atelierGlJournalEntry, atelierGlJournalLine,
     atelierAuditEvents, atelierBackgroundJobs, atelierAgentRuns,
+    atelierPartnerFirmInvoices,
   } = D;
   const { and, eq, inArray } = await import("drizzle-orm");
   const appMod = await import("../../src/app.js");
@@ -51,6 +52,16 @@ async function main() {
   const homeId = `lent_home_${tag}`;
   const istId = `lent_ist_${tag}`;
   const expId = `exp_${tag}`;
+  // Section 8 — supplier invoice path
+  const splId = `lent_spl_${tag}`;
+  const pfInvId = `pfi_${tag}`;
+  const pfInvSettledId = `pfis_${tag}`;
+  // Section 9 — founder_receivable settlement
+  const fndId = `lent_fnd_${tag}`;
+  const expFndId = `exp_fnd_${tag}`;
+  // Section 10 — absorb settlement
+  const absId = `lent_abs_${tag}`;
+  const expAbsId = `exp_abs_${tag}`;
   const PERIOD = new Date().toISOString().slice(0, 7);
 
   const server = app.listen(0);
@@ -290,10 +301,204 @@ async function main() {
       );
       check("chat: active (settled+active) entity still taggable", (chatOk as any)?.ok === true, chatOk);
     }
+    // -------
+    // 8 — Supplier invoice path: paid partner-firm invoice tagged to a
+    //     pre-formation entity → Bookkeeper Dr 1500 + pool item.
+    // -------
+    await db.insert(atelierLegalEntities).values({
+      id: splId, orgId: ORG, shortName: "Cognirise Singapore", legalNameEn: `Cognirise Singapore ${tag}`,
+      country: "SG", status: "in_formation", entityType: "llc",
+    } as any);
+    const patch3 = await api("PATCH", `/finance/entities/${splId}`, {
+      formation: {
+        ownershipType: "jv",
+        jvSplits: [
+          { partnerName: "Asia Ventures", sharePct: 50 },
+          { partnerName: "Cognirise UAE", sharePct: 50 },
+        ],
+        notes: "Singapore market entry",
+      },
+    });
+    check("si: Singapore formation PATCH 200", patch3.status === 200, patch3.status);
+    // Insert a paid supplier invoice tagged to the Singapore entity.
+    await db.insert(atelierPartnerFirmInvoices).values({
+      id: pfInvId, orgId: ORG,
+      partnerFirmId: `firm_${tag}`, partnerFirmName: "Asia Ventures",
+      weekIso: `${PERIOD.slice(0, 4)}-W02`,
+      costAmount: 800, costCurrency: "USD", fxRate: 1, usdAmount: 800,
+      status: "paid", source: "partner_submitted",
+      legalEntityId: splId,
+      allocStatus: "approved", allocDecidedBy: "human",
+      paidAt: new Date(),
+    } as any);
+    // Pipeline guard: unposted invoice blocks settlement.
+    const siGuard = await api("POST", `/finance/preformation/pools/${splId}/settle`, { treatment: "jv_split" });
+    check("si: unposted invoice blocks settle 409", siGuard.status === 409, siGuard);
+    // Run the Bookkeeper — invoice must quarantine on 1500.
+    await runBookkeeper({
+      orgId: ORG,
+      input: { periodLabel: PERIOD } as any,
+      triggeredByUserId: fpId,
+      actorLabel: "probe",
+    });
+    const siLines = await db.select({ l: atelierGlJournalLine, e: atelierGlJournalEntry })
+      .from(atelierGlJournalLine)
+      .innerJoin(atelierGlJournalEntry, eq(atelierGlJournalLine.journalEntryId, atelierGlJournalEntry.id))
+      .where(and(
+        eq(atelierGlJournalLine.orgId, ORG),
+        eq(atelierGlJournalLine.accountCode, "1500"),
+        eq(atelierGlJournalLine.preFormationEntityId, splId),
+      ));
+    check("si: 1500 line posted for supplier invoice", siLines.length === 1, siLines.length);
+    check("si: 1500 debit = invoice usdAmount", siLines[0]?.l.debit === 800, siLines[0]?.l.debit);
+    check("si: stamped preFormationEntityId = splId", siLines[0]?.l.preFormationEntityId === splId);
+    check("si: posted on HOME entity", siLines[0]?.e.legalEntityId === homeId, siLines[0]?.e.legalEntityId);
+    check("si: no opex lines", !(await db.select().from(atelierGlJournalLine).where(and(
+      eq(atelierGlJournalLine.orgId, ORG),
+      inArray(atelierGlJournalLine.accountCode, ["6100", "6200", "6300", "6400", "6500"]),
+      eq(atelierGlJournalLine.preFormationEntityId, splId),
+    ))).length, "opex lines found");
+    // Pool view: supplier_invoice item must appear as posted.
+    const pools3 = await api("GET", "/finance/preformation/pools?currency=USD");
+    const splPool = (pools3.json?.items ?? []).find((p: any) => p.entityId === splId);
+    check("si: pool present", !!splPool, splPool);
+    check("si: pool postedUsd = 800", splPool?.postedUsd === 800, splPool?.postedUsd);
+    check("si: pool pipelineUsd = 0", splPool?.pipelineUsd === 0, splPool?.pipelineUsd);
+    check("si: supplier_invoice item present + posted", (splPool?.items ?? []).some(
+      (i: any) => i.kind === "supplier_invoice" && i.posted,
+    ), splPool?.items);
+    // Settled-pool exception for supplier invoices: insert a paid invoice on
+    // the already-settled Istanbul entity; Bookkeeper must raise an exception,
+    // not post a new 1500 line.
+    await db.insert(atelierPartnerFirmInvoices).values({
+      id: pfInvSettledId, orgId: ORG,
+      partnerFirmId: `firm2_${tag}`, partnerFirmName: "THY Cargo",
+      weekIso: `${PERIOD.slice(0, 4)}-W03`,
+      costAmount: 200, costCurrency: "USD", fxRate: 1, usdAmount: 200,
+      status: "paid", source: "partner_submitted",
+      legalEntityId: istId, // Istanbul is already settled
+      allocStatus: "approved", allocDecidedBy: "human",
+      paidAt: new Date(),
+    } as any);
+    const runSi = await runBookkeeper({
+      orgId: ORG,
+      input: { periodLabel: PERIOD } as any,
+      triggeredByUserId: fpId,
+      actorLabel: "probe",
+    });
+    const settledSiExc = (runSi.output?.exceptions ?? []).some(
+      (e: any) => e.code === "preformation_pool_settled" && e.sourceRef === pfInvSettledId,
+    );
+    check("si: settled-pool supplier invoice raises exception", settledSiExc, runSi.output?.exceptions);
+    // No new 1500 debit line for the settled Istanbul pool.
+    const istPost2 = await db.select().from(atelierGlJournalLine).where(and(
+      eq(atelierGlJournalLine.orgId, ORG),
+      eq(atelierGlJournalLine.accountCode, "1500"),
+      eq(atelierGlJournalLine.preFormationEntityId, istId),
+    ));
+    const istClear2 = istPost2.reduce((s, x) => s + x.debit - x.credit, 0);
+    check("si: settled Istanbul clearing stays 0", Math.abs(istClear2) < 0.005, istClear2);
+
+    // -------
+    // 9 — founder_receivable settlement: Dr 1160 / Cr 1500.
+    //     Requires an explicit approval note.
+    // -------
+    await db.insert(atelierLegalEntities).values({
+      id: fndId, orgId: ORG, shortName: "Cognirise Paris", legalNameEn: `Cognirise Paris ${tag}`,
+      country: "FR", status: "in_formation", entityType: "llc",
+    } as any);
+    await api("PATCH", `/finance/entities/${fndId}`, {
+      formation: { ownershipType: "founder_partner", notes: "Paris market entry" },
+    });
+    await db.insert(atelierExpenses).values({
+      id: expFndId, orgId: ORG, personId: fpId, personType: "employee",
+      expenseDate: `${PERIOD}-12`, captureSource: "manual", merchant: "Air France",
+      category: "travel", amount: 600, currency: "USD", usdAmount: 600,
+      status: "approved", approvedAt: new Date(), entityId: fndId,
+      description: "Flight to Paris (pre-formation)",
+    } as any);
+    await runBookkeeper({
+      orgId: ORG,
+      input: { periodLabel: PERIOD } as any,
+      triggeredByUserId: fpId,
+      actorLabel: "probe",
+    });
+    const fndLines = await db.select({ l: atelierGlJournalLine })
+      .from(atelierGlJournalLine)
+      .where(and(
+        eq(atelierGlJournalLine.orgId, ORG),
+        eq(atelierGlJournalLine.accountCode, "1500"),
+        eq(atelierGlJournalLine.preFormationEntityId, fndId),
+      ));
+    check("fr: 1500 line posted for founder entity", fndLines.length === 1, fndLines.length);
+    // founder_receivable without note → 400.
+    const fndNoNote = await api("POST", `/finance/preformation/pools/${fndId}/settle`, { treatment: "founder_receivable" });
+    check("fr: missing approval note → 400", fndNoNote.status === 400 && fndNoNote.json?.error === "approval-note-required", fndNoNote);
+    // Settle with founder_receivable + approval note.
+    const fndSettle = await api("POST", `/finance/preformation/pools/${fndId}/settle`, {
+      treatment: "founder_receivable",
+      approvalNote: "Board resolution FR-01",
+    });
+    check("fr: founder_receivable settle 200", fndSettle.status === 200, fndSettle);
+    const fndJl = await db.select().from(atelierGlJournalLine)
+      .where(eq(atelierGlJournalLine.journalEntryId, fndSettle.json?.journalEntryId));
+    const dr1160 = fndJl.find((x) => x.accountCode === "1160" && x.debit === 600);
+    const cr1500fnd = fndJl.find((x) => x.accountCode === "1500" && x.credit === 600);
+    check("fr: Dr 1160 clears pool", !!dr1160, fndJl.map((x) => `${x.accountCode} d${x.debit} c${x.credit}`));
+    check("fr: Cr 1500 clears quarantine", !!cr1500fnd, fndJl.map((x) => `${x.accountCode} d${x.debit} c${x.credit}`));
+    check("fr: journal balanced", Math.abs(fndJl.reduce((s, x) => s + x.debit - x.credit, 0)) < 0.005);
+    check("fr: settlement stamped", fndSettle.json?.settlement?.treatment === "founder_receivable" && fndSettle.json?.settlement?.totalUsd === 600, fndSettle.json);
+
+    // -------
+    // 10 — absorb settlement: Dr 6900 / Cr 1500.
+    //      No approval note required.
+    // -------
+    await db.insert(atelierLegalEntities).values({
+      id: absId, orgId: ORG, shortName: "Cognirise Cairo", legalNameEn: `Cognirise Cairo ${tag}`,
+      country: "EG", status: "in_formation", entityType: "llc",
+    } as any);
+    await api("PATCH", `/finance/entities/${absId}`, {
+      formation: { ownershipType: "cognirise_uae", notes: "Cairo market entry" },
+    });
+    await db.insert(atelierExpenses).values({
+      id: expAbsId, orgId: ORG, personId: fpId, personType: "employee",
+      expenseDate: `${PERIOD}-15`, captureSource: "manual", merchant: "EgyptAir",
+      category: "travel", amount: 400, currency: "USD", usdAmount: 400,
+      status: "approved", approvedAt: new Date(), entityId: absId,
+      description: "Flight to Cairo (pre-formation)",
+    } as any);
+    await runBookkeeper({
+      orgId: ORG,
+      input: { periodLabel: PERIOD } as any,
+      triggeredByUserId: fpId,
+      actorLabel: "probe",
+    });
+    const absLines = await db.select({ l: atelierGlJournalLine })
+      .from(atelierGlJournalLine)
+      .where(and(
+        eq(atelierGlJournalLine.orgId, ORG),
+        eq(atelierGlJournalLine.accountCode, "1500"),
+        eq(atelierGlJournalLine.preFormationEntityId, absId),
+      ));
+    check("ab: 1500 line posted for absorb entity", absLines.length === 1, absLines.length);
+    // Settle with absorb.
+    const absSettle = await api("POST", `/finance/preformation/pools/${absId}/settle`, {
+      treatment: "absorb",
+    });
+    check("ab: absorb settle 200", absSettle.status === 200, absSettle);
+    const absJl = await db.select().from(atelierGlJournalLine)
+      .where(eq(atelierGlJournalLine.journalEntryId, absSettle.json?.journalEntryId));
+    const dr6900 = absJl.find((x) => x.accountCode === "6900" && x.debit === 400);
+    const cr1500abs = absJl.find((x) => x.accountCode === "1500" && x.credit === 400);
+    check("ab: Dr 6900 (absorb) clears pool", !!dr6900, absJl.map((x) => `${x.accountCode} d${x.debit} c${x.credit}`));
+    check("ab: Cr 1500 clears quarantine", !!cr1500abs, absJl.map((x) => `${x.accountCode} d${x.debit} c${x.credit}`));
+    check("ab: journal balanced", Math.abs(absJl.reduce((s, x) => s + x.debit - x.credit, 0)) < 0.005);
+    check("ab: settlement stamped", absSettle.json?.settlement?.treatment === "absorb" && absSettle.json?.settlement?.totalUsd === 400, absSettle.json);
   } finally {
     await db.delete(atelierGlJournalLine).where(eq(atelierGlJournalLine.orgId, ORG));
     await db.delete(atelierGlJournalEntry).where(eq(atelierGlJournalEntry.orgId, ORG));
     await db.delete(atelierGlAccount).where(eq(atelierGlAccount.orgId, ORG));
+    await db.delete(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.orgId, ORG));
     await db.delete(atelierExpenses).where(eq(atelierExpenses.orgId, ORG));
     await db.delete(atelierAuditEvents).where(eq(atelierAuditEvents.orgId, ORG));
     await db.delete(atelierBackgroundJobs).where(eq(atelierBackgroundJobs.orgId, ORG));
