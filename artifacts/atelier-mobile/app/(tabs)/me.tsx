@@ -365,6 +365,7 @@ function TaskPushToggle() {
   const c = useColors();
   const rtl = useRTL();
   const feedback = useFeedback();
+  const { t } = useI18n();
   const [enabled, setEnabled] = useState(getPushEnabledSync());
   const [busy, setBusy] = useState(false);
 
@@ -383,25 +384,22 @@ function TaskPushToggle() {
     try {
       if (enabled) {
         await disableTaskPush();
-        feedback.toast("Phone alerts off", "success");
+        feedback.toast(t("me.tasks.pushDisabled"), "success");
       } else {
         const perm = await enableTaskPush();
         if (perm === "blocked") {
-          feedback.toast("Notifications are blocked — enable them in system Settings", "error");
+          feedback.toast(t("me.tasks.pushBlocked"), "error");
         } else if (perm === "denied") {
-          feedback.toast("Notification permission was not granted", "error");
+          feedback.toast(t("me.tasks.pushDenied"), "error");
         } else if (perm === "local-only") {
           // Task #1035 — remote push can't work here (Expo Go preview / no
           // EAS project id). Reminders still fire via device-local
           // notifications while the app is installed on this device.
           hapticSuccess();
-          feedback.toast(
-            "This preview can't receive server alerts — reminders will still ring on this device at their due time. The installed App Store app gets full phone alerts.",
-            "success",
-          );
+          feedback.toast(t("me.tasks.pushLocalOnly"), "success");
         } else {
           hapticSuccess();
-          feedback.toast("Phone alerts on — reminders will reach this device", "success");
+          feedback.toast(t("me.tasks.pushEnabled"), "success");
         }
       }
     } catch (e) {
@@ -421,12 +419,12 @@ function TaskPushToggle() {
     >
       <Feather name={enabled ? "bell" : "bell-off"} size={15} color={enabled ? c.accent : c.mutedForeground} />
       <Text style={{ color: c.mutedForeground, fontSize: 13, flex: 1, textAlign: rtl.textAlign }}>
-        Phone alerts for due reminders
+        {t("me.tasks.pushLabel")}
       </Text>
       {busy ? (
         <ActivityIndicator size="small" color={c.accent} />
       ) : (
-        <Chip label={enabled ? "On" : "Off"} color={enabled ? c.accent : c.mutedForeground} />
+        <Chip label={enabled ? t("me.tasks.pushOn") : t("me.tasks.pushOff")} color={enabled ? c.accent : c.mutedForeground} />
       )}
     </Pressable>
   );
@@ -589,9 +587,9 @@ function MyTasksSection() {
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
         <Feather name="check-circle" size={16} color={c.accent} />
         <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, textAlign: rtl.textAlign }}>
-          Reminders
+          {t("me.tasks.reminders")}
         </Text>
-        {open.length > 0 ? <Chip label={`${open.length} open`} /> : null}
+        {open.length > 0 ? <Chip label={t("me.tasks.countOpen").replace("{n}", String(open.length))} /> : null}
       </View>
       <TaskPushToggle />
       {addOpen ? (
@@ -599,7 +597,7 @@ function MyTasksSection() {
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="Add a task…"
+          placeholder={t("me.tasks.addPlaceholder")}
           placeholderTextColor={c.mutedForeground}
           onSubmitEditing={add}
           returnKeyType="done"
@@ -629,7 +627,7 @@ function MyTasksSection() {
       {list.isLoading ? <Skeleton height={40} /> : null}
       {!list.isLoading && open.length === 0 ? (
         <Text style={{ color: c.mutedForeground, fontSize: 13, textAlign: rtl.textAlign }}>
-          Nothing open. Tap “{t("me.addTask")}” above — or ask Riser to “remind me to submit my timesheet on Friday”.
+          {t("me.tasks.emptyHint")}
         </Text>
       ) : null}
       {open.map((task) => {
@@ -652,7 +650,7 @@ function MyTasksSection() {
                   style={{ color: task.overdue ? c.destructive : c.mutedForeground, fontSize: 11, textAlign: rtl.textAlign }}
                 >
                   {dueTxt}
-                  {task.overdue ? " · overdue" : ""}
+                  {task.overdue ? t("me.tasks.overdueSuffix") : ""}
                 </Text>
               ) : null}
             </View>
