@@ -14,6 +14,9 @@ import {
   looksLikeWritePromise,
   stripUnfulfilledWritePromises,
   stripDeadEndDocumentAdvice,
+  extractClassifyResults,
+  classifyGroundingNote,
+  stripBogusLowConfidenceClaims,
 } from "../../src/lib/atelier-cli/narration-contract.js";
 
 let pass = 0;
@@ -178,6 +181,73 @@ test("combined guard order: dead-end scrub then promise scrub empties the 792 re
     ? stripUnfulfilledWritePromises(afterDeadEnd)
     : afterDeadEnd;
   assert.equal(final, "");
+});
+
+// ---- Task #1249 — classification grounding + bogus low-confidence scrub ----
+
+const confidentClassify = {
+  results: [
+    {
+      attachmentId: "att_1",
+      fileName: "receipt-lunch.pdf",
+      kind: "receipt",
+      confidence: 0.91,
+      lowConfidence: false,
+      reasons: ["receipt keywords", "merchant total line"],
+      recommendedTool: "ingest_receipts_to_expenses",
+    },
+  ],
+};
+const lowClassify = {
+  results: [
+    { attachmentId: "att_2", fileName: "scan.pdf", kind: "unknown", confidence: 0.3, lowConfidence: true, reasons: [] },
+  ],
+};
+
+test("extractClassifyResults reads results and skips error entries", () => {
+  const rs = extractClassifyResults({
+    results: [...confidentClassify.results, { attachmentId: "x", error: "not_found" }],
+  });
+  assert.equal(rs.length, 1);
+  assert.equal(rs[0]!.lowConfidence, false);
+  assert.equal(rs[0]!.kind, "receipt");
+  assert.deepEqual(extractClassifyResults(null), []);
+  assert.deepEqual(extractClassifyResults({ nope: 1 }), []);
+});
+
+test("classifyGroundingNote spells out a confident verdict", () => {
+  const note = classifyGroundingNote(confidentClassify)!;
+  assert.ok(note.includes("lowConfidence=FALSE"));
+  assert.ok(note.includes("91%"));
+  assert.ok(note.includes("receipt-lunch.pdf"));
+  assert.ok(/do NOT describe it as low confidence/i.test(note));
+});
+
+test("classifyGroundingNote instructs one question on low confidence", () => {
+  const note = classifyGroundingNote(lowClassify)!;
+  assert.ok(note.includes("lowConfidence=TRUE"));
+  assert.ok(/ONE clarifying question/.test(note));
+  assert.equal(classifyGroundingNote({ results: [] }), null);
+});
+
+test("stripBogusLowConfidenceClaims removes low-confidence/percent claims", () => {
+  const text =
+    "This receipt has low confidence (42%) so I can't be sure. I've filed it for review.";
+  assert.equal(stripBogusLowConfidenceClaims(text), "I've filed it for review.");
+});
+
+test("stripBogusLowConfidenceClaims removes what-kind-of-document asks", () => {
+  const text = "Could you tell me what kind of document this is?";
+  assert.equal(stripBogusLowConfidenceClaims(text), "");
+  const text2 = "I'm not sure what type of document that file is — can you confirm?";
+  assert.equal(stripBogusLowConfidenceClaims(text2), "");
+});
+
+test("stripBogusLowConfidenceClaims keeps confident prose intact", () => {
+  const text = "This is a receipt from Gulf Cafe. I'll prefill an expense from it.";
+  assert.equal(stripBogusLowConfidenceClaims(text), text);
+  const unrelated = "The forecast confidence interval is wide."; // no % / doc claim
+  assert.equal(stripBogusLowConfidenceClaims(unrelated), unrelated);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -1267,6 +1267,9 @@ import {
   looksLikeWritePromise,
   stripUnfulfilledWritePromises,
   stripDeadEndDocumentAdvice,
+  classifyGroundingNote,
+  extractClassifyResults,
+  stripBogusLowConfidenceClaims,
 } from "./narration-contract.js";
 export {
   cardPayloadTokens,
@@ -1276,6 +1279,9 @@ export {
   looksLikeWritePromise,
   stripUnfulfilledWritePromises,
   stripDeadEndDocumentAdvice,
+  classifyGroundingNote,
+  extractClassifyResults,
+  stripBogusLowConfidenceClaims,
 } from "./narration-contract.js";
 
 // Hallucinated tool-name recovery — find the unique close match for a
@@ -5069,6 +5075,11 @@ export async function runTurn(
     }
     // Task #645 — narration/card output-contract state for this turn.
     let pendingNarration: { text: string; step: number } | null = null;
+    // Task #1249 — classification grounding. Track the classifier's
+    // verdicts this turn so prose claiming "low confidence" can be
+    // deterministically scrubbed when every classification was confident.
+    let sawConfidentClassify = false;
+    let sawLowConfidenceClassify = false;
     let committedWriteOk = false;
     let lastCardShape: string | null = null;
     let lastCardData: unknown = null;
@@ -5331,6 +5342,13 @@ export async function runTurn(
             let guarded = stripDeadEndDocumentAdvice(cleanText);
             if (guarded && looksLikeWritePromise(guarded)) {
               guarded = stripUnfulfilledWritePromises(guarded);
+            }
+            // Task #1249 — when every classification this turn was
+            // confident, scrub prose claiming low confidence /
+            // uncertainty about the document type (a past hallucination
+            // misquoted the classifier's own result).
+            if (guarded && sawConfidentClassify && !sawLowConfidenceClassify) {
+              guarded = stripBogusLowConfidenceClaims(guarded);
             }
             // Task #645 — final prose after a card-rendering tool result:
             // clamp anything that restates the card payload to one sentence.
@@ -5671,6 +5689,11 @@ export async function runTurn(
           if (flushText && !wroteOk && !committedWriteOk && looksLikeWritePromise(flushText)) {
             flushText = stripUnfulfilledWritePromises(flushText);
           }
+          // Task #1249 — pre-tool prose flushed after a confident
+          // classification must not claim low confidence either.
+          if (flushText && sawConfidentClassify && !sawLowConfidenceClassify) {
+            flushText = stripBogusLowConfidenceClaims(flushText);
+          }
           if (flushText) {
             record({
               type: "narration",
@@ -5695,6 +5718,13 @@ export async function runTurn(
           lastCardData = toolResult.data;
         }
         if (isCommit) committedWriteOk = true;
+        // Task #1249 — remember the classifier's verdicts for this turn.
+        if (tc.name === "classify_finance_document") {
+          for (const r of extractClassifyResults(toolResult.data)) {
+            if (r.lowConfidence) sawLowConfidenceClassify = true;
+            else sawConfidentClassify = true;
+          }
+        }
       }
 
       // Task #769 — flail guard. Track read-tool call counts and
@@ -6058,6 +6088,12 @@ export async function runTurn(
             ? "[render note] The success card for this committed write is already displayed to the user. Do NOT add a closing recap or restate what was changed — end your reply now, with no further prose."
             : `[render note] A "${lastCardShape}" result card showing this exact data is already displayed to the user. Reply with at most ONE short framing sentence and do NOT restate the card's fields, numbers, names, or lists.`
           : null;
+      // Task #1249 — classification grounding: spell out the classifier's
+      // verdict alongside the tool_result so narration cannot misquote it.
+      const groundingNote =
+        toolResult.ok && tc.name === "classify_finance_document"
+          ? classifyGroundingNote(toolResult.data)
+          : null;
       history.push({
         role: "user",
         content: [
@@ -6073,6 +6109,7 @@ export async function runTurn(
             }),
             is_error: !toolResult.ok,
           },
+          ...(groundingNote ? [{ type: "text", text: groundingNote }] : []),
           ...(renderNote ? [{ type: "text", text: renderNote }] : []),
         ],
       });
