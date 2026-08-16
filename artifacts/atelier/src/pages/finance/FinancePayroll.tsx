@@ -13,13 +13,13 @@
  * drives runs.
  */
 import * as React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, MonoChip, PillButton, Eyebrow, BackLink } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
 import {
   PlayCircle, BookOpenCheck, RefreshCw, AlertTriangle, CheckCircle2,
   Undo2, Plus, X, ChevronDown, ChevronUp, Pause, Play, DollarSign,
-  History,
+  History, ClipboardList, ExternalLink,
 } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
@@ -750,6 +750,198 @@ function AdvancesSection({ employees }: AdvancesSectionProps) {
   );
 }
 
+// ─── Payroll Clerk exception report card (Task #1166) ───────────────────────
+
+const EXCEPTION_CODE_LABELS: Record<string, string> = {
+  run_validation: "Validation",
+  sif_exclusion: "WPS exclusion",
+  sif_entity_config: "WPS entity config",
+  leaver_settlement: "Leaver unsettled",
+  advance_unapplied: "Advance unapplied",
+  comp_change_pending: "Comp change pending",
+};
+
+const EXCEPTION_CODE_TONE: Record<string, "red" | "amber"> = {
+  run_validation: "red",
+  sif_exclusion: "amber",
+  sif_entity_config: "red",
+  leaver_settlement: "amber",
+  advance_unapplied: "amber",
+  comp_change_pending: "amber",
+};
+
+const ENTITY_STATUS_TONE: Record<string, "green" | "amber" | "red"> = {
+  draft_ready: "green",
+  draft_with_exceptions: "amber",
+  already_posted: "green",
+};
+
+const ENTITY_STATUS_LABEL: Record<string, string> = {
+  draft_ready: "Draft ready",
+  draft_with_exceptions: "Has exceptions",
+  already_posted: "Already posted",
+};
+
+interface PayrollClerkReportCardProps {
+  clerkOutputQ: UseQueryResult<PayrollClerkRun | null, Error>;
+}
+
+function PayrollClerkReportCard({ clerkOutputQ }: PayrollClerkReportCardProps) {
+  const [showExceptions, setShowExceptions] = React.useState(true);
+  const run = clerkOutputQ.data;
+  const output = run?.output ?? null;
+
+  if (clerkOutputQ.isLoading) return null;
+  if (!run || !output) return null;
+
+  const hasExceptions = output.exceptions.length > 0;
+  const totalDraft = output.entities.filter((e) => e.status !== "already_posted").length;
+
+  return (
+    <section data-testid="payroll-clerk-report-card">
+      <SectionHead headline={`Payroll Clerk report — ${output.periodLabel}`} />
+      <Card className="p-6 mt-4">
+        {/* ── Header ── */}
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3">
+            <ClipboardList className="w-5 h-5 text-text-mute shrink-0" />
+            <div>
+              <p className="text-sm font-medium">
+                {totalDraft} draft{totalDraft !== 1 ? "s" : ""} prepared
+                {hasExceptions ? ` · ${output.exceptions.length} exception${output.exceptions.length !== 1 ? "s" : ""} need attention` : " · No exceptions"}
+              </p>
+              <p className="text-xs text-text-mute mt-0.5">
+                {run.createdAt ? `Run completed ${new Date(run.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                {output.rationaleSummary ? ` — ${output.rationaleSummary}` : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {run.confidence && (
+              <MonoChip tone={run.confidence === "green" ? "green" : run.confidence === "red" ? "red" : "amber"}>
+                {run.confidence}
+              </MonoChip>
+            )}
+          </div>
+        </div>
+
+        {/* ── Entity table ── */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="clerk-entities-table">
+            <thead>
+              <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+                <th className="py-2 pr-4">Entity</th>
+                <th className="py-2 pr-4">Country</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4 text-right">People</th>
+                <th className="py-2 pr-4 text-right">Net pay</th>
+                <th className="py-2 pr-4">WPS</th>
+                <th className="py-2 text-right">Exceptions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {output.entities.map((ent) => (
+                <tr key={ent.entityId} className="border-b border-border/50" data-testid={`clerk-entity-${ent.entityId}`}>
+                  <td className="py-2 pr-4 font-medium">{ent.entityName}</td>
+                  <td className="py-2 pr-4 font-mono text-text-mute">{ent.country}</td>
+                  <td className="py-2 pr-4">
+                    <MonoChip tone={ENTITY_STATUS_TONE[ent.status] ?? "amber"}>
+                      {ENTITY_STATUS_LABEL[ent.status] ?? ent.status}
+                    </MonoChip>
+                  </td>
+                  <td className="py-2 pr-4 text-right font-mono">{ent.headcount}</td>
+                  <td className="py-2 pr-4 text-right font-mono">
+                    {fmt(ent.netPay)} {ent.currency}
+                  </td>
+                  <td className="py-2 pr-4 text-xs text-text-mute">
+                    {ent.wps === null ? "—" : !ent.wps.applicable ? (
+                      <span title={ent.wps.exemptReason ?? undefined}>Exempt</span>
+                    ) : ent.wps.excludedCount > 0 ? (
+                      <span className="text-amber-400">{ent.wps.excludedCount} excluded</span>
+                    ) : (
+                      <span className="text-green-400">Ready</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right font-mono">
+                    {ent.exceptionCount > 0 ? (
+                      <span className="text-amber-400">{ent.exceptionCount}</span>
+                    ) : (
+                      <span className="text-text-faint">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Exceptions list ── */}
+        {hasExceptions && (
+          <div className="mt-6 border-t border-border pt-4" data-testid="clerk-exceptions-list">
+            <button
+              className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-text-mute mb-3 hover:text-text transition-colors w-full text-left"
+              onClick={() => setShowExceptions((v) => !v)}
+              data-testid="clerk-exceptions-toggle"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              {output.exceptions.length} exception{output.exceptions.length !== 1 ? "s" : ""} to resolve before approval
+              <span className="ml-auto">{showExceptions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
+            </button>
+            {showExceptions && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+                    <th className="py-2 pr-4">Entity</th>
+                    <th className="py-2 pr-4">Type</th>
+                    <th className="py-2 pr-4">Person</th>
+                    <th className="py-2">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {output.exceptions.map((ex, i) => (
+                    <tr
+                      key={i}
+                      className="border-b border-border/50"
+                      data-testid={`clerk-exception-${i}`}
+                    >
+                      <td className="py-2 pr-4 text-text-mute">{ex.entityName}</td>
+                      <td className="py-2 pr-4">
+                        <MonoChip tone={EXCEPTION_CODE_TONE[ex.code] ?? "amber"}>
+                          {EXCEPTION_CODE_LABELS[ex.code] ?? ex.code}
+                        </MonoChip>
+                      </td>
+                      <td className="py-2 pr-4">
+                        {ex.employeeId && ex.name ? (
+                          <a
+                            href={`/roster/people/${ex.employeeId}`}
+                            className="flex items-center gap-1 hover:text-gold transition-colors"
+                          >
+                            {ex.name}
+                            <ExternalLink className="w-3 h-3 text-text-faint shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-text-mute">{ex.name ?? "—"}</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-xs text-text-mute">{ex.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {!hasExceptions && (
+          <p className="mt-4 flex items-center gap-2 text-sm text-green-400" data-testid="clerk-no-exceptions">
+            <CheckCircle2 className="w-4 h-4 shrink-0" /> All draft runs are clean — no exceptions to resolve.
+          </p>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function FinancePayroll() {
@@ -831,6 +1023,17 @@ export default function FinancePayroll() {
     queryKey: ["payroll-clerk-status"],
     queryFn: async () => ((await jfetch("/finance/payroll/clerk/status")) as { job: ClerkJob | null }).job,
     refetchInterval: (q) => (q.state.data?.status === "running" ? 4000 : false),
+  });
+
+  // Task #1166 — latest completed clerk run structured output.
+  const clerkOutputQ = useQuery({
+    queryKey: ["payroll-clerk-output"],
+    queryFn: async () => ((await jfetch("/finance/payroll/clerk/latest-output")) as { run: PayrollClerkRun | null }).run,
+    // Refresh when the clerk job finishes (status flips from running → done).
+    refetchInterval: (q) => {
+      if (clerkQ.data?.status === "running") return 4000;
+      return false;
+    },
   });
 
   async function downloadSif(runId: string) {
@@ -1307,6 +1510,9 @@ export default function FinancePayroll() {
           </Card>
         </section>
 
+        {/* Task #1166 — Payroll Clerk exception report card */}
+        <PayrollClerkReportCard clerkOutputQ={clerkOutputQ} />
+
         {/* Task #1146 — Salary advances panel */}
         <AdvancesSection employees={employees} />
 
@@ -1455,4 +1661,54 @@ interface WpsPreview {
   exports: Array<{ id: string; fileName: string; sha256: string; createdAt: string; recordCount: number; totalNetPay: number }>;
   filingEntryId: string | null;
   gpssaNote: string;
+}
+
+// ── Task #1166 — Payroll Clerk exception report types ────────────────────────
+
+interface PayrollClerkEntityResult {
+  entityId: string;
+  entityName: string;
+  country: string;
+  status: "draft_ready" | "draft_with_exceptions" | "already_posted";
+  runId: string | null;
+  headcount: number;
+  netPay: number;
+  currency: string;
+  wps: {
+    applicable: boolean;
+    exemptReason: string | null;
+    excludedCount: number;
+  } | null;
+  exceptionCount: number;
+}
+
+interface PayrollClerkException {
+  entityId: string;
+  entityName: string;
+  code:
+    | "run_validation"
+    | "sif_exclusion"
+    | "sif_entity_config"
+    | "leaver_settlement"
+    | "advance_unapplied"
+    | "comp_change_pending";
+  employeeId: string | null;
+  name: string | null;
+  message: string;
+}
+
+interface PayrollClerkOutput {
+  periodLabel: string;
+  entities: PayrollClerkEntityResult[];
+  exceptions: PayrollClerkException[];
+  notifiedUserIds: string[];
+  rationaleSummary: string;
+}
+
+interface PayrollClerkRun {
+  id: string;
+  status: string;
+  confidence: string | null;
+  createdAt: string;
+  output: PayrollClerkOutput | null;
 }

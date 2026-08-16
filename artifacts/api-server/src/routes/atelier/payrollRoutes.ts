@@ -45,6 +45,7 @@ import {
   atelierAdvanceRepayments,
   atelierCompChanges,
   atelierEmployees,
+  atelierAgentRuns,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
@@ -539,6 +540,32 @@ router.get("/finance/payroll/clerk/status", async (req, res) => {
   const me = ensureFinanceLeadership(req, res); if (!me) return;
   const job = await getLatestJob(["payroll_clerk"], AGENT_SINGLETON_TARGET, me.orgId);
   res.json({ job: job ?? null });
+});
+
+// @cli-skip: finance payroll read; REST-only surface (Task #1166)
+// Returns the latest completed ag_payroll_clerk run's structured output
+// (entities + exceptions) so the Finance Payroll page can render the
+// exception report card instead of a one-line notification.
+router.get("/finance/payroll/clerk/latest-output", async (req, res) => {
+  const me = ensureFinanceLeadership(req, res); if (!me) return;
+  const [run] = await db
+    .select({
+      id: atelierAgentRuns.id,
+      status: atelierAgentRuns.status,
+      confidence: atelierAgentRuns.confidence,
+      createdAt: atelierAgentRuns.createdAt,
+      output: atelierAgentRuns.output,
+    })
+    .from(atelierAgentRuns)
+    .where(and(
+      eq(atelierAgentRuns.orgId, me.orgId),
+      eq(atelierAgentRuns.agentId, "ag_payroll_clerk"),
+      isNull(atelierAgentRuns.deletedAt),
+    ))
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  if (!run) return res.json({ run: null });
+  return res.json({ run });
 });
 
 // ─────────────── Simple monthly payroll (Task #654) ───────────────
