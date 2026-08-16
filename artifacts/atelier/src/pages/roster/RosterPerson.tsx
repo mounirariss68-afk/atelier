@@ -14,6 +14,8 @@ import {
   TravelProfileCard,
   type TravelProfileValue,
 } from "@/components/travel/TravelProfileCard";
+// Task #1157 — icons for the salary advance card.
+import { DollarSign, X, Plus, RefreshCw } from "lucide-react";
 
 interface Person {
   id: string;
@@ -376,6 +378,10 @@ function ProfileTab({
         )}
       </Card>
       )}
+      {/* Task #1157 — salary-advance shortcut for finance/HR viewing an employee. */}
+      {person.workerType === "employee" && viewerCanSeeComp && (
+        <PayrollAdvancesCard personId={person.id} personName={person.fullName} />
+      )}
       {person.notes && (
         <Card className="p-4 md:col-span-2">
           <h3 className="font-mono text-xs uppercase text-text-mute mb-2">
@@ -636,6 +642,285 @@ function Field({
         {value || "—"}
       </span>
     </div>
+  );
+}
+
+// ─── Salary advances (Task #1157) ────────────────────────────────────────────
+
+interface RosterSalaryAdvance {
+  id: string;
+  employeeId: string;
+  personName: string;
+  currency: string;
+  principal: number;
+  installmentAmount: number;
+  startPeriod: string;
+  outstanding: number;
+  status: "active" | "paused" | "repaid";
+  issuedOn: string;
+  note: string | null;
+}
+
+function fmt2(n: number): string {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function currentPeriod(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+/**
+ * Issue-advance dialog pre-filled for a specific employee.
+ * Replicates the FinancePayroll IssueAdvanceDialog shape but without the
+ * employee selector — the person is already known from context.
+ */
+function IssueAdvanceFromRosterDialog({
+  personId,
+  personName,
+  onClose,
+  onIssued,
+}: {
+  personId: string;
+  personName: string;
+  onClose: () => void;
+  onIssued: () => void;
+}) {
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [form, setForm] = React.useState({
+    amount: "",
+    installmentAmount: "",
+    startPeriod: currentPeriod(),
+    note: "",
+  });
+  const set =
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit() {
+    setError(null);
+    const amount = parseFloat(form.amount);
+    const installment = parseFloat(form.installmentAmount);
+    if (isNaN(amount) || amount <= 0) { setError("Enter a valid advance amount."); return; }
+    if (isNaN(installment) || installment <= 0) { setError("Enter a valid monthly installment."); return; }
+    if (installment > amount) { setError("Installment cannot exceed the advance amount."); return; }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(form.startPeriod)) { setError("Enter a valid start period (YYYY-MM)."); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/atelier/finance/payroll/advances", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          employeeId: personId,
+          amount,
+          installmentAmount: installment,
+          startPeriod: form.startPeriod,
+          note: form.note.trim() || null,
+        }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => null) as { message?: string; error?: string } | null;
+        setError(d?.message ?? d?.error ?? `Failed (${r.status}).`);
+        return;
+      }
+      onIssued();
+      onClose();
+    } catch {
+      setError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-bg border border-border rounded-lg w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-text-mute">Salary advance</p>
+            <h2 className="text-lg font-semibold mt-0.5">Issue advance — {personName}</h2>
+          </div>
+          <button onClick={onClose} className="text-text-mute hover:text-text p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          {error && (
+            <p className="text-xs text-red-400" data-testid="advance-roster-error">{error}</p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Advance amount</span>
+              <input
+                type="number" min="1" step="1"
+                placeholder="e.g. 5000"
+                value={form.amount}
+                onChange={set("amount")}
+                className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                data-testid="roster-advance-amount"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Monthly installment</span>
+              <input
+                type="number" min="1" step="1"
+                placeholder="e.g. 500"
+                value={form.installmentAmount}
+                onChange={set("installmentAmount")}
+                className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+                data-testid="roster-advance-installment"
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Repayment starts (YYYY-MM)</span>
+            <input
+              type="month"
+              value={form.startPeriod}
+              onChange={set("startPeriod")}
+              className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text"
+              data-testid="roster-advance-start"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-text-mute">Note (optional)</span>
+            <textarea
+              rows={2} maxLength={500}
+              placeholder="Reason or reference"
+              value={form.note}
+              onChange={set("note")}
+              className="bg-bg-elevate border border-border rounded px-3 py-2 text-sm text-text resize-none"
+              data-testid="roster-advance-note"
+            />
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-mono uppercase tracking-widest text-text-mute hover:text-text"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={busy}
+              onClick={submit}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded bg-gold text-bg text-xs font-mono uppercase tracking-widest disabled:opacity-50"
+              data-testid="roster-advance-submit"
+            >
+              {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+              Issue advance
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shows any outstanding salary advances for an employee and provides an
+ * "Issue advance" shortcut without leaving the roster page.
+ * Gated: finance/HR/partner roles only (the API 403s others).
+ */
+function PayrollAdvancesCard({ personId, personName }: { personId: string; personName: string }) {
+  const [advances, setAdvances] = React.useState<RosterSalaryAdvance[] | null>(null);
+  const [forbidden, setForbidden] = React.useState(false);
+  const [issueOpen, setIssueOpen] = React.useState(false);
+
+  const load = React.useCallback(() => {
+    fetch(`/api/atelier/finance/payroll/advances?employeeId=${encodeURIComponent(personId)}`, {
+      credentials: "include",
+    }).then(async (r) => {
+      if (r.status === 403) { setForbidden(true); return; }
+      if (!r.ok) return;
+      const d = await r.json() as { items: RosterSalaryAdvance[] };
+      setAdvances(d.items ?? []);
+    });
+  }, [personId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  // Don't render for non-finance viewers — the API will 403 and we simply
+  // get null advances (forbidden state), so we render nothing at all.
+  if (forbidden) return null;
+  if (advances === null) return null; // still loading — skip to avoid layout flicker
+
+  const active = advances.filter((a) => a.status !== "repaid");
+
+  return (
+    <Card className="p-4 space-y-3 md:col-span-2" data-testid="payroll-advances-card">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-mono text-xs uppercase text-text-mute">Salary advances</h3>
+        <button
+          onClick={() => setIssueOpen(true)}
+          className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest border border-border-soft rounded px-2 py-1 text-text-mute hover:text-gold hover:border-gold/50"
+          data-testid="roster-advance-issue-btn"
+        >
+          <Plus className="w-3 h-3" /> Issue advance
+        </button>
+      </div>
+
+      {active.length === 0 ? (
+        <p className="text-sm text-text-mute">No active advances.</p>
+      ) : (
+        <div className="space-y-2">
+          {active.map((adv) => (
+            <div
+              key={adv.id}
+              className="grid grid-cols-3 gap-3 text-sm border-b border-border-soft pb-2 last:border-0 last:pb-0"
+              data-testid={`roster-advance-row-${adv.id}`}
+            >
+              <div>
+                <div className="text-xs text-text-mute font-mono uppercase">Outstanding</div>
+                <div className="font-mono mt-0.5">
+                  <span className={adv.outstanding > 0 ? "text-amber-400" : "text-text"}>
+                    {fmt2(adv.outstanding)}
+                  </span>{" "}
+                  <span className="text-text-faint text-xs">{adv.currency}</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-text-mute font-mono uppercase">Installment / mo</div>
+                <div className="font-mono mt-0.5">
+                  {fmt2(adv.installmentAmount)}{" "}
+                  <span className="text-text-faint text-xs">{adv.currency}</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-text-mute font-mono uppercase">Status</div>
+                <div className="mt-0.5">
+                  <MonoChip
+                    className={
+                      adv.status === "paused"
+                        ? "text-amber-400 border-amber-400/40"
+                        : ""
+                    }
+                  >
+                    {adv.status}
+                  </MonoChip>
+                </div>
+              </div>
+              {adv.note && (
+                <div className="col-span-3 text-xs text-text-faint">{adv.note}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {issueOpen && (
+        <IssueAdvanceFromRosterDialog
+          personId={personId}
+          personName={personName}
+          onClose={() => setIssueOpen(false)}
+          onIssued={load}
+        />
+      )}
+    </Card>
   );
 }
 
