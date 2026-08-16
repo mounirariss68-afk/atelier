@@ -110,6 +110,19 @@ app.listen(port, (err) => {
         "Self-linkage repair failed — /me/profile may miss roster records",
       );
     });
+    // Post-merge column split: relocate vendor tooling extraction payloads
+    // out of line_items into tooling_extraction (idempotent; schema pushes
+    // add the column but never move data, so the move rides the boot chores
+    // and covers production on redeploy).
+    await (async () => {
+      const { ensureToolingExtractionRelocated } = await import(
+        "./lib/atelier-tooling-extraction-relocate"
+      );
+      const n = await ensureToolingExtractionRelocated();
+      if (n > 0) logger.info({ relocated: n }, "Relocated tooling extraction payloads out of line_items");
+    })().catch((err) => {
+      logger.error({ err }, "Tooling-extraction relocation failed — older tooling invoices may not show their splits");
+    });
   // All demo-data seeding was removed for production (2026-07-16). The only
   // boot-time seeds left are configuration, not demo data: the auth
   // credential seed above, the reference-data seed (countries / industries /

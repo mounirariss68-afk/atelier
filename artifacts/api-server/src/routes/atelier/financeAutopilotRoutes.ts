@@ -447,7 +447,7 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
       costAmount: atelierPartnerFirmInvoices.costAmount,
       submittedAt: atelierPartnerFirmInvoices.submittedAt,
       createdAt: atelierPartnerFirmInvoices.createdAt,
-      lineItems: atelierPartnerFirmInvoices.lineItems,
+      toolingExtraction: atelierPartnerFirmInvoices.toolingExtraction,
     }).from(atelierPartnerFirmInvoices).where(and(
       eq(atelierPartnerFirmInvoices.orgId, orgId),
       isNull(atelierPartnerFirmInvoices.deletedAt),
@@ -488,7 +488,7 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
     for (const inv of toolingInvoices) {
       const vk = detectVendorKey(inv.partnerFirmName);
       if (!vk) continue;
-      const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+      const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
       if (!ext || ext.status !== "ok") continue;
       for (const item of ext.items) {
         const mapped = item.projectKey === VENDOR_DEFAULT_KEY

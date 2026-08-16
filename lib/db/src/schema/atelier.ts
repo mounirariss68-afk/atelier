@@ -4460,8 +4460,9 @@ export const atelierPartnerFirmInvoices = pgTable(
     // tooling vendors (Replit/Anthropic/Perplexity): itemized per-project
     // spend, reconciliation status, credits/VAT. NULL until extraction runs
     // (fire-and-forget after upload for detected tooling vendors) or when
-    // the supplier is not a tooling vendor.
-    lineItems: jsonb("line_items").$type<VendorInvoiceExtraction | null>(),
+    // the supplier is not a tooling vendor. Own column (tooling_extraction) —
+    // line_items above belongs to the chat-ingest itemization (Task #1250).
+    toolingExtraction: jsonb("tooling_extraction").$type<VendorInvoiceExtraction | null>(),
     submittedByUserId: text("submitted_by_user_id"),
     submittedAt: timestamp("submitted_at"),
     fileName: text("file_name"),

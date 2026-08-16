@@ -255,7 +255,7 @@ router.get("/finance/tooling/overview", async (req, res) => {
   for (const inv of toolingInvoices) {
     const vk = toolingVendorKey(inv.partnerFirmName);
     if (!vk) continue; // not a tooling vendor
-    const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
     const splits = splitsByInv.get(inv.id) ?? [];
     const proposedCount = splits.filter((s) => s.status === "proposed").length;
     const approvedCount = splits.filter((s) => s.status === "approved").length;
@@ -319,7 +319,7 @@ router.get("/finance/tooling/unmapped", async (req, res) => {
   for (const inv of invoices) {
     const vk = toolingVendorKey(inv.partnerFirmName);
     if (!vk) continue;
-    const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
     if (!ext || ext.status !== "ok") continue;
     for (const item of ext.items) {
       const mapped = item.projectKey === VENDOR_DEFAULT_KEY
@@ -367,13 +367,13 @@ router.post("/finance/tooling/map", async (req, res) => {
   // Resolve a display label for the project from any reconciled invoice.
   let projectLabel = projectKey;
   const invoices = await db.select({
-    lineItems: atelierPartnerFirmInvoices.lineItems,
+    toolingExtraction: atelierPartnerFirmInvoices.toolingExtraction,
   }).from(atelierPartnerFirmInvoices).where(and(
     eq(atelierPartnerFirmInvoices.orgId, me.orgId),
     isNull(atelierPartnerFirmInvoices.deletedAt),
   )).limit(1000);
   outer: for (const inv of invoices) {
-    const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
     if (!ext) continue;
     for (const it of ext.items) {
       if (it.projectKey === projectKey) { projectLabel = it.projectLabel; break outer; }
@@ -419,7 +419,7 @@ router.post("/finance/tooling/map", async (req, res) => {
   for (const inv of toolingInvoices) {
     const vk = toolingVendorKey(inv.partnerFirmName);
     if (vk !== vendorKey) continue;
-    const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
     if (!ext || ext.status !== "ok") continue;
     const touches = ext.items.some((it) => it.projectKey === projectKey);
     if (!touches) continue;
@@ -534,7 +534,7 @@ router.put("/finance/tooling/vendor-rules", async (req, res) => {
   for (const inv of toolingInvoices) {
     const vk = toolingVendorKey(inv.partnerFirmName);
     if (vk !== vendorKey) continue;
-    const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
     if (!ext || ext.status !== "ok") continue;
     if (!ext.items.some((it) => it.projectKey === VENDOR_DEFAULT_KEY)) continue;
     // Approved invoices are immutable — skip so rule changes never churn or
@@ -604,7 +604,7 @@ router.get("/finance/tooling/invoices/:id", async (req, res) => {
   ));
   if (!inv) return res.status(404).json({ error: "not-found" });
   const vk = toolingVendorKey(inv.partnerFirmName);
-  const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+  const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
 
   const splitRows = await db.select().from(atelierVendorCostSplits).where(and(
     eq(atelierVendorCostSplits.invoiceId, inv.id),
@@ -670,7 +670,7 @@ router.post("/finance/tooling/invoices/:id/approve", async (req, res) => {
   ));
   if (!inv) return res.status(404).json({ error: "not-found" });
 
-  const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+  const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
   const proposed = await db.select().from(atelierVendorCostSplits).where(and(
     eq(atelierVendorCostSplits.invoiceId, inv.id),
     eq(atelierVendorCostSplits.status, "proposed"),

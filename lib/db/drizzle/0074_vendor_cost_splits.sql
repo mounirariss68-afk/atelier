@@ -4,8 +4,19 @@
 -- Idempotent: safe to run against databases that already received the
 -- column/tables via drizzle push, and safe to re-run as a no-op.
 
+-- Extraction payload lives in its OWN column: "line_items" belongs to the
+-- Task #1250 chat-ingest itemization (an ARRAY). The merge briefly collided
+-- the two on "line_items"; the relocation block below moves any extraction
+-- OBJECTS (they carry a "status" key) that landed there into
+-- "tooling_extraction" and clears them from "line_items".
 ALTER TABLE "atelier_partner_firm_invoices"
-  ADD COLUMN IF NOT EXISTS "line_items" jsonb;
+  ADD COLUMN IF NOT EXISTS "tooling_extraction" jsonb;
+
+UPDATE "atelier_partner_firm_invoices"
+  SET "tooling_extraction" = "line_items", "line_items" = NULL
+  WHERE "tooling_extraction" IS NULL
+    AND jsonb_typeof("line_items") = 'object'
+    AND "line_items" ? 'status';
 
 CREATE TABLE IF NOT EXISTS "atelier_vendor_project_map" (
   "id" text PRIMARY KEY NOT NULL,

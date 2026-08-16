@@ -196,10 +196,10 @@ async function main(): Promise<void> {
 
       // Read back the extraction to collect unmapped project names + split flag.
       const [row] = await db
-        .select({ lineItems: atelierPartnerFirmInvoices.lineItems })
+        .select({ toolingExtraction: atelierPartnerFirmInvoices.toolingExtraction })
         .from(atelierPartnerFirmInvoices)
         .where(eq(atelierPartnerFirmInvoices.id, invoiceId));
-      const ext = (row?.lineItems ?? null) as VendorInvoiceExtraction | null;
+      const ext = (row?.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
       if (ext?.status === "ok") {
         for (const it of ext.items) unmappedProjects.add(it.projectLabel);
       }
@@ -213,12 +213,12 @@ async function main(): Promise<void> {
   // Count invoices that ended up with proposed splits.
   if (APPLY) {
     const rows = await db
-      .select({ id: atelierPartnerFirmInvoices.id, lineItems: atelierPartnerFirmInvoices.lineItems, name: atelierPartnerFirmInvoices.partnerFirmName })
+      .select({ id: atelierPartnerFirmInvoices.id, toolingExtraction: atelierPartnerFirmInvoices.toolingExtraction, name: atelierPartnerFirmInvoices.partnerFirmName })
       .from(atelierPartnerFirmInvoices)
       .where(eq(atelierPartnerFirmInvoices.orgId, ORG_ID));
     for (const r of rows) {
       if (!detectVendorKey(r.name)) continue;
-      const ext = (r.lineItems ?? null) as VendorInvoiceExtraction | null;
+      const ext = (r.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
       if (ext?.status === "ok" && ext.items.length > 0) summary.proposedSplitInvoices += 1;
     }
   }

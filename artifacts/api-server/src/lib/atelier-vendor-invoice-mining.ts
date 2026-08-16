@@ -582,7 +582,7 @@ async function setExtraction(
 ): Promise<void> {
   await db
     .update(atelierPartnerFirmInvoices)
-    .set({ lineItems: payload, updatedAt: new Date() })
+    .set({ toolingExtraction: payload, updatedAt: new Date() })
     .where(eq(atelierPartnerFirmInvoices.id, invoiceId));
 }
 

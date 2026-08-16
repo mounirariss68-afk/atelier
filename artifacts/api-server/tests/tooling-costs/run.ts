@@ -90,7 +90,7 @@ async function main() {
     };
   }
   async function storeAndPropose(id: string, supplier: string, pl: any) {
-    await db.update(atelierPartnerFirmInvoices).set({ lineItems: pl }).where(eq(atelierPartnerFirmInvoices.id, id));
+    await db.update(atelierPartnerFirmInvoices).set({ toolingExtraction: pl }).where(eq(atelierPartnerFirmInvoices.id, id));
     const [inv] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, id));
     return mining.proposeSplitsForInvoice({
       inv: {
@@ -510,7 +510,7 @@ async function main() {
       bucketType: "internal", bucketRef: null,
     });
     const plK = payload([{ label: "Conc A", amount: 60 }, { label: "Conc B", amount: 40 }], { subtotal: 100, vat: 5, credits: 0 });
-    await db.update(atelierPartnerFirmInvoices).set({ lineItems: plK }).where(eq(atelierPartnerFirmInvoices.id, invK));
+    await db.update(atelierPartnerFirmInvoices).set({ toolingExtraction: plK }).where(eq(atelierPartnerFirmInvoices.id, invK));
     const [invKRow] = await db.select().from(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, invK));
     const invKArg = {
       id: invKRow.id, orgId: invKRow.orgId, partnerFirmName: invKRow.partnerFirmName,

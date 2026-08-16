@@ -153,4 +153,5 @@
 - [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).
 - [Vendor tooling cost splits](atelier-tooling-splits.md) — mined items are POST-credit net (never re-subtract credits); flat vendors use __vendor_default__ + % rules; recon gate quarantines, never scales.
+- [Merge-loss lessons](finance-doc-merge-loss.md) — merges can silently delete capability blocks (diff vs pre-merge); jsonb data moves must ride boot chores, never SQL migration files.
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
