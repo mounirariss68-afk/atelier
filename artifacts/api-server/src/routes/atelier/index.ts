@@ -124,6 +124,9 @@ import revrecRoutes from "./revrecRoutes";
 import glRoutes from "./glRoutes";
 import closeRoutes from "./closeRoutes";
 import financeAutopilotRoutes from "./financeAutopilotRoutes";
+// Task #1251 — vendor tooling spend: line-item mining + project cost
+// allocation. Finance-leadership gated inside the router.
+import financeToolingRoutes from "./financeToolingRoutes";
 import vatRoutes from "./vatRoutes";
 import marginReportsRoutes from "./marginReportsRoutes";
 import bankRoutes from "./bankRoutes";
@@ -504,6 +507,8 @@ router.use(closeRoutes);
 // endpoints), and reverse-and-repost for agent-posted journals. Persona
 // gating (finance leadership) is enforced per-handler.
 router.use(financeAutopilotRoutes);
+// Task #1251 — vendor tooling spend console (finance-leadership gated).
+router.use(financeToolingRoutes);
 router.use(vatRoutes);
 
 // Task #434 — Margin / realization reporting suite: sold-position

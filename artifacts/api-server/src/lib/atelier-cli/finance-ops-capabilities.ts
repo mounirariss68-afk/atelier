@@ -40,11 +40,19 @@ import {
   atelierContractors,
   atelierContractRecords,
   atelierContractTemplates,
+  atelierPartnerFirmInvoices,
+  atelierVendorCostSplits,
+  type VendorCostBucketType,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
 } from "./capability-catalog.js";
+import {
+  detectVendorKey,
+  vendorLabel,
+  bucketLabelFor,
+} from "../atelier-vendor-invoice-mining.js";
 import {
   cliFinanceReportSummary,
   type CliFinanceReportKind,
@@ -868,6 +876,159 @@ defineCapability({
           createdAt: t.createdAt,
           updatedAt: t.updatedAt,
         })),
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// Task #1251 — vendor tooling spend (read-only chat parity for the
+// tooling console). Reports totals + top projects from APPROVED cost
+// splits only. Finance-leadership gated (founding_partner | partner |
+// finance), same tier as the tooling REST console.
+// ---------------------------------------------------------------------
+
+const TOOLING_FINANCE_ROLES = ["founding_partner", "partner", "finance"] as const;
+
+const TOOLING_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    bucket: {
+      type: "string",
+      enum: ["engagement", "opportunity", "internal", "overhead"],
+      description: "Optional cost bucket filter (engagement = delivery, opportunity = BD).",
+    },
+    vendorKey: {
+      type: "string",
+      enum: ["replit", "anthropic", "perplexity"],
+      description: "Optional vendor filter.",
+    },
+    sinceIso: {
+      type: "string",
+      description: "Optional ISO date; only splits from invoices dated on/after are counted.",
+    },
+  },
+  additionalProperties: false,
+} as const;
+
+defineCapability({
+  id: "finance.tooling_spend",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "finance",
+  toolName: "tooling_spend",
+  description:
+    "Read tooling vendor spend (Replit / Anthropic / Perplexity) allocated to projects. Totals by bucket (internal / BD / delivery / overhead) and the top projects, from APPROVED cost splits only. Same numbers as the Tooling console.",
+  slashAliases: { en: ["/tooling-spend", "/vendor-spend"] },
+  inputSchema: TOOLING_INPUT_SCHEMA as unknown as Record<string, unknown>,
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["ledger", "home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "kpi_strip",
+  promoteAsSuggestion: false,
+  requiredRoles: [...TOOLING_FINANCE_ROLES],
+  examplePhrases: {
+    en: [
+      "How much have we spent on Anthropic this quarter?",
+      "Show tooling spend by project",
+      "What's our Replit delivery cost?",
+    ],
+  },
+  async run(input, ctx) {
+    // Defence in depth beyond requiredRoles: refuse recruiter/self-scope
+    // and anything outside finance leadership explicitly.
+    const refusal = refuseOrgWideRead(ctx.persona, "tooling vendor spend");
+    if (refusal) return refusal;
+    if (!TOOLING_FINANCE_ROLES.includes(ctx.persona.role as (typeof TOOLING_FINANCE_ROLES)[number])) {
+      return denyForbidden(
+        "Tooling vendor spend is limited to finance leadership (founding_partner | partner | finance).",
+      );
+    }
+    const orgId = ctx.persona.orgId;
+    const bucketFilter = typeof input.bucket === "string" ? (input.bucket as VendorCostBucketType) : null;
+    const vendorFilter = typeof input.vendorKey === "string" ? input.vendorKey.toLowerCase() : null;
+    const sinceIso = typeof input.sinceIso === "string" ? input.sinceIso : null;
+
+    const approved = await db
+      .select()
+      .from(atelierVendorCostSplits)
+      .where(
+        and(
+          eq(atelierVendorCostSplits.orgId, orgId),
+          eq(atelierVendorCostSplits.status, "approved"),
+          isNull(atelierVendorCostSplits.deletedAt),
+          bucketFilter ? eq(atelierVendorCostSplits.bucketType, bucketFilter) : undefined,
+        ),
+      );
+
+    // Resolve vendorKey + invoice date via the parent invoices.
+    const invIds = [...new Set(approved.map((s) => s.invoiceId))];
+    const invRows = invIds.length
+      ? await db
+          .select({
+            id: atelierPartnerFirmInvoices.id,
+            partnerFirmName: atelierPartnerFirmInvoices.partnerFirmName,
+            invoiceDate: atelierPartnerFirmInvoices.invoiceDate,
+          })
+          .from(atelierPartnerFirmInvoices)
+          .where(inArray(atelierPartnerFirmInvoices.id, invIds))
+      : [];
+    const invMeta = new Map(invRows.map((r) => [r.id, r]));
+
+    const totals = { internalUsd: 0, bdUsd: 0, deliveryUsd: 0, overheadUsd: 0, unallocatedUsd: 0 };
+    const bucketOf = (t: VendorCostBucketType): keyof typeof totals => {
+      switch (t) {
+        case "internal": return "internalUsd";
+        case "opportunity": return "bdUsd";
+        case "engagement": return "deliveryUsd";
+        case "overhead": return "overheadUsd";
+        default: return "unallocatedUsd";
+      }
+    };
+    const projMap = new Map<string, { vendorKey: string; projectLabel: string; bucketType: VendorCostBucketType; bucketRef: string | null; totalUsd: number }>();
+    let grandTotalUsd = 0;
+
+    for (const s of approved) {
+      const meta = invMeta.get(s.invoiceId);
+      const vk = detectVendorKey(meta?.partnerFirmName ?? null) ?? "other";
+      if (vendorFilter && vk !== vendorFilter) continue;
+      if (sinceIso && meta?.invoiceDate && meta.invoiceDate < sinceIso) continue;
+      const usd = Number(s.usdAmount || 0);
+      totals[bucketOf(s.bucketType)] += usd;
+      grandTotalUsd += usd;
+      const key = `${vk}::${s.projectKey}::${s.bucketType}::${s.bucketRef ?? ""}`;
+      let p = projMap.get(key);
+      if (!p) {
+        p = { vendorKey: vk, projectLabel: s.projectLabel, bucketType: s.bucketType, bucketRef: s.bucketRef, totalUsd: 0 };
+        projMap.set(key, p);
+      }
+      p.totalUsd += usd;
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    for (const k of Object.keys(totals) as (keyof typeof totals)[]) totals[k] = r2(totals[k]);
+
+    const top = [...projMap.values()].sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10);
+    const topProjects = [];
+    for (const p of top) {
+      topProjects.push({
+        vendorKey: p.vendorKey,
+        vendorLabel: vendorLabel(p.vendorKey),
+        projectLabel: p.projectLabel,
+        bucketType: p.bucketType,
+        bucketLabel: await bucketLabelFor(orgId, p.bucketType, p.bucketRef),
+        totalUsd: r2(p.totalUsd),
+      });
+    }
+
+    return {
+      ok: true,
+      data: {
+        totals,
+        grandTotalUsd: r2(grandTotalUsd),
+        topProjects,
+        filters: { bucket: bucketFilter, vendorKey: vendorFilter, sinceIso },
       },
     };
   },

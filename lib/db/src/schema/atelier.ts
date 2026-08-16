@@ -4360,6 +4360,32 @@ export const atelierContractorPayments = pgTable(
  * weekIso) bucket. Partner approval is ALWAYS required (per spec:
  * any partner-firm proposal needs Partner sign-off).
  */
+/**
+ * Task #1251 — vendor invoice line-item mining extraction payload. Stored
+ * on atelier_partner_firm_invoices.line_items for detected tooling vendors
+ * (Replit/Anthropic/Perplexity). `status`:
+ *   ok            — extracted + reconciled to the cent (splits can propose).
+ *   unreconciled  — extracted but sums don't tie; stored for review, NO splits.
+ *   failed        — extraction threw / model error; stored for a re-run.
+ */
+export interface VendorInvoiceExtractionItem {
+  /** lowercased/trimmed/squashed projectLabel; "__vendor_default__" for flat. */
+  projectKey: string;
+  projectLabel: string;
+  category: string | null;
+  amount: number;
+}
+export interface VendorInvoiceExtraction {
+  status: "ok" | "unreconciled" | "failed";
+  extractedAt: string; // ISO
+  currency: string;
+  subtotal: number;
+  vatAmount: number;
+  creditsTotal: number; // credits/discounts as a positive number
+  items: VendorInvoiceExtractionItem[];
+  note: string | null;
+}
+
 export const atelierPartnerFirmInvoices = pgTable(
   "atelier_partner_firm_invoices",
   {
@@ -4409,6 +4435,12 @@ export const atelierPartnerFirmInvoices = pgTable(
     reference: text("reference"),
     periodLabel: text("period_label"),
     invoiceDate: text("invoice_date"),
+    // Task #1251 — vendor invoice line-item mining. Extraction payload for
+    // tooling vendors (Replit/Anthropic/Perplexity): itemized per-project
+    // spend, reconciliation status, credits/VAT. NULL until extraction runs
+    // (fire-and-forget after upload for detected tooling vendors) or when
+    // the supplier is not a tooling vendor.
+    lineItems: jsonb("line_items").$type<VendorInvoiceExtraction | null>(),
     submittedByUserId: text("submitted_by_user_id"),
     submittedAt: timestamp("submitted_at"),
     fileName: text("file_name"),
@@ -4439,6 +4471,119 @@ export const atelierPartnerFirmInvoices = pgTable(
     index("idx_atelier_pfi_firm_status").on(t.partnerFirmId, t.status),
     index("idx_atelier_pfi_status").on(t.status),
     uniqueIndex("uq_atelier_pfi_firm_eng_week").on(t.partnerFirmId, t.engagementId, t.weekIso),
+  ],
+);
+
+// ============================================================
+// Task #1251 — vendor invoice line-item mining + project cost allocation.
+//
+// Replit invoices itemize spend per Replit project; Anthropic/Perplexity
+// invoices are flat. These three tables let finance map each vendor's
+// project lines onto the firm's cost buckets (engagement / opportunity /
+// internal / overhead) and materialize per-invoice cost splits.
+// ============================================================
+
+export type VendorCostBucketType = "engagement" | "opportunity" | "internal" | "overhead";
+
+/**
+ * Per-org mapping of a vendor's project (exact projectKey — never fuzzy)
+ * onto a cost bucket. `bucket_ref` is the engagement/opportunity id for
+ * those bucket types; NULL for internal/overhead. Soft-delete on remap.
+ */
+export const atelierVendorProjectMap = pgTable(
+  "atelier_vendor_project_map",
+  {
+    id: text("id").primaryKey(), // vpm_...
+    orgId: ORG("org_id"),
+    vendorKey: text("vendor_key").notNull(),
+    /** lowercased/trimmed/squashed project label from extraction. Exact match only. */
+    projectKey: text("project_key").notNull(),
+    projectLabel: text("project_label").notNull(),
+    bucketType: text("bucket_type").notNull().$type<VendorCostBucketType>(),
+    bucketRef: text("bucket_ref"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_vpm_org").on(t.orgId),
+    uniqueIndex("uq_atelier_vpm_org_vendor_project").on(t.orgId, t.vendorKey, t.projectKey),
+  ],
+);
+
+/**
+ * Per-org percentage-split rule for a vendor's FLAT invoices (no per-project
+ * lines — the "__vendor_default__" item resolves through this). `splits` is
+ * a jsonb array of { bucketType, bucketRef, pct } summing to 100.
+ */
+export interface VendorAllocSplit {
+  bucketType: VendorCostBucketType;
+  bucketRef: string | null;
+  pct: number;
+}
+export const atelierVendorAllocRules = pgTable(
+  "atelier_vendor_alloc_rules",
+  {
+    id: text("id").primaryKey(), // var_...
+    orgId: ORG("org_id"),
+    vendorKey: text("vendor_key").notNull(),
+    splits: jsonb("splits").$type<VendorAllocSplit[]>().notNull().default([]),
+    updatedByUserId: text("updated_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_var_org").on(t.orgId),
+    uniqueIndex("uq_atelier_var_org_vendor").on(t.orgId, t.vendorKey),
+  ],
+);
+
+/**
+ * Materialized per-invoice cost splits. One row per extracted item once
+ * ALL items on an invoice resolve to a mapping. Credits + VAT are pro-rated
+ * by item gross share with largest-remainder rounding so the split figures
+ * sum EXACTLY to the invoice figures. Splits NEVER auto-approve.
+ */
+export type VendorCostSplitStatus = "proposed" | "approved";
+export const atelierVendorCostSplits = pgTable(
+  "atelier_vendor_cost_splits",
+  {
+    id: text("id").primaryKey(), // vcs_...
+    orgId: ORG("org_id"),
+    invoiceId: text("invoice_id")
+      .notNull()
+      .references(() => atelierPartnerFirmInvoices.id, { onDelete: "cascade" }),
+    projectKey: text("project_key").notNull(),
+    projectLabel: text("project_label").notNull(),
+    bucketType: text("bucket_type").notNull().$type<VendorCostBucketType>(),
+    bucketRef: text("bucket_ref"),
+    currency: text("currency").notNull().default("USD"),
+    grossAmount: doublePrecision("gross_amount").notNull().default(0),
+    creditAmount: doublePrecision("credit_amount").notNull().default(0),
+    vatAmount: doublePrecision("vat_amount").notNull().default(0),
+    netAmount: doublePrecision("net_amount").notNull().default(0),
+    usdAmount: doublePrecision("usd_amount").notNull().default(0),
+    status: text("status").notNull().default("proposed").$type<VendorCostSplitStatus>(),
+    decidedByUserId: text("decided_by_user_id"),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_vcs_org").on(t.orgId),
+    index("idx_atelier_vcs_invoice").on(t.invoiceId),
+    index("idx_atelier_vcs_bucket").on(t.orgId, t.bucketType, t.bucketRef, t.status),
+    // Duplicate-proposal guard (Task #1251): a materialized split identity is
+    // unique among PROPOSED rows, so two concurrent extract+propose runs can
+    // never both insert a full set (double-count on approval). Partial on
+    // status='proposed'; approved/other statuses unconstrained. coalesce so
+    // internal/overhead rows (NULL bucketRef) still collide.
+    uniqueIndex("uq_atelier_vcs_proposed_identity")
+      .on(t.invoiceId, t.projectKey, t.bucketType, sql`coalesce(${t.bucketRef}, '')`)
+      .where(sql`status = 'proposed'`),
   ],
 );
 

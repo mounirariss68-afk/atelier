@@ -18,6 +18,7 @@
     "test:merchant-parse": "tsx ./tests/merchant-parse/run.ts",
     "test:payroll-statutory": "tsx ./tests/payroll-statutory/run.ts",
     "test:wio-export": "NODE_ENV=test tsx ./tests/wio-export/run.ts",
+    "test:tooling-costs": "NODE_ENV=test tsx ./tests/tooling-costs/run.ts",
     "test:contract-salary": "NODE_ENV=test tsx ./tests/contract-salary/run.ts",
     "test:gl-autoseed": "tsx ./tests/gl-autoseed/run.ts",
     "test:expense-policy-seed": "NODE_ENV=test tsx ./tests/expense-policy-seed/run.ts",

@@ -151,4 +151,5 @@
 - [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
 - [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).
+- [Vendor tooling cost splits](atelier-tooling-splits.md) — mined items are POST-credit net (never re-subtract credits); flat vendors use __vendor_default__ + % rules; recon gate quarantines, never scales.
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.

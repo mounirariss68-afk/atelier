@@ -135,6 +135,8 @@ import FinanceReportsBoardPack from "@/pages/finance/FinanceReportsBoardPack";
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
+// Task #1251 — vendor tooling cost allocation.
+import ToolingSpend from "@/pages/finance/ToolingSpend";
 import BillingWorklist from "@/pages/finance/BillingWorklist";
 import FinanceClose from "@/pages/finance/FinanceClose";
 import FinancePayroll from "@/pages/finance/FinancePayroll";
@@ -846,6 +848,11 @@ function Router() {
             per-engagement EAC / change-order workflow). */}
         <Route path="/finance/plan/engagement-health" component={EngagementHealth} />
         <Route path="/finance/plan/engagement-pnl/:engagementId" component={EngagementPnl} />
+        {/* Task #1251 — vendor tooling cost allocation. No placeholder
+            /finance/* route precedes this in the Switch, so first-match is
+            safe; deep links (?focus=unmapped | ?focus=<invoiceId>) are read
+            from the query string inside the page. */}
+        <Route path="/finance/tooling" component={ToolingSpend} />
         <Route path="/finance/_lens" component={FinanceLensHome} />
         <Route component={NotFound} />
       </Switch>

@@ -50,6 +50,8 @@ import {
 } from "../../lib/atelier-entity-allocation.js";
 import { evaluateAutoPost } from "../../lib/atelier-finance-autopolicy.js";
 import { loadFinanceAutopilotThresholds } from "../../lib/atelier-finance-autopilot-settings.js";
+// Task #1251 — vendor invoice line-item mining trigger.
+import { detectVendorKey, triggerVendorInvoiceMining } from "../../lib/atelier-vendor-invoice-mining.js";
 
 export type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -1601,6 +1603,12 @@ export async function createSupplierInvoiceCore(args: {
    * autopilot attribution on the auto-advance. */
   agentRunId?: string | null;
   agentName?: string | null;
+  /** Task #1251 — suppress the async tooling-mining trigger so a caller that
+   * runs extraction SYNCHRONOUSLY itself (e.g. the backfill script) is the
+   * only run. Without this the async trigger + the caller's sync call could
+   * race two full split proposals for the same fresh invoice. Default false
+   * (normal uploads keep the fire-and-forget trigger). */
+  skipToolingMining?: boolean;
 }): Promise<{ status: number; body: Record<string, unknown> }> {
   const { me } = args;
   if (!args.fileBuffer || args.fileBuffer.length === 0) {
@@ -1769,6 +1777,14 @@ export async function createSupplierInvoiceCore(args: {
     aiText: [`supplier: ${firm?.name ?? supplierName}`, `reference: ${reference}`, notes ? `notes: ${notes}` : null]
       .filter(Boolean).join("\n"),
   }).catch(() => {});
+
+  // Task #1251 — tooling vendor (Replit/Anthropic/Perplexity): mine the
+  // stored PDF for per-project line items + propose cost splits. Fire and
+  // forget so a slow/failed extraction never blocks the upload response;
+  // failures land as an extraction status "failed" on the row.
+  if (!args.skipToolingMining && detectVendorKey(firm?.name ?? supplierName)) {
+    triggerVendorInvoiceMining(id);
+  }
 
   // Task #1091 — auto-post policy (blueprint §4). The intake decision
   // (auto → approved/"ready to pay" vs founder review) is authorised

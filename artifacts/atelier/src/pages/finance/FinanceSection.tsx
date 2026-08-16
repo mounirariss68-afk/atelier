@@ -115,6 +115,7 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Working capital", href: "/finance/reports/working-capital", blurb: "DSO · WIP days · DPO · lockup per entity and consolidated, from GL balances.", status: "live" },
       { label: "Margin & realization", href: "/finance/reports/margin", blurb: "Client margin rollups, net margin after overhead allocation, sold-vs-delivered realization with leakage decomposition.", status: "live" },
       { label: "Board / management pack", href: "/finance/reports/board-pack", blurb: "Standing monthly board pack with PDF export and a monthly delivery schedule.", status: "live" },
+      { label: "Tooling spend", href: "/finance/tooling", blurb: "AI & developer vendor (Replit / Anthropic / Perplexity) cost allocation across Internal/IP, Business development, Client delivery and Overhead — mined from vendor invoices.", status: "live" },
     ],
   },
   comply: {

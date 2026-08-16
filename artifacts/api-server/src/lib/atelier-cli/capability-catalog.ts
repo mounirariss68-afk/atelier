@@ -78,7 +78,10 @@ export type CapabilityModule =
   | "cash"
   | "bank"
   | "treasury"
-  | "renewal";
+  | "renewal"
+  // Task #1251 — vendor tooling spend (line-item mining + project cost
+  // allocation). Finance-leadership read surface `finance.tooling_spend`.
+  | "finance";
 
 /**
  * Outbound side-effect channel a capability fires when it commits.

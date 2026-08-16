@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-client-react";
 import { ArrowRight, Bot, Clock, Inbox } from "lucide-react";
 import { useDeepLinkFocus, deepLinkFocusClass, scrollFocusIntoView, focusOutcome } from "@/lib/useDeepLinkFocus";
+import { vendorKeyFromSupplier } from "./toolingSpend.helpers";
 import {
   usePayablesRuns,
   usePayablesSelfBillingState,
@@ -783,6 +784,128 @@ function SupplierInvoiceUploadForm({ onUploaded }: { onUploaded: () => void }) {
   );
 }
 
+// Task #1251 — compact, defensive "Project cost split" block for supplier
+// invoices from a recognised tooling vendor (Replit / Anthropic /
+// Perplexity). Fetched lazily only when the row is expanded; any non-ok
+// fetch renders a quiet one-line notice and never breaks the page.
+type ToolingSplitState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "error" }
+  | {
+      phase: "ok";
+      extraction:
+        | null
+        | {
+            status: "ok" | "unreconciled" | "failed";
+            currency: string;
+            items: Array<{ projectLabel: string; category: string; amount: number }>;
+          };
+    };
+
+function ToolingCostSplitBlock({ invoiceId }: { invoiceId: string }) {
+  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState<ToolingSplitState>({ phase: "idle" });
+
+  const load = React.useCallback(() => {
+    setState({ phase: "loading" });
+    void fetch(`${API_BASE}/finance/tooling/invoices/${encodeURIComponent(invoiceId)}`, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!body || !body.ok || !body.data) {
+          setState({ phase: "error" });
+          return;
+        }
+        setState({ phase: "ok", extraction: body.data.extraction ?? null });
+      })
+      .catch(() => setState({ phase: "error" }));
+  }, [invoiceId]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && state.phase === "idle") load();
+  };
+
+  return (
+    <div className="mt-3 border-t border-border-soft pt-3" data-testid={`tooling-split-block-${invoiceId}`}>
+      <button
+        type="button"
+        onClick={toggle}
+        className="text-xs font-mono text-text-mute hover:text-text"
+        data-testid={`tooling-split-toggle-${invoiceId}`}
+      >
+        {open ? "▾" : "▸"} Project cost split
+      </button>
+      {open && (
+        <div className="mt-2 text-xs">
+          {state.phase === "loading" && <div className="text-text-mute">Loading cost split…</div>}
+          {state.phase === "error" && (
+            <div className="text-text-mute" data-testid={`tooling-split-notice-${invoiceId}`}>
+              Project cost split is unavailable right now.
+            </div>
+          )}
+          {state.phase === "ok" && (
+            <div>
+              <div className="flex items-center gap-2">
+                {state.extraction ? (
+                  <MonoChip
+                    tone={
+                      state.extraction.status === "ok"
+                        ? "green"
+                        : state.extraction.status === "unreconciled"
+                        ? "amber"
+                        : "red"
+                    }
+                    data-testid={`tooling-split-status-${invoiceId}`}
+                  >
+                    {state.extraction.status}
+                  </MonoChip>
+                ) : (
+                  <MonoChip data-testid={`tooling-split-status-${invoiceId}`}>not extracted</MonoChip>
+                )}
+              </div>
+              {state.extraction && state.extraction.items.length > 0 && (
+                <table className="w-full mt-2" data-testid={`tooling-split-items-${invoiceId}`}>
+                  <thead>
+                    <tr className="text-left font-mono text-[10px] uppercase text-text-faint">
+                      <th className="py-1 pr-3">Project</th>
+                      <th className="py-1 pr-3">Category</th>
+                      <th className="py-1 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.extraction.items.map((it, i) => (
+                      <tr key={i} className="border-t border-border-soft/50">
+                        <td className="py-1 pr-3">{it.projectLabel}</td>
+                        <td className="py-1 pr-3 text-text-mute">{it.category}</td>
+                        <td className="py-1 text-right font-mono">
+                          {state.extraction!.currency}{" "}
+                          {it.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <Link
+                href={`/finance/tooling?focus=${encodeURIComponent(invoiceId)}`}
+                className="inline-block mt-2 text-gold hover:text-gold/80"
+                data-testid={`tooling-split-open-${invoiceId}`}
+              >
+                Open in Tooling spend →
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FinancePayablesSupplierInvoices() {
   const { items, loaded, refetch } = useSupplierInvoices();
   const { busy, error, run } = useMutate();
@@ -1028,6 +1151,11 @@ export function FinancePayablesSupplierInvoices() {
               <div className="text-[11px] text-text-mute mt-3" data-testid={`supplier-invoice-in-run-note-${inv.id}`}>
                 In a payment run — un-approve is no longer available; cancel the run to pull it back.
               </div>
+            )}
+            {/* Task #1251 — tooling-vendor invoices (Replit / Anthropic /
+                Perplexity) show a lazy, defensive project cost-split block. */}
+            {vendorKeyFromSupplier(inv.supplierName) && (
+              <ToolingCostSplitBlock invoiceId={inv.id} />
             )}
           </Card>
           </div>

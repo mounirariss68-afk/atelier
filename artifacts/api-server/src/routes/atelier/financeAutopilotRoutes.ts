@@ -39,8 +39,14 @@ import {
   atelierTimesheetWeeks,
   atelierLeaveRequests,
   atelierExpenses,
+  atelierVendorCostSplits,
+  atelierVendorProjectMap,
+  atelierVendorAllocRules,
+  type VendorInvoiceExtraction,
 } from "@workspace/db";
 import { isGlPeriodLocked } from "../../lib/atelier-agents/bookkeeper.js";
+// Task #1251 — tooling vendor detection for the two new inbox kinds.
+import { detectVendorKey, vendorLabel, VENDOR_DEFAULT_KEY } from "../../lib/atelier-vendor-invoice-mining.js";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import {
   loadFinanceAutopilotSettings,
@@ -426,6 +432,100 @@ export async function loadFinanceApprovalsInbox(me: Me): Promise<FinanceApproval
       href: "/finance/ledger",
       actionable: true,
     });
+  }
+
+  // (i) Task #1251 — vendor tooling spend: two kinds.
+  //   vendor_project_unmapped: one item per vendor with unmapped project(s).
+  //   vendor_cost_split: one item per invoice with proposed (not yet
+  //     approved) splits awaiting a finance-lead decision.
+  {
+    const toolingInvoices = await db.select({
+      id: atelierPartnerFirmInvoices.id,
+      reference: atelierPartnerFirmInvoices.reference,
+      partnerFirmName: atelierPartnerFirmInvoices.partnerFirmName,
+      costCurrency: atelierPartnerFirmInvoices.costCurrency,
+      costAmount: atelierPartnerFirmInvoices.costAmount,
+      submittedAt: atelierPartnerFirmInvoices.submittedAt,
+      createdAt: atelierPartnerFirmInvoices.createdAt,
+      lineItems: atelierPartnerFirmInvoices.lineItems,
+    }).from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, orgId),
+      isNull(atelierPartnerFirmInvoices.deletedAt),
+    )).limit(1000);
+
+    const maps = await db.select({
+      vendorKey: atelierVendorProjectMap.vendorKey,
+      projectKey: atelierVendorProjectMap.projectKey,
+    }).from(atelierVendorProjectMap).where(and(
+      eq(atelierVendorProjectMap.orgId, orgId),
+      isNull(atelierVendorProjectMap.deletedAt),
+    ));
+    const mappedSet = new Set(maps.map((m) => `${m.vendorKey}::${m.projectKey}`));
+    const rules = await db.select({
+      vendorKey: atelierVendorAllocRules.vendorKey,
+      splits: atelierVendorAllocRules.splits,
+    }).from(atelierVendorAllocRules).where(and(
+      eq(atelierVendorAllocRules.orgId, orgId),
+      isNull(atelierVendorAllocRules.deletedAt),
+    ));
+    const ruledVendors = new Set(rules.filter((r) => (r.splits ?? []).length > 0).map((r) => r.vendorKey));
+
+    // Proposed-split counts per invoice.
+    const invIds = toolingInvoices.map((r) => r.id);
+    const proposedRows = invIds.length
+      ? await db.select({ invoiceId: atelierVendorCostSplits.invoiceId })
+          .from(atelierVendorCostSplits).where(and(
+            inArray(atelierVendorCostSplits.invoiceId, invIds),
+            eq(atelierVendorCostSplits.status, "proposed"),
+            isNull(atelierVendorCostSplits.deletedAt),
+          ))
+      : [];
+    const proposedByInv = new Map<string, number>();
+    for (const p of proposedRows) proposedByInv.set(p.invoiceId, (proposedByInv.get(p.invoiceId) ?? 0) + 1);
+
+    // Unmapped project names per vendor (aggregated across reconciled invoices).
+    const unmappedByVendor = new Map<string, Set<string>>();
+    for (const inv of toolingInvoices) {
+      const vk = detectVendorKey(inv.partnerFirmName);
+      if (!vk) continue;
+      const ext = (inv.lineItems ?? null) as VendorInvoiceExtraction | null;
+      if (!ext || ext.status !== "ok") continue;
+      for (const item of ext.items) {
+        const mapped = item.projectKey === VENDOR_DEFAULT_KEY
+          ? ruledVendors.has(vk)
+          : mappedSet.has(`${vk}::${item.projectKey}`);
+        if (mapped) continue;
+        const set = unmappedByVendor.get(vk) ?? new Set<string>();
+        set.add(item.projectLabel);
+        unmappedByVendor.set(vk, set);
+      }
+      // vendor_cost_split item — proposed splits awaiting approval.
+      const proposedCount = proposedByInv.get(inv.id) ?? 0;
+      if (proposedCount > 0) {
+        items.push({
+          id: inv.id, kind: "vendor_cost_split",
+          title: `Tooling cost split · ${inv.reference ?? inv.id}`,
+          subtitle: `${vendorLabel(vk)} · ${proposedCount} proposed split(s) awaiting approval`,
+          amount: { currency: inv.costCurrency, value: round2(Number(inv.costAmount || 0)) },
+          submittedAt: iso(inv.submittedAt ?? inv.createdAt),
+          requiredRole: "finance",
+          href: `/finance/tooling?focus=${encodeURIComponent(inv.id)}`,
+          actionable: true,
+        });
+      }
+    }
+    for (const [vk, names] of unmappedByVendor) {
+      const list = [...names];
+      items.push({
+        id: `vendor_unmapped_${vk}`, kind: "vendor_project_unmapped",
+        title: `Unmapped ${vendorLabel(vk)} project(s)`,
+        subtitle: `${list.length} project(s) need a cost bucket: ${list.slice(0, 4).join(", ")}${list.length > 4 ? "…" : ""}`,
+        submittedAt: null,
+        requiredRole: "finance",
+        href: "/finance/tooling?focus=unmapped",
+        actionable: true,
+      });
+    }
   }
 
   // ── Resolve agent-run provenance + staleness in one batched read. ──

@@ -25,7 +25,8 @@
     "generate:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts",
     "test:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts --check",
     "test:deeplink-focus": "tsx src/lib/useDeepLinkFocus.test.ts",
-    "test:partner-change-requests": "tsx --tsconfig tsconfig.test.json src/pages/PartnerPortal.change-requests.test.tsx"
+    "test:partner-change-requests": "tsx --tsconfig tsconfig.test.json src/pages/PartnerPortal.change-requests.test.tsx",
+    "test:tooling-ui": "tsx --tsconfig tsconfig.test.json src/pages/finance/ToolingSpend.helpers.test.tsx"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

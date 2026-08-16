@@ -30,6 +30,7 @@ import {
   atelierRateCardRows,
   atelierExpenses,
   atelierPartnerFirmHours,
+  atelierVendorCostSplits,
 } from "@workspace/db";
 import { convertToUsd } from "./atelier-fx.js";
 
@@ -204,6 +205,26 @@ async function rollupSubs(engagementId: string): Promise<number> {
       total += amount; // last-resort identity; we never silently drop spend
     }
   }
+
+  // Task #1251 — tooling costs (approved vendor cost splits mapped to this
+  // engagement) ride the subs bucket: they are external-vendor spend
+  // attributed to the engagement, same economic character as subcontractor
+  // cost. usd_amount is snapshotted at invoice date on approval.
+  const toolingRows = await db
+    .select({ usdAmount: atelierVendorCostSplits.usdAmount })
+    .from(atelierVendorCostSplits)
+    .where(
+      and(
+        eq(atelierVendorCostSplits.bucketType, "engagement"),
+        eq(atelierVendorCostSplits.bucketRef, engagementId),
+        eq(atelierVendorCostSplits.status, "approved"),
+        isNull(atelierVendorCostSplits.deletedAt),
+      ),
+    );
+  for (const r of toolingRows) {
+    total += Number(r.usdAmount || 0);
+  }
+
   return total;
 }
 
