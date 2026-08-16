@@ -97,6 +97,12 @@ export async function resolveAccount(
 /**
  * Contact, optionally scoped to a single account. Task #332 —
  * tenant-scoped via persona.orgId.
+ *
+ * Task #1169 — also ACL-filtered through canSeeAccount BEFORE capping
+ * to disambiguation options, mirroring resolveAccount. Both the ILIKE
+ * fast-path and the accent-insensitive JS fallback path over-fetch and
+ * then filter so a restricted persona (e.g. partner_firm_resource)
+ * cannot discover contacts from accounts outside their perimeter.
  */
 export async function resolveContact(
   query: string,
@@ -105,6 +111,25 @@ export async function resolveContact(
 ): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
+
+  // Shared ACL helpers — computed once for both paths.
+  const access = await accessibleEngagementIds({
+    id: persona.id,
+    role: persona.role,
+  } as Parameters<typeof accessibleEngagementIds>[0]);
+  const me = { id: persona.id, role: persona.role };
+
+  /** Filter a candidate list through canSeeAccount. */
+  async function aclFilter<T extends { accountId: string }>(
+    rows: T[],
+  ): Promise<T[]> {
+    if (rows.length === 0) return [];
+    const flags = await Promise.all(
+      rows.map((r) => canSeeAccount(access, me, r.accountId)),
+    );
+    return rows.filter((_, i) => flags[i]);
+  }
+
   const where = and(
     or(
       ilike(atelierContacts.fullName, `%${q}%`),
@@ -116,20 +141,25 @@ export async function resolveContact(
     isNull(atelierContacts.deletedAt),
     opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
   );
+  // Over-fetch so ACL filtering still yields enough options.
   const rows = await db
     .select({
       id: atelierContacts.id,
       name: atelierContacts.fullName,
       email: atelierContacts.email,
       title: atelierContacts.title,
+      accountId: atelierContacts.accountId,
     })
     .from(atelierContacts)
     .where(where)
-    .limit(MAX_CHOICES + 1);
+    .limit(MAX_CHOICES * 3);
+
+  // Apply canSeeAccount ACL before surfacing any candidates.
+  let candidates = await aclFilter(rows);
+
   // Task #570 — accent-insensitive fallback: SQL ILIKE can't fold
   // ö/ü/ş/ı ("gokhan" vs "Gökhan"); on a miss, fold-compare in JS over
-  // the org's contacts.
-  let candidates = rows;
+  // the org's contacts — then ACL-filter that wider set too.
   if (candidates.length === 0) {
     const needle = foldRosterName(q);
     if (needle) {
@@ -139,6 +169,7 @@ export async function resolveContact(
           name: atelierContacts.fullName,
           email: atelierContacts.email,
           title: atelierContacts.title,
+          accountId: atelierContacts.accountId,
         })
         .from(atelierContacts)
         .where(
@@ -148,11 +179,13 @@ export async function resolveContact(
             opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
           ),
         );
-      candidates = all
-        .filter((r) => foldRosterName(r.name ?? "").includes(needle))
-        .slice(0, MAX_CHOICES + 1);
+      const folded = all.filter((r) =>
+        foldRosterName(r.name ?? "").includes(needle),
+      );
+      candidates = (await aclFilter(folded)).slice(0, MAX_CHOICES * 3);
     }
   }
+
   if (candidates.length === 0) return { kind: "none" };
   if (candidates.length === 1) {
     const r = candidates[0]!;
