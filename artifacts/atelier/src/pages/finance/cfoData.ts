@@ -132,11 +132,30 @@ export interface EntityExpiryLike {
   severity: "overdue" | "critical" | "upcoming";
 }
 
+export interface PreformationAlert {
+  entityId: string;
+  name: string;
+  totalUsd: number;
+  itemCount: number;
+}
+
+export function usePreformationAlerts(): PreformationAlert[] {
+  const [data, setData] = React.useState<PreformationAlert[]>([]);
+  React.useEffect(() => {
+    void fetch("/api/atelier/finance/preformation/active-alerts", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => setData(j?.alerts ?? []))
+      .catch(() => setData([]));
+  }, []);
+  return data;
+}
+
 export function buildCfoInbox(
   ar: ArAging | null,
   margin: MarginFirm | null,
   cash: CashForecastResp | null,
   expiries: EntityExpiryLike[] = [],
+  preformationAlerts: PreformationAlert[] = [],
 ): NextAction[] {
   const out: NextAction[] = [];
 
@@ -192,6 +211,20 @@ export function buildCfoInbox(
         daysOut: 0,
       });
     }
+  }
+
+  // Task #1182 — active entities with unsettled pre-formation pools
+  for (const a of preformationAlerts) {
+    out.push({
+      id: `pfpool-${a.entityId}`,
+      section: "Entities",
+      href: `/finance/pre-formation`,
+      title: `Settle pre-formation pool — ${a.name}`,
+      detail: `Entity is now active · ${a.itemCount} item${a.itemCount === 1 ? "" : "s"} · $${Math.round(a.totalUsd).toLocaleString()} USD`,
+      due: "action needed",
+      tone: "amber",
+      daysOut: 0,
+    });
   }
 
   // From cash — projected gap weeks in next 4

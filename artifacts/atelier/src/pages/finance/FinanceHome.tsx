@@ -55,6 +55,7 @@ import {
   useMarginFirm,
   useCashForecast,
   useUtilFirm,
+  usePreformationAlerts,
   buildCfoInbox,
   type CashForecastWeek,
 } from "./cfoData";
@@ -901,11 +902,12 @@ export default function FinanceHome() {
   const { data: fpaHc } = useFpaHeadcount("base", null);
   const { data: fpaRenewals } = useFpaRenewals("USD", null);
   const { expiries } = useEntityExpiries(90);
+  const preformationAlerts = usePreformationAlerts();
 
   // Inbox is entity-scoped: only producers tied to selected entities
   const inbox = React.useMemo(
-    () => buildCfoInbox(ar, margin, cash, expiries),
-    [ar, margin, cash, expiries],
+    () => buildCfoInbox(ar, margin, cash, expiries, preformationAlerts),
+    [ar, margin, cash, expiries, preformationAlerts],
   );
 
   const sources: FilterBarSource[] = [

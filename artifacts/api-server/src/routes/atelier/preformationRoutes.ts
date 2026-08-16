@@ -536,4 +536,31 @@ router.post("/finance/preformation/pools/:entityId/settle", async (req, res, nex
   } catch (err) { next(err); }
 });
 
+// @cli-skip: Task #1182 lightweight alert feed for finance home inbox + entity detail
+router.get("/finance/preformation/active-alerts", async (req, res, next) => {
+  try {
+    const me = financeGate(req, res);
+    if (!me) return;
+    // Return only active entities with a pre-formation pool that has not yet
+    // been settled — enough for the inbox nudge and entity-detail banner.
+    // Reuses buildPools so the staleness/clearing logic stays canonical.
+    const pools = await buildPools(me.orgId, "USD");
+    const alerts = pools
+      .filter(
+        (p) =>
+          p.status === "active" &&
+          !p.settlement &&
+          p.staleFlags instanceof Array &&
+          (p.staleFlags as string[]).includes("entity_active_unsettled"),
+      )
+      .map((p) => ({
+        entityId: p.entityId,
+        name: p.name,
+        totalUsd: p.totalUsd,
+        itemCount: p.itemCount,
+      }));
+    res.json({ alerts });
+  } catch (err) { next(err); }
+});
+
 export default router;

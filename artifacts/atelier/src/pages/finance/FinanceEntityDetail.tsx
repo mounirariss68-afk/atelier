@@ -44,7 +44,7 @@ import {
   ExtractDialog,
   type EntityDraft,
 } from "./FinanceEntities";
-import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical, Copy, Check, Landmark, Plus, UploadCloud, Loader2 } from "lucide-react";
+import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical, Copy, Check, Landmark, Plus, UploadCloud, Loader2, AlertTriangle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Copy-to-clipboard affordances — every identifying number on this page
@@ -456,6 +456,30 @@ export default function FinanceEntityDetail() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-8">
+        {/* Task #1182 — unsettled pre-formation pool nudge */}
+        {e.status === "active" && e.formation && !e.formation.settlement && (
+          <Link href="/finance/pre-formation">
+            <div
+              className="flex items-start gap-3 border border-warn/40 bg-warn/5 rounded-lg p-4 cursor-pointer hover:border-warn/70 transition-colors"
+              data-testid="banner-preformation-unsettled"
+            >
+              <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text">
+                  Unsettled pre-formation pool
+                </div>
+                <div className="text-xs text-text-mute mt-0.5">
+                  This entity is now active but its pre-formation cost pool has not been settled yet.
+                  Visit the pre-formation page to choose a settlement treatment.
+                </div>
+              </div>
+              <div className="ml-auto shrink-0 text-xs font-mono uppercase tracking-widest text-warn">
+                Settle →
+              </div>
+            </div>
+          </Link>
+        )}
+
         {/* Documents — tiered shelf: compliance first, then constitutional,
             then a collapsed formation-history accordion. */}
         <section data-testid="entity-documents-shelf">
