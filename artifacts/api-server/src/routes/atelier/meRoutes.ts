@@ -413,11 +413,19 @@ router.get("/me/background-jobs", async (req, res, next) => {
         kind: l.agentId,
         label:
           l.targetLabel ||
-          (l.agentId === "executive_mapper"
+          (l.agentId === "executive_mapper" || l.agentId === "alliance_executive_mapper"
             ? "Executive Mapper"
             : l.agentId === "account_cartographer"
               ? "Account research"
-              : "Agent run"),
+              : l.agentId === "alliance_cartographer"
+                ? "Alliance Cartographer"
+                : l.agentId === "ag_pov_author"
+                  ? "POV outline"
+                  : l.agentId === "ag_pov_researcher"
+                    ? "POV research"
+                    : l.agentId === "ag_pov_draft"
+                      ? "POV draft"
+                      : "Agent run"),
         status: "running" as const,
         error: null,
         resultHref: "/agents/monitor",

@@ -68,6 +68,10 @@ import {
   AtelierGetStageHistoryResponse,
 } from "@workspace/api-zod";
 import {
+  noteAgentLaunch,
+  clearAgentLaunch,
+} from "../../lib/atelier-agents/launch-visibility.js";
+import {
   runPursuitScout,
   runPovOutline,
   runPovDraft,
@@ -1526,36 +1530,43 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
   // Task #1053 — per-POV depth knob, chosen on the create form and frozen on
   // the row: "memo" (tight 4–6 sections) vs "full" (8–12, default).
   const depth = parsed.data.depth === "memo" ? "memo" : "full";
-  const { runId, outline } = await runPovOutline({
-    opportunityId: opp.id,
-    opportunityName: opp.name,
-    audience: parsed.data.audience,
-    objective: parsed.data.objective,
-    promotedFacts: promoted,
-    triggeredByUserId: me.id,
-    actorLabel: "POV Author · Outliner",
-    depth,
-  });
-  const id = rid("pov");
-  const [pov] = await db
-    .insert(atelierPovs)
-    .values({
-      id,
+  // Task #1198 — show "working on it" in the bell during the pre-row window
+  // while the outliner LLM warms up (synchronous call, no background job).
+  noteAgentLaunch({ agentId: "ag_pov_author", targetId: opp.id, targetLabel: opp.name, userId: me.id });
+  try {
+    const { runId, outline } = await runPovOutline({
       opportunityId: opp.id,
-      title: parsed.data.title,
+      opportunityName: opp.name,
       audience: parsed.data.audience,
       objective: parsed.data.objective,
+      promotedFacts: promoted,
+      triggeredByUserId: me.id,
+      actorLabel: "POV Author · Outliner",
       depth,
-      status: "outline",
-      outline: outline.sections as never,
-      // Task #1022 — the evidence snapshot is frozen at outline APPROVAL time
-      // (decision route), not here: facts demoted/promoted during outline
-      // review must be reflected in the set the draft runs on.
-      runId,
-      createdByUserId: me.id,
-    })
-    .returning();
-  res.status(201).json(povWire(pov));
+    });
+    const id = rid("pov");
+    const [pov] = await db
+      .insert(atelierPovs)
+      .values({
+        id,
+        opportunityId: opp.id,
+        title: parsed.data.title,
+        audience: parsed.data.audience,
+        objective: parsed.data.objective,
+        depth,
+        status: "outline",
+        outline: outline.sections as never,
+        // Task #1022 — the evidence snapshot is frozen at outline APPROVAL time
+        // (decision route), not here: facts demoted/promoted during outline
+        // review must be reflected in the set the draft runs on.
+        runId,
+        createdByUserId: me.id,
+      })
+      .returning();
+    res.status(201).json(povWire(pov));
+  } finally {
+    clearAgentLaunch("ag_pov_author", opp.id);
+  }
 });
 
 // ── POV deep research (Task #1022) ──────────────────────────────────────────
@@ -2144,18 +2155,26 @@ router.post("/povs/:povId/outline/regenerate", async (req, res) => {
     });
     return;
   }
-  const { runId, outline } = await runPovOutline({
-    opportunityId: opp.id,
-    opportunityName: opp.name,
-    audience: pov.audience ?? "",
-    objective: pov.objective ?? "",
-    promotedFacts: promoted,
-    triggeredByUserId: me.id,
-    actorLabel: "POV Author · Outliner (revision)",
-    revisionFeedback: parsed.data.feedback?.trim() || undefined,
-    priorOutline: (pov.outline as PovOutline["sections"]) ?? [],
-    depth: pov.depth === "memo" ? "memo" : "full",
-  });
+  // Task #1198 — bell visibility during synchronous outline-regen LLM call.
+  noteAgentLaunch({ agentId: "ag_pov_author", targetId: opp.id, targetLabel: opp.name, userId: me.id });
+  let runId: string;
+  let outline: PovOutline;
+  try {
+    ({ runId, outline } = await runPovOutline({
+      opportunityId: opp.id,
+      opportunityName: opp.name,
+      audience: pov.audience ?? "",
+      objective: pov.objective ?? "",
+      promotedFacts: promoted,
+      triggeredByUserId: me.id,
+      actorLabel: "POV Author · Outliner (revision)",
+      revisionFeedback: parsed.data.feedback?.trim() || undefined,
+      priorOutline: (pov.outline as PovOutline["sections"]) ?? [],
+      depth: pov.depth === "memo" ? "memo" : "full",
+    }));
+  } finally {
+    clearAgentLaunch("ag_pov_author", opp.id);
+  }
   const [updated] = await db
     .update(atelierPovs)
     .set({

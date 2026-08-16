@@ -14,6 +14,7 @@
 import { db, atelierPartnerFirms, atelierAgentRuns } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { agentRunIsFresh } from "./run-staleness.js";
+import { noteAgentLaunch, clearAgentLaunch } from "./launch-visibility.js";
 import {
   runAllianceCartographer,
   buildAllianceCartographerProposals,
@@ -75,15 +76,29 @@ export async function runAllianceMapperAndQueue(
       linkedinUrl: null as string | null,
     }));
 
-    const { runId, output } = await runAllianceExecutiveMapper({
-      firmId: firm.id,
-      firmName: firm.name,
-      firmCountry: firm.country ?? firm.hqCountry ?? null,
-      firmSpeciality: firm.speciality ?? null,
-      knownContacts,
-      triggeredByUserId,
-      actorLabel: "Alliance Executive Mapper",
+    // Task #1198 — show "working on it" in the bell for the chained mapper
+    // (no background job is registered for this fire-and-forget path).
+    noteAgentLaunch({
+      agentId: "alliance_executive_mapper",
+      targetId: firm.id,
+      targetLabel: firm.name,
+      userId: triggeredByUserId,
     });
+    let runId: string;
+    let output: Awaited<ReturnType<typeof runAllianceExecutiveMapper>>["output"];
+    try {
+      ({ runId, output } = await runAllianceExecutiveMapper({
+        firmId: firm.id,
+        firmName: firm.name,
+        firmCountry: firm.country ?? firm.hqCountry ?? null,
+        firmSpeciality: firm.speciality ?? null,
+        knownContacts,
+        triggeredByUserId,
+        actorLabel: "Alliance Executive Mapper",
+      }));
+    } finally {
+      clearAgentLaunch("alliance_executive_mapper", firm.id);
+    }
 
     // Re-load for the freshest queue — the LLM run takes minutes and the
     // Cartographer persist or a partner edit may have touched the row.
@@ -149,16 +164,29 @@ export async function runAllianceCartographerAndQueue(
       .limit(1);
     if (inFlight) throw new Error("alliance-cartographer-already-running");
 
-    const { runId, output } = await runAllianceCartographer({
-      firmId: firm.id,
-      firmName: firm.name,
-      firmCountry: firm.country ?? firm.hqCountry ?? null,
-      firmSpeciality: firm.speciality ?? null,
-      firmKind: firm.kind ?? null,
-      contextNotes: opts?.contextNotes ?? null,
-      triggeredByUserId,
-      actorLabel: "Alliance Cartographer",
+    // Task #1198 — show "working on it" in the bell during the pre-row window.
+    noteAgentLaunch({
+      agentId: "alliance_cartographer",
+      targetId: firm.id,
+      targetLabel: firm.name,
+      userId: triggeredByUserId,
     });
+    let runId: string;
+    let output: Awaited<ReturnType<typeof runAllianceCartographer>>["output"];
+    try {
+      ({ runId, output } = await runAllianceCartographer({
+        firmId: firm.id,
+        firmName: firm.name,
+        firmCountry: firm.country ?? firm.hqCountry ?? null,
+        firmSpeciality: firm.speciality ?? null,
+        firmKind: firm.kind ?? null,
+        contextNotes: opts?.contextNotes ?? null,
+        triggeredByUserId,
+        actorLabel: "Alliance Cartographer",
+      }));
+    } finally {
+      clearAgentLaunch("alliance_cartographer", firm.id);
+    }
 
     // Re-load for the freshest queue/fields before diffing proposals.
     const fresh = (await loadFirm(firm.id)) ?? firm;
