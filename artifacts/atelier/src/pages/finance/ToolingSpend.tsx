@@ -53,6 +53,8 @@ interface OverviewTotals {
   bdUsd: number;
   deliveryUsd: number;
   overheadUsd: number;
+  clientUsd: number;
+  ipDevUsd: number;
   unallocatedUsd: number;
 }
 type SplitStatus = "proposed" | "unmapped" | "unreconciled" | "failed" | "none";
@@ -73,7 +75,7 @@ interface OverviewResp {
       vendorKey: string;
       vendorLabel: string;
       totalUsd: number;
-      bucketTotals: { internalUsd: number; bdUsd: number; deliveryUsd: number; overheadUsd: number };
+      bucketTotals: { internalUsd: number; bdUsd: number; deliveryUsd: number; overheadUsd: number; clientUsd: number; ipDevUsd: number };
     }>;
     byProject: Array<{
       vendorKey: string;
@@ -105,7 +107,24 @@ interface TargetsResp {
   data: {
     engagements: Array<{ id: string; name: string }>;
     opportunities: Array<{ id: string; name: string; accountName: string }>;
+    accounts: Array<{ id: string; name: string }>;
   };
+}
+interface MappingListRow {
+  id: string;
+  vendorKey: string;
+  vendorLabel: string;
+  projectKey: string;
+  projectLabel: string;
+  bucketType: string;
+  bucketRef: string | null;
+  bucketLabel: string;
+  createdByName: string | null;
+  updatedAt: string | null;
+}
+interface MappingsResp {
+  ok: boolean;
+  data: { rows: MappingListRow[] };
 }
 interface VendorRuleSplit {
   bucketType: BucketType;
@@ -160,13 +179,17 @@ interface InvoiceDetailResp {
 const BUCKET_OPTIONS: Array<{ type: BucketType; label: string }> = [
   { type: "engagement", label: "Client delivery" },
   { type: "opportunity", label: "Business development" },
-  { type: "internal", label: "Internal / IP" },
+  { type: "account", label: "Client (account)" },
+  { type: "internal", label: "Internal" },
+  { type: "ip_development", label: "IP development" },
   { type: "overhead", label: "Overhead" },
 ];
 const BUCKET_LABEL: Record<string, string> = {
   engagement: "Client delivery",
   opportunity: "Business development",
-  internal: "Internal / IP",
+  account: "Client (account)",
+  internal: "Internal",
+  ip_development: "IP development",
   overhead: "Overhead",
 };
 
@@ -249,8 +272,10 @@ export default function ToolingSpend(): React.JSX.Element {
   const ov = overviewQ.data.data;
   const t = ov.totals;
   const totalMined =
-    t.internalUsd + t.bdUsd + t.deliveryUsd + t.overheadUsd + t.unallocatedUsd;
-  const targets = targetsQ.data?.ok ? targetsQ.data.data : { engagements: [], opportunities: [] };
+    t.internalUsd + t.bdUsd + t.deliveryUsd + t.overheadUsd + (t.clientUsd ?? 0) + (t.ipDevUsd ?? 0) + t.unallocatedUsd;
+  const targets = targetsQ.data?.ok
+    ? { ...targetsQ.data.data, accounts: targetsQ.data.data.accounts ?? [] }
+    : { engagements: [], opportunities: [], accounts: [] };
 
   const nothingMined = totalMined === 0 && ov.pendingInvoices.length === 0 && ov.unmappedCount === 0;
 
@@ -265,7 +290,7 @@ export default function ToolingSpend(): React.JSX.Element {
               Tooling spend
             </span>
           }
-          lede="AI & developer vendor cost allocation — mine Replit / Anthropic / Perplexity invoices and split their spend across Internal/IP, Business development, Client delivery and Overhead."
+          lede="AI & developer vendor cost allocation — mine Replit / Anthropic / Perplexity / OpenAI invoices and split their spend across Client delivery, Business development, Client accounts, Internal, IP development and Overhead."
         />
       </PageHero>
       <div className="px-6 py-10 max-w-[1280px] mx-auto">
@@ -276,10 +301,12 @@ export default function ToolingSpend(): React.JSX.Element {
         ) : (
           <>
             {/* (a) KPI tiles */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3" data-testid="tooling-kpis">
-              <KpiTile label="Internal / IP" value={fmtUsd(t.internalUsd)} testId="kpi-internal" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="tooling-kpis">
+              <KpiTile label="Internal" value={fmtUsd(t.internalUsd)} testId="kpi-internal" />
               <KpiTile label="Business development" value={fmtUsd(t.bdUsd)} testId="kpi-bd" />
               <KpiTile label="Client delivery" value={fmtUsd(t.deliveryUsd)} testId="kpi-delivery" />
+              <KpiTile label="Client (account)" value={fmtUsd(t.clientUsd ?? 0)} testId="kpi-client" />
+              <KpiTile label="IP development" value={fmtUsd(t.ipDevUsd ?? 0)} testId="kpi-ipdev" />
               <KpiTile label="Overhead" value={fmtUsd(t.overheadUsd)} testId="kpi-overhead" />
               <KpiTile
                 label="Unallocated"
@@ -297,6 +324,11 @@ export default function ToolingSpend(): React.JSX.Element {
                 onMapped={invalidate}
                 highlight={focus.kind === "unmapped"}
               />
+            </div>
+
+            {/* (b2) Saved project mappings */}
+            <div className="mt-8">
+              <MappingsPanel targets={targets} canWrite={canWrite} onChanged={invalidate} />
             </div>
 
             {/* (c) Vendor split rules editor */}
@@ -452,6 +484,21 @@ function BucketPicker({
           ))}
         </select>
       )}
+      {bucketType === "account" && (
+        <select
+          className="bg-bg-deep border border-border-soft rounded px-2 py-1 text-xs"
+          value={bucketRef ?? ""}
+          onChange={(e) => onRef(e.target.value || null)}
+          data-testid={`${idPrefix}-account-select`}
+        >
+          <option value="">Pick client account…</option>
+          {(targets.accounts ?? []).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
@@ -581,6 +628,169 @@ function MappingRow({
           {busy ? "Mapping…" : "Map"}
         </PillButton>
       </div>
+    </div>
+  );
+}
+
+// ── (b2) Saved project mappings panel (Task #1268) ─────────────────────
+function MappingsPanel({
+  targets,
+  canWrite,
+  onChanged,
+}: {
+  targets: TargetsResp["data"];
+  canWrite: boolean;
+  onChanged: () => void;
+}): React.JSX.Element {
+  const q = useQuery<MappingsResp>({
+    queryKey: ["finance", "tooling", "mappings"],
+    queryFn: () => getJson<MappingsResp>("/finance/tooling/mappings"),
+  });
+  const rows = q.data?.ok ? q.data.data.rows : [];
+  return (
+    <Card className="p-6" data-testid="tooling-mappings-panel">
+      <SectionHead
+        eyebrow="Project mappings"
+        headline="Saved project homes"
+        lede="Every project→bucket association the firm has saved. Edit re-points future invoices; remove sends the project back to the unmapped queue. Already-approved spend never moves."
+      />
+      <div className="mt-4 grid gap-2">
+        {q.isLoading && <div className="text-sm text-text-mute">Loading mappings…</div>}
+        {q.isError && <div className="text-sm text-danger">Failed to load mappings.</div>}
+        {q.data && rows.length === 0 && (
+          <div className="text-sm text-text-mute" data-testid="tooling-mappings-empty">
+            No saved project mappings yet.
+          </div>
+        )}
+        {rows.map((row) => (
+          <SavedMappingRow key={row.id} row={row} targets={targets} canWrite={canWrite} onChanged={onChanged} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function SavedMappingRow({
+  row,
+  targets,
+  canWrite,
+  onChanged,
+}: {
+  row: MappingListRow;
+  targets: TargetsResp["data"];
+  canWrite: boolean;
+  onChanged: () => void;
+}): React.JSX.Element {
+  const { toast } = useToast();
+  const [editing, setEditing] = React.useState(false);
+  const [bucketType, setBucketType] = React.useState<BucketType>(row.bucketType as BucketType);
+  const [bucketRef, setBucketRef] = React.useState<string | null>(row.bucketRef);
+  const [busy, setBusy] = React.useState<null | "save" | "delete">(null);
+  const needsRef = bucketNeedsRef(bucketType);
+  const canSave = canWrite && (!needsRef || !!bucketRef) && busy === null;
+
+  const save = async () => {
+    setBusy("save");
+    try {
+      const r = await fetch(`${API_BASE}/finance/tooling/map`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorKey: row.vendorKey,
+          projectKey: row.projectKey,
+          bucketType,
+          bucketRef: needsRef ? bucketRef : null,
+        }),
+      });
+      if (!r.ok) throw new Error(`http_${r.status}`);
+      toast({ title: "Mapping updated", description: `${row.projectLabel} → ${BUCKET_LABEL[bucketType]}` });
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      toast({ title: "Update failed", variant: "destructive", description: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy("delete");
+    try {
+      const r = await fetch(`${API_BASE}/finance/tooling/mappings/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!r.ok) throw new Error(`http_${r.status}`);
+      toast({ title: "Mapping removed", description: `${row.projectLabel} is back in the unmapped queue.` });
+      onChanged();
+    } catch (e) {
+      toast({ title: "Remove failed", variant: "destructive", description: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="rounded border border-border-soft p-3" data-testid={`tooling-mapping-saved-${row.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="text-sm font-medium">{row.projectLabel}</span>
+          <span className="ml-2 font-mono text-[11px] text-text-faint uppercase">{row.vendorLabel}</span>
+          <span className="ml-2 font-mono text-[11px] text-gold">
+            → {BUCKET_LABEL[row.bucketType] ?? row.bucketType}
+            {row.bucketRef ? ` · ${row.bucketLabel}` : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {row.createdByName && (
+            <span className="text-[11px] text-text-faint">
+              by {row.createdByName}
+              {row.updatedAt ? ` · ${row.updatedAt.slice(0, 10)}` : ""}
+            </span>
+          )}
+          {canWrite && (
+            <>
+              <button
+                type="button"
+                className="text-[11px] text-text-mute hover:text-text"
+                onClick={() => setEditing((v) => !v)}
+                data-testid={`tooling-mapping-edit-${row.id}`}
+              >
+                {editing ? "cancel" : "edit"}
+              </button>
+              <button
+                type="button"
+                className="text-[11px] text-danger hover:underline"
+                onClick={remove}
+                disabled={busy !== null}
+                data-testid={`tooling-mapping-delete-${row.id}`}
+              >
+                {busy === "delete" ? "removing…" : "remove"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <BucketPicker
+            idPrefix={`saved-${row.id}`}
+            bucketType={bucketType}
+            bucketRef={bucketRef}
+            targets={targets}
+            onType={(b) => {
+              setBucketType(b);
+              setBucketRef(null);
+            }}
+            onRef={setBucketRef}
+          />
+          <PillButton onClick={save} disabled={!canSave} data-testid={`tooling-mapping-save-${row.id}`}>
+            {busy === "save" ? "Saving…" : "Save"}
+          </PillButton>
+        </div>
+      )}
     </div>
   );
 }
@@ -781,7 +991,12 @@ function InvoicePanel({
         `${API_BASE}/finance/tooling/invoices/${encodeURIComponent(invoiceId)}/approve`,
         { method: "POST", credentials: "include", headers: { Accept: "application/json" } },
       );
-      if (!r.ok) throw new Error(`http_${r.status}`);
+      if (!r.ok) {
+        // The server explains 409s (e.g. "2 projects need a home before
+        // approval: …") — surface its message instead of a bare status code.
+        const errBody = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(errBody?.message || `http_${r.status}`);
+      }
       const body = (await r.json()) as { ok: boolean; data: { approvedCount: number } };
       toast({ title: "Splits approved", description: `${body.data?.approvedCount ?? 0} split(s)` });
       refetchPanel();

@@ -27,15 +27,17 @@
  * authority. Approval happens explicitly on the finance-tooling route.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   db,
+  atelierUsers,
   atelierPartnerFirmInvoices,
   atelierVendorProjectMap,
   atelierVendorAllocRules,
   atelierVendorCostSplits,
   atelierEngagements,
   atelierOpportunities,
+  atelierAccounts,
   atelierAuditEvents,
   type VendorInvoiceExtraction,
   type VendorInvoiceExtractionItem,
@@ -50,12 +52,13 @@ import { convertToUsd } from "./atelier-fx.js";
 export const VENDOR_DEFAULT_KEY = "__vendor_default__";
 const RECON_TOLERANCE = 0.05;
 
-export type VendorKey = "replit" | "anthropic" | "perplexity";
+export type VendorKey = "replit" | "anthropic" | "perplexity" | "openai";
 
 const VENDOR_LABELS: Record<VendorKey, string> = {
   replit: "Replit",
   anthropic: "Anthropic",
   perplexity: "Perplexity",
+  openai: "OpenAI",
 };
 
 /**
@@ -68,12 +71,13 @@ const VENDOR_LABELS: Record<VendorKey, string> = {
  * Replit is per-project; it is included in the vendor-rules listing as a
  * FALLBACK so a rule can catch a Replit invoice that has no project rows.
  */
-const FLAT_VENDORS: readonly VendorKey[] = ["anthropic", "perplexity"] as const;
+const FLAT_VENDORS: readonly VendorKey[] = ["anthropic", "perplexity", "openai"] as const;
 
 /** Vendors surfaced by GET /vendor-rules (flat vendors + replit fallback). */
 export const RULE_VENDOR_KEYS: readonly VendorKey[] = [
   "anthropic",
   "perplexity",
+  "openai",
   "replit",
 ] as const;
 
@@ -95,6 +99,7 @@ export function detectVendorKey(supplierName: string | null | undefined): Vendor
   if (s.includes("replit")) return "replit";
   if (s.includes("anthropic")) return "anthropic";
   if (s.includes("perplexity")) return "perplexity";
+  if (s.includes("openai") || s.includes("chatgpt")) return "openai";
   return null;
 }
 
@@ -556,6 +561,7 @@ interface InvoiceRow {
   fileName: string | null;
   reference: string | null;
   blobRef: string | null;
+  submittedByUserId?: string | null;
 }
 
 async function loadInvoice(invoiceId: string): Promise<InvoiceRow | null> {
@@ -570,6 +576,7 @@ async function loadInvoice(invoiceId: string): Promise<InvoiceRow | null> {
       fileName: atelierPartnerFirmInvoices.fileName,
       reference: atelierPartnerFirmInvoices.reference,
       blobRef: atelierPartnerFirmInvoices.blobRef,
+      submittedByUserId: atelierPartnerFirmInvoices.submittedByUserId,
     })
     .from(atelierPartnerFirmInvoices)
     .where(eq(atelierPartnerFirmInvoices.id, invoiceId));
@@ -731,8 +738,112 @@ export async function extractAndProposeForInvoice(
     },
     summary: `Extraction OK for ${vendorLabel(vendorKey)} invoice ${inv.reference ?? invoiceId} — ${payload.items.length} line item(s).`,
   });
-  await proposeSplitsForInvoice({ inv, vendorKey, payload });
+  const proposal = await proposeSplitsForInvoice({ inv, vendorKey, payload });
+
+  // Task #1268 — when the breakdown scan finishes but some project names have
+  // no saved home yet, tell the person who filed the invoice (Me-home card +
+  // device push) so the ask happens DURING review, not silently in a queue.
+  // Best-effort: a notification failure must never fail the extraction.
+  if (proposal.unmapped) {
+    try {
+      await notifyUnmappedProjects({
+        orgId: inv.orgId,
+        invoiceId: inv.id,
+        submittedByUserId: inv.submittedByUserId ?? null,
+        vendorKey,
+        payload,
+      });
+    } catch (err) {
+      console.error(
+        `[vendor-invoice-mining] unmapped notification failed for ${invoiceId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
   return { status: "ok" };
+}
+
+/**
+ * Task #1268 — tell someone who can ACT that projects need a home.
+ *
+ * The mapping console (/finance/tooling) is finance-leadership gated
+ * (founding_partner | partner | finance). Notify the submitter only when
+ * they hold one of those roles and can open the link; otherwise notify the
+ * finance-leadership users instead, so the ask never dead-ends in a 403
+ * for a consultant/contractor submitter. Exported for the probes.
+ */
+export async function notifyUnmappedProjects(args: {
+  orgId: string;
+  invoiceId: string;
+  submittedByUserId: string | null;
+  vendorKey: VendorKey;
+  payload: VendorInvoiceExtraction;
+}): Promise<string[]> {
+  const { orgId, invoiceId, submittedByUserId, vendorKey, payload } = args;
+  const { emitSelfNotification } = await import("../routes/atelier/meRoutes.js");
+  const labels = await unmappedProjectLabels(orgId, vendorKey, payload);
+  const shown = labels.slice(0, 4).join(", ");
+  const more = labels.length > 4 ? ` and ${labels.length - 4} more` : "";
+  const title = `${vendorLabel(vendorKey)} invoice needs project homes`;
+  const body = labels.length
+    ? `Tell us who ${shown}${more} belong${labels.length === 1 ? "s" : ""} to — the cost split is waiting on it.`
+    : "Some projects on this invoice need a home before the cost split can be approved.";
+  const FINANCE_ROLES = ["founding_partner", "partner", "finance"];
+  const recipients = new Set<string>();
+  if (submittedByUserId) {
+    const [submitter] = await db.select({ role: atelierUsers.role })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, submittedByUserId), eq(atelierUsers.orgId, orgId)));
+    if (submitter && FINANCE_ROLES.includes(submitter.role)) recipients.add(submittedByUserId);
+  }
+  if (recipients.size === 0) {
+    const leads = await db.select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(and(
+        eq(atelierUsers.orgId, orgId),
+        inArray(atelierUsers.role, FINANCE_ROLES),
+        isNull(atelierUsers.deletedAt),
+      ));
+    for (const l of leads) recipients.add(l.id);
+  }
+  for (const userId of recipients) {
+    await emitSelfNotification({
+      orgId,
+      userId,
+      kind: "tooling_project_unmapped",
+      title,
+      body,
+      href: `/finance/tooling?focus=${invoiceId}`,
+    });
+  }
+  return [...recipients];
+}
+
+/** Labels of extraction items that currently resolve to NO mapping/rule.
+ *  Exported for the tooling-costs probes (Task #1268). */
+export async function unmappedProjectLabels(
+  orgId: string,
+  vendorKey: string,
+  payload: VendorInvoiceExtraction,
+): Promise<string[]> {
+  const maps = await db.select().from(atelierVendorProjectMap).where(and(
+    eq(atelierVendorProjectMap.orgId, orgId),
+    eq(atelierVendorProjectMap.vendorKey, vendorKey),
+    isNull(atelierVendorProjectMap.deletedAt),
+  ));
+  const mapped = new Set(maps.map((m) => m.projectKey));
+  const [rule] = await db.select().from(atelierVendorAllocRules).where(and(
+    eq(atelierVendorAllocRules.orgId, orgId),
+    eq(atelierVendorAllocRules.vendorKey, vendorKey),
+    isNull(atelierVendorAllocRules.deletedAt),
+  ));
+  const hasRule = ((rule?.splits ?? []) as VendorAllocSplit[]).length > 0;
+  const out: string[] = [];
+  for (const it of payload.items) {
+    const ok = it.projectKey === VENDOR_DEFAULT_KEY ? hasRule : mapped.has(it.projectKey);
+    if (!ok && !out.includes(it.projectLabel)) out.push(it.projectLabel);
+  }
+  return out;
 }
 
 async function deleteProposedSplits(invoiceId: string): Promise<void> {
@@ -864,7 +975,15 @@ async function bucketLabelFor(
 ): Promise<string> {
   if (bucketType === "internal") return "Internal";
   if (bucketType === "overhead") return "Overhead";
+  if (bucketType === "ip_development") return "IP development";
   if (!bucketRef) return bucketType;
+  if (bucketType === "account") {
+    const [a] = await db
+      .select({ name: atelierAccounts.name })
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, bucketRef), eq(atelierAccounts.orgId, orgId)));
+    return a?.name ?? bucketRef;
+  }
   if (bucketType === "engagement") {
     const [e] = await db
       .select({ name: atelierEngagements.name })

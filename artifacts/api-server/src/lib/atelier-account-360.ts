@@ -38,6 +38,7 @@ import {
   atelierRaidItems,
   atelierPaneAItems,
   atelierAuditEvents,
+  atelierVendorCostSplits,
 } from "@workspace/db";
 
 type Engagement = typeof atelierEngagements.$inferSelect;
@@ -93,6 +94,9 @@ export interface AccountFinancials {
   engagementCount: number;
   activeEngagementCount: number;
   openOpportunityCount: number;
+  /** Task #1268 — approved vendor tooling spend allocated to this account
+   *  (bucketType="account" cost splits, net USD). Read-only rollup. */
+  toolingSpendUsd: number;
 }
 
 export async function computeAccountFinancials(args: {
@@ -105,7 +109,7 @@ export async function computeAccountFinancials(args: {
   const engIds = engagements.map((e) => e.id);
   const activeEngIds = new Set(engagements.filter(isActiveEng).map((e) => e.id));
 
-  const [budgets, costs, invoices] = await Promise.all([
+  const [budgets, costs, invoices, toolingSplits] = await Promise.all([
     engIds.length
       ? db
           .select()
@@ -138,7 +142,22 @@ export async function computeAccountFinancials(args: {
           isNull(atelierInvoice.deletedAt),
         ),
       ),
+    // Task #1268 — approved tooling cost splits allocated to this account.
+    db
+      .select({ usdAmount: atelierVendorCostSplits.usdAmount })
+      .from(atelierVendorCostSplits)
+      .where(
+        and(
+          eq(atelierVendorCostSplits.orgId, orgId),
+          eq(atelierVendorCostSplits.bucketType, "account"),
+          eq(atelierVendorCostSplits.bucketRef, accountId),
+          eq(atelierVendorCostSplits.status, "approved"),
+          isNull(atelierVendorCostSplits.deletedAt),
+        ),
+      ),
   ]);
+  const toolingSpendUsd =
+    Math.round(toolingSplits.reduce((s, r) => s + (r.usdAmount ?? 0), 0) * 100) / 100;
 
   let contractValueUsd = 0;
   let activeEngagementValueUsd = 0;
@@ -232,6 +251,7 @@ export async function computeAccountFinancials(args: {
     engagementCount: engagements.length,
     activeEngagementCount: activeEngIds.size,
     openOpportunityCount,
+    toolingSpendUsd,
   };
 }
 
@@ -778,6 +798,7 @@ function emptyFinancials(): AccountFinancials {
     weightedPipelineUsd: 0,
     arOutstandingUsd: 0,
     arOverdueUsd: 0,
+    toolingSpendUsd: 0,
     aging: { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 },
     invoiceCount: 0,
     overdueInvoiceCount: 0,

@@ -26,4 +26,6 @@ export interface AtelierAccountFinancials {
   engagementCount: number;
   activeEngagementCount: number;
   openOpportunityCount: number;
+  /** Approved AI/developer tooling spend allocated to this account (net USD, Task #1268). Read-only rollup. */
+  toolingSpendUsd: number;
 }

@@ -4505,7 +4505,15 @@ export const atelierPartnerFirmInvoices = pgTable(
 // internal / overhead) and materialize per-invoice cost splits.
 // ============================================================
 
-export type VendorCostBucketType = "engagement" | "opportunity" | "internal" | "overhead";
+// Task #1268 adds two bucket types: "account" (client — bucket_ref is an
+// org-scoped account id) and "ip_development" (ref-less, like internal).
+export type VendorCostBucketType =
+  | "engagement"
+  | "opportunity"
+  | "account"
+  | "internal"
+  | "overhead"
+  | "ip_development";
 
 /**
  * Per-org mapping of a vendor's project (exact projectKey — never fuzzy)

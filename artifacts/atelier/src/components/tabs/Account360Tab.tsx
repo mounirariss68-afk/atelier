@@ -143,6 +143,11 @@ export function Account360Tab({ accountId }: { accountId: string }) {
                   : "None overdue"
               }
             />
+            <Stat
+              label="Tooling spend"
+              value={fmtUsd(f.toolingSpendUsd ?? 0)}
+              sub="Approved AI/dev tool costs"
+            />
           </div>
           {f.arOutstandingUsd > 0 && (
             <div className="mt-6 pt-5 border-t border-border-soft">

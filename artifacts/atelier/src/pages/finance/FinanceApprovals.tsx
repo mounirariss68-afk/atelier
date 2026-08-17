@@ -23,10 +23,14 @@ import {
   type AtelierApprovalInboxItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Bot, Clock, Inbox } from "lucide-react";
+import { bucketNeedsRef, type BucketType } from "./toolingSpend.helpers";
+
+const TOOLING_API = `${import.meta.env?.BASE_URL ?? "/"}api/atelier/finance/tooling`;
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -40,6 +44,8 @@ const KIND_LABEL: Record<string, string> = {
   payroll_run: "Payroll runs",
   collections_draft: "Collections drafts",
   journal_review: "Journal review",
+  vendor_project_unmapped: "Tooling projects to map",
+  vendor_cost_split: "Tooling cost splits",
 };
 
 function kindLabel(kind: string): string {
@@ -128,6 +134,180 @@ function ApprovalRow({ item }: { item: AtelierApprovalInboxItem }) {
             View →
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── inline tooling project mapper (Task #1268) ───────────────
+ * Rendered inside the "Tooling projects to map" group so the reviewer can
+ * answer "who does this project belong to?" right here, without leaving
+ * the inbox. Reuses the frozen /finance/tooling wire contract (raw fetch,
+ * same as the Tooling spend console). */
+
+const INLINE_BUCKETS: Array<{ type: BucketType; label: string }> = [
+  { type: "engagement", label: "Client delivery" },
+  { type: "opportunity", label: "Business development" },
+  { type: "account", label: "Client (account)" },
+  { type: "internal", label: "Internal" },
+  { type: "ip_development", label: "IP development" },
+  { type: "overhead", label: "Overhead" },
+];
+
+interface InlineUnmappedRow {
+  vendorKey: string;
+  projectKey: string;
+  projectLabel: string;
+  invoiceCount: number;
+  totalUsd: number;
+}
+interface InlineTargets {
+  engagements: Array<{ id: string; name: string }>;
+  opportunities: Array<{ id: string; name: string; accountName: string }>;
+  accounts: Array<{ id: string; name: string }>;
+}
+
+async function toolingGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${TOOLING_API}${path}`, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!r.ok) throw new Error(`http_${r.status}`);
+  return (await r.json()) as T;
+}
+
+function InlineToolingMapper({ onMapped }: { onMapped: () => void }) {
+  const unmappedQ = useQuery<{ ok: boolean; data: { rows: InlineUnmappedRow[] } }>({
+    queryKey: ["finance", "tooling", "unmapped"],
+    queryFn: () => toolingGet("/unmapped"),
+  });
+  const targetsQ = useQuery<{ ok: boolean; data: InlineTargets }>({
+    queryKey: ["finance", "tooling", "targets"],
+    queryFn: () => toolingGet("/targets"),
+  });
+  const rows = unmappedQ.data?.ok ? unmappedQ.data.data.rows : [];
+  const targets: InlineTargets = targetsQ.data?.ok
+    ? { ...targetsQ.data.data, accounts: targetsQ.data.data.accounts ?? [] }
+    : { engagements: [], opportunities: [], accounts: [] };
+
+  if (unmappedQ.isLoading) {
+    return <div className="py-2 text-[11px] text-text-mute">Loading unmapped projects…</div>;
+  }
+  if (unmappedQ.isError) {
+    return <div className="py-2 text-[11px] text-danger">Could not load the unmapped projects.</div>;
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="py-2 text-[11px] text-text-mute" data-testid="inline-mapper-empty">
+        All projects are mapped — this item will clear on the next refresh.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 grid gap-2" data-testid="inline-tooling-mapper">
+      {rows.map((row) => (
+        <InlineMapRow key={`${row.vendorKey}:${row.projectKey}`} row={row} targets={targets} onMapped={onMapped} />
+      ))}
+    </div>
+  );
+}
+
+function InlineMapRow({
+  row,
+  targets,
+  onMapped,
+}: {
+  row: InlineUnmappedRow;
+  targets: InlineTargets;
+  onMapped: () => void;
+}) {
+  const { toast } = useToast();
+  const [bucketType, setBucketType] = React.useState<BucketType>("engagement");
+  const [bucketRef, setBucketRef] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const needsRef = bucketNeedsRef(bucketType);
+  const canSubmit = (!needsRef || !!bucketRef) && !busy;
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${TOOLING_API}/map`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorKey: row.vendorKey,
+          projectKey: row.projectKey,
+          bucketType,
+          bucketRef: needsRef ? bucketRef : null,
+        }),
+      });
+      if (!r.ok) throw new Error(`http_${r.status}`);
+      toast({ title: "Project mapped", description: row.projectLabel });
+      onMapped();
+    } catch (e) {
+      toast({ title: "Mapping failed", variant: "destructive", description: String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refOptions =
+    bucketType === "engagement"
+      ? targets.engagements.map((e) => ({ id: e.id, label: e.name }))
+      : bucketType === "opportunity"
+        ? targets.opportunities.map((o) => ({ id: o.id, label: `${o.name} · ${o.accountName}` }))
+        : bucketType === "account"
+          ? (targets.accounts ?? []).map((a) => ({ id: a.id, label: a.name }))
+          : [];
+
+  return (
+    <div
+      className="rounded border border-border-soft/60 p-2"
+      data-testid={`inline-map-row-${row.vendorKey}-${row.projectKey}`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs text-text">{row.projectLabel}</span>
+        <span className="font-mono text-[10px] uppercase text-text-faint">{row.vendorKey}</span>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <select
+          className="bg-bg-deep border border-border-soft rounded px-1.5 py-1 text-[11px]"
+          value={bucketType}
+          onChange={(e) => {
+            setBucketType(e.target.value as BucketType);
+            setBucketRef(null);
+          }}
+          data-testid={`inline-map-bucket-${row.vendorKey}-${row.projectKey}`}
+        >
+          {INLINE_BUCKETS.map((b) => (
+            <option key={b.type} value={b.type}>
+              {b.label}
+            </option>
+          ))}
+        </select>
+        {needsRef && (
+          <select
+            className="bg-bg-deep border border-border-soft rounded px-1.5 py-1 text-[11px] max-w-[220px]"
+            value={bucketRef ?? ""}
+            onChange={(e) => setBucketRef(e.target.value || null)}
+            data-testid={`inline-map-target-${row.vendorKey}-${row.projectKey}`}
+          >
+            <option value="">Pick target…</option>
+            {refOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )}
+        <PillButton
+          onClick={submit}
+          disabled={!canSubmit}
+          data-testid={`inline-map-submit-${row.vendorKey}-${row.projectKey}`}
+        >
+          {busy ? "Mapping…" : "Map"}
+        </PillButton>
       </div>
     </div>
   );
@@ -285,7 +465,12 @@ function AutopilotCard() {
 /* ── page ────────────────────────────────────────────────── */
 
 export default function FinanceApprovals() {
-  const { data, isLoading } = useAtelierGetFinanceApprovalsInbox();
+  const qc = useQueryClient();
+  const { data, isLoading, refetch } = useAtelierGetFinanceApprovalsInbox();
+  const onToolingMapped = React.useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ["finance", "tooling"] });
+    void refetch();
+  }, [qc, refetch]);
   const inbox = data?.data;
   const items = inbox?.items ?? [];
 
@@ -347,6 +532,9 @@ export default function FinanceApprovals() {
                     <ApprovalRow key={it.id} item={it} />
                   ))}
                 </div>
+                {group.kind === "vendor_project_unmapped" && (
+                  <InlineToolingMapper onMapped={onToolingMapped} />
+                )}
               </Card>
             );
           })}

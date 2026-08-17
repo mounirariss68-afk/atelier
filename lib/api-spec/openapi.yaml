@@ -8365,6 +8365,7 @@ components:
         - engagementCount
         - activeEngagementCount
         - openOpportunityCount
+        - toolingSpendUsd
       properties:
         contractValueUsd: { type: number }
         activeEngagementValueUsd: { type: number }
@@ -8391,6 +8392,11 @@ components:
         engagementCount: { type: integer }
         activeEngagementCount: { type: integer }
         openOpportunityCount: { type: integer }
+        toolingSpendUsd:
+          type: number
+          description: >-
+            Approved AI/developer tooling spend allocated to this account
+            (net USD, Task #1268). Read-only rollup.
 
     AtelierAccountHealthBand:
       type: string

@@ -374,7 +374,7 @@ async function main() {
     // so the console can seed the first rule (anthropic already set in (e)).
     const rulesGet = await call("GET", "/finance/tooling/vendor-rules", FP_ID);
     const ruleVendors = ((rulesGet.body?.data?.rules ?? []) as any[]).map((r) => r.vendorKey).sort();
-    check("(h) vendor-rules lists anthropic+perplexity+replit", rulesGet.status === 200 && JSON.stringify(ruleVendors) === JSON.stringify(["anthropic", "perplexity", "replit"]), ruleVendors);
+    check("(h) vendor-rules lists anthropic+openai+perplexity+replit", rulesGet.status === 200 && JSON.stringify(ruleVendors) === JSON.stringify(["anthropic", "openai", "perplexity", "replit"]), ruleVendors);
     const perpRow = ((rulesGet.body?.data?.rules ?? []) as any[]).find((r) => r.vendorKey === "perplexity");
     check("(h) unset vendor returns splits: [] (addable card)", !!perpRow && Array.isArray(perpRow.splits) && perpRow.splits.length === 0, perpRow);
 
@@ -529,6 +529,110 @@ async function main() {
     check("(k) at least one concurrent proposal fulfilled", anyFulfilledProposed, conc.map((r) => r.status));
     check("(k) EXACTLY ONE complete proposed set (2 rows, no duplicates)", kSplits.length === 2, { n: kSplits.length });
     check("(k) concurrent proposed set net ties to total 105 (no double-count)", cents(kNet) === cents(105.0), kNet);
+
+    // ============================================================
+    // (l) Task #1268 — OpenAI vendor, account/ip_development buckets,
+    // 409 body with project names, mappings list/delete round-trip,
+    // and the unmapped-labels helper that feeds the submitter notification.
+    // ============================================================
+    // (l1) OpenAI detection — both "OpenAI" and "ChatGPT" supplier strings.
+    check("(l1) detectVendorKey('OpenAI, LLC') = openai", mining.detectVendorKey("OpenAI, LLC") === "openai");
+    check("(l1) detectVendorKey('ChatGPT Team subscription') = openai", mining.detectVendorKey("ChatGPT Team subscription") === "openai");
+
+    // (l2) account + ip_development buckets: map, propose, tie to cent, approve.
+    const invL = await seedInvoice("l", "OpenAI, LLC", 105.0);
+    const badRef = await call("POST", "/finance/tooling/map", FP_ID, {
+      vendorKey: "openai", projectKey: mining.projectKeyFromLabel("Client Copilot"),
+      bucketType: "account", bucketRef: "acc_bogus_nope",
+    });
+    check("(l2) account bucket with bogus ref → 400", badRef.status === 400, badRef);
+    const mapAcc = await call("POST", "/finance/tooling/map", FP_ID, {
+      vendorKey: "openai", projectKey: mining.projectKeyFromLabel("Client Copilot"),
+      bucketType: "account", bucketRef: ACC_ID,
+    });
+    const mapIp = await call("POST", "/finance/tooling/map", FP_ID, {
+      vendorKey: "openai", projectKey: mining.projectKeyFromLabel("Atlas IP Engine"),
+      bucketType: "ip_development", bucketRef: null,
+    });
+    check("(l2) account + ip_development maps accepted", mapAcc.status === 200 && mapIp.status === 200, { a: mapAcc.status, b: mapIp.status });
+    const plL = payload([{ label: "Client Copilot", amount: 60 }, { label: "Atlas IP Engine", amount: 40 }], { subtotal: 100, vat: 5, credits: 0 });
+    const resL = await storeAndPropose(invL, "OpenAI, LLC", plL);
+    const lSplits = await db.select().from(atelierVendorCostSplits).where(and(eq(atelierVendorCostSplits.invoiceId, invL), eq(atelierVendorCostSplits.status, "proposed")));
+    const lNet = lSplits.reduce((s: number, r: any) => s + Number(r.netAmount), 0);
+    const lTypes = lSplits.map((r: any) => r.bucketType).sort();
+    check("(l2) openai invoice proposes account+ip_development splits", resL.proposed === true && JSON.stringify(lTypes) === JSON.stringify(["account", "ip_development"]), { resL, lTypes });
+    check("(l2) account/ip splits net tie to total 105 to the cent", cents(lNet) === cents(105.0), lNet);
+    const approveL = await call("POST", `/finance/tooling/invoices/${invL}/approve`, FP_ID);
+    check("(l2) approve account/ip splits 200", approveL.status === 200, approveL.body);
+    // Account 360 rollup source: approved account-bucket splits for ACC_ID.
+    const accApproved = await db.select().from(atelierVendorCostSplits).where(and(
+      eq(atelierVendorCostSplits.bucketType, "account"),
+      eq(atelierVendorCostSplits.bucketRef, ACC_ID),
+      eq(atelierVendorCostSplits.status, "approved"),
+    ));
+    const accUsd = accApproved.reduce((s: number, r: any) => s + Number(r.usdAmount), 0);
+    check("(l2) approved account-bucket spend > 0 for the account (360 rollup source)", accApproved.length === 1 && accUsd > 0, { n: accApproved.length, accUsd });
+
+    // (l3) 409 body carries the unmapped project names + human message.
+    const invM = await seedInvoice("m", "OpenAI, LLC", 105.0);
+    const plM = payload([{ label: "Orphan Project X", amount: 100 }], { subtotal: 100, vat: 5, credits: 0 });
+    await storeAndPropose(invM, "OpenAI, LLC", plM); // unmapped → no splits
+    const forgedM = await call("POST", `/finance/tooling/invoices/${invM}/approve`, FP_ID);
+    check("(l3) approve unmapped → 409 with unmappedProjects + message",
+      forgedM.status === 409
+        && Array.isArray(forgedM.body?.unmappedProjects)
+        && forgedM.body.unmappedProjects.includes("Orphan Project X")
+        && String(forgedM.body?.message ?? "").includes("need"),
+      forgedM.body);
+
+    // (l3b) unmapped-labels helper (feeds the submitter notification).
+    const labels = await mining.unmappedProjectLabels(ORG, "openai", plM);
+    check("(l3b) unmappedProjectLabels lists the orphan project", JSON.stringify(labels) === JSON.stringify(["Orphan Project X"]), labels);
+
+    // (l4) mappings GET/DELETE round-trip: delete → project back in unmapped
+    // and the affected (non-approved) invoice's splits withdrawn.
+    const invN = await seedInvoice("n", "OpenAI, LLC", 105.0);
+    await call("POST", "/finance/tooling/map", FP_ID, {
+      vendorKey: "openai", projectKey: mining.projectKeyFromLabel("Orphan Project X"),
+      bucketType: "internal", bucketRef: null,
+    });
+    const plN = payload([{ label: "Orphan Project X", amount: 100 }], { subtotal: 100, vat: 5, credits: 0 });
+    const resN = await storeAndPropose(invN, "OpenAI, LLC", plN);
+    check("(l4) mapped project proposes splits on fresh invoice", resN.proposed === true, resN);
+    const mapsGet = await call("GET", "/finance/tooling/mappings", FP_ID);
+    const mapRows = (mapsGet.body?.data?.rows ?? []) as any[];
+    const orphanRow = mapRows.find((r) => r.vendorKey === "openai" && r.projectLabel === "Orphan Project X");
+    check("(l4) GET /mappings lists the saved mapping with labels", mapsGet.status === 200 && !!orphanRow && !!orphanRow.bucketLabel, { status: mapsGet.status, orphanRow });
+    const del = await call("DELETE", `/finance/tooling/mappings/${orphanRow?.id}`, FP_ID);
+    check("(l4) DELETE mapping 200", del.status === 200, del.body);
+    const nSplitsAfter = await db.select().from(atelierVendorCostSplits).where(and(eq(atelierVendorCostSplits.invoiceId, invN), eq(atelierVendorCostSplits.status, "proposed")));
+    check("(l4) delete withdraws the non-approved invoice's proposed splits", nSplitsAfter.length === 0, nSplitsAfter.length);
+    const unmappedGet = await call("GET", "/finance/tooling/unmapped", FP_ID);
+    const unmappedRows = (unmappedGet.body?.data?.rows ?? []) as any[];
+    check("(l4) project back in the unmapped queue after delete", unmappedRows.some((r) => r.vendorKey === "openai" && r.projectLabel === "Orphan Project X"), unmappedRows.map((r) => r.projectLabel));
+    // Approved invoice (invL) must be untouched by mapping deletes.
+    const lStill = await db.select().from(atelierVendorCostSplits).where(and(eq(atelierVendorCostSplits.invoiceId, invL), eq(atelierVendorCostSplits.status, "approved")));
+    check("(l4) approved splits untouched by mapping delete", lStill.length === 2, lStill.length);
+
+    // (l5) Unmapped notification routing: the mapping console is
+    // finance-leadership gated, so a non-finance submitter must NOT get a
+    // link they cannot open — finance leadership gets the ask instead.
+    const notifTable = (D as any).atelierSelfNotifications;
+    const plO = payload([{ label: "Orphan Project X", amount: 100 }], { subtotal: 100, vat: 5, credits: 0 });
+    const consultRecipients = await mining.notifyUnmappedProjects({
+      orgId: ORG, invoiceId: "pfi_probe_l5a", submittedByUserId: CONSULT_ID,
+      vendorKey: "openai", payload: plO,
+    });
+    check("(l5) consultant submitter is NOT notified (would 403)", !consultRecipients.includes(CONSULT_ID), consultRecipients);
+    check("(l5) finance leadership notified instead", consultRecipients.includes(FP_ID), consultRecipients);
+    const fpRecipients = await mining.notifyUnmappedProjects({
+      orgId: ORG, invoiceId: "pfi_probe_l5b", submittedByUserId: FP_ID,
+      vendorKey: "openai", payload: plO,
+    });
+    check("(l5) finance submitter is notified directly (and only them)", JSON.stringify(fpRecipients) === JSON.stringify([FP_ID]), fpRecipients);
+    const notifRows = await db.select().from(notifTable).where(and(eq(notifTable.kind, "tooling_project_unmapped"), eq(notifTable.userId, FP_ID)));
+    check("(l5) notification rows persisted with actionable href", notifRows.length >= 2 && notifRows.every((r: any) => String(r.href).startsWith("/finance/tooling?focus=")), notifRows.map((r: any) => r.href));
+    await db.delete(notifTable).where(eq(notifTable.kind, "tooling_project_unmapped"));
   } finally {
     // Scratch DB is per-run/isolated; still clean our rows for reuse.
     try {

@@ -92,19 +92,28 @@ async function audit(args: {
   });
 }
 
-const BUCKET_TYPES: VendorCostBucketType[] = ["engagement", "opportunity", "internal", "overhead"];
+const BUCKET_TYPES: VendorCostBucketType[] = ["engagement", "opportunity", "account", "internal", "overhead", "ip_development"];
+const BUCKET_ENUM = ["engagement", "opportunity", "account", "internal", "overhead", "ip_development"] as const;
 
-/** Validate a bucketRef against org-scoped engagement/opportunity ids. */
+/** Validate a bucketRef against org-scoped engagement/opportunity/account ids. */
 async function validateBucketRef(
   orgId: string,
   bucketType: VendorCostBucketType,
   bucketRef: string | null,
 ): Promise<{ ok: true; ref: string | null } | { ok: false; error: string }> {
-  if (bucketType === "internal" || bucketType === "overhead") {
+  if (bucketType === "internal" || bucketType === "overhead" || bucketType === "ip_development") {
     // bucketRef ignored for these types.
     return { ok: true, ref: null };
   }
   if (!bucketRef) return { ok: false, error: "bucketRef-required" };
+  if (bucketType === "account") {
+    const [a] = await db
+      .select({ id: atelierAccounts.id })
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, bucketRef), eq(atelierAccounts.orgId, orgId), isNull(atelierAccounts.deletedAt)));
+    if (!a) return { ok: false, error: "account-not-found" };
+    return { ok: true, ref: a.id };
+  }
   if (bucketType === "engagement") {
     const [e] = await db
       .select({ id: atelierEngagements.id })
@@ -173,18 +182,20 @@ router.get("/finance/tooling/overview", async (req, res) => {
     : [];
   const vendorByInv = new Map(invRows.map((r) => [r.id, toolingVendorKey(r.partnerFirmName) ?? "other"]));
 
-  const totals = { internalUsd: 0, bdUsd: 0, deliveryUsd: 0, overheadUsd: 0, unallocatedUsd: 0 };
+  const totals = { internalUsd: 0, bdUsd: 0, deliveryUsd: 0, overheadUsd: 0, clientUsd: 0, ipDevUsd: 0, unallocatedUsd: 0 };
   const bucketOf = (t: VendorCostBucketType): keyof typeof totals => {
     switch (t) {
       case "internal": return "internalUsd";
       case "opportunity": return "bdUsd";
       case "engagement": return "deliveryUsd";
       case "overhead": return "overheadUsd";
+      case "account": return "clientUsd";
+      case "ip_development": return "ipDevUsd";
       default: return "unallocatedUsd";
     }
   };
 
-  const byVendorMap = new Map<string, { vendorKey: string; vendorLabel: string; totalUsd: number; bucketTotals: { internalUsd: number; bdUsd: number; deliveryUsd: number; overheadUsd: number } }>();
+  const byVendorMap = new Map<string, { vendorKey: string; vendorLabel: string; totalUsd: number; bucketTotals: { internalUsd: number; bdUsd: number; deliveryUsd: number; overheadUsd: number; clientUsd: number; ipDevUsd: number } }>();
   const byProjectMap = new Map<string, { vendorKey: string; projectKey: string; projectLabel: string; bucketType: VendorCostBucketType; bucketRef: string | null; bucketLabel: string; totalUsd: number }>();
 
   for (const s of approved) {
@@ -194,7 +205,7 @@ router.get("/finance/tooling/overview", async (req, res) => {
     const vk = vendorByInv.get(s.invoiceId) ?? "other";
     let v = byVendorMap.get(vk);
     if (!v) {
-      v = { vendorKey: vk, vendorLabel: vendorLabel(vk), totalUsd: 0, bucketTotals: { internalUsd: 0, bdUsd: 0, deliveryUsd: 0, overheadUsd: 0 } };
+      v = { vendorKey: vk, vendorLabel: vendorLabel(vk), totalUsd: 0, bucketTotals: { internalUsd: 0, bdUsd: 0, deliveryUsd: 0, overheadUsd: 0, clientUsd: 0, ipDevUsd: 0 } };
       byVendorMap.set(vk, v);
     }
     v.totalUsd += usd;
@@ -220,6 +231,8 @@ router.get("/finance/tooling/overview", async (req, res) => {
     v.bucketTotals.bdUsd = round2(v.bucketTotals.bdUsd);
     v.bucketTotals.deliveryUsd = round2(v.bucketTotals.deliveryUsd);
     v.bucketTotals.overheadUsd = round2(v.bucketTotals.overheadUsd);
+    v.bucketTotals.clientUsd = round2(v.bucketTotals.clientUsd);
+    v.bucketTotals.ipDevUsd = round2(v.bucketTotals.ipDevUsd);
   }
   for (const p of byProjectMap.values()) p.totalUsd = round2(p.totalUsd);
   for (const k of Object.keys(totals) as (keyof typeof totals)[]) totals[k] = round2(totals[k]);
@@ -349,7 +362,7 @@ router.get("/finance/tooling/unmapped", async (req, res) => {
 const MapSchema = z.object({
   vendorKey: z.string().min(1).max(40),
   projectKey: z.string().min(1).max(200),
-  bucketType: z.enum(["engagement", "opportunity", "internal", "overhead"]),
+  bucketType: z.enum(BUCKET_ENUM),
   bucketRef: z.string().max(200).nullable().optional(),
 });
 // @cli-skip: UI-workflow finance-leadership write; mapping requires the console's queue context
@@ -480,7 +493,7 @@ router.get("/finance/tooling/vendor-rules", async (req, res) => {
 const VendorRulesSchema = z.object({
   vendorKey: z.string().min(1).max(40),
   splits: z.array(z.object({
-    bucketType: z.enum(["engagement", "opportunity", "internal", "overhead"]),
+    bucketType: z.enum(BUCKET_ENUM),
     bucketRef: z.string().max(200).nullable().optional(),
     pct: z.number().min(0).max(100),
   })).min(1).max(50),
@@ -582,11 +595,20 @@ router.get("/finance/tooling/targets", async (req, res) => {
     : [];
   const accName = new Map(accs.map((a) => [a.id, a.name]));
 
+  // Task #1268 — account (client) targets for the new "account" bucket.
+  const accountRows = await db.select({
+    id: atelierAccounts.id, name: atelierAccounts.name,
+  }).from(atelierAccounts).where(and(
+    eq(atelierAccounts.orgId, me.orgId),
+    isNull(atelierAccounts.deletedAt),
+  )).orderBy(desc(atelierAccounts.createdAt)).limit(500);
+
   return res.json({
     ok: true,
     data: {
       engagements: engagements.map((e) => ({ id: e.id, name: e.name })),
       opportunities: oppRows.map((o) => ({ id: o.id, name: o.name, accountName: accName.get(o.accountId) ?? "" })),
+      accounts: accountRows.map((a) => ({ id: a.id, name: a.name })),
     },
   });
 });
@@ -678,9 +700,26 @@ router.post("/finance/tooling/invoices/:id/approve", async (req, res) => {
   ));
 
   // 409 if any item is unmapped (no proposed splits despite a reconciled
-  // extraction that produced items).
+  // extraction that produced items). Include the project names so the
+  // console can say exactly what still needs a home (Task #1268).
   if (ext?.status === "ok" && ext.items.length > 0 && proposed.length === 0) {
-    return res.status(409).json({ error: "unmapped", message: "This invoice has unmapped project(s); map them before approving." });
+    const maps = await db.select().from(atelierVendorProjectMap).where(and(
+      eq(atelierVendorProjectMap.orgId, me.orgId),
+      isNull(atelierVendorProjectMap.deletedAt),
+    ));
+    const vk = toolingVendorKey(inv.partnerFirmName) ?? "";
+    const mapped = new Set(maps.filter((m) => m.vendorKey === vk).map((m) => m.projectKey));
+    const unmappedLabels = [...new Set(ext.items
+      .filter((it) => it.projectKey === VENDOR_DEFAULT_KEY ? false : !mapped.has(it.projectKey))
+      .map((it) => it.projectLabel))];
+    const n = unmappedLabels.length;
+    return res.status(409).json({
+      error: "unmapped",
+      unmappedProjects: unmappedLabels,
+      message: n > 0
+        ? `${n} project${n === 1 ? " needs" : "s need"} a home before approval: ${unmappedLabels.join(", ")}.`
+        : "This invoice has unmapped project(s); map them before approving.",
+    });
   }
   if (proposed.length === 0) {
     return res.status(409).json({ error: "no-proposed-splits", message: "There are no proposed splits to approve on this invoice." });
@@ -729,7 +768,7 @@ router.post("/finance/tooling/invoices/:id/extract", async (req, res) => {
   ));
   if (!inv) return res.status(404).json({ error: "not-found" });
   if (!toolingVendorKey(inv.partnerFirmName)) {
-    return res.status(400).json({ error: "not-a-tooling-vendor", message: "This supplier is not a tooling vendor (Replit/Anthropic/Perplexity)." });
+    return res.status(400).json({ error: "not-a-tooling-vendor", message: "This supplier is not a tooling vendor (Replit/Anthropic/Perplexity/OpenAI)." });
   }
   // Immutable once approved: re-extraction would rewrite line items / churn
   // proposals while approved spend stays counted, risking a double-count.
@@ -747,6 +786,103 @@ router.post("/finance/tooling/invoices/:id/extract", async (req, res) => {
     summary: `${me.name} re-ran tooling extraction on invoice ${inv.id} (status ${out.status}).`,
   });
   return res.json({ ok: true, data: { status: out.status } });
+});
+
+// =====================================================================
+// GET /finance/tooling/mappings — Task #1268
+// =====================================================================
+// All saved project→bucket associations, newest first, with display labels
+// and who saved them. Powers the "Project mappings" panel.
+// @cli-skip: read parity via finance.tooling_spend (#1251); the mappings panel is console-only
+router.get("/finance/tooling/mappings", async (req, res) => {
+  const me = deny(req, res); if (!me) return;
+  const maps = await db.select().from(atelierVendorProjectMap).where(and(
+    eq(atelierVendorProjectMap.orgId, me.orgId),
+    isNull(atelierVendorProjectMap.deletedAt),
+  )).orderBy(desc(atelierVendorProjectMap.updatedAt)).limit(1000);
+
+  const userIds = [...new Set(maps.map((m) => m.createdByUserId).filter((x): x is string => !!x))];
+  const users = userIds.length
+    ? await db.select({ id: atelierUsers.id, name: atelierUsers.name })
+        .from(atelierUsers).where(inArray(atelierUsers.id, userIds))
+    : [];
+  const userName = new Map(users.map((u) => [u.id, u.name]));
+
+  const rows = [];
+  for (const m of maps) {
+    rows.push({
+      id: m.id,
+      vendorKey: m.vendorKey,
+      vendorLabel: vendorLabel(m.vendorKey),
+      projectKey: m.projectKey,
+      projectLabel: m.projectLabel,
+      bucketType: m.bucketType,
+      bucketRef: m.bucketRef,
+      bucketLabel: await bucketLabelFor(me.orgId, m.bucketType, m.bucketRef),
+      createdByName: (m.createdByUserId && userName.get(m.createdByUserId)) || null,
+      updatedAt: m.updatedAt ? m.updatedAt.toISOString() : null,
+    });
+  }
+  return res.json({ ok: true, data: { rows } });
+});
+
+// =====================================================================
+// DELETE /finance/tooling/mappings/:id — Task #1268
+// =====================================================================
+// Soft-delete a saved mapping: the project name returns to the unmapped
+// queue, and any still-PROPOSED splits that relied on it are cleared so
+// affected invoices show "unmapped" again. Approved splits are immutable —
+// already-approved spend never moves.
+// @cli-skip: UI-workflow finance-leadership write; unmapping is driven from the mappings panel
+router.delete("/finance/tooling/mappings/:id", async (req, res) => {
+  const me = deny(req, res); if (!me) return;
+  const [m] = await db.select().from(atelierVendorProjectMap).where(and(
+    eq(atelierVendorProjectMap.id, req.params.id),
+    eq(atelierVendorProjectMap.orgId, me.orgId),
+    isNull(atelierVendorProjectMap.deletedAt),
+  ));
+  if (!m) return res.status(404).json({ error: "not-found" });
+
+  const now = new Date();
+  await db.update(atelierVendorProjectMap).set({ deletedAt: now, updatedAt: now })
+    .where(eq(atelierVendorProjectMap.id, m.id));
+
+  // Re-propose (which now yields "unmapped" → zero proposed rows) for
+  // reconciled invoices touching this project. Approved invoices are skipped —
+  // immutability guard, same as the map/rules routes.
+  const reproposedInvoiceIds: string[] = [];
+  const toolingInvoices = await db.select().from(atelierPartnerFirmInvoices).where(and(
+    eq(atelierPartnerFirmInvoices.orgId, me.orgId),
+    isNull(atelierPartnerFirmInvoices.deletedAt),
+  )).limit(1000);
+  for (const inv of toolingInvoices) {
+    const vk = toolingVendorKey(inv.partnerFirmName);
+    if (vk !== m.vendorKey) continue;
+    const ext = (inv.toolingExtraction ?? null) as VendorInvoiceExtraction | null;
+    if (!ext || ext.status !== "ok") continue;
+    if (!ext.items.some((it) => it.projectKey === m.projectKey)) continue;
+    if (await hasApprovedSplits(inv.id)) continue;
+    await proposeSplitsForInvoice({
+      inv: {
+        id: inv.id, orgId: inv.orgId, partnerFirmName: inv.partnerFirmName,
+        costAmount: Number(inv.costAmount || 0), costCurrency: inv.costCurrency,
+        invoiceDate: inv.invoiceDate, fileName: inv.fileName, reference: inv.reference,
+        blobRef: inv.blobRef,
+      },
+      vendorKey: m.vendorKey,
+      payload: ext,
+    });
+    reproposedInvoiceIds.push(inv.id);
+  }
+
+  await audit({
+    entityType: "vendor_project_map", entityId: m.id, actor: me,
+    action: "tooling.project_unmapped",
+    payload: { vendorKey: m.vendorKey, projectKey: m.projectKey, projectLabel: m.projectLabel, bucketType: m.bucketType, bucketRef: m.bucketRef },
+    summary: `${me.name} removed the ${vendorLabel(m.vendorKey)} mapping for "${m.projectLabel}" — the project returns to the unmapped queue.`,
+  });
+
+  return res.json({ ok: true, data: { removedId: m.id, reproposedInvoiceIds } });
 });
 
 export default router;

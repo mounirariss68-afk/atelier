@@ -18945,9 +18945,11 @@ export const useAtelierUpdateAccount = <
 };
 
 /**
- * Task #1191. Accepts image/jpeg, image/png, image/webp, image/gif, or
-image/svg+xml up to 2 MB. Replaces any previously uploaded logo.
-Gated to the same partner/senior-manager personas as account PATCH.
+ * Task #1191. Accepts image/jpeg, image/png, image/webp, or image/gif
+up to 2 MB (SVG is rejected to prevent stored XSS). Magic bytes are
+validated server-side; the client-supplied MIME type is ignored.
+Replaces any previously uploaded logo. Gated to the same
+partner/senior-manager personas as account PATCH.
 
  * @summary Upload / replace the client logo for an account (partner only)
  */

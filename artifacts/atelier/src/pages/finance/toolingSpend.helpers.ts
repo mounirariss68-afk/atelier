@@ -14,10 +14,18 @@
  *  - bucketNeedsRef: engagement/opportunity buckets require a bucketRef.
  */
 
-export const TOOLING_VENDORS = ["replit", "anthropic", "perplexity"] as const;
+export const TOOLING_VENDORS = ["replit", "anthropic", "perplexity", "openai"] as const;
 export type VendorKey = (typeof TOOLING_VENDORS)[number];
 
-export type BucketType = "engagement" | "opportunity" | "internal" | "overhead";
+// Task #1268 adds "account" (client — needs an account ref) and
+// "ip_development" (ref-less) bucket types.
+export type BucketType =
+  | "engagement"
+  | "opportunity"
+  | "account"
+  | "internal"
+  | "overhead"
+  | "ip_development";
 
 /** Detect the vendorKey from a supplier name (case-insensitive substring).
  *  Returns null when the supplier is not a recognised tooling vendor. */
@@ -27,13 +35,14 @@ export function vendorKeyFromSupplier(name: string | null | undefined): VendorKe
   for (const v of TOOLING_VENDORS) {
     if (hay.includes(v)) return v;
   }
+  if (hay.includes("chatgpt")) return "openai"; // mirrors server detectVendorKey
   return null;
 }
 
-/** True when a bucket requires an org-scoped bucketRef (engagement id /
- *  opportunity id). Internal & overhead buckets take no ref. */
+/** True when a bucket requires an org-scoped bucketRef (engagement /
+ *  opportunity / account id). Internal, overhead & IP development take no ref. */
 export function bucketNeedsRef(bucketType: BucketType): boolean {
-  return bucketType === "engagement" || bucketType === "opportunity";
+  return bucketType === "engagement" || bucketType === "opportunity" || bucketType === "account";
 }
 
 /** Sum of a set of pct values (NaN-safe). */
