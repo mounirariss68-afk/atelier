@@ -9,24 +9,20 @@ import {
   type NavGroup,
 } from './registry';
 
+import {
+  PreviewThemeProvider,
+  usePreviewTheme,
+  type ThemeMode,
+} from './theme';
+
 const BASE = import.meta.env.BASE_URL;
 
-function readInitialTheme(): 'dark' | 'light' {
-  const fromHash = new URLSearchParams(window.location.hash.slice(1)).get('theme');
-  if (fromHash === 'dark' || fromHash === 'light') return fromHash;
-  const stored = window.localStorage.getItem('cognirise-atelier-theme');
-  if (stored === 'dark' || stored === 'light') return stored;
-  return 'dark'; // Atelier's default is the deep-navy theme.
-}
-
-function useTheme(): ['dark' | 'light', () => void] {
-  const [theme, setTheme] = useState<'dark' | 'light'>(readInitialTheme);
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    window.localStorage.setItem('cognirise-atelier-theme', theme);
-  }, [theme]);
-  return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
-}
+const MODE_ORDER: ThemeMode[] = ['light', 'dark', 'system'];
+const MODE_LABEL: Record<ThemeMode, string> = {
+  light: 'Light',
+  dark: 'Dark',
+  system: 'System',
+};
 
 function readHashId(): string {
   const id = new URLSearchParams(window.location.hash.slice(1)).get('page');
@@ -112,7 +108,17 @@ function NavigationItems({
 }
 
 export function DesignSystemBrowser() {
-  const [theme, toggleTheme] = useTheme();
+  return (
+    <PreviewThemeProvider>
+      <DesignSystemBrowserInner />
+    </PreviewThemeProvider>
+  );
+}
+
+function DesignSystemBrowserInner() {
+  const { mode, resolved: theme, setMode } = usePreviewTheme();
+  const nextMode =
+    MODE_ORDER[(MODE_ORDER.indexOf(mode) + 1) % MODE_ORDER.length];
   const [selectedId, select] = useSelectedId();
   const [query, setQuery] = useState('');
   const mobileNav = useRef<HTMLDetailsElement>(null);
@@ -180,11 +186,11 @@ export function DesignSystemBrowser() {
           </div>
           <button
             type="button"
-            onClick={toggleTheme}
+            onClick={() => setMode(nextMode)}
             className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            title="Toggle light/dark theme"
+            title={`Theme mode: ${MODE_LABEL[mode]} — switch to ${MODE_LABEL[nextMode]}`}
           >
-            {theme === 'dark' ? 'Light' : 'Dark'}
+            {MODE_LABEL[mode]}
           </button>
         </div>
         <div className="p-4 pb-2">

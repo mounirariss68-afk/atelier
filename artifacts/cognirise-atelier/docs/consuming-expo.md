@@ -74,6 +74,18 @@ Usage rules (mirroring the web guidance):
   `Inter_600SemiBold`), not via the `fontWeight` style property, to avoid
   faux-bolding on Android.
 
+## App shell & chat
+
+The app-shell and chat conventions (chat area pinned to screen height with an
+internally scrolling transcript and bottom-fixed composer; composer anatomy —
+36px circular "+" attach button, 22px-radius input pill, 32px circular accent
+send button; lens selection via a drop-down in the title bar; and a
+light/dark/system theme mode selector in the title bar) are defined in
+`docs/consuming-web.md` under **App shell & chat**. Mirror the same anatomy,
+proportions, and behaviors natively (e.g. `KeyboardAvoidingView` + a
+`FlatList` transcript with the composer outside it, a native menu for the
+lens picker, and `Appearance`/`useColorScheme` for the System theme mode).
+
 > For a complete native component layer (Button, Card, Badge, etc.), native
 > theme hook, and font hook wired for Expo — see Task #1273 "Add a custom
 > Cognirise component library on top of the design-system tokens". That task

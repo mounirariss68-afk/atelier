@@ -210,6 +210,9 @@ const AtelierPatternsDemo = lazyPage(() =>
     ({ AtelierPatternsDemo }) => AtelierPatternsDemo,
   ),
 );
+const AppShellDemo = lazyPage(() =>
+  import('./demos/app-shell').then(({ AppShellDemo }) => AppShellDemo),
+);
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -228,6 +231,13 @@ export const NAV_GROUPS: NavGroup[] = [
         description:
           'Glassmorphism surfaces, the navy dark-island hero, and editorial primitives.',
         Page: AtelierPatternsDemo,
+      },
+      {
+        id: 'app-shell',
+        name: 'App shell & chat',
+        description:
+          'Title bar with lens drop-down and theme mode selector, plus the pinned chat column and composer.',
+        Page: AppShellDemo,
       },
     ],
   },

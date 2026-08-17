@@ -33,6 +33,15 @@ surface, below).
 | `Logo.tsx` | brand assets in `docs/references/logos/` + Brand preview page | consumers wire their own theme switch |
 | body backdrop layers | `.cog-backdrop`, `.cog-backdrop-art` | see `README.md` layering notes |
 
+## App shell & chat conventions (documented, not shipped as components)
+
+Title-bar composition (56px glass card: wordmark, lens drop-down,
+light/dark/system mode selector, user avatar), the pinned full-height chat
+column, and the chat composer anatomy ("+" button, input pill, send button)
+are specified in `docs/consuming-web.md` under **App shell & chat**, with a
+live rendering on the preview browser's "App shell & chat" page. Consumers
+rebuild these compositions from the primitives; the spec is the contract.
+
 ## Deliberately not ported (app-specific)
 
 `kpi-card.tsx`, `record-card.tsx`, `view-toggle.tsx`, `fieldControls.ts`
