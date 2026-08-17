@@ -54,6 +54,12 @@ const stubState = {
   // Task #1250 — per-section override of the parsed invoice fields
   // (incl. lineItems); null = the default Gulf Office Supplies payload.
   invoiceFields: null as Record<string, unknown> | null,
+  // Task #1267 — queue of forced replies for the invoice parser: each entry
+  // is served once (in order) INSTEAD of the normal payload. Lets probes
+  // simulate a max_tokens-truncated first reply.
+  invoiceForcedReplies: [] as Array<{ text: string; stopReason: string }>,
+  // Records whether the header-only retry override reached the model.
+  sawHeaderOnlyOverride: false,
 };
 
 async function main() {
@@ -67,18 +73,24 @@ async function main() {
       const systemText = Array.isArray(parsed.system)
         ? parsed.system.map((b: any) => b?.text ?? "").join("\n")
         : String(parsed.system ?? "");
-      const reply = (text: string) => {
+      const reply = (text: string, stopReason = "end_turn") => {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({
           id: `msg_${TAG}`, type: "message", role: "assistant",
           model: parsed.model ?? "claude-sonnet-4-5",
           content: [{ type: "text", text }],
-          stop_reason: "end_turn", stop_sequence: null,
+          stop_reason: stopReason, stop_sequence: null,
           usage: { input_tokens: 10, output_tokens: 10 },
         }));
       };
       if (systemText.includes("accounts-payable clerk")) {
         stubState.invoiceCalls++;
+        if (systemText.includes("Do NOT itemize")) stubState.sawHeaderOnlyOverride = true;
+        const forced = stubState.invoiceForcedReplies.shift();
+        if (forced) {
+          reply(forced.text, forced.stopReason);
+          return;
+        }
         reply(JSON.stringify({
           confidence: stubState.invoiceConfidence,
           fields: stubState.invoiceFields ?? {
@@ -520,6 +532,123 @@ async function main() {
       f1.confirmation?.summary,
     );
     stubState.invoiceFields = null;
+  }
+
+  // =============== 2c) Task #1267 — max_tokens truncation recovery ===============
+  {
+    const { parseSupplierInvoiceText } = await import("../../src/lib/atelier-finance-docs.js");
+
+    // Unit-level: a max_tokens-truncated reply degrades to a HEADER-ONLY
+    // parse (retry without itemization), never parse-non-json.
+    const truncRef = `TRUNC-${String(Date.now()).slice(-6)}`;
+    const truncatedJson = `{"confidence":0.95,"fields":{"supplierName":"Replit Inc","amount":250.48,"currency":"USD","reference":"${truncRef}","invoiceDate":"2026-08-01","periodLabel":null,"notes":null,"lineItems":[{"description":"Agent usage","qty":1,"unitAmount":9.9`;
+    stubState.invoiceForcedReplies = [
+      { text: truncatedJson, stopReason: "max_tokens" },
+    ];
+    stubState.sawHeaderOnlyOverride = false;
+    // The retry payload DELIBERATELY includes line items — the parser must
+    // force lineItems to null after a truncation recovery regardless.
+    stubState.invoiceFields = {
+      supplierName: "Replit Inc", amount: 250.48, currency: "USD",
+      reference: truncRef, invoiceDate: "2026-08-01",
+      periodLabel: null, notes: null,
+      lineItems: [{ description: "should be discarded", qty: 1, unitAmount: 1, amount: 1 }],
+    };
+    const trunc = await parseSupplierInvoiceText({ text: "x".repeat(200), contextLabel: "trunc probe" });
+    check(
+      "truncation: max_tokens reply degrades to header-only parse (not parse-non-json)",
+      trunc.ok === true && trunc.fields.supplierName === "Replit Inc" &&
+        trunc.fields.amount === 250.48 && trunc.fields.reference === truncRef &&
+        trunc.fields.lineItems === null && trunc.lineItemsTruncated === true,
+      trunc,
+    );
+    check("truncation: retry carried the header-only override", stubState.sawHeaderOnlyOverride === true);
+    check("truncation: forced-reply queue fully consumed (exactly one retry)", stubState.invoiceForcedReplies.length === 0);
+
+    // Double truncation (retry ALSO cut off) fails loud with parse-failed.
+    stubState.invoiceForcedReplies = [
+      { text: truncatedJson, stopReason: "max_tokens" },
+      { text: truncatedJson, stopReason: "max_tokens" },
+    ];
+    const twice = await parseSupplierInvoiceText({ text: "x".repeat(200), contextLabel: "trunc twice probe" });
+    check(
+      "truncation: cut off twice → parse-failed (named, not non-json)",
+      twice.ok === false && twice.errorCode === "parse-failed" && /cut off/i.test(twice.errorMessage),
+      twice,
+    );
+
+    // End-to-end: an ingest whose FIRST parse reply truncates still returns
+    // a confirmation with the header fields prefis + a truncation note —
+    // never the blank "couldn't read supplier name..." clarification.
+    stubState.invoiceForcedReplies = [{ text: truncatedJson, stopReason: "max_tokens" }];
+    const truncPdf = await makePdf([
+      "TAX INVOICE", "Replit Inc",
+      `Invoice No: ${truncRef}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      ...Array.from({ length: 60 }, (_, i) => `Item ${i + 1}: Agent usage project-${i + 1}  $3.90`),
+      "Amount Due: USD 250.48",
+    ]);
+    const truncAtt = await ingest(`replit-usage-${TAG}.pdf`, "application/pdf", truncPdf);
+    const t1: any = await ingestInv.run({ attachmentId: truncAtt }, mkCtx() as any);
+    check(
+      "truncation e2e: confirmation with header prefills, no blank clarification",
+      !!t1.confirmation && !t1.clarification &&
+        t1.confirmation?.pending?.input?.supplierName === "Replit Inc" &&
+        t1.confirmation?.pending?.input?.amount === 250.48 &&
+        t1.confirmation?.pending?.input?.reference === truncRef,
+      t1.clarification ?? t1.confirmation?.pending?.input,
+    );
+    check(
+      "truncation e2e: summary notes itemization was skipped (not 'none printed')",
+      /too long to read reliably/i.test(t1.confirmation?.summary ?? ""),
+      t1.confirmation?.summary,
+    );
+
+    // Long itemized invoice (many line rows) parses end-to-end when the
+    // reply FITS the new budget: all items survive into the confirmation.
+    const longRef = `LONG-${String(Date.now()).slice(-6)}`;
+    const manyItems = Array.from({ length: 40 }, (_, i) => ({
+      description: `Project row ${i + 1}`, qty: 1, unitAmount: 5, amount: 5,
+    }));
+    stubState.invoiceFields = {
+      supplierName: "Replit Inc", amount: 210, currency: "USD",
+      reference: longRef, invoiceDate: "2026-08-01",
+      periodLabel: "2026-07", notes: null, lineItems: manyItems,
+    };
+    const longPdf = await makePdf([
+      "TAX INVOICE", "Replit Inc", `Invoice No: ${longRef}`,
+      "Bill To: Cognirise Consulting FZ-LLC",
+      ...manyItems.map((it, i) => `Item ${i + 1}: ${it.description}  $5.00`),
+      "Amount Due: USD 210.00",
+    ]);
+    const longAtt = await ingest(`replit-long-${TAG}.pdf`, "application/pdf", longPdf);
+    const l1: any = await ingestInv.run({ attachmentId: longAtt }, mkCtx() as any);
+    check(
+      "long invoice: 40 line rows parse end-to-end into the confirmation",
+      !!l1.confirmation &&
+        (l1.confirmation?.pending?.input?.lineItems ?? []).length === 40 &&
+        /40 printed line item/.test(l1.confirmation?.summary ?? ""),
+      { n: (l1.confirmation?.pending?.input?.lineItems ?? []).length, summary: l1.confirmation?.summary },
+    );
+
+    // Parse-failure copy: an AI-reader failure names itself and offers a
+    // retry — distinct from the "no readable text" copy.
+    stubState.invoiceForcedReplies = [{ text: "sorry, I cannot help with that", stopReason: "end_turn" }];
+    const failPdf = await makePdf([
+      "TAX INVOICE", "Mystery Vendor LLC",
+      "Invoice No: unreadable", "Subtotal VAT Bill To Due Date",
+      "Amount Due: AED ????",
+    ]);
+    const failAtt = await ingest(`fail-${TAG}.pdf`, "application/pdf", failPdf);
+    const f2: any = await ingestInv.run({ attachmentId: failAtt }, mkCtx() as any);
+    check(
+      "parse failure: clarification says the AI reader failed (retry or type), not 'no readable text'",
+      !!f2.clarification && /AI reader failed/i.test(f2.clarification?.question ?? "") &&
+        /parse-non-json/.test(f2.clarification?.question ?? ""),
+      f2.clarification?.question,
+    );
+    stubState.invoiceFields = null;
+    stubState.invoiceForcedReplies = [];
   }
 
   // =============== 3) bank statement pipeline ===============

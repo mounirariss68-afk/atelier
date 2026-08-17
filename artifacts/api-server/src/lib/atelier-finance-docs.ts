@@ -185,70 +185,139 @@ export interface SupplierInvoiceFields {
 }
 
 export type SupplierInvoiceParseResult =
-  | { ok: true; confidence: number; fields: SupplierInvoiceFields }
+  | {
+      ok: true;
+      confidence: number;
+      fields: SupplierInvoiceFields;
+      /** Task #1267 — true when the itemized reply hit the token cap and we
+       *  recovered with a header-only retry; line items were dropped, not
+       *  the whole parse. Callers should tell the reviewer itemization was
+       *  skipped rather than pretend the invoice printed none. */
+      lineItemsTruncated?: boolean;
+    }
   | { ok: false; errorCode: "parse-non-json" | "parse-timeout" | "parse-failed"; errorMessage: string };
+
+/** One model round for the supplier-invoice parser. Task #1267: surfaces
+ *  stop_reason so the caller can detect max_tokens truncation. */
+async function supplierInvoiceModelCall(args: {
+  text: string;
+  contextLabel: string;
+  headerOnly: boolean;
+  /** Absolute epoch-ms deadline shared across the initial call AND any
+   *  truncation retry, so the two-call recovery never doubles the 90s
+   *  operation budget. */
+  deadlineAt: number;
+}): Promise<{ raw: string; stopReason: string | null }> {
+  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const ac = new AbortController();
+  const remainingMs = args.deadlineAt - Date.now();
+  if (remainingMs <= 0) {
+    const err = new Error("supplier-invoice parse deadline exhausted");
+    err.name = "AbortError";
+    throw err;
+  }
+  const timer = setTimeout(() => ac.abort(), remainingMs);
+  const headerOnlyNote = args.headerOnly
+    ? `\n\nIMPORTANT OVERRIDE: Do NOT itemize. Set "lineItems" to null regardless of what the document prints — return header fields only.`
+    : "";
+  const resp = await anthropic.messages
+    .create(
+      {
+        model: "claude-sonnet-4-5",
+        // Task #1267 — 1024 tokens silently truncated itemized invoices
+        // (stop_reason max_tokens → broken JSON → blank clarification).
+        max_tokens: 8192,
+        system: `${SUPPLIER_INVOICE_SYSTEM}${headerOnlyNote}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
+        messages: [
+          {
+            role: "user",
+            content: `${args.contextLabel}\n\nExtracted invoice text:\n<<<\n${args.text.slice(0, 60_000)}\n>>>`,
+          },
+        ],
+      },
+      { signal: ac.signal },
+    )
+    .finally(() => clearTimeout(timer));
+  const block = resp.content[0];
+  return {
+    raw: block && block.type === "text" ? block.text.trim() : "",
+    stopReason: (resp as { stop_reason?: string | null }).stop_reason ?? null,
+  };
+}
+
+function supplierInvoiceFieldsFromJson(json: string): { confidence: number; fields: SupplierInvoiceFields } {
+  const parsed = JSON.parse(json) as Record<string, unknown>;
+  const f = (parsed.fields ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const confidence =
+    typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : 0;
+  return {
+    confidence,
+    fields: {
+      supplierName: str(f.supplierName),
+      amount: num(f.amount),
+      currency: str(f.currency)?.toUpperCase().slice(0, 3) ?? null,
+      reference: str(f.reference),
+      invoiceDate: str(f.invoiceDate),
+      periodLabel: str(f.periodLabel),
+      notes: str(f.notes),
+      lineItems: normalizeParsedLineItems(f.lineItems),
+    },
+  };
+}
 
 export async function parseSupplierInvoiceText(args: {
   text: string;
   contextLabel: string;
 }): Promise<SupplierInvoiceParseResult> {
+  // Safe diagnostics only: never log document-derived content (invoice text,
+  // model replies, labels) — bounded metadata like codes and lengths only.
+  const logFail = (errorCode: string, detail: { stop_reason: string | null } & Record<string, unknown>) =>
+    console.error(`[supplier-invoice-parse] ${errorCode}`, {
+      textLength: args.text.length,
+      ...detail,
+    });
+  const deadlineAt = Date.now() + 90_000;
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 90_000);
-    const resp = await anthropic.messages
-      .create(
-        {
-          model: "claude-sonnet-4-5",
-          max_tokens: 1024,
-          system: `${SUPPLIER_INVOICE_SYSTEM}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
-          messages: [
-            {
-              role: "user",
-              content: `${args.contextLabel}\n\nExtracted invoice text:\n<<<\n${args.text.slice(0, 60_000)}\n>>>`,
-            },
-          ],
-        },
-        { signal: ac.signal },
-      )
-      .finally(() => clearTimeout(timer));
-    const block = resp.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "";
+    let { raw, stopReason } = await supplierInvoiceModelCall({ ...args, headerOnly: false, deadlineAt });
+    let lineItemsTruncated = false;
+    // Task #1267 — a max_tokens cut produces syntactically broken JSON.
+    // Never discard the whole parse: retry ONCE header-only so supplier /
+    // amount / currency / reference still prefill; itemization degrades
+    // gracefully with a note instead of a blank clarification.
+    if (stopReason === "max_tokens") {
+      logFail("truncated-retrying-header-only", { stop_reason: stopReason, replyLength: raw.length });
+      const retry = await supplierInvoiceModelCall({ ...args, headerOnly: true, deadlineAt });
+      raw = retry.raw;
+      stopReason = retry.stopReason;
+      lineItemsTruncated = true;
+      if (stopReason === "max_tokens") {
+        logFail("parse-truncated", { stop_reason: stopReason, replyLength: raw.length, attempt: "header-only-retry" });
+        return { ok: false, errorCode: "parse-failed", errorMessage: "The AI reply was cut off twice (token limit)." };
+      }
+    }
     const json = extractFirstJsonObject(
       raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, ""),
     );
     if (!json) {
+      logFail("parse-non-json", { stop_reason: stopReason, replyLength: raw.length });
       return { ok: false, errorCode: "parse-non-json", errorMessage: "The AI returned no structured result." };
     }
-    const parsed = JSON.parse(json) as Record<string, unknown>;
-    const f = (parsed.fields ?? {}) as Record<string, unknown>;
-    const str = (v: unknown): string | null =>
-      typeof v === "string" && v.trim() ? v.trim() : null;
-    const num = (v: unknown): number | null =>
-      typeof v === "number" && Number.isFinite(v) ? v : null;
-    const confidence =
-      typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
-        ? Math.max(0, Math.min(1, parsed.confidence))
-        : 0;
-    return {
-      ok: true,
-      confidence,
-      fields: {
-        supplierName: str(f.supplierName),
-        amount: num(f.amount),
-        currency: str(f.currency)?.toUpperCase().slice(0, 3) ?? null,
-        reference: str(f.reference),
-        invoiceDate: str(f.invoiceDate),
-        periodLabel: str(f.periodLabel),
-        notes: str(f.notes),
-        lineItems: normalizeParsedLineItems(f.lineItems),
-      },
-    };
+    const { confidence, fields } = supplierInvoiceFieldsFromJson(json);
+    if (lineItemsTruncated) fields.lineItems = null;
+    return { ok: true, confidence, fields, ...(lineItemsTruncated ? { lineItemsTruncated: true } : {}) };
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
+    const errorCode = aborted ? "parse-timeout" : "parse-failed";
+    logFail(errorCode, { stop_reason: null, error: err instanceof Error ? err.message : String(err) });
     return {
       ok: false,
-      errorCode: aborted ? "parse-timeout" : "parse-failed",
+      errorCode,
       errorMessage: err instanceof Error ? err.message : "AI parse error",
     };
   }

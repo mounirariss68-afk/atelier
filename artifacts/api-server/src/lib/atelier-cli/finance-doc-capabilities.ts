@@ -431,6 +431,10 @@ defineCapability({
     // clarification asking for the fields, never a dead end and never
     // a guessed value.
     let parseConfidence: number | null = null;
+    // Task #1267 — distinguish "no readable text" from "AI reader failed"
+    // and surface a truncation-degraded itemization instead of hiding it.
+    let parseErrorCode: string | null = null;
+    let parseLineItemsTruncated = false;
     // Defense-in-depth: only a `confirm:true` carrying the phase-1 HMAC
     // token commits; anything else (incl. a model-forged confirm) degrades
     // to the phase-1 preview below.
@@ -451,6 +455,9 @@ defineCapability({
           invoiceDate = invoiceDate ?? parsed.fields.invoiceDate;
           periodLabel = periodLabel ?? parsed.fields.periodLabel;
           lineItems = lineItems ?? parsed.fields.lineItems;
+          parseLineItemsTruncated = parsed.lineItemsTruncated === true;
+        } else {
+          parseErrorCode = parsed.errorCode;
         }
       }
       const missing: Array<{ field: string; label: string; hint?: string }> = [];
@@ -476,7 +483,9 @@ defineCapability({
             field: missing[0].field,
             question:
               parseConfidence == null
-                ? `I couldn't read ${missing.map((m) => m.label.toLowerCase()).join(", ")} from the document — please provide ${missing.length > 1 ? "them" : "it"}.`
+                ? parseErrorCode != null
+                  ? `The document's text extracted fine, but the AI reader failed while parsing it (${parseErrorCode}). Please try again, or type ${missing.map((m) => m.label.toLowerCase()).join(", ")} yourself.`
+                  : `The document had no readable text for ${missing.map((m) => m.label.toLowerCase()).join(", ")} — please provide ${missing.length > 1 ? "them" : "it"}.`
                 : `I read the invoice but couldn't confidently find ${missing.map((m) => m.label.toLowerCase()).join(", ")} — please provide ${missing.length > 1 ? "them" : "it"} (I never guess amounts).`,
             tool: "ingest_supplier_invoice",
             partial,
@@ -523,7 +532,9 @@ defineCapability({
       }
       const itemsSummary = lineItems
         ? ` Captured ${lineItems.length} printed line item${lineItems.length === 1 ? "" : "s"} from the document.`
-        : " No itemizable line rows are printed on the document, so no itemization is stored.";
+        : parseLineItemsTruncated
+          ? " The invoice's itemization was too long to read reliably, so the line items were skipped — header totals are captured; add itemization manually if needed."
+          : " No itemizable line rows are printed on the document, so no itemization is stored.";
       // Registered-firm link parity: exact case-insensitive name match
       // only (same as picking the firm in the UI selector); no fuzzy
       // guessing. New/unmatched suppliers stay unlinked.

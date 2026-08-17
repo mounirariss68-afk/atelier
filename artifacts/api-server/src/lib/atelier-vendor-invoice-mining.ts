@@ -391,6 +391,11 @@ export async function mineInvoiceText(args: {
     .finally(() => clearTimeout(timer));
   const block = resp.content[0];
   const raw = block && block.type === "text" ? block.text.trim() : "";
+  // Task #1267 audit — same silent-truncation class as the supplier-invoice
+  // parser: name the failure so it's diagnosable from logs, never "non-json".
+  if ((resp as { stop_reason?: string | null }).stop_reason === "max_tokens") {
+    throw new Error("extraction-truncated-max-tokens");
+  }
   const json = extractFirstJsonObject(
     raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, ""),
   );
