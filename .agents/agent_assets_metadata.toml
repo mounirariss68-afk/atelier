@@ -235,3 +235,10 @@ uri = "file://attached_assets/pov-live-check-task1054.pdf"
 type = "pdf"
 title = "Live POV PDF (regenerated) — Scaling AI from pilots to P&L impact"
 description = "Client-ready 8-page branded PDF: numbered citations mapped to the Sources appendix, no raw markup; 11 typed sections, 100% citation coverage, firm-profile-grounded positioning."
+
+[[outputs]]
+id = "b5q8dUEFLLCvxEanZHGpK"
+uri = "file://attached_assets/cognirise-atelier-design-system.zip"
+type = "unspecified"
+title = "Cognirise Atelier design system (zip)"
+description = "The complete design system: design tokens, theme CSS, React components, brand assets (logos, backdrops), and usage docs — Comfortaa + Inter typography included."
