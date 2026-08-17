@@ -1,0 +1,19 @@
+kind = "design-system"
+previewPath = "/cognirise-atelier/"
+title = "Cognirise Atelier"
+description = "The Cognirise Atelier design system extracted from the Atelier employee portal: navy glassmorphism theme with the blue→purple→magenta→coral accent gradient, Plus Jakarta Sans typography, DTCG tokens for light and dark modes, brand assets, and a themed component library for reuse across workspace apps."
+version = "1.0.0"
+id = "artifacts/cognirise-atelier"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/cognirise-atelier/" ]
+localPort = 20776
+
+[services.development]
+run = "pnpm --filter @workspace/cognirise-atelier run dev"
+
+[services.env]
+PORT = "20776"
+BASE_PATH = "/cognirise-atelier/"

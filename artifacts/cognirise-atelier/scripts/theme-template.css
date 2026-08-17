@@ -1,0 +1,692 @@
+/* GENERATED FROM tokens.json BY scripts/build-tokens.mjs -- DO NOT EDIT.
+ * Edit tokens.json instead; the dev server regenerates this file on change. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+/* Register this package's own components so any consumer that imports this
+ * stylesheet (via `@import "<pkg>/styles.css"`) gets their utility classes
+ * generated -- Tailwind does not scan node_modules by default. Resolved
+ * relative to this file, so it points at this package's components whether it
+ * runs in the design system's own preview or inside a consuming app/sandbox. */
+@source "./components";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary-border: var(--sidebar-primary-border);
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent-border: var(--sidebar-accent-border);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.25 / 0.875);
+  --text-base: 1rem;
+  --text-base--line-height: calc(1.5 / 1);
+  --text-lg: 1.125rem;
+  --text-lg--line-height: calc(1.75 / 1.125);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: calc(1.75 / 1.25);
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: calc(2 / 1.5);
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: calc(2.25 / 1.875);
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: calc(2.5 / 2.25);
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 6rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 8rem;
+  --text-9xl--line-height: 1;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* LIGHT MODE */
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+
+  /* Automatic computation of border around primary / danger buttons */
+  --opaque-button-border-intensity: -8; /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
+
+  --background: __DS_LIGHT_BACKGROUND__;
+  --foreground: __DS_LIGHT_FOREGROUND__;
+  --border: __DS_LIGHT_BORDER__;
+  --card: __DS_LIGHT_CARD__;
+  --card-foreground: __DS_LIGHT_CARDFOREGROUND__;
+  --sidebar: __DS_LIGHT_SIDEBAR__;
+  --sidebar-foreground: __DS_LIGHT_SIDEBARFOREGROUND__;
+  --sidebar-border: __DS_LIGHT_SIDEBARBORDER__;
+  --sidebar-primary: __DS_LIGHT_SIDEBARPRIMARY__;
+  --sidebar-primary-foreground: __DS_LIGHT_SIDEBARPRIMARYFOREGROUND__;
+  --sidebar-accent: __DS_LIGHT_SIDEBARACCENT__;
+  --sidebar-accent-foreground: __DS_LIGHT_SIDEBARACCENTFOREGROUND__;
+  --sidebar-ring: __DS_LIGHT_SIDEBARRING__;
+  --popover: __DS_LIGHT_POPOVER__;
+  --popover-foreground: __DS_LIGHT_POPOVERFOREGROUND__;
+  --primary: __DS_LIGHT_PRIMARY__;
+  --primary-foreground: __DS_LIGHT_PRIMARYFOREGROUND__;
+  --secondary: __DS_LIGHT_SECONDARY__;
+  --secondary-foreground: __DS_LIGHT_SECONDARYFOREGROUND__;
+  --muted: __DS_LIGHT_MUTED__;
+  --muted-foreground: __DS_LIGHT_MUTEDFOREGROUND__;
+  --accent: __DS_LIGHT_ACCENT__;
+  --accent-foreground: __DS_LIGHT_ACCENTFOREGROUND__;
+  --destructive: __DS_LIGHT_DESTRUCTIVE__;
+  --destructive-foreground: __DS_LIGHT_DESTRUCTIVEFOREGROUND__;
+  --input: __DS_LIGHT_INPUT__;
+  --ring: __DS_LIGHT_RING__;
+  --chart-1: __DS_LIGHT_CHART1__;
+  --chart-2: __DS_LIGHT_CHART2__;
+  --chart-3: __DS_LIGHT_CHART3__;
+  --chart-4: __DS_LIGHT_CHART4__;
+  --chart-5: __DS_LIGHT_CHART5__;
+
+  --app-font-sans: __DS_FONT_SANS__;
+  --app-font-serif: __DS_FONT_SERIF__;
+  --app-font-mono: __DS_FONT_MONO__;
+  --radius: __DS_RADIUS__;
+  --spacing: __DS_SPACING__;
+
+  /* Computed contrast borders (fallback then modern color-mix syntax). */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --card-border: hsl(var(--card));
+  --popover-border: hsl(var(--popover));
+}
+
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+
+  --opaque-button-border-intensity: 9;  /* In terms of percentages */
+
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  --background: __DS_DARK_BACKGROUND__;
+  --foreground: __DS_DARK_FOREGROUND__;
+  --border: __DS_DARK_BORDER__;
+  --card: __DS_DARK_CARD__;
+  --card-foreground: __DS_DARK_CARDFOREGROUND__;
+  --sidebar: __DS_DARK_SIDEBAR__;
+  --sidebar-foreground: __DS_DARK_SIDEBARFOREGROUND__;
+  --sidebar-border: __DS_DARK_SIDEBARBORDER__;
+  --sidebar-primary: __DS_DARK_SIDEBARPRIMARY__;
+  --sidebar-primary-foreground: __DS_DARK_SIDEBARPRIMARYFOREGROUND__;
+  --sidebar-accent: __DS_DARK_SIDEBARACCENT__;
+  --sidebar-accent-foreground: __DS_DARK_SIDEBARACCENTFOREGROUND__;
+  --sidebar-ring: __DS_DARK_SIDEBARRING__;
+  --popover: __DS_DARK_POPOVER__;
+  --popover-foreground: __DS_DARK_POPOVERFOREGROUND__;
+  --primary: __DS_DARK_PRIMARY__;
+  --primary-foreground: __DS_DARK_PRIMARYFOREGROUND__;
+  --secondary: __DS_DARK_SECONDARY__;
+  --secondary-foreground: __DS_DARK_SECONDARYFOREGROUND__;
+  --muted: __DS_DARK_MUTED__;
+  --muted-foreground: __DS_DARK_MUTEDFOREGROUND__;
+  --accent: __DS_DARK_ACCENT__;
+  --accent-foreground: __DS_DARK_ACCENTFOREGROUND__;
+  --destructive: __DS_DARK_DESTRUCTIVE__;
+  --destructive-foreground: __DS_DARK_DESTRUCTIVEFOREGROUND__;
+  --input: __DS_DARK_INPUT__;
+  --ring: __DS_DARK_RING__;
+  --chart-1: __DS_DARK_CHART1__;
+  --chart-2: __DS_DARK_CHART2__;
+  --chart-3: __DS_DARK_CHART3__;
+  --chart-4: __DS_DARK_CHART4__;
+  --chart-5: __DS_DARK_CHART5__;
+
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --card-border: hsl(var(--card));
+  --popover-border: hsl(var(--popover));
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Hide ugly search cancel button in Chrome until we can style it properly */
+  input[type="search"]::-webkit-search-cancel-button {
+    @apply hidden;
+  }
+
+  /* Placeholder styling for contentEditable div */
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+
+  .no-default-hover-elevate {}
+
+  .no-default-active-elevate {}
+
+  .toggle-elevate::before,
+  .toggle-elevate-2::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    border-radius: inherit;
+    z-index: -1;
+  }
+
+  .toggle-elevate.toggle-elevated::before {
+    background-color: var(--elevate-2);
+  }
+
+  .border.toggle-elevate::before {
+    inset: -1px;
+  }
+
+  .hover-elevate:not(.no-default-hover-elevate),
+  .active-elevate:not(.no-default-active-elevate),
+  .hover-elevate-2:not(.no-default-hover-elevate),
+  .active-elevate-2:not(.no-default-active-elevate) {
+    position: relative;
+    z-index: 0;
+  }
+
+  .hover-elevate:not(.no-default-hover-elevate)::after,
+  .active-elevate:not(.no-default-active-elevate)::after,
+  .hover-elevate-2:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:not(.no-default-active-elevate)::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    border-radius: inherit;
+    z-index: 999;
+  }
+
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-1);
+  }
+
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-2);
+  }
+
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
+    inset: -1px;
+  }
+}
+
+/* ============================================================
+   Cognirise Atelier brand layer — extracted verbatim from the
+   Atelier employee portal (artifacts/atelier/src/index.css).
+   Signature pieces: the blue→purple→magenta→coral gradient,
+   knob-driven glassmorphism (alpha-only color-mix over the token
+   hues + backdrop blur), the fixed backdrop-gradient pattern, the
+   navy "dark island" hero, shadows, easing, and the wordmark face.
+   ============================================================ */
+
+:root {
+  /* Cognirise signature accent gradient (same in both themes). */
+  --cog-grad: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+  /* Named brand hues (dark-theme reference values). */
+  --cog-blue: #5B7CFF;
+  --cog-purple: #8A5BD6;
+  --cog-magenta: #C45BB8;
+  --cog-coral: #FF7B5A;
+  --cog-navy: #0A1230;
+  --cog-navy-deep: #070B22;
+  --cog-navy-elevate: #141C42;
+
+  /* Status colors (light theme: AA on pale surfaces). */
+  --success: #15803D;
+  --warn: #B45309;
+  --danger: #B91C1C;
+
+  /* Light glass knobs: whiter fill carries more alpha for readability. */
+  --glass-card-alpha: 52%;
+  --glass-popover-alpha: 80%;
+  --glass-panel-alpha: 24%;
+  --glass-hero-alpha: 82%;
+  --glass-hero-nested-alpha: 82%;
+  --glass-card-border: rgba(10, 18, 48, 0.10);
+  --glass-popover-border: rgba(10, 18, 48, 0.12);
+
+  --shadow-cog: 0 24px 48px -20px rgba(10, 18, 48, 0.18);
+  --shadow-lift: 0 14px 28px -16px rgba(10, 18, 48, 0.16);
+  --shadow-card-hover: 0 22px 40px -22px rgba(10, 18, 48, 0.22);
+  --panel-shadow: 0 8px 32px rgba(10, 18, 48, 0.10);
+
+  /* Backdrop gradient stops (fallback while wallpaper art loads). */
+  --backdrop-deep: #ECEFF7;
+  --backdrop-mid: #F6F7FB;
+  --backdrop-hi: #FFFFFF;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Display face for brand wordmarks only (echoes the rounded logo lettering). */
+  --font-wordmark: 'Quicksand', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.dark {
+  --success: #4ADE80;
+  --warn: #FBBF24;
+  --danger: #F87171;
+
+  /* Dark glass needs LESS fill: the navy backdrop does the work. */
+  --glass-card-alpha: 34%;
+  --glass-popover-alpha: 68%;
+  --glass-panel-alpha: 14%;
+  --glass-hero-alpha: 62%;
+  --glass-hero-nested-alpha: 40%;
+  --glass-card-border: rgba(255, 255, 255, 0.14);
+  --glass-popover-border: rgba(255, 255, 255, 0.18);
+
+  --shadow-cog: 0 30px 60px -20px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 18px 36px -18px rgba(0, 0, 0, 0.6);
+  --shadow-card-hover: 0 24px 44px -20px rgba(0, 0, 0, 0.7);
+  --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+
+  --backdrop-deep: #070B22;
+  --backdrop-mid: #0A1230;
+  --backdrop-hi: #141C42;
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-wordmark: var(--font-wordmark);
+  /* Atelier radii: sm chips 2px, cards 16px. */
+  --radius-sm: 2px;
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+@layer components {
+  /* ----- Fixed backdrop-gradient pattern -----
+     Apply .cog-backdrop to <body> (or the app root). A fixed pseudo-
+     element (NOT background-attachment: fixed — broken/slow on iOS
+     Safari) keeps the gradient put while the document scrolls. Layer
+     the wallpaper artwork above it with .cog-backdrop-art (an empty
+     fixed div whose background-image points at dark-bg.webp /
+     light-bg-wave.webp — see docs/references/README.md). */
+  .cog-backdrop::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(160deg, var(--backdrop-deep) 0%, var(--backdrop-mid) 45%, var(--backdrop-hi) 130%);
+    pointer-events: none;
+    z-index: -2;
+  }
+  .cog-backdrop-art {
+    position: fixed;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* ----- Knob-driven glass surfaces -----
+     Alpha-only color-mix over the token hues; blur is reserved for
+     large surfaces — small leaf chips inside a glass panel should use
+     plain alpha fills instead of nesting blur. */
+  .glass-card {
+    background: color-mix(in srgb, hsl(var(--card)) var(--glass-card-alpha), transparent);
+    border: 1px solid var(--glass-card-border);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+  }
+  .glass-popover {
+    background: color-mix(in srgb, hsl(var(--popover)) var(--glass-popover-alpha), transparent);
+    border: 1px solid var(--glass-popover-border);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+  }
+  .glass-panel {
+    background-color: color-mix(in srgb, hsl(var(--card)) var(--glass-panel-alpha), transparent);
+    border: 1px solid var(--glass-card-border);
+    box-shadow: var(--panel-shadow);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+  }
+  .card-hover {
+    transition: transform 200ms var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease);
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-card-hover);
+    border-color: hsl(var(--primary) / 0.45);
+  }
+
+  /* ----- Navy "dark island" page hero -----
+     Full-width header band that stays on the deep navy brand surface
+     in BOTH themes. Tokens are re-declared inside the island so
+     children (eyebrow, headline, muted text, primary accents) stay
+     legible over navy even in light mode. */
+  .page-hero {
+    --background: 227 66% 11%;
+    --foreground: 225 55% 96%;
+    --card: 230 53% 17%;
+    --card-foreground: 225 55% 96%;
+    --border: 229 42% 28%;
+    --muted-foreground: 223 30% 70%;
+    --primary: 307 47% 56%;
+    --primary-foreground: 231 66% 8%;
+    background: color-mix(in srgb, hsl(var(--background)) var(--glass-hero-alpha), transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+    color: hsl(var(--foreground));
+    padding-block: clamp(2rem, 4vw, 3rem);
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .glass-panel .page-hero {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: color-mix(in srgb, hsl(var(--background)) var(--glass-hero-nested-alpha), transparent);
+    border-bottom: 0;
+  }
+
+  /* ----- Recurring editorial primitives ----- */
+  /* Eyebrow: mono uppercase 11px with a 24px accent leading rule. */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: hsl(var(--primary));
+  }
+  /* 48×3 gradient section divider — introduces major sections. */
+  .section-divider {
+    display: block;
+    width: 48px;
+    height: 3px;
+    background: var(--cog-grad);
+    border-radius: 2px;
+  }
+  /* Section label: mono uppercase + flex hairline rule. */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .section-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: hsl(var(--border));
+  }
+  /* 540px lede with a 2px accent left border. */
+  .lede {
+    max-width: 540px;
+    padding-left: 16px;
+    border-left: 2px solid hsl(var(--primary));
+    color: hsl(var(--muted-foreground));
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .headline {
+    font-size: clamp(28px, 3.6vw, 48px);
+    line-height: 1.06;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .headline-xl {
+    font-size: clamp(36px, 4.6vw, 64px);
+    line-height: 1.04;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  em.accent, .accent-italic {
+    font-style: italic;
+    font-weight: 400;
+    color: hsl(var(--primary));
+  }
+  .font-wordmark, em.accent.font-wordmark {
+    font-family: var(--font-wordmark);
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+  }
+  /* Mono telemetry chip. */
+  .mono-chip {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+    display: inline-block;
+  }
+  .mono-chip.is-primary { color: hsl(var(--primary)); border-color: hsl(var(--primary) / 0.4); }
+  .mono-chip.is-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, transparent); }
+  .mono-chip.is-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .mono-chip.is-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+  /* Accent pill (Atelier's .plm-pill). */
+  .accent-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.3);
+  }
+  /* 999px pill buttons. */
+  .pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    transition: all 180ms var(--ease);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .pill-btn-primary {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--primary));
+  }
+  .pill-btn-primary:hover { filter: brightness(1.1); }
+  .pill-btn-ghost {
+    background: transparent;
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+  }
+  .pill-btn-ghost:hover {
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary));
+  }
+  .pill-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pill-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+  /* Underline tab nav: active tab gets a 2px accent underline. */
+  .tab-nav {
+    display: flex;
+    gap: 28px;
+    overflow-x: auto;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .tab-nav-item {
+    position: relative;
+    padding: 10px 0 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    transition: color 160ms var(--ease);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+  .tab-nav-item::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background 160ms var(--ease);
+  }
+  .tab-nav-item:hover { color: hsl(var(--foreground)); }
+  .tab-nav-item:hover::after { background: hsl(var(--primary) / 0.35); }
+  .tab-nav-item[aria-current="true"],
+  .tab-nav-item.is-active { color: hsl(var(--primary)); }
+  .tab-nav-item[aria-current="true"]::after,
+  .tab-nav-item.is-active::after { background: hsl(var(--primary)); }
+}
+
+/* Accessibility fallbacks: opaque surfaces when transparency/blur is
+   unavailable or unwanted. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-card, .glass-popover, .glass-panel, .page-hero {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .glass-card { background: hsl(var(--card)); }
+  .glass-popover { background: hsl(var(--popover)); }
+  .glass-panel { background-color: hsl(var(--card)); }
+  .page-hero { background: hsl(var(--background)); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card { background: hsl(var(--card)); }
+  .glass-popover { background: hsl(var(--popover)); }
+  .glass-panel { background-color: hsl(var(--card)); }
+  .page-hero { background: hsl(var(--background)); }
+}
