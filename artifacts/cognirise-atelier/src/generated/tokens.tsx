@@ -75,13 +75,14 @@ export const tokens = {
   },
   "fontFamily": {
     "sans": [
-      "Plus Jakarta Sans",
+      "Inter",
       "system-ui",
       "-apple-system",
       "sans-serif"
     ],
     "serif": [
-      "Plus Jakarta Sans",
+      "Comfortaa",
+      "Inter",
       "Georgia",
       "serif"
     ],

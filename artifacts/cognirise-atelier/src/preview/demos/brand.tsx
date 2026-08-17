@@ -63,9 +63,10 @@ export function BrandDemo() {
           Cognirise <em className="accent font-wordmark">Atelier</em>
         </p>
         <p className="text-sm text-muted-foreground">
-          Quicksand (via <code>.font-wordmark</code>) is reserved for brand
-          wordmarks only — it echoes the rounded logo lettering. Everything
-          else is Plus Jakarta Sans.
+          Comfortaa (via <code>.font-wordmark</code>, weight 700) draws brand
+          wordmarks and all headings — it echoes the rounded dotted-C logo
+          lettering. Body copy, labels, buttons, stats, and captions are Inter
+          (400/600/800).
         </p>
       </Stack>
 
@@ -97,7 +98,7 @@ export function BrandDemo() {
           { kind: 'do', text: 'Keep the app on the fixed navy/off-white backdrop so glass surfaces have something to blur.' },
           { kind: 'do', text: 'Use the gradient for thin rules and dividers; use solid token accents for interactive color.' },
           { kind: 'dont', text: 'Do not recolor or redraw the logos, and never place the light wordmark on a pale surface.' },
-          { kind: 'dont', text: 'Do not use Quicksand for body copy or headings — it is wordmark-only.' },
+          { kind: 'dont', text: 'Do not use Comfortaa for body copy — it is for headings, display text, and the wordmark only (weights 400/700; never synthesize 600).' },
         ]}
       />
     </div>

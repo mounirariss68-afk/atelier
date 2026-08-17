@@ -192,7 +192,7 @@ export type NavGroup = {
 export const DESIGN_SYSTEM = {
   title: 'Cognirise Atelier',
   description:
-    'The Cognirise visual language extracted from the Atelier employee portal: deep-navy glassmorphism, the blue→purple→magenta→coral accent gradient, and Plus Jakarta Sans — as reusable tokens, components, and patterns.',
+    'The Cognirise visual language extracted from the Atelier employee portal: deep-navy glassmorphism, the blue→purple→magenta→coral accent gradient, and Comfortaa headings over Inter body text — as reusable tokens, components, and patterns.',
 } as const;
 
 export const OVERVIEW_ENTRY: PreviewEntry = {

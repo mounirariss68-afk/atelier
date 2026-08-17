@@ -1,6 +1,6 @@
 # Component inventory — source: Atelier employee portal
 
-Source library: `artifacts/atelier/src/components/ui/` (~60 modules). It is a
+Source library: the Atelier employee portal's component set (~60 modules). It is a
 shadcn-based set themed entirely by CSS variables, so this design system's
 scaffold components cover most families automatically once the Cognirise
 tokens and brand layer are applied. Families are grouped below by how they

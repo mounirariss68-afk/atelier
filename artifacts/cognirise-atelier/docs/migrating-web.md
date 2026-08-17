@@ -1,7 +1,7 @@
 # Migrating web UI to Cognirise Atelier
 
-Read `artifacts/cognirise-atelier/docs/AGENTS.md` and
-`artifacts/cognirise-atelier/docs/consuming-web.md` first. Use this guide
+Read `docs/AGENTS.md` and
+`docs/consuming-web.md` first. Use this guide
 when a web app, including a fresh scaffold, already has local theme or component
 copies.
 

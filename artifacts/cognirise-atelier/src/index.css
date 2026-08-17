@@ -147,8 +147,8 @@
   --chart-4: 12 100% 67.6%;
   --chart-5: 142 71.8% 29.2%;
 
-  --app-font-sans: Plus Jakarta Sans, system-ui, -apple-system, sans-serif;
-  --app-font-serif: Plus Jakarta Sans, Georgia, serif;
+  --app-font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --app-font-serif: Comfortaa, Inter, Georgia, serif;
   --app-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --radius: 0.625rem;
   --spacing: 0.25rem;
@@ -242,6 +242,14 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    /* Comfortaa for headings brand-wide (700: it ships 400/700 only;
+       600 would synthesize). Body/UI stays Inter via --font-sans. */
+    font-family: var(--font-serif);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
 }
 
 @layer utilities {
@@ -320,7 +328,7 @@
 
 /* ============================================================
    Cognirise Atelier brand layer — extracted verbatim from the
-   Atelier employee portal (artifacts/atelier/src/index.css).
+   Atelier employee portal.
    Signature pieces: the blue→purple→magenta→coral gradient,
    knob-driven glassmorphism (alpha-only color-mix over the token
    hues + backdrop blur), the fixed backdrop-gradient pattern, the
@@ -364,8 +372,9 @@
   --backdrop-hi: #FFFFFF;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  /* Display face for brand wordmarks only (echoes the rounded logo lettering). */
-  --font-wordmark: 'Quicksand', 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Display face for brand wordmarks — Comfortaa echoes the rounded
+     dotted-C Cognirise logo lettering (same face as headings). */
+  --font-wordmark: 'Comfortaa', system-ui, sans-serif;
 }
 
 .dark {
@@ -543,15 +552,18 @@
     line-height: 1.6;
   }
   .headline {
+    font-family: var(--font-serif);
     font-size: clamp(28px, 3.6vw, 48px);
     line-height: 1.06;
-    font-weight: 600;
+    /* Comfortaa ships 400/700 only. */
+    font-weight: 700;
     letter-spacing: -0.02em;
   }
   .headline-xl {
+    font-family: var(--font-serif);
     font-size: clamp(36px, 4.6vw, 64px);
     line-height: 1.04;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.025em;
   }
   em.accent, .accent-italic {
@@ -562,7 +574,8 @@
   .font-wordmark, em.accent.font-wordmark {
     font-family: var(--font-wordmark);
     font-style: normal;
-    font-weight: 600;
+    /* Comfortaa ships 400/700 only. */
+    font-weight: 700;
     letter-spacing: 0.015em;
   }
   /* Mono telemetry chip. */

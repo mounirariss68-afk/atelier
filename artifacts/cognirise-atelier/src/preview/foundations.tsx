@@ -27,8 +27,9 @@ const SUPPORTING_SWATCHES = [
 ] as const;
 
 const TYPE_SCALE = [
-  { label: 'Display', className: 'text-4xl font-bold' },
-  { label: 'Heading', className: 'text-2xl font-semibold' },
+  /* Comfortaa (font-serif) for display/headings — 700 only; Inter for the rest. */
+  { label: 'Display', className: 'font-serif text-4xl font-bold' },
+  { label: 'Heading', className: 'font-serif text-2xl font-bold' },
   { label: 'Body', className: 'text-base' },
   { label: 'Label', className: 'text-sm font-medium' },
   { label: 'Caption', className: 'text-sm text-muted-foreground' },
@@ -61,7 +62,7 @@ export function OverviewPage() {
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-card p-5 text-card-foreground">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Core palette
         </h2>
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -73,7 +74,7 @@ export function OverviewPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border bg-card p-5 text-card-foreground">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Typography
           </h2>
           <div className="mt-4 space-y-3">
@@ -86,7 +87,7 @@ export function OverviewPage() {
         </section>
 
         <section className="rounded-xl border bg-card p-5 text-card-foreground">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
             In use
           </h2>
           <Card className="mt-4">
@@ -116,7 +117,7 @@ export function OverviewPage() {
       </div>
 
       <section className="space-y-4 rounded-xl border bg-card p-5 text-card-foreground">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Components
         </h2>
         <div className="flex flex-wrap items-center gap-3">
@@ -138,7 +139,7 @@ export function ColorsPage() {
     <div className="space-y-8 rounded-xl border bg-card p-6 text-card-foreground">
       <section className="space-y-4">
         <div>
-          <h2 className="font-semibold">Brand colors</h2>
+          <h2 className="font-bold">Brand colors</h2>
           <p className="text-sm text-muted-foreground">
             The core roles used for emphasis, supporting actions, and accents.
           </p>
@@ -152,7 +153,7 @@ export function ColorsPage() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="font-semibold">Semantic and surface colors</h2>
+          <h2 className="font-bold">Semantic and surface colors</h2>
           <p className="text-sm text-muted-foreground">
             Roles for text, backgrounds, borders, muted content, and danger.
           </p>
@@ -171,7 +172,7 @@ export function FontsPage() {
   return (
     <div className="space-y-8 rounded-xl border bg-card p-6 text-card-foreground">
       <section>
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Font family
         </h2>
         <p className="mt-4 text-4xl font-bold">The quick brown fox</p>
@@ -181,7 +182,7 @@ export function FontsPage() {
       </section>
 
       <section className="space-y-4 border-t pt-6">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Type scale
         </h2>
         {TYPE_SCALE.map((entry) => (
@@ -201,7 +202,7 @@ export function LayoutPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="rounded-xl border bg-card p-6 text-card-foreground">
-        <h2 className="font-semibold">Spacing</h2>
+        <h2 className="font-bold">Spacing</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           The spacing scale, derived from the base spacing token.
         </p>
@@ -218,7 +219,7 @@ export function LayoutPage() {
       </section>
 
       <section className="rounded-xl border bg-card p-6 text-card-foreground">
-        <h2 className="font-semibold">Radius</h2>
+        <h2 className="font-bold">Radius</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Corner treatments derive from the base radius token.
         </p>

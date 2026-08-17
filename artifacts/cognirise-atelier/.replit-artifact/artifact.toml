@@ -1,7 +1,7 @@
 kind = "design-system"
 previewPath = "/cognirise-atelier/"
 title = "Cognirise Atelier"
-description = "The Cognirise Atelier design system extracted from the Atelier employee portal: navy glassmorphism theme with the blue→purple→magenta→coral accent gradient, Plus Jakarta Sans typography, DTCG tokens for light and dark modes, brand assets, and a themed component library for reuse across workspace apps."
+description = "The Cognirise Atelier design system extracted from the Atelier employee portal: navy glassmorphism theme with the blue→purple→magenta→coral accent gradient, Comfortaa heading/display typography over Inter body text, DTCG tokens for light and dark modes, brand assets, and a themed component library for reuse across workspace apps."
 version = "1.0.0"
 id = "artifacts/cognirise-atelier"
 router = "path"

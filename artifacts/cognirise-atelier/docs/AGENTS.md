@@ -126,12 +126,12 @@ run `pnpm install`, and import directly from this package.
 
 Read only the guides required by the current task:
 
-- Building or styling web UI: `artifacts/cognirise-atelier/docs/consuming-web.md`
-- Building or styling Expo UI: `artifacts/cognirise-atelier/docs/consuming-expo.md`
+- Building or styling web UI: `docs/consuming-web.md`
+- Building or styling Expo UI: `docs/consuming-expo.md`
 - Replacing an existing or scaffolded web theme/component library:
-  `artifacts/cognirise-atelier/docs/migrating-web.md`
+  `docs/migrating-web.md`
 - Replacing existing or scaffolded Expo theme/hooks/components:
-  `artifacts/cognirise-atelier/docs/migrating-expo.md`
+  `docs/migrating-expo.md`
 
 A freshly scaffolded app counts as a migration when it still contains local
 theme, hook, or component copies that this package supersedes. Read the platform

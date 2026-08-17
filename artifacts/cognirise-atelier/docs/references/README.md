@@ -1,7 +1,7 @@
 # Cognirise Atelier — retained brand assets
 
 Everything here is retained verbatim from the Atelier employee portal
-(`artifacts/atelier/`). Do not redraw, recolor, or regenerate these files.
+(the Atelier employee portal). Do not redraw, recolor, or regenerate these files.
 Consuming apps should copy the files they need into their own `public/` (or
 `src/assets/`) — never hot-link across artifacts.
 

@@ -241,7 +241,7 @@ export function DesignSystemBrowser() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {activeGroup?.name}
                 </p>
-                <h1 className="mt-2 text-2xl font-semibold">{active.name}</h1>
+                <h1 className="mt-2 text-2xl font-bold">{active.name}</h1>
                 <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                   {active.description}
                 </p>
