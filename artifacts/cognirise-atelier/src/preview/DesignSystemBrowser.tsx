@@ -75,7 +75,7 @@ function NavigationItems({
           type="button"
           onClick={() => select(OVERVIEW_ENTRY.id)}
           aria-current={OVERVIEW_ENTRY.id === activeId}
-          className="block w-full rounded-md px-2 py-2 text-left text-sm font-medium transition-colors hover:bg-muted aria-[current=true]:bg-primary aria-[current=true]:text-primary-foreground"
+          className="block w-full rounded-md px-2 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted aria-[current=true]:bg-primary aria-[current=true]:text-primary-foreground"
         >
           {OVERVIEW_ENTRY.name}
         </button>
@@ -83,7 +83,7 @@ function NavigationItems({
 
       {groups.map((group) => (
         <div key={group.name}>
-          <p className="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {group.name}
           </p>
           <div className="mt-2 space-y-1 border-l pl-2">
@@ -207,7 +207,7 @@ export function DesignSystemBrowser() {
         <details ref={mobileNav} className="border-t px-4 py-3 md:hidden">
           <summary
             ref={mobileNavSummary}
-            className="cursor-pointer text-sm font-medium"
+            className="cursor-pointer text-sm font-semibold"
           >
             Browse sections:{' '}
             <span className="text-muted-foreground">{active.name}</span>
@@ -238,7 +238,7 @@ export function DesignSystemBrowser() {
               </>
             ) : (
               <>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {activeGroup?.name}
                 </p>
                 <h1 className="mt-2 text-2xl font-bold">{active.name}</h1>

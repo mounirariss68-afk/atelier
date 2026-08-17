@@ -10,7 +10,7 @@ function Swatch({ hex, name }: { hex: string; name: string }) {
         style={{ background: hex }}
       />
       <div className="text-xs">
-        <div className="font-medium">{name}</div>
+        <div className="font-semibold">{name}</div>
         <div className="font-mono text-muted-foreground">{hex}</div>
       </div>
     </div>

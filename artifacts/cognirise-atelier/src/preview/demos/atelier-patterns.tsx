@@ -34,7 +34,7 @@ export function AtelierPatternsDemo() {
               </CardContent>
             </Card>
             <div className="glass-panel rounded-xl p-6">
-              <p className="text-sm font-medium">Glass panel</p>
+              <p className="text-sm font-semibold">Glass panel</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Thinner fill (--glass-panel-alpha) for large shell chrome:
                 nav, rails, page panels.

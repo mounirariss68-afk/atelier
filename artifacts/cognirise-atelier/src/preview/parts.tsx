@@ -10,7 +10,7 @@ export function Row({
   return (
     <div className="space-y-2">
       {label ? (
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
       ) : null}
@@ -29,7 +29,7 @@ export function Stack({
   return (
     <div className="space-y-2">
       {label ? (
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
       ) : null}
@@ -48,7 +48,7 @@ export function Guidelines({
       {items.map((item) => (
         <li key={`${item.kind}-${item.text}`} className="flex gap-3">
           <span
-            className={`shrink-0 font-medium ${
+            className={`shrink-0 font-semibold ${
               item.kind === 'do' ? 'text-primary' : 'text-destructive'
             }`}
           >

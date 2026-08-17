@@ -12,7 +12,7 @@ export function HoverCardDemo() {
         <HoverCardTrigger asChild>
           <a
             href="#page=hover-card"
-            className="font-medium underline underline-offset-4"
+            className="font-semibold underline underline-offset-4"
           >
             @design-team
           </a>
@@ -22,7 +22,7 @@ export function HoverCardDemo() {
             <AvatarFallback>DT</AvatarFallback>
           </Avatar>
           <div className="space-y-1">
-            <p className="font-medium">Design team</p>
+            <p className="font-semibold">Design team</p>
             <p className="text-sm text-muted-foreground">
               Building clear, consistent product experiences.
             </p>

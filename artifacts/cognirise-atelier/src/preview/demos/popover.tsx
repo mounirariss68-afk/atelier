@@ -16,7 +16,7 @@ export function PopoverDemo() {
         </PopoverTrigger>
         <PopoverContent className="space-y-3">
           <div>
-            <p className="font-medium">Dimensions</p>
+            <p className="font-semibold">Dimensions</p>
             <p className="text-sm text-muted-foreground">
               Set a fixed width for the panel.
             </p>

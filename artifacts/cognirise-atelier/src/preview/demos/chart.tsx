@@ -31,7 +31,7 @@ export function ChartDemo() {
   return (
     <div className="max-w-2xl rounded-xl border bg-card p-6">
       <div className="mb-4">
-        <p className="font-medium">Monthly visitors</p>
+        <p className="font-semibold">Monthly visitors</p>
         <p className="text-sm text-muted-foreground">Desktop and mobile traffic.</p>
       </div>
       <ChartContainer config={chartConfig} className="max-h-72 w-full">

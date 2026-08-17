@@ -23,7 +23,7 @@ export function NavigationMenuDemo() {
                     href="#page=navigation-menu"
                     className="block rounded-md p-3 hover:bg-accent"
                   >
-                    <span className="font-medium">Apps</span>
+                    <span className="font-semibold">Apps</span>
                     <span className="block text-sm text-muted-foreground">
                       Build and publish full-stack projects.
                     </span>
@@ -34,7 +34,7 @@ export function NavigationMenuDemo() {
                     href="#page=navigation-menu"
                     className="block rounded-md p-3 hover:bg-accent"
                   >
-                    <span className="font-medium">Teams</span>
+                    <span className="font-semibold">Teams</span>
                     <span className="block text-sm text-muted-foreground">
                       Collaborate with shared tools and access.
                     </span>

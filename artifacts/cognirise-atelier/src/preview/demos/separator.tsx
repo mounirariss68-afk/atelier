@@ -4,7 +4,7 @@ export function SeparatorDemo() {
   return (
     <div className="max-w-md rounded-xl border bg-card p-6">
       <div>
-        <p className="font-medium">Design system</p>
+        <p className="font-semibold">Design system</p>
         <p className="text-sm text-muted-foreground">Reusable interface foundations.</p>
       </div>
       <Separator className="my-4" />

@@ -31,7 +31,7 @@ const TYPE_SCALE = [
   { label: 'Display', className: 'font-serif text-4xl font-bold' },
   { label: 'Heading', className: 'font-serif text-2xl font-bold' },
   { label: 'Body', className: 'text-base' },
-  { label: 'Label', className: 'text-sm font-medium' },
+  { label: 'Label', className: 'text-sm font-semibold' },
   { label: 'Caption', className: 'text-sm text-muted-foreground' },
 ] as const;
 
@@ -53,7 +53,7 @@ function Swatch({
   return (
     <div className="space-y-2">
       <div className={`h-16 rounded-lg ${className}`} />
-      <p className="text-sm font-medium">{name}</p>
+      <p className="text-sm font-semibold">{name}</p>
     </div>
   );
 }
@@ -62,7 +62,7 @@ export function OverviewPage() {
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-card p-5 text-card-foreground">
-        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Core palette
         </h2>
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -74,7 +74,7 @@ export function OverviewPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border bg-card p-5 text-card-foreground">
-          <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Typography
           </h2>
           <div className="mt-4 space-y-3">
@@ -87,7 +87,7 @@ export function OverviewPage() {
         </section>
 
         <section className="rounded-xl border bg-card p-5 text-card-foreground">
-          <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             In use
           </h2>
           <Card className="mt-4">
@@ -117,7 +117,7 @@ export function OverviewPage() {
       </div>
 
       <section className="space-y-4 rounded-xl border bg-card p-5 text-card-foreground">
-        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Components
         </h2>
         <div className="flex flex-wrap items-center gap-3">
@@ -172,7 +172,7 @@ export function FontsPage() {
   return (
     <div className="space-y-8 rounded-xl border bg-card p-6 text-card-foreground">
       <section>
-        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Font family
         </h2>
         <p className="mt-4 text-4xl font-bold">The quick brown fox</p>
@@ -182,12 +182,12 @@ export function FontsPage() {
       </section>
 
       <section className="space-y-4 border-t pt-6">
-        <h2 className="font-sans text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Type scale
         </h2>
         {TYPE_SCALE.map((entry) => (
           <div key={entry.label} className="grid gap-2 sm:grid-cols-[88px_1fr]">
-            <span className="pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {entry.label}
             </span>
             <p className={entry.className}>Build products people understand.</p>
@@ -234,7 +234,7 @@ export function LayoutPage() {
               key={radius.label}
               className={`flex h-24 items-end border bg-muted p-3 ${radius.className}`}
             >
-              <span className="text-xs font-medium">{radius.label}</span>
+              <span className="text-xs font-semibold">{radius.label}</span>
             </div>
           ))}
         </div>

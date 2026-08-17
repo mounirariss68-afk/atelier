@@ -17,7 +17,7 @@ export function ScrollAreaDemo() {
           {['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((label) => (
             <div
               key={label}
-              className="flex h-32 w-32 items-end rounded-lg bg-muted p-3 text-sm font-medium"
+              className="flex h-32 w-32 items-end rounded-lg bg-muted p-3 text-sm font-semibold"
             >
               {label}
             </div>

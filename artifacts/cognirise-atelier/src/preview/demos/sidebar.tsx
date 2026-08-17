@@ -57,7 +57,7 @@ export function SidebarDemo() {
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="min-h-0 p-6">
-          <p className="font-medium">Project canvas</p>
+          <p className="font-semibold">Project canvas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Main content remains contained beside the navigation.
           </p>
