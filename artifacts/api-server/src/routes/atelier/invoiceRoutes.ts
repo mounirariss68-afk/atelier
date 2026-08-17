@@ -135,6 +135,29 @@ const VAT_RATE_BY_JURISDICTION: Record<string, number> = {
 
 const JURISDICTIONS = new Set(["AE", "SA", "EU", "GLOBAL"]);
 
+// Task #1288 — derive a sensible invoicing jurisdiction from the client
+// account's country so the create dialog can prefill instead of asking a
+// bare prompt. Falls back to GLOBAL (0% VAT) when unknown.
+const EU_ISO2 = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+  "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+  "SI", "ES", "SE",
+]);
+const EU_NAMES = new Set([
+  "austria", "belgium", "bulgaria", "croatia", "cyprus", "czech republic", "czechia",
+  "denmark", "estonia", "finland", "france", "germany", "greece", "hungary",
+  "ireland", "italy", "latvia", "lithuania", "luxembourg", "malta", "netherlands",
+  "poland", "portugal", "romania", "slovakia", "slovenia", "spain", "sweden",
+]);
+export function deriveJurisdiction(countryCode: string | null | undefined, country: string | null | undefined): string {
+  const cc = (countryCode ?? "").trim().toUpperCase();
+  const name = (country ?? "").trim().toLowerCase();
+  if (cc === "AE" || name === "uae" || name === "united arab emirates") return "AE";
+  if (cc === "SA" || name === "ksa" || name === "saudi arabia" || name === "kingdom of saudi arabia") return "SA";
+  if (EU_ISO2.has(cc) || EU_NAMES.has(name)) return "EU";
+  return "GLOBAL";
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -215,6 +238,69 @@ router.get("/wallet/invoices/:id", async (req, res) => {
   res.json(full);
 });
 
+// =============================================================== create options (Task #1288)
+// Engagement + account pick-list for the "New invoice" dialog, with the
+// derived bill-to / jurisdiction / currency prefills. Same gate as create.
+// @cli-skip: UI-workflow helper; pairs with the invoice create dialog
+router.get("/wallet/invoice-create-options", async (req, res) => {
+  if (denyRestricted(req, res)) return;
+  if (denyBoardObserver(req, res)) return;
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isFinanceLeadership(me) && me.role !== "senior_manager") {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const accounts = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      country: atelierAccounts.country,
+      countryCode: atelierAccounts.countryCode,
+      primaryCurrency: atelierAccounts.primaryCurrency,
+    })
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.orgId, me.orgId), sql`${atelierAccounts.status} <> 'archived'`))
+    .orderBy(atelierAccounts.name);
+  const acctById = new Map(accounts.map((a) => [a.id, a]));
+  const engs = await db
+    .select({
+      id: atelierEngagements.id,
+      name: atelierEngagements.name,
+      accountId: atelierEngagements.accountId,
+      plmStage: atelierEngagements.plmStage,
+    })
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.orgId, me.orgId), isNull(atelierEngagements.deletedAt)))
+    .orderBy(atelierEngagements.name);
+  res.json({
+    engagements: engs.map((e) => {
+      const acct = acctById.get(e.accountId);
+      return {
+        id: e.id,
+        name: e.name,
+        plmStage: e.plmStage,
+        accountId: e.accountId,
+        accountName: acct?.name ?? null,
+        defaults: {
+          billToName: acct?.name ?? null,
+          jurisdiction: deriveJurisdiction(acct?.countryCode, acct?.country),
+          currency: acct?.primaryCurrency ?? "USD",
+        },
+      };
+    }),
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      name: a.name,
+      defaults: {
+        billToName: a.name,
+        jurisdiction: deriveJurisdiction(a.countryCode, a.country),
+        currency: a.primaryCurrency ?? "USD",
+      },
+    })),
+  });
+});
+
 // =============================================================== create draft
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices", async (req, res) => {
@@ -227,21 +313,67 @@ router.post("/wallet/invoices", async (req, res) => {
     return;
   }
   const b = req.body ?? {};
-  const jurisdiction = String(b.jurisdiction ?? "GLOBAL").toUpperCase();
+
+  // Task #1288 — engagement-aware create: resolve the engagement (or
+  // account) up front so drafts are born composable, and default the
+  // bill-to / jurisdiction / currency from the client account instead of
+  // relying on bare free-text prompts.
+  let engagementId: string | null = null;
+  let accountId: string | null = null;
+  let account: { name: string; country: string | null; countryCode: string | null; primaryCurrency: string | null } | null = null;
+  if (b.engagementId) {
+    const [eng] = await db
+      .select()
+      .from(atelierEngagements)
+      .where(and(
+        eq(atelierEngagements.id, String(b.engagementId)),
+        eq(atelierEngagements.orgId, me.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ));
+    if (!eng) {
+      res.status(400).json({ error: "invalid_input", message: "Unknown engagement." });
+      return;
+    }
+    engagementId = eng.id;
+    accountId = eng.accountId;
+  } else if (b.accountId) {
+    accountId = String(b.accountId);
+  }
+  if (accountId) {
+    const [acct] = await db
+      .select({
+        name: atelierAccounts.name,
+        country: atelierAccounts.country,
+        countryCode: atelierAccounts.countryCode,
+        primaryCurrency: atelierAccounts.primaryCurrency,
+      })
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, accountId), eq(atelierAccounts.orgId, me.orgId)));
+    if (!acct) {
+      res.status(400).json({ error: "invalid_input", message: "Unknown account." });
+      return;
+    }
+    account = acct;
+  }
+
+  const jurisdiction = String(
+    b.jurisdiction ?? (account ? deriveJurisdiction(account.countryCode, account.country) : "GLOBAL"),
+  ).toUpperCase();
   if (!JURISDICTIONS.has(jurisdiction)) {
     res.status(400).json({ error: "invalid_input", message: `Unknown jurisdiction "${jurisdiction}"` });
     return;
   }
   const id = rid("inv");
-  const billTo = (b.billTo && typeof b.billTo === "object") ? b.billTo : {};
+  const billTo = (b.billTo && typeof b.billTo === "object") ? { ...b.billTo } : {};
+  if (!billTo.name && account) billTo.name = account.name;
   const vatRatePct = typeof b.vatRatePct === "number" ? b.vatRatePct : VAT_RATE_BY_JURISDICTION[jurisdiction] ?? 0;
   await db.insert(atelierInvoice).values({
     id,
     orgId: me.orgId,
-    engagementId: b.engagementId ?? null,
-    accountId: b.accountId ?? null,
+    engagementId,
+    accountId,
     jurisdiction,
-    currency: String(b.currency ?? "USD"),
+    currency: String(b.currency ?? account?.primaryCurrency ?? "USD"),
     status: "draft",
     billTo,
     vatRatePct,
@@ -254,11 +386,146 @@ router.post("/wallet/invoices", async (req, res) => {
     entityId: id,
     actor: me,
     action: "wallet.invoice.drafted",
-    payload: { jurisdiction, engagementId: b.engagementId ?? null },
+    payload: { jurisdiction, engagementId, accountId },
     summary: `Drafted invoice (${jurisdiction})`,
   });
   const full = await loadFull(me.orgId, id);
   res.status(201).json(full);
+});
+
+// =============================================================== draft repair (Task #1288)
+// Attach an engagement and/or edit bill-to on a DRAFT created the old way
+// (no engagement), so Compose can work instead of dead-ending.
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.patch("/wallet/invoices/:id", async (req, res) => {
+  if (denyRestricted(req, res)) return;
+  if (denyBoardObserver(req, res)) return;
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isFinanceLeadership(me) && me.role !== "senior_manager") {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const [inv] = await db
+    .select()
+    .from(atelierInvoice)
+    .where(and(
+      eq(atelierInvoice.id, req.params.id),
+      eq(atelierInvoice.orgId, me.orgId),
+      isNull(atelierInvoice.deletedAt),
+    ));
+  if (!inv) { res.status(404).json({ error: "not_found" }); return; }
+  if (inv.status !== "draft") {
+    res.status(400).json({ error: "invalid_state", message: "Only draft invoices can be edited." });
+    return;
+  }
+  const b = req.body ?? {};
+  const set: Partial<typeof atelierInvoice.$inferInsert> = {};
+  const changed: Record<string, unknown> = {};
+  if (b.engagementId !== undefined) {
+    if (b.engagementId === null) {
+      res.status(400).json({ error: "invalid_input", message: "Cannot detach the engagement from a draft." });
+      return;
+    }
+    const [eng] = await db
+      .select()
+      .from(atelierEngagements)
+      .where(and(
+        eq(atelierEngagements.id, String(b.engagementId)),
+        eq(atelierEngagements.orgId, me.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ));
+    if (!eng) {
+      res.status(400).json({ error: "invalid_input", message: "Unknown engagement." });
+      return;
+    }
+    // Billing-context policy: the draft's Bill To / jurisdiction / currency /
+    // VAT are only kept when the draft is already proven to belong to this
+    // engagement's account (inv.accountId matches). In every other case —
+    // including accountless legacy drafts with a free-text Bill To — the
+    // context is unconditionally reset from the engagement's account, and any
+    // existing billing signal requires explicit confirmation first.
+    const sameAccount = !!inv.accountId && inv.accountId === eng.accountId;
+    const resetsContext = !sameAccount;
+    const changesEngagement = !!inv.engagementId && inv.engagementId !== eng.id;
+    if (resetsContext || changesEngagement) {
+      // Reassignment guard: once lines exist they were composed/added in the
+      // context of the current engagement/account — reassigning under them
+      // would produce a financially inconsistent invoice.
+      const [{ c: lineCount }] = await db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(atelierInvoiceLine)
+        .where(eq(atelierInvoiceLine.invoiceId, inv.id));
+      if (lineCount > 0) {
+        res.status(400).json({
+          error: "invalid_state",
+          message: "This draft already has lines. Remove them (or void the draft and create a new one) before moving it to a different engagement.",
+        });
+        return;
+      }
+    }
+    if (resetsContext && b.confirmAccountChange !== true) {
+      // Explicit confirmation required: the attach atomically refreshes
+      // Bill To, jurisdiction, currency and VAT rate from the engagement's
+      // client account so the draft can never mix two clients' billing context.
+      res.status(409).json({
+        error: "account_mismatch",
+        message: "This engagement bills a different client account than this draft was set up for. Confirm the switch to reset Bill To, jurisdiction and currency to the engagement's account.",
+      });
+      return;
+    }
+    if (resetsContext && b.billTo !== undefined) {
+      // The atomic reset must be real — a same-request Bill To override could
+      // re-smuggle the prior client's details. Edit Bill To afterwards.
+      res.status(400).json({
+        error: "invalid_input",
+        message: "billTo cannot be combined with an account-context change. Attach the engagement first, then edit Bill To.",
+      });
+      return;
+    }
+    const [acct] = await db
+      .select({
+        name: atelierAccounts.name,
+        country: atelierAccounts.country,
+        countryCode: atelierAccounts.countryCode,
+        primaryCurrency: atelierAccounts.primaryCurrency,
+      })
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, eng.accountId), eq(atelierAccounts.orgId, me.orgId)));
+    set.engagementId = eng.id;
+    set.accountId = eng.accountId;
+    changed.engagementId = eng.id;
+    if (resetsContext && acct) {
+      // Atomic billing-context refresh from the engagement's account.
+      const jur = deriveJurisdiction(acct.countryCode, acct.country);
+      set.billTo = { name: acct.name };
+      set.jurisdiction = jur;
+      set.currency = acct.primaryCurrency ?? "USD";
+      set.vatRatePct = VAT_RATE_BY_JURISDICTION[jur] ?? 0;
+      changed.accountChanged = { to: eng.accountId, jurisdiction: jur };
+    }
+  }
+  if (b.billTo && typeof b.billTo === "object") {
+    // Only reachable without an account-context change (rejected above), so
+    // merging over the existing bill-to is safe.
+    set.billTo = { ...(inv.billTo ?? {}), ...(set.billTo ?? {}), ...b.billTo };
+    changed.billTo = true;
+  }
+  if (Object.keys(set).length === 0) {
+    res.status(400).json({ error: "invalid_input", message: "Nothing to update (engagementId or billTo required)." });
+    return;
+  }
+  set.updatedAt = new Date();
+  await db.update(atelierInvoice).set(set).where(eq(atelierInvoice.id, inv.id));
+  await audit({
+    entityType: "invoice",
+    entityId: inv.id,
+    actor: me,
+    action: "wallet.invoice.updated",
+    payload: changed,
+    summary: `Updated draft (${Object.keys(changed).join(", ")})`,
+  });
+  res.json(await loadFull(me.orgId, inv.id));
 });
 
 // =============================================================== compose lines (time + expenses)

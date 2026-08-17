@@ -1,19 +1,127 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
 import { BackLink, PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SupplierInvoiceSignpost, type CreateOptions } from "./WalletInvoices";
 
 interface Line { id: string; ord: number; description: string; qty: number; unitPrice: number; amount: number; sourceKind: string; sourceRef: string | null }
 interface Submission { id: string; channel: string; status: string; clearanceUuid: string | null; qrCodePayload: string | null; clearedAt: string | null; rejectedReason: string | null }
 interface DunningEvent { id: string; stepIndex: number; channel: string; template: string | null; sentAt: string }
-interface Promise { id: string; promisedAmount: number; promisedDate: string; status: string; contactName: string | null }
+interface PromiseToPay { id: string; promisedAmount: number; promisedDate: string; status: string; contactName: string | null }
 interface Invoice {
   id: string; invoiceNumber: string | null; jurisdiction: string; status: string;
   currency: string; subtotal: number; vatAmount: number; vatRatePct: number; total: number; amountPaid: number;
-  dueDate: string | null; issuedAt: string | null; engagementId: string | null; billTo: Record<string, string>;
+  dueDate: string | null; issuedAt: string | null; engagementId: string | null; accountId: string | null; billTo: Record<string, string>;
   notes: string | null; voidedReason: string | null;
 }
-interface Full { invoice: Invoice; lines: Line[]; submissions: Submission[]; dunningEvents: DunningEvent[]; promises: Promise[] }
+interface Full { invoice: Invoice; lines: Line[]; submissions: Submission[]; dunningEvents: DunningEvent[]; promises: PromiseToPay[] }
 interface Me { id: string; role: string }
+
+/** Task #1288 — draft repair: attach an engagement so Compose can work. */
+function AttachEngagement({ busy, invAccountId, onAttach }: {
+  busy: boolean;
+  invAccountId: string | null;
+  onAttach: (body: { engagementId: string; confirmAccountChange?: boolean }) => Promise<void>;
+}) {
+  const [opts, setOpts] = React.useState<CreateOptions | null>(null);
+  const [sel, setSel] = React.useState("");
+  const [confirmSwitch, setConfirmSwitch] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    void fetch("/api/atelier/wallet/invoice-create-options", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j) setOpts(j); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const selected = opts?.engagements.find((e) => e.id === sel);
+  // The server resets Bill To / jurisdiction / currency and requires explicit
+  // confirmation whenever the draft isn't already proven to belong to the
+  // engagement's account (including accountless legacy drafts).
+  const accountChanges = !!(selected && selected.accountId !== invAccountId);
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2 items-center text-sm">
+        <select
+          value={sel}
+          onChange={(e) => { setSel(e.target.value); setConfirmSwitch(false); }}
+          className="bg-bg-elevate border border-border rounded px-2 py-1 text-sm flex-1"
+          data-testid="select-attach-engagement"
+        >
+          <option value="">{opts ? (opts.engagements.length === 0 ? "No engagements available" : "Select an engagement…") : "Loading…"}</option>
+          {opts?.engagements.map((e) => (
+            <option key={e.id} value={e.id}>{e.name}{e.accountName ? ` — ${e.accountName}` : ""}</option>
+          ))}
+        </select>
+        <button
+          disabled={busy || !sel || (accountChanges && !confirmSwitch)}
+          onClick={() => void onAttach({ engagementId: sel, ...(accountChanges ? { confirmAccountChange: true } : {}) })}
+          className="px-3 py-1 rounded bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30 disabled:opacity-40"
+          data-testid="btn-attach-engagement"
+        >
+          Attach
+        </button>
+      </div>
+      {accountChanges && (
+        <label className="flex items-start gap-2 text-xs text-text-mute border border-gold/30 bg-gold/5 rounded px-2 py-1.5 cursor-pointer" data-testid="confirm-account-switch">
+          <input type="checkbox" checked={confirmSwitch} onChange={(e) => setConfirmSwitch(e.target.checked)} className="mt-0.5" />
+          <span>
+            This draft's billing details don't match this engagement's client account
+            {selected?.accountName ? ` (${selected.accountName})` : ""}. Attaching it will reset Bill To,
+            jurisdiction and currency to that account's details — you can edit Bill To afterwards.
+          </span>
+        </label>
+      )}
+    </div>
+  );
+}
+
+/** Task #1288 — draft repair: inline Bill To edit. */
+function BillToBlock({ inv, canEdit, busy, onSave }: {
+  inv: Invoice;
+  canEdit: boolean;
+  busy: boolean;
+  onSave: (billTo: { name: string; contactEmail?: string }) => Promise<void>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [name, setName] = React.useState(inv.billTo?.name ?? "");
+  const [email, setEmail] = React.useState(inv.billTo?.contactEmail ?? "");
+  if (!editing) {
+    return (
+      <>
+        <div className="font-medium">{inv.billTo?.name ?? "—"}</div>
+        <div className="text-text-mute text-xs">{inv.billTo?.contactEmail ?? ""}</div>
+        {canEdit && (
+          <button
+            className="text-xs text-gold hover:underline mt-1"
+            onClick={() => { setName(inv.billTo?.name ?? ""); setEmail(inv.billTo?.contactEmail ?? ""); setEditing(true); }}
+            data-testid="btn-edit-billto"
+          >
+            Edit
+          </button>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="space-y-1.5 mt-1">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Client legal name"
+             className="w-full bg-bg-elevate border border-border rounded px-2 py-1 text-sm" data-testid="input-edit-billto-name" />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="billing@client.com (optional)"
+             className="w-full bg-bg-elevate border border-border rounded px-2 py-1 text-sm" data-testid="input-edit-billto-email" />
+      <div className="flex gap-2 text-xs">
+        <button
+          disabled={busy || !name.trim()}
+          onClick={() => { void onSave({ name: name.trim(), ...(email.trim() ? { contactEmail: email.trim() } : {}) }).then(() => setEditing(false)); }}
+          className="px-2 py-0.5 rounded bg-gold/20 text-gold border border-gold/40 disabled:opacity-40"
+          data-testid="btn-save-billto"
+        >
+          Save
+        </button>
+        <button onClick={() => setEditing(false)} className="px-2 py-0.5 rounded border border-border text-text-mute">Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 export default function WalletInvoiceDetail() {
   const [, params] = useRoute("/wallet/invoices/:id");
@@ -31,11 +139,11 @@ export default function WalletInvoiceDetail() {
   }, [id]);
   React.useEffect(() => { void load(); }, [load]);
 
-  async function call(path: string, body?: unknown): Promise<void> {
+  async function call(path: string, body?: unknown, method: "POST" | "PATCH" = "POST"): Promise<void> {
     setBusy(true);
     try {
       const r = await fetch(`/api/atelier/wallet/invoices/${id}${path}`, {
-        method: "POST",
+        method,
         headers: { "content-type": "application/json" },
         credentials: "include",
         body: body ? JSON.stringify(body) : "{}",
@@ -61,7 +169,7 @@ export default function WalletInvoiceDetail() {
           Back to invoices
         </BackLink>
         <SectionHead
-          eyebrow={inv.invoiceNumber ?? "(draft)"}
+          eyebrow="Client invoice (issued to a client)"
           headline={inv.invoiceNumber ?? "(draft)"}
           lede={
             <span>
@@ -75,11 +183,11 @@ export default function WalletInvoiceDetail() {
       </PageHero>
 
       <div className="px-6 py-4 max-w-5xl mx-auto space-y-4">
+        {inv.status === "draft" && data.lines.length === 0 && <SupplierInvoiceSignpost canLink={isSm ?? false} />}
         <Card className="p-4 grid grid-cols-2 gap-4 text-sm">
           <div>
             <div className="text-[11px] font-mono uppercase text-text-faint">Bill to</div>
-            <div className="font-medium">{inv.billTo?.name ?? "—"}</div>
-            <div className="text-text-mute text-xs">{inv.billTo?.contactEmail ?? ""}</div>
+            <BillToBlock inv={inv} canEdit={inv.status === "draft" && !!isSm} onSave={(billTo) => call("", { billTo }, "PATCH")} busy={busy} />
           </div>
           <div className="text-right">
             <div className="text-[11px] font-mono uppercase text-text-faint">Total</div>
@@ -114,17 +222,35 @@ export default function WalletInvoiceDetail() {
         {inv.status === "draft" && isSm && (
           <Card className="p-4 space-y-2">
             <div className="text-[11px] font-mono uppercase text-text-faint">Compose lines from time + expenses</div>
-            <div className="flex gap-2 text-sm">
-              <button disabled={busy} onClick={() => void call("/compose", { fromDate: "1900-01-01", toDate: "2999-12-31", defaultRateUsd: 250 })}
-                      className="px-3 py-1 rounded bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30">
-                Compose
-              </button>
-              <button disabled={busy || !isPartner} onClick={() => void call("/issue")}
-                      className="px-3 py-1 rounded bg-success/20 text-success border border-success/40 hover:bg-success/30 disabled:opacity-40"
-                      title={isPartner ? "Issue invoice (partner)" : "Partner-tier required"}>
-                Issue
-              </button>
-            </div>
+            {inv.engagementId ? (
+              <div className="flex gap-2 text-sm">
+                <button disabled={busy} onClick={() => void call("/compose", { fromDate: "1900-01-01", toDate: "2999-12-31", defaultRateUsd: 250 })}
+                        className="px-3 py-1 rounded bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30"
+                        data-testid="btn-compose">
+                  Compose
+                </button>
+                <button disabled={busy || !isPartner} onClick={() => void call("/issue")}
+                        className="px-3 py-1 rounded bg-success/20 text-success border border-success/40 hover:bg-success/30 disabled:opacity-40"
+                        title={isPartner ? "Issue invoice (partner)" : "Partner-tier required"}>
+                  Issue
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2" data-testid="compose-needs-engagement">
+                <div className="text-xs text-text-mute">
+                  This draft isn't linked to an engagement yet, so Compose has no time or expenses to pull from.
+                  Attach the engagement this invoice bills for:
+                </div>
+                <AttachEngagement busy={busy} invAccountId={inv.accountId} onAttach={(body) => call("", body, "PATCH")} />
+                <div className="flex gap-2 text-sm pt-1">
+                  <button disabled={busy || !isPartner} onClick={() => void call("/issue")}
+                          className="px-3 py-1 rounded bg-success/20 text-success border border-success/40 hover:bg-success/30 disabled:opacity-40"
+                          title={isPartner ? "Issue invoice (partner)" : "Partner-tier required"}>
+                    Issue
+                  </button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
 

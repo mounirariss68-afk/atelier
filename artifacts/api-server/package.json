@@ -134,7 +134,8 @@
     "test:wps": "export CRM_TEST_DB_NAME=crm_test_wps && tsx ./scripts/wps-sif-test.ts && tsx ./scripts/payroll-clerk-probe.ts",
     "test:background-work-bell": "NODE_ENV=test tsx ./tests/crm/background-work-bell-probe.ts",
     "test:tone-multilingual": "tsx ./tests/crm/tone-probe-multilingual.ts",
-    "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts"
+    "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts",
+    "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

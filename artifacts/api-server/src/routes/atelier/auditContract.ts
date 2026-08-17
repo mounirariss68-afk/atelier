@@ -104,6 +104,8 @@ export const V3_AUDIT_ACTIONS = {
 
   // L2C Wave 3 — Task #362 (invoicing, e-invoicing, AR, collections) ----
   INVOICE_DRAFTED: "wallet.invoice.drafted",
+  // Task #1288 — draft repair (attach engagement / edit bill-to).
+  INVOICE_UPDATED: "wallet.invoice.updated",
   INVOICE_LINE_ADDED: "wallet.invoice.line_added",
   INVOICE_ISSUED: "wallet.invoice.issued",
   INVOICE_VOIDED: "wallet.invoice.voided",
