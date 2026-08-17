@@ -171,7 +171,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 14,
                 flex: 1,
                 textAlign: rtl.textAlign,
@@ -223,7 +223,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
                 <Text
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_700Bold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 17,
                     flex: 1,
                     textAlign: rtl.textAlign,
@@ -236,7 +236,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 14,
                     lineHeight: 21,
                     textAlign: rtl.textAlign,

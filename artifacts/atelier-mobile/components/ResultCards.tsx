@@ -99,7 +99,7 @@ function InternalLinkRow({ route, label }: { route: string; label: string }) {
         numberOfLines={1}
         style={{
           color: c.primary,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 13,
         }}
       >
@@ -131,7 +131,7 @@ function ExternalLinkRow({ url, label }: { url: string; label: string }) {
         numberOfLines={1}
         style={{
           color: c.primary,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 13,
         }}
       >
@@ -165,7 +165,7 @@ function CardHeader({ icon, title, ok }: { icon: React.ComponentProps<typeof Fea
         style={{
           flex: 1,
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 12,
           letterSpacing: 0.4,
           textTransform: "uppercase",
@@ -198,7 +198,7 @@ function FieldGrid({ entries, currency, lang }: { entries: [string, unknown][]; 
             numberOfLines={1}
             style={{
               color: c.faint,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 10.5,
               letterSpacing: 0.3,
               textTransform: "uppercase",
@@ -211,7 +211,7 @@ function FieldGrid({ entries, currency, lang }: { entries: [string, unknown][]; 
             numberOfLines={2}
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 13.5,
               textAlign: rtl.textAlign,
             }}
@@ -263,7 +263,7 @@ function WriteSuccess({ data, lang }: { data: Json; lang: string }) {
           style={{
             flex: 1,
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 14.5,
             textAlign: rtl.textAlign,
           }}
@@ -339,7 +339,7 @@ function KpiStrip({ data, lang }: { data: Json; lang: string }) {
             numberOfLines={1}
             style={{
               color: c.faint,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 10.5,
               letterSpacing: 0.3,
               textTransform: "uppercase",
@@ -351,7 +351,7 @@ function KpiStrip({ data, lang }: { data: Json; lang: string }) {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontFamily: "Inter_800ExtraBold",
               fontSize: 17,
               fontVariant: ["tabular-nums"],
               textAlign: rtl.textAlign,
@@ -396,7 +396,7 @@ function RankedList({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}
@@ -437,7 +437,7 @@ function RankedList({
               key="mid"
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 11,
                 fontVariant: ["tabular-nums"],
               }}
@@ -464,7 +464,7 @@ function RankedList({
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 11,
                   }}
                 >
@@ -503,7 +503,7 @@ function RankedList({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 13,
           }}
         >
@@ -513,7 +513,7 @@ function RankedList({
           <Text
             style={{
               color: c.primary,
-              fontFamily: "PlusJakartaSans_700Bold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 13,
               fontVariant: ["tabular-nums"],
             }}
@@ -526,7 +526,7 @@ function RankedList({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 11.5,
             textAlign: rtl.textAlign,
           }}
@@ -556,7 +556,7 @@ function RankedList({
       <Text
         style={{
           color: c.faint,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
           letterSpacing: 0.3,
           textAlign: rtl.textAlign,
@@ -584,7 +584,7 @@ function RankedList({
           style={{
             flex: 1,
             color: c.warning,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 11,
             textAlign: rtl.textAlign,
           }}
@@ -653,7 +653,7 @@ function RankedList({
             <Text
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_700Bold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 12,
                 width: 18,
                 textAlign: "center",
@@ -666,7 +666,7 @@ function RankedList({
                 numberOfLines={1}
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 14,
                   textAlign: rtl.textAlign,
                 }}
@@ -678,7 +678,7 @@ function RankedList({
                   numberOfLines={1}
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 12,
                     textAlign: rtl.textAlign,
                   }}
@@ -691,7 +691,7 @@ function RankedList({
               <Text
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 14,
                   fontVariant: ["tabular-nums"],
                 }}
@@ -790,13 +790,13 @@ function FlightOfferRow({
       : {};
   const timeStyle = {
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_800ExtraBold",
+    fontFamily: "Inter_800ExtraBold",
     fontSize: 17,
     fontVariant: ["tabular-nums"] as ("tabular-nums")[],
   };
   const iataStyle = {
     color: c.faint,
-    fontFamily: "PlusJakartaSans_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 10.5,
     letterSpacing: 0.4,
   };
@@ -847,7 +847,7 @@ function FlightOfferRow({
                   <Text
                     style={{
                       color: c.warning,
-                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 11,
                     }}
                   >
@@ -863,7 +863,7 @@ function FlightOfferRow({
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 12,
                 marginTop: 4,
                 textAlign: rtl.textAlign,
@@ -877,7 +877,7 @@ function FlightOfferRow({
               numberOfLines={1}
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 12,
                 textAlign: rtl.textAlign,
               }}
@@ -887,7 +887,7 @@ function FlightOfferRow({
                 <Text
                   style={{
                     color: c.faint,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 11,
                   }}
                 >
@@ -901,7 +901,7 @@ function FlightOfferRow({
               numberOfLines={1}
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 11,
                 textAlign: rtl.textAlign,
               }}
@@ -914,7 +914,7 @@ function FlightOfferRow({
               numberOfLines={2}
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 11,
                 marginTop: 3,
                 textAlign: rtl.textAlign,
@@ -938,7 +938,7 @@ function FlightOfferRow({
               <Text
                 style={{
                   color: c.faint,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 11,
                 }}
               >
@@ -948,7 +948,7 @@ function FlightOfferRow({
             <Text
               style={{
                 color: c.success,
-                fontFamily: "PlusJakartaSans_800ExtraBold",
+                fontFamily: "Inter_800ExtraBold",
                 fontSize: 16,
                 fontVariant: ["tabular-nums"],
               }}
@@ -960,7 +960,7 @@ function FlightOfferRow({
             <Text
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 11,
               }}
             >
@@ -971,7 +971,7 @@ function FlightOfferRow({
             <Text
               style={{
                 color: c.faint,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 10,
               }}
             >
@@ -999,7 +999,7 @@ function FlightOfferRow({
           <Text
             style={{
               color: c.primary,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 12,
             }}
           >
@@ -1045,7 +1045,7 @@ function AuditTimeline({ data, lang }: { data: Json; lang: string }) {
               <Text
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13.5,
                   textAlign: rtl.textAlign,
                 }}
@@ -1056,7 +1056,7 @@ function AuditTimeline({ data, lang }: { data: Json; lang: string }) {
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 11.5,
                     textAlign: rtl.textAlign,
                   }}
@@ -1120,7 +1120,7 @@ function CapacityBanner({ totalPct, hiddenCount, lang }: { totalPct: number; hid
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 17,
           }}
         >
@@ -1128,7 +1128,7 @@ function CapacityBanner({ totalPct, hiddenCount, lang }: { totalPct: number; hid
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 11,
             }}
           >
@@ -1138,7 +1138,7 @@ function CapacityBanner({ totalPct, hiddenCount, lang }: { totalPct: number; hid
         <Text
           style={{
             color: tone,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 12,
           }}
         >
@@ -1166,7 +1166,7 @@ function CapacityBanner({ totalPct, hiddenCount, lang }: { totalPct: number; hid
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 11,
             textAlign: rtl.textAlign,
           }}
@@ -1202,7 +1202,7 @@ function EntityBody({ data, lang }: { data: Json; lang: string }) {
           numberOfLines={2}
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15.5,
             textAlign: rtl.textAlign,
           }}
@@ -1214,7 +1214,7 @@ function EntityBody({ data, lang }: { data: Json; lang: string }) {
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 12,
             letterSpacing: 0.3,
             textTransform: "uppercase",
@@ -1253,7 +1253,7 @@ function RecapBody({ data }: { data: Json }) {
       <Text
         style={{
           color: "#C9A24E",
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
           letterSpacing: 1,
           textTransform: "uppercase",
@@ -1267,7 +1267,7 @@ function RecapBody({ data }: { data: Json }) {
           key={i}
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}
@@ -1281,7 +1281,7 @@ function RecapBody({ data }: { data: Json }) {
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 10,
               letterSpacing: 1,
               textTransform: "uppercase",
@@ -1295,7 +1295,7 @@ function RecapBody({ data }: { data: Json }) {
               key={i}
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 12,
                 textAlign: rtl.textAlign,
               }}
@@ -1331,7 +1331,7 @@ function RecapBody({ data }: { data: Json }) {
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 10,
                   }}
                 >
@@ -1359,7 +1359,7 @@ function FallbackGrid({ data, lang }: { data: Json; lang: string }) {
       <Text
         style={{
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_500Medium",
+          fontFamily: "Inter_400Regular",
           fontSize: 13,
           textAlign: rtl.textAlign,
         }}
@@ -1401,7 +1401,7 @@ function SupplierInvoiceBody({ data, lang }: { data: Json; lang: string }) {
           style={{
             flex: 1,
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 14.5,
             textAlign: rtl.textAlign,
           }}
@@ -1411,7 +1411,7 @@ function SupplierInvoiceBody({ data, lang }: { data: Json; lang: string }) {
         <Text
           style={{
             color: committed ? c.success : c.foreground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15,
           }}
         >
@@ -1423,7 +1423,7 @@ function SupplierInvoiceBody({ data, lang }: { data: Json; lang: string }) {
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 12,
             textAlign: rtl.textAlign,
           }}
@@ -1456,7 +1456,7 @@ function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
       <Text
         style={{
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_500Medium",
+          fontFamily: "Inter_400Regular",
           fontSize: 13,
           textAlign: rtl.textAlign,
         }}
@@ -1475,7 +1475,7 @@ function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
               key={i}
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 12.5,
                 textAlign: rtl.textAlign,
               }}
@@ -1496,7 +1496,7 @@ function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
                 numberOfLines={1}
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13,
                   textAlign: rtl.textAlign,
                 }}
@@ -1506,7 +1506,7 @@ function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 11.5,
                   textAlign: rtl.textAlign,
                 }}
@@ -1517,7 +1517,7 @@ function DocClassificationBody({ data, lang }: { data: Json; lang: string }) {
             <Text
               style={{
                 color: low ? c.warning ?? c.mutedForeground : c.success,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 11,
               }}
             >
@@ -1547,7 +1547,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
     <Text
       style={{
         color: c.mutedForeground,
-        fontFamily: "PlusJakartaSans_600SemiBold",
+        fontFamily: "Inter_600SemiBold",
         fontSize: 10,
         letterSpacing: 1,
         textTransform: "uppercase",
@@ -1562,7 +1562,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
       key={i}
       style={{
         color: muted ? c.mutedForeground : c.foreground,
-        fontFamily: "PlusJakartaSans_400Regular",
+        fontFamily: "Inter_400Regular",
         fontSize: 13,
         textAlign: rtl.textAlign,
       }}
@@ -1581,7 +1581,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 14,
               textAlign: rtl.textAlign,
             }}
@@ -1592,7 +1592,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}
@@ -1622,7 +1622,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 14,
             textAlign: rtl.textAlign,
           }}
@@ -1635,7 +1635,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
           <Text
             style={{
               color: "#C9A24E",
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 10,
               letterSpacing: 1,
               textTransform: "uppercase",
@@ -1647,7 +1647,7 @@ function AccountBriefBody({ data, lang }: { data: Json; lang: string }) {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_400Regular",
+              fontFamily: "Inter_400Regular",
               fontSize: 13,
               textAlign: rtl.textAlign,
             }}
@@ -1762,7 +1762,7 @@ function TravellerPicker({
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_700Bold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 14,
           textAlign: rtl.textAlign,
         }}
@@ -1785,7 +1785,7 @@ function TravellerPicker({
           style={{
             flex: 1,
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 14,
             textAlign: rtl.textAlign,
           }}
@@ -1824,7 +1824,7 @@ function TravellerPicker({
                   numberOfLines={1}
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 14,
                     textAlign: rtl.textAlign,
                   }}
@@ -1843,7 +1843,7 @@ function TravellerPicker({
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontFamily: "Inter_600SemiBold",
                         fontSize: 10.5,
                       }}
                     >
@@ -1857,7 +1857,7 @@ function TravellerPicker({
                   numberOfLines={1}
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 12,
                     textAlign: rtl.textAlign,
                   }}
@@ -1874,7 +1874,7 @@ function TravellerPicker({
         <Text
           style={{
             color: c.faint,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 11.5,
             textAlign: rtl.textAlign,
           }}
@@ -1943,7 +1943,7 @@ function FlightSelectionCard({
           <Text
             style={{
               color: c.primary,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 13,
             }}
           >
@@ -1957,7 +1957,7 @@ function FlightSelectionCard({
           <Text
             style={{
               color: c.faint,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 11,
               textAlign: rtl.textAlign,
             }}
@@ -1985,7 +1985,7 @@ function FlightSelectionCard({
                 <Text
                   style={{
                     color: c.secondaryForeground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 12.5,
                   }}
                 >
@@ -2036,14 +2036,14 @@ function StatementOfAccountBody({ data }: { data: Json; lang: string }) {
   const currencies = asArr(data.currencies) as Json[];
   const rowText = {
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_500Medium",
+    fontFamily: "Inter_400Regular",
     fontSize: 12,
     textAlign: rtl.textAlign,
   } as const;
   const muteText = { ...rowText, color: c.mutedForeground, fontSize: 11 } as const;
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ ...rowText, fontSize: 14, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+      <Text style={{ ...rowText, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
         {asStr(account.name) || "Account"} — statement of account
       </Text>
       {currencies.length === 0 && <Text style={muteText}>No issued invoices on record.</Text>}
@@ -2057,7 +2057,7 @@ function StatementOfAccountBody({ data }: { data: Json; lang: string }) {
               {asStr(cur.currency)} · issued {formatCompact(asNum(totals.issued) ?? 0)} · paid{" "}
               {formatCompact(asNum(totals.paid) ?? 0)}
             </Text>
-            <Text style={{ ...rowText, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+            <Text style={{ ...rowText, fontFamily: "Inter_600SemiBold" }}>
               Outstanding {asStr(cur.currency)} {formatCompact(asNum(totals.outstanding) ?? 0)}
             </Text>
             <Text style={muteText}>
@@ -2089,14 +2089,14 @@ function PendingInvoicesBody({ data }: { data: Json; lang: string }) {
   const totals = asArr(data.totalsByCurrency) as Json[];
   const rowText = {
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_500Medium",
+    fontFamily: "Inter_400Regular",
     fontSize: 12,
     textAlign: rtl.textAlign,
   } as const;
   const muteText = { ...rowText, color: c.mutedForeground, fontSize: 11 } as const;
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ ...rowText, fontSize: 14, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+      <Text style={{ ...rowText, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
         Pending invoices — {asStr(scope.label) || "—"}
       </Text>
       {invoices.length === 0 ? (
@@ -2181,7 +2181,7 @@ export function ToolResultCards({
             <Text
               style={{
                 color: softMiss ? c.mutedForeground : c.destructive,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 13,
                 textAlign: rtl.textAlign,
               }}

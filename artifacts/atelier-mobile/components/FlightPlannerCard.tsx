@@ -309,14 +309,14 @@ export function FlightPlannerCard({
 
   const inputStyle = {
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 15,
     textAlign: rtl.textAlign,
   } as const;
 
   const labelStyle = {
     color: c.faint,
-    fontFamily: "PlusJakartaSans_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 10.5,
     letterSpacing: 0.4,
     textTransform: "uppercase" as const,
@@ -357,7 +357,7 @@ export function FlightPlannerCard({
           <Text
             style={{
               color: value ? c.foreground : c.faint,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 14,
               fontVariant: ["tabular-nums"],
               textAlign: rtl.textAlign,
@@ -417,7 +417,7 @@ export function FlightPlannerCard({
           numberOfLines={1}
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontFamily: "Inter_800ExtraBold",
             fontSize: 22,
             letterSpacing: 0.5,
             textAlign: rtl.textAlign,
@@ -439,7 +439,7 @@ export function FlightPlannerCard({
             numberOfLines={1}
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 11,
               textAlign: rtl.textAlign,
             }}
@@ -499,7 +499,7 @@ export function FlightPlannerCard({
               <Text
                 style={{
                   color: active ? c.primaryForeground : c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 12.5,
                 }}
               >
@@ -576,7 +576,7 @@ export function FlightPlannerCard({
               <Text
                 style={{
                   color: c.primary,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13,
                 }}
               >
@@ -635,7 +635,7 @@ export function FlightPlannerCard({
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_800ExtraBold",
+                fontFamily: "Inter_800ExtraBold",
                 fontSize: 17,
                 fontVariant: ["tabular-nums"],
                 minWidth: 20,
@@ -682,7 +682,7 @@ export function FlightPlannerCard({
                 <Text
                   style={{
                     color: active ? c.primaryForeground : c.secondaryForeground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 12.5,
                   }}
                 >
@@ -714,7 +714,7 @@ export function FlightPlannerCard({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 12,
               textAlign: "center",
             }}

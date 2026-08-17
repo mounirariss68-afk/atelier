@@ -118,7 +118,7 @@ export function AppHeader({
             numberOfLines={1}
             style={{
               color: "#FFFFFF",
-              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontFamily: "Comfortaa_700Bold",
               fontSize: 19,
               letterSpacing: -0.3,
             }}
@@ -130,7 +130,7 @@ export function AppHeader({
               numberOfLines={1}
               style={{
                 color: "rgba(238,241,250,0.72)",
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 12,
               }}
             >

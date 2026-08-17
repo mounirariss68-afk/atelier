@@ -140,7 +140,7 @@ function SectionHeading({ label }: { label: string }) {
     <Text
       style={{
         color: c.mutedForeground,
-        fontFamily: "PlusJakartaSans_600SemiBold",
+        fontFamily: "Inter_600SemiBold",
         fontSize: 11,
         textTransform: "uppercase",
         letterSpacing: 0.8,
@@ -180,7 +180,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
         style={{
           marginTop: 10,
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_400Regular",
+          fontFamily: "Inter_400Regular",
           fontSize: 13,
           textAlign: rtl.textAlign,
         }}
@@ -209,7 +209,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
 
   const line = {
     color: c.mutedForeground,
-    fontFamily: "PlusJakartaSans_400Regular" as const,
+    fontFamily: "Inter_400Regular" as const,
     fontSize: 13,
     textAlign: rtl.textAlign,
   };
@@ -262,7 +262,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
                 style={{
                   flexShrink: 1,
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 13,
                   textAlign: rtl.textAlign,
                 }}
@@ -273,7 +273,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 12,
                 }}
               >
@@ -302,7 +302,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
                 <Text
                   style={{
                     color: task.overdue ? c.destructive : c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 12,
                   }}
                 >
@@ -358,7 +358,7 @@ function MeetingRow({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 12,
             }}
           >
@@ -367,7 +367,7 @@ function MeetingRow({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_400Regular",
+              fontFamily: "Inter_400Regular",
               fontSize: 12,
             }}
           >
@@ -379,7 +379,7 @@ function MeetingRow({
             numberOfLines={2}
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 15,
               textAlign: rtl.textAlign,
             }}
@@ -417,7 +417,7 @@ function MeetingRow({
               <Text
                 style={{
                   color: c.primary,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13,
                 }}
               >
@@ -431,7 +431,7 @@ function MeetingRow({
                 numberOfLines={1}
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 13,
                 }}
               >
@@ -481,7 +481,7 @@ function MeetingRow({
                 <Text
                   style={{
                     color: c.primary,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 13,
                   }}
                 >
@@ -636,7 +636,7 @@ function AwayTodayStrip({ date }: { date?: string }) {
       <Text
         style={{
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
           textTransform: "uppercase",
           letterSpacing: 0.6,
@@ -686,7 +686,7 @@ function AwayTodayStrip({ date }: { date?: string }) {
                 <Text
                   style={{
                     color: c.primary,
-                    fontFamily: "PlusJakartaSans_700Bold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 10,
                   }}
                 >
@@ -697,7 +697,7 @@ function AwayTodayStrip({ date }: { date?: string }) {
                 numberOfLines={1}
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 12,
                 }}
               >
@@ -770,7 +770,7 @@ function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: str
       <Text
         style={{
           color: c.mutedForeground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
           textTransform: "uppercase",
           letterSpacing: 0.6,
@@ -806,7 +806,7 @@ function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: str
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 11,
               }}
             >
@@ -961,7 +961,7 @@ function DayNavigator({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15,
           }}
         >
@@ -984,7 +984,7 @@ function DayNavigator({
             <Text
               style={{
                 color: c.primary,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 12,
               }}
             >
@@ -1048,7 +1048,7 @@ function DayTimeline({
             style={{
               width: GUTTER - 8,
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_400Regular",
+              fontFamily: "Inter_400Regular",
               fontSize: 10,
               textAlign: "right",
               transform: [{ translateY: -6 }],
@@ -1111,7 +1111,7 @@ function DayTimeline({
                   numberOfLines={height > 40 ? 2 : 1}
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 12,
                   }}
                 >
@@ -1122,7 +1122,7 @@ function DayTimeline({
                     numberOfLines={1}
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 11,
                     }}
                   >
@@ -1332,7 +1332,7 @@ function RescheduleForm({
 
   const label = {
     color: c.mutedForeground,
-    fontFamily: "PlusJakartaSans_500Medium" as const,
+    fontFamily: "Inter_400Regular" as const,
     fontSize: 13,
     textAlign: rtl.textAlign,
   };
@@ -1346,7 +1346,7 @@ function RescheduleForm({
   };
   const fieldText = {
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_500Medium" as const,
+    fontFamily: "Inter_400Regular" as const,
     fontSize: 15,
   };
 
@@ -1395,7 +1395,7 @@ function RescheduleForm({
               <Text
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 13,
                 }}
               >
@@ -1507,7 +1507,7 @@ function RescheduleForm({
         <Text
           style={{
             color: c.destructive,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}
@@ -1593,7 +1593,7 @@ function MeetingDetailSheet({
   const manageable = Boolean(meeting.internal && meeting.canManage);
   const line = {
     color: c.mutedForeground,
-    fontFamily: "PlusJakartaSans_400Regular" as const,
+    fontFamily: "Inter_400Regular" as const,
     fontSize: 13,
     textAlign: rtl.textAlign,
   };
@@ -1638,7 +1638,7 @@ function MeetingDetailSheet({
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_700Bold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 17,
               }}
             >
@@ -1673,7 +1673,7 @@ function MeetingDetailSheet({
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_700Bold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 20,
                 textAlign: rtl.textAlign,
               }}
@@ -1769,7 +1769,7 @@ function MeetingDetailSheet({
                         <Text
                           style={{
                             color: c.primary,
-                            fontFamily: "PlusJakartaSans_600SemiBold",
+                            fontFamily: "Inter_600SemiBold",
                             fontSize: 13,
                           }}
                         >
@@ -1822,7 +1822,7 @@ function MeetingDetailSheet({
                   <Text
                     style={{
                       color: c.destructive,
-                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 13,
                       textAlign: rtl.textAlign,
                     }}
@@ -2074,7 +2074,7 @@ export default function MeetingsScreen() {
                   <Text
                     style={{
                       color: active ? c.foreground : c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 13,
                     }}
                   >
@@ -2240,7 +2240,7 @@ export default function MeetingsScreen() {
                           numberOfLines={1}
                           style={{
                             color: c.foreground,
-                            fontFamily: "PlusJakartaSans_600SemiBold",
+                            fontFamily: "Inter_600SemiBold",
                             fontSize: 13,
                             textAlign: rtl.textAlign,
                           }}

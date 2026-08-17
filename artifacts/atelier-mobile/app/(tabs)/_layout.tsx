@@ -177,7 +177,7 @@ function AnimatedLabel({
       <Text
         numberOfLines={1}
         style={{
-          fontFamily: focused ? "PlusJakartaSans_700Bold" : "PlusJakartaSans_500Medium",
+          fontFamily: focused ? "Inter_600SemiBold" : "Inter_400Regular",
           fontSize: 10.5,
           letterSpacing: 0.2,
           color: focused ? "#FFFFFF" : muted,

@@ -123,7 +123,7 @@ function ExpenseRow({
                 numberOfLines={1}
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 15.5,
                   textAlign: rtl.textAlign,
                 }}
@@ -133,7 +133,7 @@ function ExpenseRow({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 12.5,
                   textAlign: rtl.textAlign,
                 }}
@@ -144,7 +144,7 @@ function ExpenseRow({
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_800ExtraBold",
+                fontFamily: "Inter_800ExtraBold",
                 fontSize: 16.5,
                 fontVariant: ["tabular-nums"],
               }}
@@ -195,7 +195,7 @@ function QueuedRow({ item }: { item: QueuedExpense }) {
             numberOfLines={1}
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_700Bold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 15.5,
               textAlign: rtl.textAlign,
             }}
@@ -205,7 +205,7 @@ function QueuedRow({ item }: { item: QueuedExpense }) {
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 12.5,
               textAlign: rtl.textAlign,
             }}
@@ -216,7 +216,7 @@ function QueuedRow({ item }: { item: QueuedExpense }) {
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontFamily: "Inter_800ExtraBold",
             fontSize: 16.5,
             fontVariant: ["tabular-nums"],
           }}
@@ -281,7 +281,7 @@ function FilterChip({
       <Text
         style={{
           color: active ? "#FFFFFF" : c.foreground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 12.5,
         }}
       >
@@ -494,7 +494,7 @@ export default function ExpensesScreen() {
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 13,
                 flex: 1,
                 textAlign: rtl.textAlign,
@@ -593,7 +593,7 @@ export default function ExpensesScreen() {
             <Text
               style={{
                 color: c.primary,
-                fontFamily: "PlusJakartaSans_700Bold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 14,
               }}
             >
@@ -633,7 +633,7 @@ export default function ExpensesScreen() {
                 <Text
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_800ExtraBold",
+                    fontFamily: "Comfortaa_700Bold",
                     fontSize: 16,
                     letterSpacing: -0.2,
                     textAlign: rtl.textAlign,
@@ -654,7 +654,7 @@ export default function ExpensesScreen() {
                   <Text
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 11.5,
                       fontVariant: ["tabular-nums"],
                     }}
@@ -667,7 +667,7 @@ export default function ExpensesScreen() {
                   <Text
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 12.5,
                       fontVariant: ["tabular-nums"],
                     }}

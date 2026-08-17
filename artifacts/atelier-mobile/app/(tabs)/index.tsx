@@ -81,7 +81,7 @@ function BlinkCursor({ color }: { color: string }) {
     <Text
       style={{
         color: on ? color : "transparent",
-        fontFamily: "PlusJakartaSans_400Regular",
+        fontFamily: "Inter_400Regular",
         fontSize: 14,
         lineHeight: 20,
       }}
@@ -121,7 +121,7 @@ function MarkdownText({
               <Text
                 style={{
                   color,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 14,
                   lineHeight: 20,
                 }}
@@ -132,7 +132,7 @@ function MarkdownText({
             <Text
               style={{
                 color,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 14,
                 lineHeight: 20,
                 flex: 1,
@@ -142,7 +142,7 @@ function MarkdownText({
             >
               {parts.map((p, j) =>
                 p.startsWith("**") && p.endsWith("**") ? (
-                  <Text key={j} style={{ fontFamily: "PlusJakartaSans_600SemiBold" }}>
+                  <Text key={j} style={{ fontFamily: "Inter_600SemiBold" }}>
                     {p.slice(2, -2)}
                   </Text>
                 ) : (
@@ -183,7 +183,7 @@ function ClarificationCard({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15,
             textAlign: rtl.textAlign,
           }}
@@ -203,7 +203,7 @@ function ClarificationCard({
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 13,
                     textAlign: rtl.textAlign,
                   }}
@@ -230,7 +230,7 @@ function ClarificationCard({
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 13,
                 textAlign: rtl.textAlign,
               }}
@@ -272,7 +272,7 @@ function ClarificationCard({
                     <Text
                       style={{
                         color: active ? c.primaryForeground : c.secondaryForeground,
-                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 14,
                       }}
                     >
@@ -299,7 +299,7 @@ function ClarificationCard({
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 15,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
@@ -338,7 +338,7 @@ function DisambigCard({
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 15,
           textAlign: rtl.textAlign,
         }}
@@ -366,7 +366,7 @@ function DisambigCard({
             <Text
               style={{
                 color: c.secondaryForeground,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 14,
                 textAlign: rtl.textAlign,
               }}
@@ -377,7 +377,7 @@ function DisambigCard({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 12,
                   textAlign: rtl.textAlign,
                 }}
@@ -416,7 +416,7 @@ function ConfirmCard({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15,
             flex: 1,
             textAlign: rtl.textAlign,
@@ -429,7 +429,7 @@ function ConfirmCard({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 14,
             textAlign: rtl.textAlign,
           }}
@@ -453,7 +453,7 @@ function ConfirmCard({
             paddingHorizontal: 14,
             paddingVertical: 12,
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 15,
             textAlign: rtl.textAlign,
           }}
@@ -515,7 +515,7 @@ function TurnBlock({
             <Text
               style={{
                 color: "#FFFFFF",
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 14,
                 lineHeight: 20,
                 textAlign: rtl.textAlign,
@@ -552,7 +552,7 @@ function TurnBlock({
               key={i}
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 12,
                 textAlign: rtl.textAlign,
               }}
@@ -581,7 +581,7 @@ function TurnBlock({
           <Text
             style={{
               color: "#C9A24E",
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 11,
               letterSpacing: 1,
               textTransform: "uppercase",
@@ -600,7 +600,7 @@ function TurnBlock({
               key={i}
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 13,
                 textAlign: rtl.textAlign,
               }}
@@ -614,7 +614,7 @@ function TurnBlock({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 10,
                   letterSpacing: 1,
                   textTransform: "uppercase",
@@ -628,7 +628,7 @@ function TurnBlock({
                   key={i}
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 12,
                     textAlign: rtl.textAlign,
                   }}
@@ -683,7 +683,7 @@ function TurnBlock({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_400Regular",
+              fontFamily: "Inter_400Regular",
               fontSize: 13,
             }}
           >
@@ -727,7 +727,7 @@ function TurnBlock({
           <Text
             style={{
               color: c.destructive,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 14,
               textAlign: rtl.textAlign,
             }}
@@ -962,7 +962,7 @@ export default function ChatScreen() {
               <Text
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 17,
                   textAlign: "center",
                 }}
@@ -972,7 +972,7 @@ export default function ChatScreen() {
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 14,
                   lineHeight: 20,
                   textAlign: "center",
@@ -1043,7 +1043,7 @@ export default function ChatScreen() {
                   <Text
                     style={{
                       color: c.secondaryForeground,
-                      fontFamily: "PlusJakartaSans_500Medium",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 12,
                       maxWidth: 140,
                     }}
@@ -1082,7 +1082,7 @@ export default function ChatScreen() {
                 paddingTop: 11,
                 paddingBottom: 11,
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 14,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
@@ -1145,7 +1145,7 @@ export default function ChatScreen() {
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 17,
               }}
             >
@@ -1189,7 +1189,7 @@ export default function ChatScreen() {
                       returnKeyType="done"
                       style={{
                         color: c.foreground,
-                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 15,
                         textAlign: rtl.textAlign,
                         borderWidth: 1,
@@ -1225,7 +1225,7 @@ export default function ChatScreen() {
                       <Text
                         style={{
                           color: c.foreground,
-                          fontFamily: "PlusJakartaSans_500Medium",
+                          fontFamily: "Inter_400Regular",
                           fontSize: 15,
                           textAlign: rtl.textAlign,
                         }}

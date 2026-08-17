@@ -50,7 +50,7 @@ function SectionTitle({ children }: { children: string }) {
     <Text
       style={{
         color: c.mutedForeground,
-        fontFamily: "PlusJakartaSans_600SemiBold",
+        fontFamily: "Inter_600SemiBold",
         fontSize: 13,
         textTransform: "uppercase",
         letterSpacing: 1,
@@ -118,7 +118,7 @@ function OptionRow({
         <Text
           style={{
             color: destructive ? c.destructive : c.foreground,
-            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 15.5,
           }}
         >
@@ -127,7 +127,7 @@ function OptionRow({
       </View>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
         {detail ? (
-          <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 14 }}>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 }}>
             {detail}
           </Text>
         ) : null}
@@ -311,7 +311,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         color: c.foreground,
-                        fontFamily: "Inter_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 16,
                         textAlign: rtl.textAlign,
                       }}
@@ -356,7 +356,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         color: c.foreground,
-                        fontFamily: "Inter_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 16,
                         textAlign: rtl.textAlign,
                         flex: 1,
@@ -443,7 +443,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         color: c.foreground,
-                        fontFamily: "Inter_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 16,
                         textAlign: rtl.textAlign,
                       }}

@@ -41,7 +41,7 @@ export default function NotFoundScreen() {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontFamily: "Comfortaa_700Bold",
               fontSize: 21,
               letterSpacing: -0.3,
               textAlign: "center",
@@ -61,7 +61,7 @@ export default function NotFoundScreen() {
               <Text
                 style={{
                   color: "#FFFFFF",
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 14,
                 }}
               >

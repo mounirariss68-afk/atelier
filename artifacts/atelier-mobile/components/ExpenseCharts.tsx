@@ -136,7 +136,7 @@ export function ExpenseCharts({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 12,
             letterSpacing: 0.4,
             textTransform: "uppercase",
@@ -174,7 +174,7 @@ export function ExpenseCharts({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 10.5,
                   letterSpacing: 0.6,
                 }}
@@ -185,7 +185,7 @@ export function ExpenseCharts({
               <Text
                 style={{
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_800ExtraBold",
+                  fontFamily: "Inter_800ExtraBold",
                   fontSize: 14,
                   fontVariant: ["tabular-nums"],
                 }}
@@ -211,7 +211,7 @@ export function ExpenseCharts({
                   numberOfLines={1}
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 12,
                     flex: 1,
                     textAlign: rtl.textAlign,
@@ -222,7 +222,7 @@ export function ExpenseCharts({
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 11.5,
                     fontVariant: ["tabular-nums"],
                   }}
@@ -240,7 +240,7 @@ export function ExpenseCharts({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_700Bold",
+            fontFamily: "Inter_600SemiBold",
             fontSize: 12,
             letterSpacing: 0.4,
             textTransform: "uppercase",
@@ -276,7 +276,7 @@ export function ExpenseCharts({
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 9.5,
                   }}
                 >
@@ -289,7 +289,7 @@ export function ExpenseCharts({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 11,
             textAlign: rtl.textAlign,
           }}

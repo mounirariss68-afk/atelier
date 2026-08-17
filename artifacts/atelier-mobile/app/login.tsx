@@ -170,7 +170,7 @@ export default function LoginScreen() {
         <Text
           style={{
             color: "#EEF1FA",
-            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontFamily: "Comfortaa_700Bold",
             fontSize: 23,
             textAlign: "center",
             letterSpacing: -0.4,
@@ -181,7 +181,7 @@ export default function LoginScreen() {
         <Text
           style={{
             color: "#9AA5C4",
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 15,
             lineHeight: 22,
             textAlign: "center",
@@ -241,7 +241,7 @@ export default function LoginScreen() {
                 <Text
                   style={{
                     color: "#EEF1FA",
-                    fontFamily: "PlusJakartaSans_800ExtraBold",
+                    fontFamily: "Comfortaa_700Bold",
                     fontSize: 27,
                     letterSpacing: -0.5,
                   }}
@@ -251,7 +251,7 @@ export default function LoginScreen() {
                 <Text
                   style={{
                     color: "#9AA5C4",
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 15,
                   }}
                 >
@@ -261,7 +261,7 @@ export default function LoginScreen() {
                 <Text
                   style={{
                     color: "#5B6790",
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 11,
                   }}
                 >
@@ -289,7 +289,7 @@ export default function LoginScreen() {
                   <Text
                     style={{
                       color: c.text,
-                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 17,
                     }}
                   >
@@ -298,7 +298,7 @@ export default function LoginScreen() {
                   <Text
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 14,
                       lineHeight: 21,
                     }}
@@ -334,7 +334,7 @@ export default function LoginScreen() {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontFamily: "Inter_600SemiBold",
                         fontSize: 13,
                         textAlign: "center",
                       }}
@@ -348,7 +348,7 @@ export default function LoginScreen() {
                   <Text
                     style={{
                       color: c.text,
-                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontFamily: "Inter_600SemiBold",
                       fontSize: 17,
                     }}
                   >
@@ -358,7 +358,7 @@ export default function LoginScreen() {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 14,
                         lineHeight: 21,
                       }}
@@ -370,7 +370,7 @@ export default function LoginScreen() {
                       <Text
                         style={{
                           color: c.mutedForeground,
-                          fontFamily: "PlusJakartaSans_400Regular",
+                          fontFamily: "Inter_400Regular",
                           fontSize: 14,
                           lineHeight: 21,
                         }}
@@ -408,7 +408,7 @@ export default function LoginScreen() {
                     <Text
                       style={{
                         color: c.primary,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontFamily: "Inter_600SemiBold",
                         fontSize: 14,
                         textAlign: "center",
                       }}
@@ -456,7 +456,7 @@ export default function LoginScreen() {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontFamily: "Inter_600SemiBold",
                         fontSize: 13,
                         textAlign: "center",
                       }}

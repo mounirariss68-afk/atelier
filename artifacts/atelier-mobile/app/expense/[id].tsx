@@ -75,13 +75,13 @@ function PickerRow({
         gap: 10,
       }}
     >
-      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
         {label}
       </Text>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, flexShrink: 1 }}>
         <Text
           numberOfLines={1}
-          style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, flexShrink: 1 }}
+          style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13, flexShrink: 1 }}
         >
           {value}
         </Text>
@@ -109,7 +109,7 @@ function FindingsCard({ findings }: { findings: unknown }) {
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 14,
           textAlign: rtl.textAlign,
         }}
@@ -127,7 +127,7 @@ function FindingsCard({ findings }: { findings: unknown }) {
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 13,
                 flex: 1,
                 textAlign: rtl.textAlign,
@@ -473,10 +473,10 @@ export default function ExpenseDetailScreen() {
 
             {expense.rejectedReason ? (
               <Card style={{ borderColor: c.destructive, backgroundColor: c.destructiveTint, gap: 6 }}>
-                <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 14 }}>
+                <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
                   {t("exp.status.rejected")}
                 </Text>
-                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
                   {expense.rejectedReason}
                 </Text>
               </Card>
@@ -490,7 +490,7 @@ export default function ExpenseDetailScreen() {
                     style={{
                       flex: 1,
                       color: c.foreground,
-                      fontFamily: "PlusJakartaSans_500Medium",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 13,
                       textAlign: rtl.textAlign,
                     }}
@@ -530,7 +530,7 @@ export default function ExpenseDetailScreen() {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 13,
                         textAlign: rtl.textAlign,
                       }}
@@ -551,7 +551,7 @@ export default function ExpenseDetailScreen() {
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
+                      <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 15 }}>
                         {date || "—"}
                       </Text>
                       <Feather name="calendar" size={18} color={c.mutedForeground} />
@@ -626,7 +626,7 @@ export default function ExpenseDetailScreen() {
                   <Text
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "PlusJakartaSans_500Medium",
+                      fontFamily: "Inter_400Regular",
                       fontSize: 13,
                       textAlign: rtl.textAlign,
                     }}
@@ -647,7 +647,7 @@ export default function ExpenseDetailScreen() {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 15 }}>
                       {t(`exp.contextType.${contextType}`)}
                     </Text>
                     <Feather name="chevron-down" size={18} color={c.mutedForeground} />
@@ -669,7 +669,7 @@ export default function ExpenseDetailScreen() {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 15 }}>
                       {selectedName}
                     </Text>
                     <Feather name="chevron-down" size={18} color={c.mutedForeground} />
@@ -703,11 +703,11 @@ export default function ExpenseDetailScreen() {
               <Card style={{ borderColor: c.destructive, backgroundColor: c.destructiveTint, gap: 8 }}>
                 <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
                   <Feather name="x-octagon" size={18} color={c.destructive} />
-                  <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15 }}>
+                  <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
                     {t("exp.redTitle")}
                   </Text>
                 </View>
-                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
                   {t("exp.blockedBody")}
                 </Text>
               </Card>
@@ -738,7 +738,7 @@ export default function ExpenseDetailScreen() {
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 13,
                     textAlign: rtl.textAlign,
                   }}
@@ -866,10 +866,10 @@ function ReadRow({ label, value }: { label: string; value: string }) {
   const rtl = useRTL();
   return (
     <View style={{ gap: 2 }}>
-      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 12, textAlign: rtl.textAlign }}>
+      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
         {label}
       </Text>
-      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15, fontVariant: ["tabular-nums"], textAlign: rtl.textAlign }}>
+      <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15, fontVariant: ["tabular-nums"], textAlign: rtl.textAlign }}>
         {value}
       </Text>
     </View>
@@ -905,11 +905,11 @@ function RationaleModal({
       <Card style={{ gap: 12 }}>
         <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
           <Feather name="alert-triangle" size={18} color={c.warning} />
-          <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16, flex: 1 }}>
+          <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 }}>
             {t("exp.amberTitle")}
           </Text>
         </View>
-        <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
           {t("exp.amberBody")}
         </Text>
         <Field

@@ -1,11 +1,13 @@
 import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
+  Comfortaa_400Regular,
+  Comfortaa_700Bold,
+} from "@expo-google-fonts/comfortaa";
+import {
+  Inter_400Regular,
+  Inter_600SemiBold,
+  Inter_800ExtraBold,
   useFonts,
-  PlusJakartaSans_800ExtraBold,
-} from "@expo-google-fonts/plus-jakarta-sans";
+} from "@expo-google-fonts/inter";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ApiError,
@@ -216,12 +218,16 @@ function Gate() {
 }
 
 export default function RootLayout() {
+  // Task #1279 — brand typography parity with the web app (Task #1278):
+  // Comfortaa 400/700 for headings/display/wordmark, Inter 400/600/800 for
+  // body/UI. Splash stays up (preventAutoHideAsync above + null render here)
+  // until fonts resolve, so there is no flash of unstyled text.
   const [fontsLoaded, fontError] = useFonts({
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
-    PlusJakartaSans_800ExtraBold,
+    Comfortaa_400Regular,
+    Comfortaa_700Bold,
+    Inter_400Regular,
+    Inter_600SemiBold,
+    Inter_800ExtraBold,
   });
 
   if (!fontsLoaded && !fontError) return null;

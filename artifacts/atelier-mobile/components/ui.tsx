@@ -317,7 +317,7 @@ export function Button({
           <Text
             style={{
               color: fg,
-              fontFamily: "PlusJakartaSans_700Bold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 14,
               letterSpacing: 0.2,
             }}
@@ -457,7 +457,7 @@ export function Field({
               top: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 6] }),
               fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 11] }),
               color: focused ? c.primary : c.mutedForeground,
-              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontFamily: "Inter_600SemiBold",
               letterSpacing: 0.2,
             }}
           >
@@ -481,7 +481,7 @@ export function Field({
           style={[
             {
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_500Medium",
+              fontFamily: "Inter_400Regular",
               fontSize: 14,
               padding: 0,
               textAlign: rtl.textAlign,
@@ -496,7 +496,7 @@ export function Field({
         <Text
           style={{
             color: c.destructive,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 12.5,
             textAlign: rtl.textAlign,
           }}
@@ -539,7 +539,7 @@ export function Chip({
       <Text
         style={{
           color: color ?? c.secondaryForeground,
-          fontFamily: "PlusJakartaSans_700Bold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
           letterSpacing: 0.3,
         }}
@@ -579,7 +579,7 @@ export function EmptyState({
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_700Bold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 17,
           textAlign: "center",
         }}
@@ -590,7 +590,7 @@ export function EmptyState({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 14,
             lineHeight: 21,
             textAlign: "center",
@@ -622,7 +622,7 @@ export function ErrorState({ onRetry, message }: { onRetry?: () => void; message
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 15,
           textAlign: "center",
         }}
@@ -797,7 +797,7 @@ export function Sheet({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13,
                   letterSpacing: 0.4,
                   textAlign: "center",
@@ -842,7 +842,7 @@ export function Sheet({
                 <Text
                   style={{
                     color: o.destructive ? c.destructive : c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 15.5,
                   }}
                 >
@@ -954,7 +954,7 @@ export function PickerSheet({
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   fontSize: 13,
                   letterSpacing: 0.4,
                   textAlign: "center",
@@ -989,7 +989,7 @@ export function PickerSheet({
                   style={{
                     flex: 1,
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 15,
                     paddingVertical: 10,
                     textAlign: rtl.textAlign,
@@ -1010,7 +1010,7 @@ export function PickerSheet({
                 <Text
                   style={{
                     color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontFamily: "Inter_400Regular",
                     fontSize: 14,
                     textAlign: "center",
                     paddingVertical: 20,
@@ -1045,8 +1045,8 @@ export function PickerSheet({
                           flex: 1,
                           color: selected ? c.primary : c.foreground,
                           fontFamily: selected
-                            ? "PlusJakartaSans_700Bold"
-                            : "PlusJakartaSans_600SemiBold",
+                            ? "Inter_600SemiBold"
+                            : "Inter_600SemiBold",
                           fontSize: 15.5,
                           textAlign: rtl.textAlign,
                         }}

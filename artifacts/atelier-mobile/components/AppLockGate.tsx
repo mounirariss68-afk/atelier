@@ -179,7 +179,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_700Bold",
+              fontFamily: "Inter_600SemiBold",
               fontSize: 18,
               textAlign: "center",
             }}
@@ -202,7 +202,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
             })}
           >
             <Feather name="unlock" size={16} color="#FFFFFF" />
-            <Text style={{ color: "#FFFFFF", fontFamily: "PlusJakartaSans_700Bold", fontSize: 15 }}>
+            <Text style={{ color: "#FFFFFF", fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
               {t("set.appLockUnlock")}
             </Text>
           </Pressable>

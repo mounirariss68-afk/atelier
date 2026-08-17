@@ -106,7 +106,7 @@ export default function ChangePasswordScreen() {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontFamily: "Comfortaa_700Bold",
               fontSize: 25,
               letterSpacing: -0.4,
               marginTop: 14,
@@ -118,7 +118,7 @@ export default function ChangePasswordScreen() {
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 15,
                 marginTop: 6,
               }}
@@ -166,7 +166,7 @@ export default function ChangePasswordScreen() {
             <Text
               style={{
                 color: c.destructive,
-                fontFamily: "PlusJakartaSans_500Medium",
+                fontFamily: "Inter_400Regular",
                 fontSize: 13,
               }}
             >

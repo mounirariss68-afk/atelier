@@ -85,13 +85,13 @@ function PickerRow({
         gap: 10,
       }}
     >
-      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
         {label}
       </Text>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, flexShrink: 1 }}>
         <Text
           numberOfLines={1}
-          style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, flexShrink: 1 }}
+          style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13, flexShrink: 1 }}
         >
           {value}
         </Text>
@@ -578,7 +578,7 @@ export default function NewExpenseScreen() {
                   style={{
                     flex: 1,
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 14,
                     textAlign: rtl.textAlign,
                   }}
@@ -629,7 +629,7 @@ export default function NewExpenseScreen() {
                 <Text
                   style={{
                     color: c.primary,
-                    fontFamily: "PlusJakartaSans_700Bold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 14,
                   }}
                 >
@@ -692,12 +692,12 @@ export default function NewExpenseScreen() {
                 ) : (
                   <Feather name="zap" size={14} color={c.primary} />
                 )}
-                <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
                   {t("exp.suggest")}
                 </Text>
               </Pressable>
               {suggestNote ? (
-                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 12 }}>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>
                   {suggestNote}
                 </Text>
               ) : null}
@@ -745,7 +745,7 @@ export default function NewExpenseScreen() {
                   style={{
                     flex: 1,
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 14,
                     textAlign: rtl.textAlign,
                   }}
@@ -756,7 +756,7 @@ export default function NewExpenseScreen() {
               {retrying ? (
                 <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "center", gap: 10 }}>
                   <ActivityIndicator color={c.primary} />
-                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 14 }}>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 }}>
                     {t("exp.reading")}
                   </Text>
                 </View>
@@ -778,7 +778,7 @@ export default function NewExpenseScreen() {
           ) : busy ? (
             <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "center", gap: 10 }}>
               <ActivityIndicator color={c.primary} />
-              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 14 }}>
+              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 }}>
                 {busyLabel}
               </Text>
             </View>

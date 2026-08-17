@@ -186,14 +186,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 26,
-    fontFamily: "PlusJakartaSans_800ExtraBold",
+    fontFamily: "Comfortaa_700Bold",
     letterSpacing: -0.5,
     textAlign: "center",
     lineHeight: 36,
   },
   message: {
     fontSize: 15,
-    fontFamily: "PlusJakartaSans_500Medium",
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
   },
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonText: {
-    fontFamily: "PlusJakartaSans_700Bold",
+    fontFamily: "Inter_600SemiBold",
     textAlign: "center",
     fontSize: 16,
   },
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontFamily: "PlusJakartaSans_700Bold",
+    fontFamily: "Inter_600SemiBold",
   },
   closeButton: {
     width: 44,

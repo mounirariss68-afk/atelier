@@ -174,7 +174,7 @@ function SelfBillingSection() {
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_800ExtraBold",
+          fontFamily: "Comfortaa_700Bold",
           fontSize: 17,
           letterSpacing: -0.2,
           textAlign: rtl.textAlign,
@@ -186,17 +186,17 @@ function SelfBillingSection() {
       {items.map((inv) => (
         <Card key={inv.id} style={{ gap: 8 }}>
           <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 14 }}>
+            <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
               {inv.invoiceNumber}
             </Text>
             <Chip label={inv.status} color={tone(inv.status)} />
           </View>
-          <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
             Week {inv.weekIso} · {inv.currency} {inv.totalAmount.toFixed(2)}
             {inv.status === "paid" && inv.remittanceRef ? ` · remittance ${inv.remittanceRef}` : ""}
           </Text>
           {inv.status === "disputed" && inv.disputeReason ? (
-            <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
+            <Text style={{ color: c.destructive, fontFamily: "Inter_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
               Disputed: {inv.disputeReason}
             </Text>
           ) : null}
@@ -208,14 +208,14 @@ function SelfBillingSection() {
                 ) : (
                   <Feather name="download" size={15} color={c.primary} />
                 )}
-                <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>PDF</Text>
+                <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>PDF</Text>
               </View>
             </PressScale>
             {(inv.status === "draft" || inv.status === "approved") && (
               <PressScale onPress={() => { setDisputeFor(inv); setDisputeText(""); }}>
                 <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
                   <Feather name="alert-circle" size={15} color={c.destructive} />
-                  <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>Dispute</Text>
+                  <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Dispute</Text>
                 </View>
               </PressScale>
             )}
@@ -226,10 +226,10 @@ function SelfBillingSection() {
         <Pressable onPress={() => setDisputeFor(null)} style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "center", padding: 24 }}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={[{ backgroundColor: c.card, borderRadius: 24, padding: 20, gap: 12 }, softShadow(c.shadow)]}>
-              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16 }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16 }}>
                 Dispute {disputeFor?.invoiceNumber}
               </Text>
-              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
                 Tell finance what looks wrong. The invoice is held out of payment runs until it is resolved.
               </Text>
               <TextInput
@@ -245,7 +245,7 @@ function SelfBillingSection() {
                   borderRadius: 14,
                   padding: 12,
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 14,
                   textAlignVertical: "top",
                 }}
@@ -553,7 +553,7 @@ function MyTasksSection() {
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontFamily: "Comfortaa_700Bold",
             fontSize: 17,
             letterSpacing: -0.2,
             textAlign: rtl.textAlign,
@@ -577,7 +577,7 @@ function MyTasksSection() {
             testID="button-mobile-task-add-open"
           >
             <Feather name="plus" size={14} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_700Bold", fontSize: 13 }}>
+            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
               {t("me.addTask")}
             </Text>
           </View>
@@ -820,7 +820,7 @@ function LettersSection() {
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_400Regular",
+            fontFamily: "Inter_400Regular",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}
@@ -846,7 +846,7 @@ function LettersSection() {
     borderRadius: 14,
     padding: 12,
     color: c.foreground,
-    fontFamily: "PlusJakartaSans_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 14,
   } as const;
 
@@ -856,7 +856,7 @@ function LettersSection() {
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontFamily: "Comfortaa_700Bold",
             fontSize: 17,
             letterSpacing: -0.2,
             textAlign: rtl.textAlign,
@@ -873,7 +873,7 @@ function LettersSection() {
         >
           <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
             <Feather name="plus" size={15} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
               Request
             </Text>
           </View>
@@ -884,7 +884,7 @@ function LettersSection() {
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_400Regular",
+              fontFamily: "Inter_400Regular",
               fontSize: 13,
               textAlign: rtl.textAlign,
             }}
@@ -900,14 +900,14 @@ function LettersSection() {
             <Card key={l.id} style={{ gap: 8 }}>
               <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <Text
-                  style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 14, flexShrink: 1, textAlign: rtl.textAlign }}
+                  style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14, flexShrink: 1, textAlign: rtl.textAlign }}
                 >
                   {l.letterLabel}
                 </Text>
                 <Chip label={l.refNumber} color={c.mutedForeground} />
               </View>
               <Text
-                style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}
+                style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}
               >
                 {new Date(l.createdAt).toLocaleDateString()} ·{" "}
                 {l.language === "en" ? "English" : l.language === "ar" ? "Arabic" : "Turkish"} ·{" "}
@@ -916,7 +916,7 @@ function LettersSection() {
               <Text
                 style={{
                   color: st.pending ? "#B8860B" : c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 12,
                   textAlign: rtl.textAlign,
                 }}
@@ -931,7 +931,7 @@ function LettersSection() {
                     ) : (
                       <Feather name="download" size={15} color={c.primary} />
                     )}
-                    <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                    <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
                       PDF
                     </Text>
                   </View>
@@ -951,22 +951,22 @@ function LettersSection() {
             <View style={[{ backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12, maxHeight: "88%" }, softShadow(c.shadow)]}>
               {preview ? (
                 <ScrollView contentContainerStyle={{ gap: 12 }}>
-                  <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16, textAlign: rtl.textAlign }}>
+                  <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16, textAlign: rtl.textAlign }}>
                     Confirm before issuing
                   </Text>
-                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                     Nothing has been generated or emailed yet — review the details below.
                   </Text>
                   <View style={{ gap: 8 }}>
-                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                       {def?.label ?? letterType} ·{" "}
                       {language === "en" ? "English" : language === "ar" ? "Arabic" : "Turkish"} ·{" "}
                       {wet ? "Wet signature" : "Digital"}
                     </Text>
-                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                       Issued by {preview.entity.name}
                     </Text>
-                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                       {preview.entity.signatoryName
                         ? `Signed by ${preview.entity.signatoryName}${preview.entity.signatoryTitle ? `, ${preview.entity.signatoryTitle}` : ""}`
                         : "No named signatory on file"}
@@ -975,7 +975,7 @@ function LettersSection() {
                       <Text
                         style={{
                           color: preview.salary.hasSalary ? c.foreground : "#B8860B",
-                          fontFamily: "PlusJakartaSans_500Medium",
+                          fontFamily: "Inter_400Regular",
                           fontSize: 13,
                           textAlign: rtl.textAlign,
                         }}
@@ -985,14 +985,14 @@ function LettersSection() {
                           : "No salary data on file — the letter will omit salary figures"}
                       </Text>
                     ) : null}
-                    <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+                    <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                       {wet
                         ? `Sent to ${preview.entity.signatoryName ?? "the signatory"} to print, sign and hand over`
                         : "Emailed to your Cognirise inbox"}
                     </Text>
                   </View>
                   {previewErr ? (
-                    <Text style={{ color: "#B00020", fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, textAlign: rtl.textAlign }}>
+                    <Text style={{ color: "#B00020", fontFamily: "Inter_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
                       {previewErr}
                     </Text>
                   ) : null}
@@ -1015,7 +1015,7 @@ function LettersSection() {
                 </ScrollView>
               ) : (
               <ScrollView contentContainerStyle={{ gap: 12 }}>
-                <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16 }}>
+                <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16 }}>
                   Request a letter
                 </Text>
                 {catalog.map((t) => (
@@ -1029,10 +1029,10 @@ function LettersSection() {
                         gap: 2,
                       }}
                     >
-                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                      <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
                         {t.label}
                       </Text>
-                      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
+                      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>
                         Use {t.hint}.
                       </Text>
                     </View>
@@ -1050,7 +1050,7 @@ function LettersSection() {
                           paddingVertical: 7,
                         }}
                       >
-                        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+                        <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
                           {lng === "en" ? "English" : lng === "ar" ? "Arabic" : "Turkish"}
                         </Text>
                       </View>
@@ -1061,7 +1061,7 @@ function LettersSection() {
                   <PressScale onPress={() => setWet((v) => !v)}>
                     <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
                       <Feather name={wet ? "check-square" : "square"} size={17} color={c.primary} />
-                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, flexShrink: 1 }}>
+                      <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 13, flexShrink: 1 }}>
                         Wet signature — printed &amp; signed
                         {data.entity.signatoryName ? ` by ${data.entity.signatoryName}` : ""}
                       </Text>
@@ -1261,7 +1261,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "PlusJakartaSans_700Bold",
+                fontFamily: "Inter_600SemiBold",
                 fontSize: 15,
                 textAlign: rtl.textAlign,
               }}
@@ -1303,7 +1303,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 12,
                         textTransform: "uppercase",
                         letterSpacing: 0.5,
@@ -1316,8 +1316,8 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
                       style={{
                         color: c.foreground,
                         fontFamily: row!.bold
-                          ? "PlusJakartaSans_700Bold"
-                          : "PlusJakartaSans_500Medium",
+                          ? "Inter_600SemiBold"
+                          : "Inter_400Regular",
                         fontSize: 13,
                         textAlign: rtl.textAlign,
                       }}
@@ -1330,7 +1330,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "PlusJakartaSans_400Regular",
+                fontFamily: "Inter_400Regular",
                 fontSize: 11,
                 textAlign: rtl.textAlign,
               }}
@@ -1346,7 +1346,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "PlusJakartaSans_800ExtraBold",
+          fontFamily: "Comfortaa_700Bold",
           fontSize: 17,
           letterSpacing: -0.2,
           textAlign: rtl.textAlign,
@@ -1387,7 +1387,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
                   numberOfLines={1}
                   style={{
                     color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     fontSize: 14,
                     textAlign: rtl.textAlign,
                   }}
@@ -1403,7 +1403,7 @@ function PaySection({ isContractor }: { isContractor: boolean }) {
                     <Text
                       style={{
                         color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 11,
                         alignSelf: "center",
                       }}
@@ -1855,7 +1855,7 @@ export default function MeScreen() {
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 28 }}>
+                  <Text style={{ color: "#EEF1FA", fontFamily: "Comfortaa_700Bold", fontSize: 28 }}>
                     {user?.initials ?? name.slice(0, 2).toUpperCase()}
                   </Text>
                 </View>
@@ -1883,16 +1883,16 @@ export default function MeScreen() {
                 )}
               </View>
             </Pressable>
-            <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 21, letterSpacing: -0.3 }}>
+            <Text style={{ color: "#EEF1FA", fontFamily: "Comfortaa_700Bold", fontSize: 21, letterSpacing: -0.3 }}>
               {name}
             </Text>
             {title ? (
-              <Text style={{ color: "#9AA5C4", fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 14 }}>
+              <Text style={{ color: "#9AA5C4", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
                 {title}
               </Text>
             ) : null}
             {email ? (
-              <Text style={{ color: "#9AA5C4", fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+              <Text style={{ color: "#9AA5C4", fontFamily: "Inter_400Regular", fontSize: 13 }}>
                 {email}
               </Text>
             ) : null}
@@ -1958,7 +1958,7 @@ export default function MeScreen() {
                   numberOfLines={1}
                   style={{
                     color: active ? "#FFFFFF" : c.mutedForeground,
-                    fontFamily: active ? "PlusJakartaSans_700Bold" : "PlusJakartaSans_600SemiBold",
+                    fontFamily: active ? "Inter_600SemiBold" : "Inter_600SemiBold",
                     fontSize: 12,
                   }}
                 >
@@ -1974,7 +1974,7 @@ export default function MeScreen() {
           testID="me-build-stamp"
           style={{
             color: c.mutedForeground,
-            fontFamily: "PlusJakartaSans_500Medium",
+            fontFamily: "Inter_400Regular",
             fontSize: 10,
             textAlign: "center",
             opacity: 0.7,
@@ -1996,7 +1996,7 @@ export default function MeScreen() {
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontFamily: "Comfortaa_700Bold",
               fontSize: 17,
               letterSpacing: -0.2,
               textAlign: rtl.textAlign,
@@ -2019,7 +2019,7 @@ export default function MeScreen() {
               }}
             >
               <Feather name="plus" size={14} color={c.primary} />
-              <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_700Bold", fontSize: 13 }}>
+              <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
                 {t("me.addDocument")}
               </Text>
             </View>
@@ -2065,7 +2065,7 @@ export default function MeScreen() {
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       numberOfLines={1}
-                      style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15, textAlign: rtl.textAlign }}
+                      style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15, textAlign: rtl.textAlign }}
                     >
                       {doc.title}
                     </Text>
@@ -2106,7 +2106,7 @@ export default function MeScreen() {
                     <Text
                       style={{
                         color: c.destructive,
-                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontFamily: "Inter_400Regular",
                         fontSize: 12,
                         textAlign: rtl.textAlign,
                       }}
@@ -2163,18 +2163,18 @@ export default function MeScreen() {
                   backgroundColor: c.primary,
                 }}
               />
-              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 18 }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 18 }}>
                 {t("me.qrTitle")}
               </Text>
               {/* QR keeps a white surround for reliable scanning in both themes. */}
               <View style={{ padding: 12, backgroundColor: "#FFFFFF", borderRadius: 16 }}>
                 <QRCode value={card || "BEGIN:VCARD\nEND:VCARD"} size={220} backgroundColor="#FFFFFF" color="#0A1230" />
               </View>
-              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16 }}>{name}</Text>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16 }}>{name}</Text>
               {title ? (
-                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>{title}</Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>{title}</Text>
               ) : null}
-              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
+              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>
                 {t("me.qrHint")}
               </Text>
               <Button label={t("common.close")} variant="secondary" onPress={() => setQrOpen(false)} />
@@ -2244,7 +2244,7 @@ export default function MeScreen() {
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={[{ backgroundColor: c.card, borderRadius: 24, padding: 20, gap: 12 }, softShadow(c.shadow)]}>
-              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16, textAlign: rtl.textAlign }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16, textAlign: rtl.textAlign }}>
                 {t("me.addDocument")}
               </Text>
               <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 8 }}>
@@ -2267,7 +2267,7 @@ export default function MeScreen() {
                     <Text
                       style={{
                         color: addKind === k ? "#FFFFFF" : c.foreground,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontFamily: "Inter_600SemiBold",
                         fontSize: 12,
                       }}
                     >
@@ -2288,7 +2288,7 @@ export default function MeScreen() {
                   borderRadius: 14,
                   padding: 12,
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 14,
                 }}
               />
@@ -2305,7 +2305,7 @@ export default function MeScreen() {
                   borderRadius: 14,
                   padding: 12,
                   color: c.foreground,
-                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontFamily: "Inter_400Regular",
                   fontSize: 14,
                 }}
               />
@@ -2326,7 +2326,7 @@ export default function MeScreen() {
                 <Feather name={addFront ? "check-circle" : "upload"} size={16} color={addFront ? "#2E9E62" : c.primary} />
                 <Text
                   numberOfLines={1}
-                  style={{ flex: 1, color: addFront ? c.foreground : c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
+                  style={{ flex: 1, color: addFront ? c.foreground : c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
                 >
                   {addFront ? addFront.name : t("me.docFront")}
                 </Text>
@@ -2350,12 +2350,12 @@ export default function MeScreen() {
                     <Feather name={addBack ? "check-circle" : "rotate-cw"} size={16} color={addBack ? "#2E9E62" : c.primary} />
                     <Text
                       numberOfLines={1}
-                      style={{ flex: 1, color: addBack ? c.foreground : c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
+                      style={{ flex: 1, color: addBack ? c.foreground : c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
                     >
                       {addBack ? addBack.name : t("me.docBack")}
                     </Text>
                   </Pressable>
-                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
                     {t("me.docCombinedHint")}
                   </Text>
                 </>
