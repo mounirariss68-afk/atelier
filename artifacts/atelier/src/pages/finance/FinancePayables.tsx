@@ -1810,7 +1810,10 @@ export function FinancePayablesOverview() {
       <NeedsYourActionPanel />
       {stageGroups.map((g) => (
         <div key={g.id} className="space-y-3">
-          <SectionHead headline={g.id === "invoices-in" ? "Invoices in" : "Pay"} />
+          <SectionHead
+            eyebrow={g.id === "invoices-in" ? "Capture & approve" : "Settle"}
+            headline={g.id === "invoices-in" ? "Invoices in" : "Pay"}
+          />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid={`payables-group-${g.id}`}>
             {g.tabs.map((t) => (
               <LandingLinkCard key={t.id} tab={t} testId={`payables-landing-${t.id}`} />
@@ -1819,7 +1822,7 @@ export function FinancePayablesOverview() {
         </div>
       ))}
       <div className="space-y-3">
-        <SectionHead headline="Registers & related" />
+        <SectionHead eyebrow="Reference" headline="Registers & related" />
         <p className="text-xs text-text-mute -mt-2">Reference registers and the Wallet expense surfaces (expense approvals stay in Wallet).</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="payables-group-registers">
           {[...registers.tabs, ...RELATED_WALLET_LINKS].map((t) => (
@@ -1866,7 +1869,7 @@ function NeedsYourActionPanel() {
   if (forbidden) {
     return (
       <Card className="p-5" data-testid="payables-needs-action-forbidden">
-        <SectionHead headline="Needs your action" />
+        <SectionHead eyebrow="Approvals" headline="Needs your action" />
         <p className="mt-3 text-sm text-text-mute">
           No pending actions are visible for your role. The payables approvals
           inbox (invoice approvals, payment-run checks and match exceptions) is
@@ -1880,7 +1883,7 @@ function NeedsYourActionPanel() {
   if (isError) {
     return (
       <Card className="p-5" data-testid="payables-needs-action-error">
-        <SectionHead headline="Needs your action" />
+        <SectionHead eyebrow="Approvals" headline="Needs your action" />
         <p className="mt-3 text-sm text-text-mute">
           Couldn&apos;t load pending payables actions. Reload the page to try
           again, or open the{" "}
@@ -1900,8 +1903,8 @@ function NeedsYourActionPanel() {
   const total = items.length;
   return (
     <Card className="p-5" data-testid="payables-needs-action">
-      <div className="flex items-center justify-between gap-2">
-        <SectionHead headline="Needs your action" />
+      <div className="flex items-start justify-between gap-2">
+        <SectionHead eyebrow="Approvals" headline="Needs your action" />
         <MonoChip tone={total > 0 ? "amber" : "default"} data-testid="payables-needs-action-count">
           {total} pending
         </MonoChip>
