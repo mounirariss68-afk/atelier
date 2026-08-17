@@ -6,7 +6,7 @@
    ATELIER — Cognirise brand system
    Internal employee portal: deep Cognirise navy + the Cognirise
    blue→purple→magenta→coral accent, cool near-white text,
-   Plus Jakarta Sans throughout.
+   Inter body/UI + Comfortaa headings throughout (Task #1278).
 
    Theming (Task #497): every color is a CSS variable so the entire
    app can switch between dark mode (default, navy) and light mode
@@ -77,13 +77,17 @@
   --container:    1240px;
   --ease:         cubic-bezier(0.22, 1, 0.36, 1);
 
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Plus Jakarta Sans', Georgia, serif;
+  /* Task #1278 — app-wide typography: Inter for body/UI, Comfortaa for
+     headings/display/wordmark (promoted from the Task #1277 Home-page
+     preview after approval). Comfortaa has no italic — em.accent keeps
+     its slant via font-style; it ships 400/700 only, so headings and
+     the wordmark use 700 (600 would synthesize). */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Comfortaa', 'Inter', Georgia, serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  /* Task #949 — display face for the "Atelier" brand wordmark only.
-     Quicksand echoes the rounded geometric lettering of the Cognirise
-     logo lockup; everything else stays Plus Jakarta Sans. */
-  --font-wordmark: 'Quicksand', 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Display face for the "Atelier" brand wordmark — Comfortaa echoes the
+     rounded geometric lettering of the Cognirise logo lockup. */
+  --font-wordmark: 'Comfortaa', system-ui, sans-serif;
 }
 
 /* ----- Light theme -----
@@ -547,8 +551,10 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-sans);
-    font-weight: 600;
+    /* Task #1278 — Comfortaa for headings app-wide (700: it ships
+       400/700 only; 600 would synthesize). */
+    font-family: 'Comfortaa', var(--font-sans);
+    font-weight: 700;
     color: var(--text);
     letter-spacing: -0.01em;
   }
@@ -561,12 +567,13 @@
   }
 
   /* Task #949 — the "Atelier" brand wordmark is drawn in the logo-matching
-     rounded geometric face (Quicksand). Wins over em.accent so auth-page
-     headlines can keep the accent color while switching typeface. */
+     rounded geometric face (Comfortaa, Task #1278). Wins over em.accent so
+     auth-page headlines can keep the accent color while switching typeface. */
   .font-wordmark, em.accent.font-wordmark {
     font-family: var(--font-wordmark);
     font-style: normal;
-    font-weight: 600;
+    /* Comfortaa ships 400/700 only. */
+    font-weight: 700;
     letter-spacing: 0.015em;
   }
 }
@@ -1023,42 +1030,4 @@
   0% { opacity: 1; }
   50% { opacity: 0; }
   100% { opacity: 1; }
-}
-
-/* ------------------------------------------------------------
-   Task #1277 — Home-page-only typography preview.
-   Home.tsx adds .type-preview-comfortaa-inter to <html> while the
-   Home route is mounted (and removes it on unmount), so the whole
-   visible shell — nav wordmark included — previews the candidate
-   pairing: Comfortaa for headings/display/wordmark, Inter for body,
-   UI labels, buttons, stats and captions. Every other page keeps
-   Plus Jakarta Sans / Quicksand untouched.
-   Unlayered rules deliberately win over the @layer base heading and
-   wordmark rules above. Remove this block (plus the class toggle in
-   Home.tsx and the extra Google Fonts families in index.html) to
-   drop the preview; promote it app-wide by moving these values into
-   :root instead.
-   ------------------------------------------------------------ */
-.type-preview-comfortaa-inter {
-  /* Body / UI / stats / captions → Inter. */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  /* Display/accent italics (em.accent) count as display text → Comfortaa.
-     Comfortaa has no italic; keep the slant via the existing font-style. */
-  --font-serif: 'Comfortaa', 'Inter', Georgia, serif;
-  /* "Atelier" wordmark → Comfortaa 700. */
-  --font-wordmark: 'Comfortaa', 'Quicksand', system-ui, sans-serif;
-}
-.type-preview-comfortaa-inter h1,
-.type-preview-comfortaa-inter h2,
-.type-preview-comfortaa-inter h3,
-.type-preview-comfortaa-inter h4,
-.type-preview-comfortaa-inter h5,
-.type-preview-comfortaa-inter h6 {
-  font-family: 'Comfortaa', var(--font-sans);
-  /* Comfortaa ships 400/700 only in this preview; 600 would synthesize. */
-  font-weight: 700;
-}
-.type-preview-comfortaa-inter .font-wordmark,
-.type-preview-comfortaa-inter em.accent.font-wordmark {
-  font-weight: 700;
 }
