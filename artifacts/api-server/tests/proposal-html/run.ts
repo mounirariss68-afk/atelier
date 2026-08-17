@@ -140,4 +140,16 @@ for (const needle of ["Cognirise DIFC Ltd", "Senior-overseen", "$200,000", "R-1"
 assert.equal(blocks[0].sectionId, "cover");
 assert.equal(blocks[0].isCover, true);
 
-console.log("ok — proposal-html spine + render + parity + header assertions passed");
+// Brand typography — proposal HTML must carry the Inter body + Comfortaa
+// heading stacks (matches the app-wide brand pairing; no serif remnants).
+assert.ok(
+  html.includes('font-family: "Inter", ui-sans-serif'),
+  "body/UI copy must use the Inter stack",
+);
+assert.ok(
+  html.includes('font-family: "Comfortaa", "Inter"'),
+  "headings must use the Comfortaa display stack",
+);
+assert.ok(!/Georgia|Times New Roman|ui-serif/.test(html), "no serif font stacks may remain");
+
+console.log("ok — proposal-html spine + render + parity + header + font assertions passed");

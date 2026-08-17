@@ -1322,7 +1322,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
 
 // Task #1007 — brand-kit table + gold-ruled section heading helpers.
 function sectionHeading(doc: PDFKit.PDFDocument, text: string) {
-  doc.font(FONT.bold).fontSize(13).fillColor(BRAND.navy).text(text, PAGE.left, doc.y, { width: PAGE.contentW });
+  doc.font(FONT.display).fontSize(12.5).fillColor(BRAND.navy).text(text, PAGE.left, doc.y, { width: PAGE.contentW });
   const y = doc.y + 3;
   doc.moveTo(PAGE.left, y).lineTo(PAGE.left + 42, y).strokeColor(BRAND.gold).lineWidth(1.4).stroke();
   doc.y = y + 8;

@@ -37,7 +37,11 @@ export interface CogniriseEmailOptions {
 const NAVY = "#0A1230";
 const MAGENTA = "#C45BB8";
 const GRAD = "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 35%,#C45BB8 65%,#FF7B5A 100%)";
-const SANS = "'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif";
+// Task #1280 — brand pairing (matches the web app): Inter body, Comfortaa
+// headings. Email clients rarely have either installed, so both stacks
+// carry system fallbacks.
+const SANS = "'Inter','Segoe UI',Helvetica,Arial,sans-serif";
+const DISPLAY = "'Comfortaa','Inter','Segoe UI',Helvetica,Arial,sans-serif";
 
 export const cogniriseEscapeHtml = (s: string): string =>
   s
@@ -109,7 +113,7 @@ export function renderCogniriseEmail(o: CogniriseEmailOptions): {
         </td></tr>
         <tr><td height="3" bgcolor="${MAGENTA}" style="height:3px;line-height:3px;font-size:0;background:${GRAD};">&nbsp;</td></tr>
         <tr><td bgcolor="#ffffff" style="background:#ffffff;border-radius:0 0 10px 10px;padding:36px;">
-          <h1 style="margin:0 0 20px;font-family:${SANS};font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;color:${NAVY};">${esc(o.title)}</h1>
+          <h1 style="margin:0 0 20px;font-family:${DISPLAY};font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;color:${NAVY};">${esc(o.title)}</h1>
           ${greeting}
           ${paras}
           ${o.bodyHtml ?? ""}

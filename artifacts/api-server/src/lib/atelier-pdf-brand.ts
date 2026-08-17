@@ -12,7 +12,8 @@
  *     (light tints + rounded corners — NO raster blur, text stays
  *     vector-crisp, selectable and printable, readable in B&W)
  *   - gold accent details, Cognirise wordmark on every page
- *   - Plus Jakarta Sans throughout (full Latin-Extended, Turkish-safe)
+ *   - Inter body + Comfortaa headings (Task #1280, mirrors the web app's
+ *     Task #1278 pairing; both full Latin-Extended, Turkish-safe)
  *
  * The section/panel layout is measurement-first: content is described as
  * simple blocks, measured with the target font, sliced across pages, and
@@ -110,20 +111,27 @@ const PANEL_RADIUS = 12;
 const PANEL_GAP = 14;
 
 // ── Fonts ─────────────────────────────────────────────────────────────────────
+// Task #1280 — brand pairing: Inter for body/UI text, Comfortaa (700) as
+// the display face for titles/wordmarks (Comfortaa ships no italic; body
+// italics stay Inter). Glyph coverage of all six TTFs verified for
+// Turkish + Latin-Extended before bundling.
 export const FONT = {
   regular: "Brand",
   medium: "Brand-Medium",
   semibold: "Brand-SemiBold",
   bold: "Brand-Bold",
   italic: "Brand-Italic",
+  /** Comfortaa Bold — headings/wordmark display face. */
+  display: "Brand-Display",
 } as const;
 
 const FONT_FILES: Record<string, string> = {
-  [FONT.regular]: "PlusJakartaSans-Regular.ttf",
-  [FONT.medium]: "PlusJakartaSans-Medium.ttf",
-  [FONT.semibold]: "PlusJakartaSans-SemiBold.ttf",
-  [FONT.bold]: "PlusJakartaSans-Bold.ttf",
-  [FONT.italic]: "PlusJakartaSans-Italic.ttf",
+  [FONT.regular]: "Inter-Regular.ttf",
+  [FONT.medium]: "Inter-Medium.ttf",
+  [FONT.semibold]: "Inter-SemiBold.ttf",
+  [FONT.bold]: "Inter-Bold.ttf",
+  [FONT.italic]: "Inter-Italic.ttf",
+  [FONT.display]: "Comfortaa-Bold.ttf",
 };
 
 // dist/index.mjs → ../fonts ; src/lib → ../../fonts (same pattern as the
@@ -150,7 +158,7 @@ function loadFontFile(file: string): Buffer {
   );
 }
 
-/** Register the Plus Jakarta Sans family on a pdfkit document. */
+/** Register the Inter + Comfortaa brand fonts on a pdfkit document. */
 export function registerBrandFonts(doc: PDFKit.PDFDocument): void {
   for (const [name, file] of Object.entries(FONT_FILES)) {
     doc.registerFont(name, loadFontFile(file));
@@ -237,7 +245,7 @@ function paintPageChrome(doc: PDFKit.PDFDocument): void {
     doc.image(avatar, PAGE.left, 22, { width: 24, height: 24 });
     tx += 32;
   }
-  doc.font(FONT.semibold).fontSize(12).fillColor(BRAND.navy).text("Riser", tx, 29, { lineBreak: false });
+  doc.font(FONT.display).fontSize(12).fillColor(BRAND.navy).text("Riser", tx, 29, { lineBreak: false });
   doc
     .moveTo(PAGE.left, 56)
     .lineTo(PAGE.right, 56)
@@ -307,7 +315,7 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
   if (whiteLogo) {
     doc.image(whiteLogo, mx, 58, { width: 132 });
   } else {
-    doc.font(FONT.bold).fontSize(18).fillColor(BRAND.white).text("COGNIRISE", mx, 62, { lineBreak: false });
+    doc.font(FONT.display).fontSize(18).fillColor(BRAND.white).text("COGNIRISE", mx, 62, { lineBreak: false });
   }
   const coverAvatar = loadBgAsset("pdf-riser-avatar.png");
   doc
@@ -332,7 +340,7 @@ export function brandCover(doc: PDFKit.PDFDocument, opts: BrandCoverOpts): void 
     .fillColor(BRAND.goldSoft)
     .text(opts.docType.toUpperCase(), mx, y, { width: cw, characterSpacing: 2.6 });
   y = doc.y + 14;
-  doc.font(FONT.bold).fontSize(31).fillColor(BRAND.white).text(opts.title, mx, y, { width: cw, lineGap: 2 });
+  doc.font(FONT.display).fontSize(29).fillColor(BRAND.white).text(opts.title, mx, y, { width: cw, lineGap: 2 });
   y = doc.y + 14;
 
   for (const line of opts.subLines ?? []) {
@@ -628,8 +636,8 @@ export function glassSection(
       // Gold accent tick + navy title.
       doc.roundedRect(PAGE.left + PANEL_PAD, cy + 1, 3.5, 13, 1.75).fill(opts.accent ?? BRAND.gold);
       doc
-        .font(FONT.semibold)
-        .fontSize(12)
+        .font(FONT.display)
+        .fontSize(11.5)
         .fillColor(BRAND.navy)
         .text(first ? title : `${title} (continued)`, PAGE.left + PANEL_PAD + 12, cy, {
           width: INNER_W - 12,

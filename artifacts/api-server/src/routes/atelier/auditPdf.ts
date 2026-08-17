@@ -86,7 +86,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
   doc.pipe(res);
   addBrandPage(doc);
 
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Immutable Audit Trail", PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text("Immutable Audit Trail", PAGE.left, doc.y);
   doc
     .font(FONT.medium)
     .fontSize(9.5)
@@ -241,7 +241,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
   doc.pipe(res);
   addBrandPage(doc);
 
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Per-Person Audit Pack", PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text("Per-Person Audit Pack", PAGE.left, doc.y);
   doc
     .font(FONT.medium)
     .fontSize(9.5)

@@ -5,7 +5,7 @@
  *   1. No Brandfetch CDN logo guess anywhere in the card — the header
  *      renders the account/brand name as a wordmark.
  *   2. Cognirise brand chrome present (navy strip + gradient rule,
- *      Plus Jakarta Sans stack) and the byline is "Prepared by Riser"
+ *      Inter/Comfortaa brand stacks) and the byline is "Prepared by Riser"
  *      — never the requesting user's personal name.
  *   3. Each distilled watch-out carries an LLM-suggested answer ("If they
  *      raise it") generated via the stub-Anthropic pattern.
@@ -180,7 +180,8 @@ async function main(): Promise<void> {
     ok("byline is Riser, not the requesting user");
     if (!first.text.includes("brand-strip") || !first.text.includes("brand-rule"))
       fail("brand chrome (navy strip / gradient rule) missing");
-    if (!first.text.includes("Plus Jakarta Sans")) fail("brand type stack missing");
+    if (!first.text.includes('"Inter"')) fail("Inter body stack missing");
+    if (!first.text.includes('"Comfortaa"')) fail("Comfortaa heading stack missing");
     ok("Cognirise brand chrome present");
     if (!first.text.includes(ANSWER_A) || !first.text.includes(ANSWER_B))
       fail("watch-out talking points missing");

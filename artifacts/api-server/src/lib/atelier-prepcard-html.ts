@@ -14,7 +14,7 @@ import { distillBriefView } from "./atelier-brief-view.js";
 //
 // Branding mirrors the shared Cognirise PDF brand kit
 // (atelier-pdf-brand.ts): navy + magenta palette, the signature
-// blue→purple→magenta→coral gradient rule, Plus Jakarta Sans type,
+// blue→purple→magenta→coral gradient rule, Inter body + Comfortaa heading type,
 // and a "Prepared by Riser" byline (the assistant, never the
 // requesting user).
 //
@@ -411,7 +411,8 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     --blue:#5B7CFF; --purple:#8A5BD6; --magenta:#C45BB8; --coral:#FF7B5A; }
   *,*::before,*::after { box-sizing:border-box; }
   html,body { margin:0; padding:0; background:#eef1f5; color:var(--ink);
-    font-family:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55; }
+    font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55; }
+  h1,h2,h3,.client-wordmark,.cognirise-mark { font-family:"Comfortaa","Inter",ui-sans-serif,system-ui,sans-serif; }
   /* Cognirise brand chrome: navy strip + signature gradient hairline
      (blue→purple→magenta→coral), same as every generated PDF page. */
   .brand-strip { height:8px; background:var(--navy); }

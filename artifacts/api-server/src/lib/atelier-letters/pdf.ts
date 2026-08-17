@@ -6,7 +6,8 @@
  * letterhead: logo top, entity block, rule, footer strip).
  *
  * Language handling:
- *  - EN/TR: Plus Jakarta Sans (full Latin-Extended, Turkish-safe).
+ *  - EN/TR: Inter (Task #1280 brand body face; full Latin-Extended,
+ *    Turkish-safe).
  *  - AR: Noto Naskh Arabic. fontkit shapes Arabic correctly, but pdfkit
  *    lays RTL runs out with `features: ["rtla"]`, which reverses the
  *    whole logical string — so embedded LTR runs (digits, Latin names,
@@ -125,17 +126,23 @@ export async function generateLetterPdf(args: LetterPdfArgs): Promise<Buffer> {
   });
 
   doc.registerFont("Body", loadCardFont());
-  const latinBoldPath = (() => {
+  const loadLatinFont = (file: string): Buffer | null => {
     for (const dir of FONT_CANDIDATE_DIRS) {
       try {
-        return readFileSync(fileURLToPath(new URL(`${dir}PlusJakartaSans-Bold.ttf`, import.meta.url)));
+        return readFileSync(fileURLToPath(new URL(`${dir}${file}`, import.meta.url)));
       } catch {
         // next
       }
     }
     return null;
-  })();
+  };
+  const latinBoldPath = loadLatinFont("Inter-Bold.ttf");
   if (latinBoldPath) doc.registerFont("BodyBold", latinBoldPath);
+  // Comfortaa display face for the wordmark fallback + Latin titles
+  // (headings follow the brand pairing; Arabic titles stay Naskh).
+  const displayBuf = loadLatinFont("Comfortaa-Bold.ttf");
+  if (displayBuf) doc.registerFont("Display", displayBuf);
+  const displayFont = displayBuf ? "Display" : latinBoldPath ? "BodyBold" : "Body";
   const arabic = isAr ? loadArabicFont() : null;
   if (arabic) doc.registerFont("Arabic", arabic);
 
@@ -175,7 +182,7 @@ export async function generateLetterPdf(args: LetterPdfArgs): Promise<Buffer> {
   if (logo) {
     doc.image(logo, left, 40, { fit: [150, 42] });
   } else {
-    doc.font("Body").fontSize(20).fillColor(NAVY).text("Cognirise", left, 44);
+    doc.font(displayFont).fontSize(20).fillColor(NAVY).text("Cognirise", left, 44);
   }
   doc.font("Body").fontSize(8.2).fillColor(MUTED);
   const headerBlock = `${args.entityName}\n${args.entityAddress}`;
@@ -206,7 +213,7 @@ export async function generateLetterPdf(args: LetterPdfArgs): Promise<Buffer> {
 
   // Title ---------------------------------------------------------------
   const titleOpts = optsFor(content.title);
-  doc.font(isAr && !titleOpts.features ? boldFont : isAr ? "Arabic" : boldFont).fontSize(14.5).fillColor(NAVY);
+  doc.font(titleOpts.features ? "Arabic" : displayFont).fontSize(14).fillColor(NAVY);
   doc.text(t(content.title), left, doc.y, {
     width: contentW,
     align: "center",

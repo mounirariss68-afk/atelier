@@ -737,7 +737,7 @@ export async function approveSendCollectionsDraftCore(args: {
 
   const chase = buildCogniriseEmail({
     title: draft.subject,
-    bodyHtml: `<div style="font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#3a4360;white-space:pre-wrap;">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`,
+    bodyHtml: `<div style="font-family:'Inter','Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#3a4360;white-space:pre-wrap;">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`,
     footerText: "Cognirise Finance",
     bodyText: draft.bodyText,
   });

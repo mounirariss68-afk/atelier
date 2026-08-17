@@ -209,7 +209,7 @@ async function deliverBrandedInvite(args: {
         title: args.reminder ? "Reminder: your signature is needed" : "Signature requested",
         greeting: `Dear ${signer.name || "Signer"},`,
         paragraphs,
-        bodyHtml: `<p style="margin:0 0 8px;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;color:#8a93ad;">Or open this link directly:<br/><a href="${esc(signingLink)}" style="color:#8A5BD6;word-break:break-all;">${esc(signingLink)}</a></p>`,
+        bodyHtml: `<p style="margin:0 0 8px;font-family:'Inter','Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;color:#8a93ad;">Or open this link directly:<br/><a href="${esc(signingLink)}" style="color:#8A5BD6;word-break:break-all;">${esc(signingLink)}</a></p>`,
         cta: { label: "Review & sign", url: signingLink },
         bodyText: [
           `Dear ${signer.name || "Signer"},`,

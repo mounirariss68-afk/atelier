@@ -714,7 +714,7 @@ router.get("/reports/:id/export.pdf", async (req, res) => {
   const doc = createBrandDoc();
   doc.pipe(res);
   addBrandPage(doc);
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text(row.name, PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text(row.name, PAGE.left, doc.y);
   doc.font(FONT.medium).fontSize(9.5).fillColor(BRAND.gold).text("Report export", PAGE.left, doc.y + 2);
   doc
     .font(FONT.regular)

@@ -682,7 +682,7 @@ router.get("/wallet/expenses/export", async (req, res) => {
   const doc = createBrandDoc();
   doc.pipe(res);
   addBrandPage(doc);
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("Reimbursable Expenses", PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text("Reimbursable Expenses", PAGE.left, doc.y);
   const metaBits = [
     accountName ? `Client: ${accountName}` : null,
     `Engagement: ${engagementName}`,
@@ -729,7 +729,7 @@ router.get("/wallet/expenses/export", async (req, res) => {
   if (withReceipts.length > 0) {
     const svc = new ObjectStorageService();
     addBrandPage(doc);
-    doc.font(FONT.bold).fontSize(15).fillColor(BRAND.navy).text("Receipt Appendix", PAGE.left, doc.y);
+    doc.font(FONT.display).fontSize(14).fillColor(BRAND.navy).text("Receipt Appendix", PAGE.left, doc.y);
     doc
       .font(FONT.regular)
       .fontSize(9)

@@ -16,3 +16,8 @@ All server-generated PDFs (briefs, POV, invoices, board pack, audit packs, expor
 - Pages paint the approved backdrop JPEGs (assets/pdf-bg-*.jpg, copied to dist/assets by build.mjs runtimeAssets). Pass pdfkit a stable file-path STRING, never a Buffer — string sources are registered once as a shared image XObject; Buffers re-embed per page.
 
 **Why:** print translation of the Atelier glass UI — light tints + rounded panels, no raster blur, text stays vector/selectable.
+
+## Brand fonts
+Server PDFs/emails/HTML exports use **Inter** (body) + **Comfortaa Bold** (`FONT.display`) for headings/title bands/wordmarks — the same pairing as the web app. PPTX exports carry font *names* only (pptx cannot embed fonts).
+**Why:** print/email must match the web brand; all bundled TTFs verified Turkish + Latin-Extended safe. Comfortaa ships no italic, so italics stay Inter.
+**How to apply:** new PDF headings use the display face, not bold Inter. The Plus Jakarta TTFs remain bundled ON PURPOSE — the contract DOCX templates are authored in Jakarta and LibreOffice conversion resolves fonts from the bundled fonts dir; never delete them.

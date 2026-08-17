@@ -56,8 +56,8 @@ export function loadTemplateAsset(name: string): Buffer {
  *
  * pdfkit's built-in Helvetica is WinAnsi-only: Turkish letters outside
  * Latin-1 (ş, ğ, İ, ı…) get substituted with wrong glyphs ("Yiş" printed
- * as "Yi ð"). Embed the bundled Plus Jakarta Sans TTFs (same fonts the
- * contract PDFs ship, full Latin-Extended coverage) instead. Fail loud if
+ * as "Yi ð"). Embed the bundled Inter TTFs (Task #1280 brand body face,
+ * full Latin-Extended coverage) instead. Fail loud if
  * the fonts directory is missing — silently falling back to Helvetica
  * would reintroduce the corruption.
  */
@@ -77,18 +77,18 @@ export function loadCardFont(): Buffer {
     try {
       const dirPath = fileURLToPath(new URL(dir, import.meta.url));
       // Sanity-guard: only accept a dir that actually holds the TTF.
-      if (!readdirSync(dirPath).includes("PlusJakartaSans-Regular.ttf")) {
+      if (!readdirSync(dirPath).includes("Inter-Regular.ttf")) {
         tried.push(dir);
         continue;
       }
-      cardFontCache = readFileSync(`${dirPath}/PlusJakartaSans-Regular.ttf`);
+      cardFontCache = readFileSync(`${dirPath}/Inter-Regular.ttf`);
       return cardFontCache;
     } catch {
       tried.push(dir);
     }
   }
   throw new Error(
-    `business-card font PlusJakartaSans-Regular.ttf not found (tried: ${tried.join(", ")}) — refusing to fall back to WinAnsi Helvetica (would corrupt non-Latin-1 glyphs)`,
+    `business-card font Inter-Regular.ttf not found (tried: ${tried.join(", ")}) — refusing to fall back to WinAnsi Helvetica (would corrupt non-Latin-1 glyphs)`,
   );
 }
 
@@ -283,8 +283,9 @@ const FRONT = {
   divider: { x: EMU(1726096), y0: EMU(440635), y1: EMU(440635 + 1017104) },
   // TextBox offsets + PowerPoint default insets (l 91440, t 45720 EMU).
   textX: EMU(1822174 + 91440),
-  // Template size was 11 with Helvetica; Plus Jakarta Sans runs wider, so
-  // 10 restores the original visual weight (user request 2026-07-28).
+  // Template size was 11 with Helvetica; the embedded brand face runs
+  // wider, so 10 restores the original visual weight (user request
+  // 2026-07-28; auto-fit below shrinks further when needed).
   name: { y: EMU(467139 + 45720), size: 10 },
   title: { y: EMU(675257 + 45720), size: 6 },
   phone: { y: EMU(962887 + 45720), size: 6 },

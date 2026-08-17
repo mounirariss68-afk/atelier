@@ -3,7 +3,7 @@
  *
  * Task #1007 — restyled on the shared glassmorphism brand kit
  * (atelier-pdf-brand.ts): navy glass cover, ice backdrop wash, rounded
- * glass panels per section, gold accents, Plus Jakarta Sans, logo on
+ * glass panels per section, gold accents, Inter body + Comfortaa headings, logo on
  * every page. Three top-level build functions:
  *
  *   buildAccountResearchBriefPdf  — Account Cartographer brief

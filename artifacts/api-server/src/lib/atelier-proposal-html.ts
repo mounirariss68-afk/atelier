@@ -426,20 +426,20 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   :root { --primary: ${primary}; --ink: ${ink}; --gold: ${gold}; --soft: #f4f1ea; --rule: #e6e1d4; --mute: #6b6358; }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fbfaf6; color: var(--ink);
-    font-family: ui-serif, Georgia, "Times New Roman", serif; line-height: 1.55; }
+    font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif; line-height: 1.55; }
   .layout { display: grid; grid-template-columns: 240px 1fr; gap: 0; min-height: 100vh; }
   /* Fixed header (Task #297) — recipient + version always visible. */
   header.fixed-bar { position: sticky; top: 0; z-index: 5; grid-column: 1 / -1;
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 18px; background: white; border-bottom: 1px solid var(--rule);
-    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; color: var(--mute); }
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 12px; color: var(--mute); }
   header.fixed-bar .h-title { color: var(--primary); font-weight: 600; letter-spacing: 0.02em; }
   header.fixed-bar .h-meta { display: flex; gap: 16px; align-items: center; }
   header.fixed-bar .h-pill { padding: 2px 8px; border: 1px solid var(--rule); border-radius: 999px;
     text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; color: var(--gold); }
   nav.toc { position: sticky; top: 38px; align-self: start; height: calc(100vh - 38px); padding: 28px 18px;
     background: var(--soft); border-right: 1px solid var(--rule); overflow-y: auto;
-    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
   nav.toc .brand { font-weight: 600; letter-spacing: 0.04em; color: var(--gold);
     text-transform: uppercase; font-size: 11px; margin-bottom: 18px; }
   nav.toc ol { list-style: none; counter-reset: toc; padding: 0; margin: 0; }
@@ -459,17 +459,17 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   section.cover { background: linear-gradient(180deg, #fbfaf6 0%, var(--soft) 100%); }
   .cover-inner { max-width: 720px; margin: 0 auto; padding-top: 60px; }
   .cover-logo { display: block; height: 44px; width: auto; margin-bottom: 36px; }
-  .cover .brand { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.18em;
+  .cover .brand { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.18em;
     text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 32px; }
   .cover-tagline { font-style: italic; color: var(--mute); margin-bottom: 16px; }
-  .cover-title { font-size: 44px; line-height: 1.1; margin: 0 0 24px; color: var(--primary); }
+  .cover-title { font-family: "Comfortaa", "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 44px; line-height: 1.1; margin: 0 0 24px; color: var(--primary); }
   .cover .recipient-line { font-size: 16px; color: var(--ink); }
-  .cover-meta { margin-top: 36px; font-family: ui-sans-serif, system-ui, sans-serif;
+  .cover-meta { margin-top: 36px; font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
-  .section-eyebrow { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.16em;
+  .section-eyebrow { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.16em;
     text-transform: uppercase; font-size: 10px; color: var(--gold); margin-bottom: 8px; }
-  .section-header h2 { font-size: 32px; margin: 0 0 8px; color: var(--primary); }
-  .section-meta { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; color: var(--mute);
+  .section-header h2 { font-family: "Comfortaa", "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 32px; margin: 0 0 8px; color: var(--primary); }
+  .section-meta { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 11px; color: var(--mute);
     margin-bottom: 28px; display: flex; gap: 12px; align-items: center; }
   .status-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--rule);
     text-transform: uppercase; letter-spacing: 0.1em; font-size: 9.5px; }
@@ -478,13 +478,13 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   .status-pill.s-red, .status-pill.s-rejected { color: #b94646; border-color: #ecbcbc; }
   .section-body { font-size: 16px; max-width: 820px; }
   .section-body p { margin: 0 0 14px; }
-  .profile-flow h3, .profile-flow h4 { color: var(--primary); margin: 18px 0 8px; }
+  .profile-flow h3, .profile-flow h4 { font-family: "Comfortaa", "Inter", ui-sans-serif, system-ui, sans-serif; color: var(--primary); margin: 18px 0 8px; }
   .profile-flow h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em;
-    font-family: ui-sans-serif, system-ui, sans-serif; color: var(--mute); }
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif; color: var(--mute); }
   .bullets { padding-left: 20px; margin: 0 0 8px; }
   .bullets li { margin-bottom: 6px; }
   .pricing-table, .compliance-table { width: 100%; border-collapse: collapse; margin-top: 12px;
-    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
   .pricing-table th { width: 130px; text-align: left; padding: 8px 10px; color: var(--mute);
     font-weight: 500; border-bottom: 1px solid var(--rule); }
   .pricing-table td { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
@@ -496,7 +496,7 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   .watermark { position: fixed; inset: 0; pointer-events: none; z-index: 1;
     background-image: repeating-linear-gradient(-30deg, transparent 0 220px, rgba(184,133,43,0.07) 220px 360px); }
   .watermark::after { content: attr(data-text); position: fixed; bottom: 16px; right: 24px;
-    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10px; letter-spacing: 0.12em;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 10px; letter-spacing: 0.12em;
     text-transform: uppercase; color: rgba(15,23,42,0.55); background: rgba(255,255,255,0.7);
     padding: 4px 10px; border: 1px solid var(--rule); border-radius: 4px; }
   @media (max-width: 760px) {

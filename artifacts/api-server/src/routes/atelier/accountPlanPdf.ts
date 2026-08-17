@@ -225,7 +225,7 @@ export async function accountPlanPdfHandler(
   addBrandPage(doc);
 
   // Header band.
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text(brand, PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text(brand, PAGE.left, doc.y);
   doc
     .font(FONT.medium)
     .fontSize(9.5)

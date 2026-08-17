@@ -617,6 +617,11 @@ export class PdfConversionError extends Error {}
 /**
  * Task #514 — faithful fonts in docx→PDF conversion.
  *
+ * NOTE (Task #1280): the app brand moved to Inter + Comfortaa, but the
+ * Jakarta TTFs stay bundled in fonts/ deliberately — the client-supplied
+ * contract DOCX templates are authored in Plus Jakarta Sans and must keep
+ * rendering faithfully. Do not delete the Jakarta files.
+ *
  * The contract templates are set in "Plus Jakarta Sans ExtraLight"; the
  * server environment only ships DejaVu, so LibreOffice silently
  * substituted the body font. The Plus Jakarta Sans TTFs are bundled in

@@ -32,7 +32,7 @@ export function createSelfBilledInvoiceDoc(): PDFKit.PDFDocument {
 export function writeSelfBilledInvoicePdf(doc: PDFKit.PDFDocument, inv: SelfBilledInvoice): void {
   addBrandPage(doc);
 
-  doc.font(FONT.bold).fontSize(17).fillColor(BRAND.navy).text("SELF-BILLED INVOICE (RCTI)", PAGE.left, doc.y);
+  doc.font(FONT.display).fontSize(16).fillColor(BRAND.navy).text("SELF-BILLED INVOICE (RCTI)", PAGE.left, doc.y);
   doc
     .font(FONT.regular)
     .fontSize(8)
@@ -74,7 +74,7 @@ export function writeSelfBilledInvoicePdf(doc: PDFKit.PDFDocument, inv: SelfBill
     doc.y,
     { width: PAGE.right - 320, align: "right" },
   );
-  doc.font(FONT.bold).fontSize(12).fillColor(BRAND.navy);
+  doc.font(FONT.display).fontSize(12).fillColor(BRAND.navy);
   doc.text(`Total: ${inv.currency} ${inv.totalAmount.toFixed(2)}`, 320, doc.y + 2, { width: PAGE.right - 320, align: "right" });
   if (inv.vat?.note) {
     doc.moveDown(0.8);

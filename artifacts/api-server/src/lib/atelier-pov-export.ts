@@ -118,7 +118,10 @@ const AI_NOTE =
 
 // ── PPTX export ───────────────────────────────────────────────────────────────
 
-const FONT_FACE = "Plus Jakarta Sans";
+// Task #1280 brand pairing — Inter body, Comfortaa headings (font *names*
+// only: pptx cannot embed fonts, viewers fall back when not installed).
+const FONT_FACE = "Inter";
+const HEADING_FACE = "Comfortaa";
 // 16:9 slide geometry in inches.
 const SLIDE_W = 10;
 const SLIDE_H = 5.625;
@@ -166,7 +169,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
                 text: "COGNIRISE",
                 options: {
                   x: MX, y: SLIDE_H - 0.45, w: 2, h: 0.3,
-                  fontFace: FONT_FACE, fontSize: 9, bold: true,
+                  fontFace: HEADING_FACE, fontSize: 9, bold: true,
                   color: BRAND.navy.replace("#", ""),
                 },
               },
@@ -202,7 +205,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
       s.addImage({ data: `data:image/png;base64,${whiteLogo}`, x: MX, y: 0.5, w: 1.55, h: 0.34 });
     } else {
       s.addText("COGNIRISE", {
-        x: MX, y: 0.45, w: 3, h: 0.4, fontFace: FONT_FACE, fontSize: 16, bold: true, color: "FFFFFF",
+        x: MX, y: 0.45, w: 3, h: 0.4, fontFace: HEADING_FACE, fontSize: 16, bold: true, color: "FFFFFF",
       });
     }
     s.addText("POINT OF VIEW", {
@@ -210,7 +213,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
       color: goldSoft, charSpacing: 4,
     });
     s.addText(pov.title, {
-      x: MX, y: 2.05, w: CW, h: 1.35, fontFace: FONT_FACE, fontSize: 30, bold: true,
+      x: MX, y: 2.05, w: CW, h: 1.35, fontFace: HEADING_FACE, fontSize: 28, bold: true,
       color: "FFFFFF", valign: "top", fit: "shrink",
     });
     s.addText(oppName + (pov.audience ? ` · For ${pov.audience}` : ""), {
@@ -243,7 +246,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
       : [`Draft v${v.versionNumber}`];
     const s = pptx.addSlide({ masterName: "COG_CONTENT" });
     s.addText("Contents", {
-      x: MX, y: 0.4, w: CW, h: 0.45, fontFace: FONT_FACE, fontSize: 20, bold: true, color: navy,
+      x: MX, y: 0.4, w: CW, h: 0.45, fontFace: HEADING_FACE, fontSize: 20, bold: true, color: navy,
     });
     s.addShape("rect", { x: MX, y: 0.92, w: 0.7, h: 0.035, fill: { color: gold } });
     // Two columns when long.
@@ -269,7 +272,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
   const addSectionSlide = (heading: string, bodyChunk: string, refs: string | null, intentOnly = false) => {
     const s = pptx.addSlide({ masterName: "COG_CONTENT" });
     s.addText(heading, {
-      x: MX, y: 0.35, w: CW, h: 0.62, fontFace: FONT_FACE, fontSize: 19, bold: true,
+      x: MX, y: 0.35, w: CW, h: 0.62, fontFace: HEADING_FACE, fontSize: 18, bold: true,
       color: navy, valign: "top", fit: "shrink",
     });
     s.addShape("rect", { x: MX, y: 1.0, w: 0.7, h: 0.035, fill: { color: gold } });
@@ -328,7 +331,7 @@ export async function buildPovPptx(input: PovVersionInput): Promise<Buffer> {
   {
     const s = pptx.addSlide({ masterName: "COG_CONTENT" });
     s.addText("Sources", {
-      x: MX, y: 0.4, w: CW, h: 0.45, fontFace: FONT_FACE, fontSize: 20, bold: true, color: navy,
+      x: MX, y: 0.4, w: CW, h: 0.45, fontFace: HEADING_FACE, fontSize: 20, bold: true, color: navy,
     });
     s.addShape("rect", { x: MX, y: 0.92, w: 0.7, h: 0.035, fill: { color: gold } });
     let y = 1.15;
@@ -455,7 +458,7 @@ export function renderPovHtml(input: PovVersionInput): string {
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
     background: linear-gradient(180deg, #E9EFF7 0%, #F5F8FC 30%, #FBFCFE 100%);
     color: var(--ink); line-height: 1.6;
   }
@@ -465,6 +468,7 @@ export function renderPovHtml(input: PovVersionInput): string {
     color: #fff; padding: 56px 8vw 44px;
   }
   .cover .logo { width: 150px; display: block; }
+  h1, h2, .wordmark { font-family: "Comfortaa", "Inter", "Segoe UI", system-ui, sans-serif; }
   .wordmark { font-weight: 800; letter-spacing: 1px; color: var(--navy); }
   .wordmark-white { color: #fff; font-size: 20px; }
   .cover .doctype { margin-top: 72px; color: var(--magenta-soft); font-weight: 700; letter-spacing: 4px; font-size: 13px; }

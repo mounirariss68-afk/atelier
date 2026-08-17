@@ -29,7 +29,7 @@ export interface WelcomeEmailArgs {
   sender: EmailSender;
 }
 
-const SANS = "'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif";
+const SANS = "'Inter','Segoe UI',Helvetica,Arial,sans-serif";
 
 export function buildWelcomeEmail(args: WelcomeEmailArgs): {
   html: string;

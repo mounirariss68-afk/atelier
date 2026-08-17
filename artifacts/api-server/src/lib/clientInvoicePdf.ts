@@ -5,7 +5,7 @@
  * as a Cognirise-branded A4 document, either streamed to a browser
  * response or buffered for an email attachment. Task #1007 — restyled
  * on the shared glassmorphism brand kit (atelier-pdf-brand.ts): ice
- * backdrop wash, glass panels, navy/gold palette, Plus Jakarta Sans,
+ * backdrop wash, glass panels, navy/gold palette, Inter body + Comfortaa headings,
  * wordmark chrome on every page.
  *
  * Drafts are intentionally NOT renderable here: the routes only call
@@ -57,8 +57,8 @@ export function writeClientInvoicePdf(doc: PDFKit.PDFDocument, args: ClientInvoi
 
   // Title band.
   doc
-    .font(FONT.bold)
-    .fontSize(19)
+    .font(FONT.display)
+    .fontSize(18)
     .fillColor(inv.status === "void" ? BRAND.danger : BRAND.navy)
     .text(inv.status === "void" ? "INVOICE (VOID)" : "INVOICE", PAGE.left, doc.y);
   doc
@@ -110,7 +110,7 @@ export function writeClientInvoicePdf(doc: PDFKit.PDFDocument, args: ClientInvoi
   doc.font(FONT.regular).fontSize(10).fillColor(BRAND.ink);
   doc.text(`Subtotal: ${money(inv.subtotal, currency)}`, 320, doc.y, { width: PAGE.right - 320, align: "right" });
   doc.text(`VAT (${inv.vatRatePct}%): ${money(inv.vatAmount, currency)}`, 320, doc.y, { width: PAGE.right - 320, align: "right" });
-  doc.font(FONT.bold).fontSize(12).fillColor(BRAND.navy);
+  doc.font(FONT.display).fontSize(12).fillColor(BRAND.navy);
   doc.text(`Total due: ${money(inv.total, currency)}`, 320, doc.y + 2, { width: PAGE.right - 320, align: "right" });
   if (inv.amountPaid > 0) {
     doc.font(FONT.regular).fontSize(10).fillColor(BRAND.ink);
