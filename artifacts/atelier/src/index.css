@@ -1024,3 +1024,41 @@
   50% { opacity: 0; }
   100% { opacity: 1; }
 }
+
+/* ------------------------------------------------------------
+   Task #1277 — Home-page-only typography preview.
+   Home.tsx adds .type-preview-comfortaa-inter to <html> while the
+   Home route is mounted (and removes it on unmount), so the whole
+   visible shell — nav wordmark included — previews the candidate
+   pairing: Comfortaa for headings/display/wordmark, Inter for body,
+   UI labels, buttons, stats and captions. Every other page keeps
+   Plus Jakarta Sans / Quicksand untouched.
+   Unlayered rules deliberately win over the @layer base heading and
+   wordmark rules above. Remove this block (plus the class toggle in
+   Home.tsx and the extra Google Fonts families in index.html) to
+   drop the preview; promote it app-wide by moving these values into
+   :root instead.
+   ------------------------------------------------------------ */
+.type-preview-comfortaa-inter {
+  /* Body / UI / stats / captions → Inter. */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Display/accent italics (em.accent) count as display text → Comfortaa.
+     Comfortaa has no italic; keep the slant via the existing font-style. */
+  --font-serif: 'Comfortaa', 'Inter', Georgia, serif;
+  /* "Atelier" wordmark → Comfortaa 700. */
+  --font-wordmark: 'Comfortaa', 'Quicksand', system-ui, sans-serif;
+}
+.type-preview-comfortaa-inter h1,
+.type-preview-comfortaa-inter h2,
+.type-preview-comfortaa-inter h3,
+.type-preview-comfortaa-inter h4,
+.type-preview-comfortaa-inter h5,
+.type-preview-comfortaa-inter h6 {
+  font-family: 'Comfortaa', var(--font-sans);
+  /* Comfortaa ships 400/700 only in this preview; 600 would synthesize. */
+  font-weight: 700;
+}
+.type-preview-comfortaa-inter .font-wordmark,
+.type-preview-comfortaa-inter em.accent.font-wordmark {
+  font-weight: 700;
+}

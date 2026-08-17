@@ -795,6 +795,16 @@ export default function Home() {
   React.useEffect(() => {
     if (selfOnly) setLocation("/me", { replace: true });
   }, [selfOnly, setLocation]);
+
+  // Task #1277 — Home-only typography preview (Comfortaa headings + Inter
+  // body). The class lives on <html> so the nav wordmark previews too while
+  // Home is on screen; unmounting (navigating anywhere else) removes it, so
+  // every other page keeps Plus Jakarta Sans / Quicksand.
+  React.useEffect(() => {
+    if (selfOnly) return;
+    document.documentElement.classList.add("type-preview-comfortaa-inter");
+    return () => document.documentElement.classList.remove("type-preview-comfortaa-inter");
+  }, [selfOnly]);
   if (selfOnly) return null;
 
   if (isPending) {
