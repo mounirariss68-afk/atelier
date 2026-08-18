@@ -18,7 +18,9 @@ import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp, UserX } 
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
 // Task #292 — Account creation: partner-tier + senior_manager.
-const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
+// Task #1297 — non_equity_partner can create their OWN accounts (server
+// forces partnerOwnerId = self and stamps origination attribution).
+const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager", "non_equity_partner"]);
 
 const TIER_TONE: Record<string, "gold" | "green" | "amber" | "default"> = {
   A: "gold",

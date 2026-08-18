@@ -58,6 +58,12 @@ import {
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
 import accountRoutes from "./accountRoutes";
+// Task #1297 — Non-Equity Partner scoped-access helpers + grant routes.
+import {
+  nepAccessFor,
+  nepCanSeeOpportunity,
+} from "../../lib/atelier-nep-access.js";
+import nepAccessRoutes from "./nepAccessRoutes";
 import pricingRoutes from "./pricingRoutes";
 import engagementRoutes, {
   accessibleEngagementIds,
@@ -262,6 +268,87 @@ router.use((req, res, next) => {
     });
     return;
   }
+  // Task #1297 — Non-Equity Partner (NEP). Their world is the Me lens
+  // (self-scope, like employee/contractor) PLUS a deliberately narrow CRM
+  // slice: accounts they own or were granted, opportunities they own or
+  // were invited into, and creating their own accounts/opportunities.
+  // Everything else — finance, roster, pipeline rollups, partners lens,
+  // documents, users enumeration — is forbidden at this central gate.
+  if (me.role === "non_equity_partner") {
+    const p = req.path;
+    const method = req.method.toUpperCase();
+    if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
+      return next();
+    if (p.startsWith("/people-photos/")) return next();
+    if (isExpenseTaxonomyHelper(p)) return next();
+    // Chat: clamped server-side to me.* + their accessible-CRM slice via
+    // SELF_ONLY_CHAT_ROLES + the NEP entity clamp in the capability layer.
+    if (p === "/cli" || p.startsWith("/cli/")) return next();
+    // Accounts: reads flow through canSeeAccount (NEP-aware). Creates are
+    // allowed (ownership forced to self). WRITES under an existing account
+    // are only allowed when the NEP is the partner owner of that account.
+    if (p === "/accounts") return next(); // GET list / POST create
+    const acctMatch = p.match(/^\/accounts\/([^/]+)/);
+    if (acctMatch) {
+      if (method === "GET") return next(); // per-route canSeeAccount gates
+      void (async () => {
+        const [acct] = await db
+          .select({ partnerOwnerId: atelierAccounts.partnerOwnerId })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.id, acctMatch[1]!));
+        if (acct && acct.partnerOwnerId === me.id) return next();
+        res.status(403).json({
+          error: "nep-scope",
+          message:
+            "Non-equity partners can only edit accounts they own.",
+        });
+      })().catch(next);
+      return;
+    }
+    // Opportunities: list/detail are NEP-filtered in their handlers;
+    // creates are allowed (ownership forced to self); writes require
+    // ownership of the opportunity.
+    if (p === "/opportunities") return next(); // GET list / POST create
+    const oppMatch = p.match(/^\/opportunities\/([^/]+)/);
+    if (oppMatch) {
+      void (async () => {
+        const [opp] = await db
+          .select()
+          .from(atelierOpportunities)
+          .where(
+            and(
+              eq(atelierOpportunities.id, oppMatch[1]!),
+              isNull(atelierOpportunities.deletedAt),
+            ),
+          );
+        if (!opp) {
+          res.status(404).json({ error: "opportunity-not-found" });
+          return;
+        }
+        const nep = await nepAccessFor(me.id);
+        if (!nepCanSeeOpportunity(nep, opp, me.id)) {
+          res.status(404).json({ error: "opportunity-not-found" });
+          return;
+        }
+        if (method !== "GET" && opp.partnerOwnerId !== me.id) {
+          res.status(403).json({
+            error: "nep-scope",
+            message:
+              "Non-equity partners can only edit opportunities they own.",
+          });
+          return;
+        }
+        next();
+      })().catch(next);
+      return;
+    }
+    res.status(403).json({
+      error: "nep-scope",
+      message:
+        "Non-equity partner logins may only access /me, their own accounts and opportunities, and chat.",
+    });
+    return;
+  }
   // Task #50 — contractors are a self-only persona exactly like employees:
   // their whole world is the Me lens. The legacy contractor allowlist
   // (/engagements, /ledger/timesheets, /wallet/expenses) is retired — those
@@ -386,6 +473,8 @@ router.use(hireRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);
 router.use(accountRoutes);
+// Task #1297 — NEP account grants + opportunity invites (leadership only).
+router.use(nepAccessRoutes);
 // Mount engagement / charter / deliverable / artifact write routes (Task #222).
 router.use(engagementRoutes);
 // Mount process / prototype / proposal write routes (Task #223).
@@ -1042,10 +1131,18 @@ router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
   const sectors = split(req.query.sector);
   const accounts = split(req.query.account);
 
-  const rows = await db
+  let rows = await db
     .select()
     .from(atelierOpportunities)
     .where(isNull(atelierOpportunities.deletedAt));
+  // Task #1297 — non_equity_partner: the pipeline list is clamped to
+  // opportunities they own, were invited into, or that sit on an account
+  // they hold full access on. No firm-wide pipeline ever.
+  const nepMe = req.atelierPersona;
+  if (nepMe?.role === "non_equity_partner") {
+    const nep = await nepAccessFor(nepMe.id);
+    rows = rows.filter((o) => nepCanSeeOpportunity(nep, o, nepMe.id));
+  }
   let wire = await Promise.all(rows.map(buildOpportunityWire));
   if (stages.length) wire = wire.filter((o) => stages.includes(o.salesStage));
   if (owners.length)
@@ -1075,6 +1172,15 @@ router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) =
   if (!row) {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
+  }
+  // Task #1297 — NEPs only see opportunities in their explicit access set.
+  const oppMe = req.atelierPersona;
+  if (oppMe?.role === "non_equity_partner") {
+    const nep = await nepAccessFor(oppMe.id);
+    if (!nepCanSeeOpportunity(nep, row, oppMe.id)) {
+      res.status(404).json({ error: "opportunity-not-found" });
+      return;
+    }
   }
   res.json(AtelierGetOpportunityResponse.parse(await buildOpportunityWire(row)));
 });

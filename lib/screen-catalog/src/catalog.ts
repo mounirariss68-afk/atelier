@@ -231,6 +231,7 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "recruiter",
       "compliance_officer",
       "employee",
+      "non_equity_partner",
       "alliance_partner"
     ],
     "parameterized": false
@@ -436,7 +437,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "partner_firm_resource",
       "board_observer",
       "recruiter",
-      "compliance_officer"
+      "compliance_officer",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -523,7 +525,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "partner_firm_resource",
       "board_observer",
       "recruiter",
-      "compliance_officer"
+      "compliance_officer",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1088,7 +1091,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1118,7 +1122,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1147,7 +1152,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1179,7 +1185,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1239,7 +1246,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1265,7 +1273,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1296,7 +1305,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "board_observer",
       "recruiter",
       "compliance_officer",
-      "employee"
+      "employee",
+      "non_equity_partner"
     ],
     "parameterized": false
   },
@@ -1876,7 +1886,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "partner_firm_resource",
       "board_observer",
       "recruiter",
-      "compliance_officer"
+      "compliance_officer",
+      "non_equity_partner"
     ],
     "parameterized": true
   },
@@ -1909,7 +1920,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "partner_firm_resource",
       "board_observer",
       "recruiter",
-      "compliance_officer"
+      "compliance_officer",
+      "non_equity_partner"
     ],
     "parameterized": true
   },
@@ -1943,7 +1955,8 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "partner_firm_resource",
       "board_observer",
       "recruiter",
-      "compliance_officer"
+      "compliance_officer",
+      "non_equity_partner"
     ],
     "parameterized": true
   },

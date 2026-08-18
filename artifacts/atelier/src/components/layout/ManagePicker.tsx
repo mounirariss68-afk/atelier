@@ -22,6 +22,7 @@ import {
   getLens,
   meSectionVisibleForRole,
   financeSectionVisibleForRole,
+  clientsSectionVisibleForRole,
   visibleLensesForRole,
 } from "@/lib/lens";
 import { useActiveLens } from "@/hooks/useActiveLens";
@@ -51,7 +52,9 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
       ? lens.sections.filter((s) => meSectionVisibleForRole(s.id, role))
       : lens.id === "finance"
         ? lens.sections.filter((s) => financeSectionVisibleForRole(s.id, role))
-        : lens.sections;
+        : lens.id === "clients"
+          ? lens.sections.filter((s) => clientsSectionVisibleForRole(s.id, role))
+          : lens.sections;
   const more = lens.more ?? [];
   // A section is active on an exact match, or a prefix match when no
   // longer/more-specific sibling href also matches (otherwise the lens

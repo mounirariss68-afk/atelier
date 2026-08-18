@@ -295,7 +295,11 @@ export function meSectionVisibleForRole(
   sectionId: string,
   role: string | null | undefined,
 ): boolean {
-  if (sectionId === "performance") return role !== "contractor";
+  if (sectionId === "performance") {
+    // Contractors AND non-equity partners (roster contractors, Task #1297)
+    // are 403'd on reviews/goals server-side.
+    return role !== "contractor" && role !== "non_equity_partner";
+  }
   if (sectionId === "delegates") {
     return role === "partner" || role === "founding_partner";
   }
@@ -340,6 +344,31 @@ export function isSelfOnlyRole(role: string | null | undefined): boolean {
 }
 
 /**
+ * Task #1297 — Non-Equity Partner: the Me lens plus a deliberately slimmed
+ * Clients lens (Accounts + Opportunities only — the server clamps every
+ * other clients surface at the central gate).
+ */
+export function isNonEquityPartnerRole(role: string | null | undefined): boolean {
+  return role === "non_equity_partner";
+}
+
+/**
+ * Task #1297 — Clients-lens tab gating. NEPs only get Accounts and
+ * Opportunities (their owned/granted/invited slice); everyone else keeps
+ * the full lens. Shared by the top-bar tabs AND the screen-catalog
+ * generator so the two cannot drift.
+ */
+export function clientsSectionVisibleForRole(
+  sectionId: string,
+  role: string | null | undefined,
+): boolean {
+  if (isNonEquityPartnerRole(role)) {
+    return sectionId === "accounts" || sectionId === "opportunities";
+  }
+  return true;
+}
+
+/**
  * Task #873 — external alliance-partner portal logins. Their world is
  * ONLY /partner (assigned opportunities + redacted client overview) and
  * /cli. No lenses, no Me lens, no org rail — the server forbids every
@@ -377,6 +406,10 @@ export function visibleLensesForRole(
   role: string | null | undefined,
 ): readonly LensDef[] {
   if (isSelfOnlyRole(role)) return LENSES.filter((l) => l.id === "me");
+  // Task #1297 — NEPs get Me + (slimmed) Clients only.
+  if (isNonEquityPartnerRole(role)) {
+    return LENSES.filter((l) => l.id === "me" || l.id === "clients");
+  }
   let out: readonly LensDef[] = LENSES;
   if (!canSeeContractsLens(role)) {
     out = out.filter((l) => l.id !== "contracts");

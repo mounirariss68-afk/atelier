@@ -55,6 +55,7 @@ import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sale
 import { Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "lucide-react";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { OpportunityAgreements } from "@/components/esign/OpportunityAgreements";
+import { NepAccessCard } from "@/components/NepAccessCard";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -273,6 +274,10 @@ export default function Opportunity() {
         {(me?.role === "founding_partner" || me?.role === "partner") && (
           <OpportunityPartnerPortalAccess oppId={opp.id} />
         )}
+
+        {/* Task #1297 — invite non-equity partners into this opportunity. */}
+        <NepAccessCard kind="opportunity" targetId={opp.id} role={me?.role} />
+
 
         <TabNav>
           {TABS.map((tab) => (

@@ -43,6 +43,15 @@ export const ATELIER_PERSONA_ROLES = [
   // roster, finance, documents, partners lens — is denied at the central
   // gate; chat is clamped to the partnerportal.* capability set.
   "alliance_partner",
+  // Task #1297 — Non-Equity Partner (NEP). An internal-ish restricted
+  // persona: a roster CONTRACTOR (no salary, no employee record) with a
+  // real login. Sees the Me lens plus ONLY the accounts they originated
+  // (partner owner), accounts a founder/partner explicitly granted them
+  // (atelier_nep_account_grants), and opportunities they own or were
+  // invited into (atelier_nep_opp_invites). No firm-wide pipeline, no
+  // finance, no roster beyond themselves. Chat is clamped to self-scope
+  // plus their own accessible accounts/opportunities.
+  "non_equity_partner",
 ] as const;
 
 export type AtelierRole = (typeof ATELIER_PERSONA_ROLES)[number];
@@ -108,11 +117,16 @@ const PEOPLE_EDITORS = SET("founding_partner", "hr");
 // engagement grants, so the RLS middleware resolves the deny-all
 // sentinel and every engagement-scoped table denies access. Their only
 // data path is the explicit opportunity-grant join in partnerPortalRoutes.
+// Task #1297 — `non_equity_partner` is restricted too: they hold no
+// engagement grants (deny-all sentinel at the RLS layer); their only CRM
+// data paths are the explicit NEP account grants / opportunity invites
+// plus records they own (see lib/atelier-nep-access.ts).
 const RESTRICTED = SET(
   "contractor",
   "partner_firm_resource",
   "recruiter",
   "alliance_partner",
+  "non_equity_partner",
 );
 
 // Reference-data / firm-config admin (Task #292 re-gate).
@@ -132,6 +146,9 @@ export const isBoardObserver = (r: RoleLike): boolean => r === "board_observer";
 /** Task #873 — external alliance-partner portal login (firm-linked). */
 export const isAlliancePartner = (r: RoleLike): boolean =>
   r === "alliance_partner";
+/** Task #1297 — Non-Equity Partner login (roster contractor + limited CRM). */
+export const isNonEquityPartner = (r: RoleLike): boolean =>
+  r === "non_equity_partner";
 
 /** Lead-tier approval (timesheet stage 1, expense lead-approve, etc.). */
 export const canApproveAsLead = (r: RoleLike): boolean =>

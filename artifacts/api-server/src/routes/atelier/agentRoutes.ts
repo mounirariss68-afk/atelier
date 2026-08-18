@@ -44,6 +44,7 @@ import {
 } from "../../lib/atelier-agents/pipeline.js";
 import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
 import { ensureAssignmentGrant } from "../../lib/atelier-access-autogrant.js";
+import { nepAccessFor } from "../../lib/atelier-nep-access.js";
 import { runCharterArchitect } from "../../lib/atelier-agents/runner.js";
 import { applyStageTransition } from "../../lib/atelier-agents/stage-service.js";
 import { scoreRubric } from "../../lib/atelier-cli/qualification-rubric.js";
@@ -316,6 +317,20 @@ router.post("/opportunities", async (req, res) => {
       res.status(404).json({ error: "account-not-found" });
       return;
     }
+    // Task #1297 — a non_equity_partner may only attach opportunities to
+    // accounts they hold FULL access on (owned or explicitly granted) —
+    // not invited-parent read-limited accounts, and never anyone else's.
+    if (me.role === "non_equity_partner") {
+      const nep = await nepAccessFor(me.id);
+      if (!nep.fullIds.has(acct.id)) {
+        res.status(403).json({
+          error: "nep-account-forbidden",
+          message:
+            "Non-equity partners can only create opportunities on their own or granted accounts.",
+        });
+        return;
+      }
+    }
   } else {
     const newName = (input.accountName ?? "").trim();
     const newCountry = (input.accountCountry ?? "").trim();
@@ -377,6 +392,12 @@ router.post("/opportunities", async (req, res) => {
           sector: newSector,
           tier: input.accountTier ?? undefined,
           createdByUserId: me.id,
+          // Task #1297 — origination attribution; NEP creators always own
+          // the account they originate (visibility flows from ownership).
+          originatedByUserId: me.id,
+          originatedAt: new Date(),
+          partnerOwnerId:
+            me.role === "non_equity_partner" ? me.id : undefined,
         })
         .returning();
     }
@@ -396,16 +417,24 @@ router.post("/opportunities", async (req, res) => {
       .where(and(eq(atelierUsers.id, userId), isNull(atelierUsers.deletedAt)));
     return u ? u.id : null;
   }
-  const partnerOwnerId = input.partnerOwnerId
-    ? await resolveOwner(input.partnerOwnerId)
-    : me.id;
+  // Task #1297 — non_equity_partner creators ALWAYS own their own
+  // opportunities (supplied owner/lead ids are ignored).
+  const partnerOwnerId =
+    me.role === "non_equity_partner"
+      ? me.id
+      : input.partnerOwnerId
+        ? await resolveOwner(input.partnerOwnerId)
+        : me.id;
   if (!partnerOwnerId) {
     res.status(400).json({ error: "invalid-partner-owner" });
     return;
   }
-  const engagementLeadId = input.engagementLeadId
-    ? await resolveOwner(input.engagementLeadId)
-    : me.id;
+  const engagementLeadId =
+    me.role === "non_equity_partner"
+      ? me.id
+      : input.engagementLeadId
+        ? await resolveOwner(input.engagementLeadId)
+        : me.id;
   if (!engagementLeadId) {
     res.status(400).json({ error: "invalid-engagement-lead" });
     return;

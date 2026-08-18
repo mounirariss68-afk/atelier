@@ -37,7 +37,7 @@ import { CliContext } from "@/components/cli/cli-context";
 import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useAuth } from "@/lib/auth";
-import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
+import { isSelfOnlyRole, isAlliancePartnerRole, isNonEquityPartnerRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 import { TwoFactorDialog } from "@/components/layout/TwoFactorDialog";
 import { NavGlidePill } from "@/components/layout/NavGlidePill";
@@ -117,7 +117,12 @@ export function TopNav() {
   const personaSwitcherEnabled =
     import.meta.env.VITE_ATELIER_PERSONA_SWITCHER === "true";
   // Task #873 — alliance-partner logins share the locked-down chrome.
-  const selfOnly = isSelfOnlyRole(me?.role) || isAlliancePartnerRole(me?.role);
+  const selfOnly =
+    isSelfOnlyRole(me?.role) ||
+    isAlliancePartnerRole(me?.role) ||
+    // Task #1297 — NEPs share the locked-down chrome (no Firm menu, no
+    // org rail); their extra Clients tabs come from the lens picker.
+    isNonEquityPartnerRole(me?.role);
   const { data: fetchedPersonas } = useAtelierListPersonas({
     query: {
       enabled: personaSwitcherEnabled && !!me && !selfOnly,
@@ -629,7 +634,10 @@ export function RightRail() {
   // AND the role is allowed, and hide the Activity/Reports rail tabs so
   // they aren't dead ends.
   const { data: railMe } = useAtelierGetMe();
-  const selfOnly = isSelfOnlyRole(railMe?.role) || isAlliancePartnerRole(railMe?.role);
+  const selfOnly =
+    isSelfOnlyRole(railMe?.role) ||
+    isAlliancePartnerRole(railMe?.role) ||
+    isNonEquityPartnerRole(railMe?.role);
   const canSeeOrgRail = !!railMe && !selfOnly;
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },

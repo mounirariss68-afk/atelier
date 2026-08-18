@@ -17,6 +17,7 @@ import { resolve, dirname } from "node:path";
 import {
   LENSES,
   meSectionVisibleForRole,
+  clientsSectionVisibleForRole,
   visibleLensesForRole,
   type LensDef,
 } from "../src/lib/lens";
@@ -36,10 +37,19 @@ const INTERNAL_ROLES = [
   "recruiter",
   "compliance_officer",
   "employee",
+  // Task #1297 — NEP: Me lens + slimmed Clients lens only.
+  "non_equity_partner",
 ] as const;
 
 // Personas whose whole world is the Me lens (server-enforced central gate).
-const SELF_SCOPE = new Set(["employee", "contractor", "partner_firm_resource"]);
+const SELF_SCOPE = new Set([
+  "employee",
+  "contractor",
+  "partner_firm_resource",
+  // Task #1297 — NEPs get NO firm-ops / home / reports surfaces; their
+  // extra Clients tabs come from the lens/section gates below.
+  "non_equity_partner",
+]);
 // Firm-ops surfaces (avatar → Firm menu etc.) — internal org roles only.
 const ORG_ROLES = INTERNAL_ROLES.filter(
   (r) => !SELF_SCOPE.has(r) && r !== "board_observer",
@@ -118,7 +128,10 @@ function build(): Entry[] {
       const sectionRoles =
         lens.id === "me"
           ? roles.filter((r) => meSectionVisibleForRole(s.id, r))
-          : roles;
+          : lens.id === "clients"
+            ? // Task #1297 — NEPs only get the Accounts/Opportunities tabs.
+              roles.filter((r) => clientsSectionVisibleForRole(s.id, r))
+            : roles;
       entries.push({
         id,
         title: s.label,

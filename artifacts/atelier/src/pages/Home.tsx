@@ -7,7 +7,7 @@ import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, Chevro
 import { KpiCard, type KpiAccent, type KpiGraphic } from "@/components/ui/kpi-card";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { isSelfOnlyRole } from "@/lib/lens";
+import { isSelfOnlyRole, isNonEquityPartnerRole } from "@/lib/lens";
 import { MyMeetingsCard } from "@/components/ms/MsMeetings";
 import { SALES_STAGE_LABEL } from "@/lib/sales-stages";
 
@@ -780,7 +780,10 @@ export default function Home() {
   // Home; their landing page is the Me lens.
   // Task #444 — don't fire the org-wide /home fetch (which 403s for
   // self-only roles) until the profile has loaded and the role may see it.
-  const selfOnly = isSelfOnlyRole(me?.role);
+  // Task #1297 — NEPs never see the org Home; their landing page is
+  // their accounts list.
+  const selfOnly = isSelfOnlyRole(me?.role) || isNonEquityPartnerRole(me?.role);
+  const nep = isNonEquityPartnerRole(me?.role);
   const { data: home, isPending } = useAtelierGetHome({
     query: {
       enabled: !!me && !selfOnly,
@@ -793,8 +796,8 @@ export default function Home() {
     selfOnly ? undefined : me?.role,
   );
   React.useEffect(() => {
-    if (selfOnly) setLocation("/me", { replace: true });
-  }, [selfOnly, setLocation]);
+    if (selfOnly) setLocation(nep ? "/clients/accounts" : "/me", { replace: true });
+  }, [selfOnly, nep, setLocation]);
 
   if (selfOnly) return null;
 

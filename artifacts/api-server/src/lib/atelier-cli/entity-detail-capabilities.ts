@@ -60,6 +60,7 @@ import {
 import { hybridResolveEntity, type ResolverCandidate } from "./entity-resolver.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import { canSeeAccount } from "../../routes/atelier/accountRoutes.js";
+import { nepAccessFor, nepCanSeeOpportunity } from "../atelier-nep-access.js";
 import { canSeeDocument } from "../../routes/atelier/documentRoutes.js";
 import {
   isRestrictedPersona,
@@ -215,6 +216,14 @@ function bridgeVisible(toolName: string, idField: string) {
  *  engagements + explicit account-team membership. */
 async function staffedAccountIds(ctx: ToolContext, access: EngAccess): Promise<Set<string>> {
   const out = new Set<string>();
+  // Task #1297 — non_equity_partner: "staffing" is the explicit NEP access
+  // set (owned + granted accounts, plus read-limited invited-opp parents).
+  if (ctx.persona.role === "non_equity_partner") {
+    const nep = await nepAccessFor(ctx.persona.id);
+    for (const id of nep.fullIds) out.add(id);
+    for (const id of nep.invitedParentIds) out.add(id);
+    return out;
+  }
   if (access.all !== true && access.ids.size > 0) {
     const engs = await db
       .select({ accountId: atelierEngagements.accountId })
@@ -345,6 +354,17 @@ registerDetailProvider({
   aliases: ["deal", "opp", "pursuit"],
   search: resolverSearch("opportunity"),
   async visible(id, ctx, access) {
+    // Task #1297 — non_equity_partner: opportunities they own, were
+    // invited into, or on an account they hold full access on.
+    if (ctx.persona.role === "non_equity_partner") {
+      const [opp] = await db
+        .select({ id: atelierOpportunities.id, accountId: atelierOpportunities.accountId, partnerOwnerId: atelierOpportunities.partnerOwnerId })
+        .from(atelierOpportunities)
+        .where(and(eq(atelierOpportunities.id, id), eq(atelierOpportunities.orgId, ctx.persona.orgId), isNull(atelierOpportunities.deletedAt)))
+        .limit(1);
+      if (!opp) return false;
+      return nepCanSeeOpportunity(await nepAccessFor(ctx.persona.id), opp, ctx.persona.id);
+    }
     if (isSelfOnly(ctx)) return false;
     const [opp] = await db
       .select({ accountId: atelierOpportunities.accountId })
@@ -1064,7 +1084,11 @@ defineCapability({
     const query = typeof input.query === "string" ? input.query.trim() : "";
 
     const providerAllowed = (p: EntityDetailProvider) =>
-      !selfOnly || (p.selfOnlyAllowed === true && SELF_ONLY_DETAIL_KINDS.has(p.kind));
+      !selfOnly ||
+      (p.selfOnlyAllowed === true && SELF_ONLY_DETAIL_KINDS.has(p.kind)) ||
+      // Task #1297 — non_equity_partner additionally gets the opportunity
+      // provider; its visible() clamps to their owned/invited/granted set.
+      (ctx.persona.role === "non_equity_partner" && p.kind === "opportunity");
 
     // ---- id path: fetch directly (kind hint narrows the probe) --------
     if (id) {

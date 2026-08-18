@@ -123,6 +123,7 @@
 - [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss handlers use global db on purpose (withRls pins a conn across long LLM runs); isolation via RLS defaults.
 - [api-client-react new-hook wiring](api-client-react-barrel.md) — orval doesn't touch the hand-maintained src/index.ts barrel; add hook names there + rebuild with tsc -b --force.
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
+- [NEP scoped access](atelier-nep-access.md) — non_equity_partner = contractor login; ALL visibility via atelier-nep-access helpers (owned+granted accounts, opp invites w/ read-only parent); never inline checks.
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
 - [Partner registration flow](atelier-partner-registration.md) — token validate-not-consume pre-auth uploads, magic-byte+base64 validation, path-scoped 16mb parser BEFORE global 100KB, contact suggestions REPLACE semantics.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).

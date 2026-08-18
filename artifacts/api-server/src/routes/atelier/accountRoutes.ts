@@ -99,6 +99,11 @@ import {
   type ActivityWire,
 } from "../../lib/atelier-account-timeline.js";
 
+import {
+  nepAccessFor,
+  nepCanSeeAccountId,
+} from "../../lib/atelier-nep-access.js";
+
 type EngAccess = Awaited<ReturnType<typeof accessibleEngagementIds>>;
 function canSeeEng(access: EngAccess, engId: string) {
   return access.all || access.ids.has(engId);
@@ -113,9 +118,16 @@ function canSeeEng(access: EngAccess, engId: string) {
  */
 export async function canSeeAccount(
   access: EngAccess,
-  me: { id: string },
+  me: { id: string; role?: string | null },
   accountId: string,
 ): Promise<boolean> {
+  // Task #1297 — Non-Equity Partners: visibility is ONLY the explicit NEP
+  // access set (owned + granted accounts, plus read-limited parents of
+  // invited opportunities). Never fall through to engagement grants.
+  if (me.role === "non_equity_partner") {
+    const nep = await nepAccessFor(me.id);
+    return nepCanSeeAccountId(nep, accountId);
+  }
   if (access.all) return true;
   // Task #509 — senior managers see every account (tiered access model);
   // opportunity/engagement visibility stays grant-scoped.
@@ -663,7 +675,14 @@ router.get("/accounts", async (req, res) => {
 
 // ---------- create ----------
 // Task #292 — CRM account creation: partner-tier + senior_manager.
-const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
+// Task #1297 — non_equity_partner may create accounts too (they become the
+// partner owner; origination is stamped for later compensation use).
+const CREATE_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "senior_manager",
+  "non_equity_partner",
+]);
 
 type ReviewedResearch = NonNullable<
   z.infer<typeof AtelierCreateAccountInput>["research"]
@@ -937,7 +956,16 @@ router.post("/accounts", async (req, res) => {
         // Task #8 — default the owner to the creator for EVERY role allowed to
         // create accounts (incl. senior_manager); an ownerless account is
         // invisible to owner-scoped views and forecast partner roll-ups.
-        partnerOwnerId: input.partnerOwnerId ?? (CREATE_ROLES.has(me.role) ? me.id : null),
+        // Task #1297 — non_equity_partner creators ALWAYS own their accounts
+        // (input.partnerOwnerId is ignored — they cannot assign to others).
+        partnerOwnerId:
+          me.role === "non_equity_partner"
+            ? me.id
+            : input.partnerOwnerId ?? (CREATE_ROLES.has(me.role) ? me.id : null),
+        // Task #1297 — origination attribution (who originated, when),
+        // stamped for every creator; consumed later by NEP compensation.
+        originatedByUserId: me.id,
+        originatedAt: now,
         relationshipStrength: 0,
         sourceSignals: [],
         strategicPriorities: (input.strategicPriorities ?? []).map((s) => s.trim()).filter(Boolean),

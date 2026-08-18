@@ -1295,19 +1295,35 @@ export async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Pr
       .slice(0, 2)
       .join("") || "??";
   const isAlliancePartnerLogin = !!args.alliancePartnerFirmId;
+  // Task #1297 — Non-Equity Partners are roster CONTRACTORS whose row
+  // carries the "Non-Equity Partner" role label (matching the NEP contract
+  // auto-add behaviour, Task #967). Their login gets the dedicated
+  // `non_equity_partner` persona instead of the self-only `contractor` one.
+  let isNepLogin = false;
+  if (!isAlliancePartnerLogin && person.workerType === "contractor") {
+    const [ct] = await db
+      .select({ notes: atelierContractors.notes })
+      .from(atelierContractors)
+      .where(eq(atelierContractors.id, person.id));
+    isNepLogin = /non[\s-]?equity\s+partner/i.test(ct?.notes ?? "");
+  }
   const role = isAlliancePartnerLogin
     ? "alliance_partner"
     : person.workerType === "employee"
       ? "employee"
       : person.workerType === "contractor"
-        ? "contractor"
+        ? isNepLogin
+          ? "non_equity_partner"
+          : "contractor"
         : "partner_firm_resource";
   const roleLabel = isAlliancePartnerLogin
     ? "Alliance Partner"
     : person.workerType === "employee"
       ? "Employee"
       : person.workerType === "contractor"
-        ? "Contractor"
+        ? isNepLogin
+          ? "Non-Equity Partner"
+          : "Contractor"
         : "Partner Firm Resource";
   // Security: no temporary password is ever generated, returned, or
   // emailed. The credential row is created with an unguessable random

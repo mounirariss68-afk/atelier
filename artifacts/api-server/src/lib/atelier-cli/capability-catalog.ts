@@ -518,6 +518,12 @@ export const BOARD_OBSERVER_ROLLUP_ALLOWLIST: ReadonlySet<string> = new Set([
 export const SELF_ONLY_CHAT_ROLES: ReadonlySet<string> = new Set([
   "employee",
   "contractor",
+  // Task #1297 — non_equity_partner chat is the same identity-locked me.*
+  // perimeter; their only widening is entity.detail, whose in-run clamp
+  // resolves their accessible accounts/opportunities through the NEP
+  // grant/invite/ownership set (lib/atelier-nep-access.ts) instead of
+  // engagement staffing.
+  "non_equity_partner",
 ]);
 
 /**

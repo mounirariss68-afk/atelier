@@ -58,6 +58,7 @@ import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { EditAccountProfileDialog } from "@/components/EditAccountProfileDialog";
 import { EditOwnershipDialog } from "@/components/EditOwnershipDialog";
+import { NepAccessCard } from "@/components/NepAccessCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -1670,6 +1671,9 @@ function ProfileTab({
               />
             </dl>
           </Card>
+
+          {/* Task #1297 — grant non-equity partners access to this account. */}
+          <NepAccessCard kind="account" targetId={a.id} role={me?.role} />
 
           {/* AI proposals — partner review queue */}
           <Card className="p-6 space-y-4">

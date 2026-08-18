@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useAtelierGetMe } from "@workspace/api-client-react";
-import { isSelfOnlyRole, isAlliancePartnerRole } from "@/lib/lens";
+import { isSelfOnlyRole, isAlliancePartnerRole, isNonEquityPartnerRole } from "@/lib/lens";
 import {
   QueryClient,
   QueryClientProvider,
@@ -310,6 +310,22 @@ function SelfOnlyRouteGuard({ children }: { children: React.ReactNode }) {
   // Task #873 — alliance-partner logins are even narrower: ONLY the
   // partner portal (/partner*) and chat. No Me lens either.
   const alliancePartner = isAlliancePartnerRole(me?.role);
+  // Task #1297 — non-equity partners: Me lens + their accounts/opportunities
+  // slice + chat. Every other org page would 403 at the server's central
+  // gate, so steer them to their accounts list instead.
+  const nep = isNonEquityPartnerRole(me?.role);
+  const nepAllowed =
+    location === "/sign-in" ||
+    location === "/me" ||
+    location.startsWith("/me/") ||
+    location === "/cli" ||
+    location.startsWith("/cli/") ||
+    location === "/clients/accounts" ||
+    location.startsWith("/clients/accounts/") ||
+    location === "/clients/opportunities" ||
+    location.startsWith("/clients/opportunities/") ||
+    location.startsWith("/accounts/") ||
+    location.startsWith("/opportunities/");
   const allowed =
     location === "/sign-in" ||
     location === "/me" ||
@@ -324,10 +340,15 @@ function SelfOnlyRouteGuard({ children }: { children: React.ReactNode }) {
     location.startsWith("/cli/");
   const blocked =
     (alliancePartner && !partnerAllowed) ||
-    (!alliancePartner && selfOnly && !allowed);
+    (nep && !nepAllowed) ||
+    (!alliancePartner && !nep && selfOnly && !allowed);
   React.useEffect(() => {
-    if (blocked) setLocation(alliancePartner ? "/partner" : "/me", { replace: true });
-  }, [blocked, alliancePartner, setLocation]);
+    if (blocked)
+      setLocation(
+        alliancePartner ? "/partner" : nep ? "/clients/accounts" : "/me",
+        { replace: true },
+      );
+  }, [blocked, alliancePartner, nep, setLocation]);
   if (blocked) return null;
   // Task #444 — while /me is still loading we can't tell whether the user is
   // self-only. Hold off mounting org routes so their queries (accounts,

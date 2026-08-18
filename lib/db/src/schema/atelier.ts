@@ -186,6 +186,54 @@ export const atelierPartnerEngagementGrants = pgTable(
   ],
 );
 
+// Task #1297 — Non-Equity Partner (NEP) account access grants. An NEP
+// login sees an account's full detail ONLY when they own it (partner
+// owner) or a founder/partner explicitly granted them access here.
+// Mirrors the alliance-partner grant pattern: soft-revoke, org isolation.
+export const atelierNepAccountGrants = pgTable(
+  "atelier_nep_account_grants",
+  {
+    id: text("id").primaryKey(), // nepag_...
+    orgId: ORG("org_id"),
+    /** atelier_users.id of the non_equity_partner login. */
+    userId: text("user_id").notNull(),
+    accountId: text("account_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+  },
+  (t) => [
+    index("idx_atelier_nep_acct_grants_org").on(t.orgId),
+    index("idx_atelier_nep_acct_grants_user").on(t.userId),
+    index("idx_atelier_nep_acct_grants_acct").on(t.accountId),
+  ],
+);
+
+// Task #1297 — Non-Equity Partner opportunity invitations. A founder /
+// partner can invite an NEP into a specific opportunity on an account the
+// NEP otherwise cannot see; the invite grants the opportunity plus a
+// read-limited view of its parent account. Soft-revoke like grants above.
+export const atelierNepOppInvites = pgTable(
+  "atelier_nep_opp_invites",
+  {
+    id: text("id").primaryKey(), // nepoi_...
+    orgId: ORG("org_id"),
+    /** atelier_users.id of the non_equity_partner login. */
+    userId: text("user_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+  },
+  (t) => [
+    index("idx_atelier_nep_opp_invites_org").on(t.orgId),
+    index("idx_atelier_nep_opp_invites_user").on(t.userId),
+    index("idx_atelier_nep_opp_invites_opp").on(t.opportunityId),
+  ],
+);
+
 // ============================================================
 // ACCOUNTS
 // ============================================================
@@ -451,6 +499,10 @@ export const atelierAccounts = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
+    // Task #1297 — origination attribution: who originated this account
+    // (stamped at create time; used later for NEP compensation).
+    originatedByUserId: text("originated_by_user_id"),
+    originatedAt: timestamp("originated_at"),
     deletedAt: timestamp("deleted_at"),
   },
   (t) => [
