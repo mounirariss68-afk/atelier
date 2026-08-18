@@ -4990,6 +4990,175 @@ export interface AtelierAdvanceBalance {
   startPeriod?: string | null;
 }
 
+export interface AtelierNepStatusNoteInput {
+  note?: string | null;
+}
+
+export interface AtelierNepRecomputeInput {
+  contractorId?: string | null;
+}
+
+export interface AtelierNepVoidInput {
+  reason?: string | null;
+}
+
+export interface AtelierNepOriginationInput {
+  originatedByUserId?: string | null;
+  firstEngagementAt?: string | null;
+}
+
+export interface AtelierNepMaterialContributionInput {
+  userId?: string | null;
+}
+
+export type AtelierNepCompPlanStatus =
+  (typeof AtelierNepCompPlanStatus)[keyof typeof AtelierNepCompPlanStatus];
+
+export const AtelierNepCompPlanStatus = {
+  pre_conversion: "pre_conversion",
+  converted: "converted",
+  ended: "ended",
+} as const;
+
+export interface AtelierNepCompPlan {
+  id: string;
+  contractorId: string;
+  contractorName?: string | null;
+  userId?: string | null;
+  effectiveFrom: string;
+  currency: string;
+  dayRateAmount: number;
+  marginSharePctSale: number;
+  marginSharePctOriginationOnly: number;
+  originationWindowMonths: number;
+  conversionRevenueThresholdUsd: number;
+  conversionMarginThresholdPct: number;
+  postConversionSalaryAmount?: number | null;
+  postConversionSalaryCurrency?: string | null;
+  postConversionVariableNote?: string | null;
+  status: AtelierNepCompPlanStatus;
+  convertedAt?: string | null;
+  endedAt?: string | null;
+  statusNote?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface AtelierNepCompPlanInput {
+  contractorId: string;
+  effectiveFrom: string;
+  currency?: string;
+  dayRateAmount: number;
+  marginSharePctSale: number;
+  marginSharePctOriginationOnly: number;
+  originationWindowMonths: number;
+  conversionRevenueThresholdUsd: number;
+  conversionMarginThresholdPct: number;
+  postConversionSalaryAmount?: number | null;
+  postConversionSalaryCurrency?: string | null;
+  postConversionVariableNote?: string | null;
+  notes?: string | null;
+}
+
+export type AtelierNepEntitlementTier =
+  (typeof AtelierNepEntitlementTier)[keyof typeof AtelierNepEntitlementTier];
+
+export const AtelierNepEntitlementTier = {
+  sale: "sale",
+  origination_only: "origination_only",
+  none: "none",
+} as const;
+
+export type AtelierNepEntitlementStatement = { [key: string]: unknown } | null;
+
+export type AtelierNepEntitlementStatus =
+  (typeof AtelierNepEntitlementStatus)[keyof typeof AtelierNepEntitlementStatus];
+
+export const AtelierNepEntitlementStatus = {
+  accruing: "accruing",
+  payable: "payable",
+  approved: "approved",
+  scheduled: "scheduled",
+  paid: "paid",
+  void: "void",
+} as const;
+
+export interface AtelierNepEntitlement {
+  id: string;
+  contractorId: string;
+  planId: string;
+  engagementId: string;
+  engagementName?: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  tier: AtelierNepEntitlementTier;
+  tierPct: number;
+  feesInvoicedUsd?: number;
+  feesCollectedUsd?: number;
+  directCostsUsd?: number;
+  ownTimeChargesUsd?: number;
+  projectProfitUsd?: number;
+  amountUsd: number;
+  statement?: AtelierNepEntitlementStatement;
+  fullyCollected?: boolean;
+  collectedAt?: string | null;
+  clientAcceptedAt?: string | null;
+  dueDate?: string | null;
+  status: AtelierNepEntitlementStatus;
+  approvedAt?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
+  paymentRunId?: string | null;
+  paidAt?: string | null;
+  remittanceRef?: string | null;
+}
+
+export interface AtelierNepConversionProgress {
+  windowStart: string;
+  windowEnd: string;
+  attributableRevenueUsd: number;
+  revenueThresholdUsd: number;
+  revenueMet: boolean;
+  realisedMarginPct?: number | null;
+  marginThresholdPct: number;
+  marginMet: boolean;
+  bothMet: boolean;
+  engagementsCounted?: number;
+}
+
+export type AtelierNepCompPlanDetailContractor = {
+  id: string;
+  fullName: string;
+  email: string;
+};
+
+export interface AtelierNepCompPlanDetail {
+  contractor: AtelierNepCompPlanDetailContractor;
+  currentPlan?: AtelierNepCompPlan | null;
+  planHistory: AtelierNepCompPlan[];
+  entitlements: AtelierNepEntitlement[];
+  conversion?: AtelierNepConversionProgress | null;
+}
+
+export type AtelierMyNepCompTimeChargesInvoicesItem = {
+  [key: string]: unknown;
+};
+
+export type AtelierMyNepCompTimeCharges = {
+  accruedUsd?: number;
+  paidUsd?: number;
+  invoices?: AtelierMyNepCompTimeChargesInvoicesItem[];
+} | null;
+
+export interface AtelierMyNepComp {
+  hasPlan: boolean;
+  plan?: AtelierNepCompPlan | null;
+  planHistory?: AtelierNepCompPlan[];
+  timeCharges?: AtelierMyNepCompTimeCharges;
+  entitlements?: AtelierNepEntitlement[];
+  conversion?: AtelierNepConversionProgress | null;
+}
+
 export interface AtelierMyPay {
   person?: AtelierSelfPerson | null;
   documents: AtelierPayDocument[];
@@ -9863,6 +10032,63 @@ export const AtelierRespondToTaskBodyResponse = {
 
 export type AtelierRespondToTaskBody = {
   response: AtelierRespondToTaskBodyResponse;
+};
+
+export type AtelierListNepCompPlans200 = {
+  items: AtelierNepCompPlan[];
+};
+
+export type AtelierCreateNepCompPlan201 = {
+  ok: boolean;
+  plan: AtelierNepCompPlan;
+};
+
+export type AtelierConvertNepCompPlan200 = {
+  ok?: boolean;
+};
+
+export type AtelierEndNepCompPlan200 = {
+  ok?: boolean;
+};
+
+export type AtelierRecomputeNepEntitlements200ResultsItem = {
+  [key: string]: unknown;
+};
+
+export type AtelierRecomputeNepEntitlements200 = {
+  ok?: boolean;
+  results?: AtelierRecomputeNepEntitlements200ResultsItem[];
+};
+
+export type AtelierListNepEntitlementsParams = {
+  contractorId?: string;
+  status?: string;
+};
+
+export type AtelierListNepEntitlements200 = {
+  items: AtelierNepEntitlement[];
+};
+
+export type AtelierAcceptNepEntitlement200 = {
+  ok?: boolean;
+  dueDate?: string | null;
+  status?: string;
+};
+
+export type AtelierApproveNepEntitlement200 = {
+  ok?: boolean;
+};
+
+export type AtelierVoidNepEntitlement200 = {
+  ok?: boolean;
+};
+
+export type AtelierUpdateAccountOrigination200 = {
+  ok?: boolean;
+};
+
+export type AtelierSetEngagementMaterialContribution200 = {
+  ok?: boolean;
 };
 
 export type AtelierListPerformanceReviewsParams = {

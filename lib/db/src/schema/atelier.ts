@@ -503,6 +503,11 @@ export const atelierAccounts = pgTable(
     // (stamped at create time; used later for NEP compensation).
     originatedByUserId: text("originated_by_user_id"),
     originatedAt: timestamp("originated_at"),
+    // Task #1298 — date of the FIRST engagement at this client (YYYY-MM-DD).
+    // Anchors the origination-only margin-share window. Founder-editable via
+    // the NEP-comp origination route; when null the entitlement computation
+    // falls back to the earliest engagement start date at the account.
+    originationFirstEngagementAt: text("origination_first_engagement_at"),
     deletedAt: timestamp("deleted_at"),
   },
   (t) => [
@@ -1127,6 +1132,13 @@ export const atelierEngagements = pgTable(
     // scaffolds in English; 'ar' emits an Arabic-first variant flag that
     // downstream rendering uses for RTL chrome and AR weekly digests.
     defaultLanguage: text("default_language").notNull().default("en"),
+    // Task #1298 — NEP margin-share attribution: which NEP (login user id)
+    // made a MATERIAL CONTRIBUTION to the sale of this engagement. Founder-
+    // set, audited (changes the payout tier). Null = no material-contribution
+    // claim on record.
+    materialContributionUserId: text("material_contribution_user_id"),
+    materialContributionSetByUserId: text("material_contribution_set_by_user_id"),
+    materialContributionSetAt: timestamp("material_contribution_set_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),

@@ -19,6 +19,7 @@ import type {
 import type {
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAcceptNepEntitlement200,
   AtelierAccount360,
   AtelierAccountDuplicateCandidates,
   AtelierAccountDuplicateError,
@@ -38,6 +39,7 @@ import type {
   AtelierAgentsUsageCounts200Item,
   AtelierAnalyzeProcessInput,
   AtelierAnalyzeProcessResponse,
+  AtelierApproveNepEntitlement200,
   AtelierArchiveOpportunityInput,
   AtelierArchivedOpportunity,
   AtelierArtifact,
@@ -83,6 +85,7 @@ import type {
   AtelierContractTemplateList,
   AtelierContractTemplateUpdate,
   AtelierContractUpdate,
+  AtelierConvertNepCompPlan200,
   AtelierCounterpartySearchResult,
   AtelierCountersignPricing200,
   AtelierCreateAccountActionInput,
@@ -98,6 +101,7 @@ import type {
   AtelierCreateMyDocument201,
   AtelierCreateMyDocumentBody,
   AtelierCreateMyEmergencyContact201,
+  AtelierCreateNepCompPlan201,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCreateRateCardVersion201,
@@ -126,6 +130,7 @@ import type {
   AtelierEditProposalSectionInput,
   AtelierEmergencyContactInput,
   AtelierEmergencyContactList,
+  AtelierEndNepCompPlan200,
   AtelierError,
   AtelierEsignUpstreamError,
   AtelierExpenseSuggestRequest,
@@ -187,6 +192,9 @@ import type {
   AtelierListMyExpenseContextsParams,
   AtelierListMyExpenses200,
   AtelierListMyTasks200,
+  AtelierListNepCompPlans200,
+  AtelierListNepEntitlements200,
+  AtelierListNepEntitlementsParams,
   AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
@@ -204,9 +212,17 @@ import type {
   AtelierMergeFactResult,
   AtelierMsConnectionStatus,
   AtelierMyApprovals,
+  AtelierMyNepComp,
   AtelierMyOpenTasks,
   AtelierMyPay,
   AtelierMyPerformance,
+  AtelierNepCompPlanDetail,
+  AtelierNepCompPlanInput,
+  AtelierNepMaterialContributionInput,
+  AtelierNepOriginationInput,
+  AtelierNepRecomputeInput,
+  AtelierNepStatusNoteInput,
+  AtelierNepVoidInput,
   AtelierOkResponse,
   AtelierOpportunityDuplicateCandidates,
   AtelierOpportunityDuplicateError,
@@ -280,6 +296,7 @@ import type {
   AtelierRateCardDetail,
   AtelierRateCardRow,
   AtelierRateCardRowInput,
+  AtelierRecomputeNepEntitlements200,
   AtelierRegeneratePovOutlineInput,
   AtelierRejectProposalSectionInput,
   AtelierRejectSalaryProposalBody,
@@ -324,6 +341,7 @@ import type {
   AtelierSendDeliverableInput,
   AtelierSetEngagementExpenseMarkup200,
   AtelierSetEngagementExpenseMarkupBody,
+  AtelierSetEngagementMaterialContribution200,
   AtelierSignatureRequestCreate,
   AtelierSignatureRequestEnvelope,
   AtelierSignatureRequestList,
@@ -343,6 +361,7 @@ import type {
   AtelierUpdateAccountActionInput,
   AtelierUpdateAccountInput,
   AtelierUpdateAccountInsightInput,
+  AtelierUpdateAccountOrigination200,
   AtelierUpdateAccountProcurement200,
   AtelierUpdateAccountProcurementInput,
   AtelierUpdateAccountRiskInput,
@@ -366,6 +385,7 @@ import type {
   AtelierUploadMyPhoto200,
   AtelierUploadMyPhotoBody,
   AtelierUpsertAccountGoalProgressInput,
+  AtelierVoidNepEntitlement200,
   AtelierWhitespaceCanvas,
   AuditEvent,
   AuthAppMeta,
@@ -8945,6 +8965,1203 @@ export function useAtelierGetMyApprovals<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetMyApprovalsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary NEP compensation — all effective-dated plan rows (comp viewers)
+ */
+export const getAtelierListNepCompPlansUrl = () => {
+  return `/api/atelier/finance/nep-comp/plans`;
+};
+
+export const atelierListNepCompPlans = async (
+  options?: RequestInit,
+): Promise<AtelierListNepCompPlans200> => {
+  return customFetch<AtelierListNepCompPlans200>(
+    getAtelierListNepCompPlansUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListNepCompPlansQueryKey = () => {
+  return [`/api/atelier/finance/nep-comp/plans`] as const;
+};
+
+export const getAtelierListNepCompPlansQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListNepCompPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListNepCompPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListNepCompPlansQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListNepCompPlans>>
+  > = ({ signal }) => atelierListNepCompPlans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListNepCompPlans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListNepCompPlansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListNepCompPlans>>
+>;
+export type AtelierListNepCompPlansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — all effective-dated plan rows (comp viewers)
+ */
+
+export function useAtelierListNepCompPlans<
+  TData = Awaited<ReturnType<typeof atelierListNepCompPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListNepCompPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListNepCompPlansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary NEP compensation — create or revise a plan (founders/Finance)
+ */
+export const getAtelierCreateNepCompPlanUrl = () => {
+  return `/api/atelier/finance/nep-comp/plans`;
+};
+
+export const atelierCreateNepCompPlan = async (
+  atelierNepCompPlanInput: AtelierNepCompPlanInput,
+  options?: RequestInit,
+): Promise<AtelierCreateNepCompPlan201> => {
+  return customFetch<AtelierCreateNepCompPlan201>(
+    getAtelierCreateNepCompPlanUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepCompPlanInput),
+    },
+  );
+};
+
+export const getAtelierCreateNepCompPlanMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateNepCompPlan>>,
+    TError,
+    { data: BodyType<AtelierNepCompPlanInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateNepCompPlan>>,
+  TError,
+  { data: BodyType<AtelierNepCompPlanInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateNepCompPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateNepCompPlan>>,
+    { data: BodyType<AtelierNepCompPlanInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateNepCompPlan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateNepCompPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateNepCompPlan>>
+>;
+export type AtelierCreateNepCompPlanMutationBody =
+  BodyType<AtelierNepCompPlanInput>;
+export type AtelierCreateNepCompPlanMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary NEP compensation — create or revise a plan (founders/Finance)
+ */
+export const useAtelierCreateNepCompPlan = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateNepCompPlan>>,
+    TError,
+    { data: BodyType<AtelierNepCompPlanInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateNepCompPlan>>,
+  TError,
+  { data: BodyType<AtelierNepCompPlanInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateNepCompPlanMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — one NEP's plan history, entitlements + conversion tracker
+ */
+export const getAtelierGetNepCompPlanDetailUrl = (contractorId: string) => {
+  return `/api/atelier/finance/nep-comp/plans/${contractorId}`;
+};
+
+export const atelierGetNepCompPlanDetail = async (
+  contractorId: string,
+  options?: RequestInit,
+): Promise<AtelierNepCompPlanDetail> => {
+  return customFetch<AtelierNepCompPlanDetail>(
+    getAtelierGetNepCompPlanDetailUrl(contractorId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetNepCompPlanDetailQueryKey = (
+  contractorId: string,
+) => {
+  return [`/api/atelier/finance/nep-comp/plans/${contractorId}`] as const;
+};
+
+export const getAtelierGetNepCompPlanDetailQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>,
+  TError = ErrorType<AtelierError>,
+>(
+  contractorId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierGetNepCompPlanDetailQueryKey(contractorId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>
+  > = ({ signal }) =>
+    atelierGetNepCompPlanDetail(contractorId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!contractorId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetNepCompPlanDetailQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>
+>;
+export type AtelierGetNepCompPlanDetailQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary NEP compensation — one NEP's plan history, entitlements + conversion tracker
+ */
+
+export function useAtelierGetNepCompPlanDetail<
+  TData = Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>,
+  TError = ErrorType<AtelierError>,
+>(
+  contractorId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetNepCompPlanDetail>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetNepCompPlanDetailQueryOptions(
+    contractorId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary NEP compensation — record manual conversion to employment (closes pre-conversion accrual)
+ */
+export const getAtelierConvertNepCompPlanUrl = (contractorId: string) => {
+  return `/api/atelier/finance/nep-comp/plans/${contractorId}/convert`;
+};
+
+export const atelierConvertNepCompPlan = async (
+  contractorId: string,
+  atelierNepStatusNoteInput?: AtelierNepStatusNoteInput,
+  options?: RequestInit,
+): Promise<AtelierConvertNepCompPlan200> => {
+  return customFetch<AtelierConvertNepCompPlan200>(
+    getAtelierConvertNepCompPlanUrl(contractorId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepStatusNoteInput),
+    },
+  );
+};
+
+export const getAtelierConvertNepCompPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConvertNepCompPlan>>,
+    TError,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierConvertNepCompPlan>>,
+  TError,
+  { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierConvertNepCompPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierConvertNepCompPlan>>,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> }
+  > = (props) => {
+    const { contractorId, data } = props ?? {};
+
+    return atelierConvertNepCompPlan(contractorId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierConvertNepCompPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierConvertNepCompPlan>>
+>;
+export type AtelierConvertNepCompPlanMutationBody =
+  BodyType<AtelierNepStatusNoteInput>;
+export type AtelierConvertNepCompPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — record manual conversion to employment (closes pre-conversion accrual)
+ */
+export const useAtelierConvertNepCompPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConvertNepCompPlan>>,
+    TError,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierConvertNepCompPlan>>,
+  TError,
+  { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+  TContext
+> => {
+  return useMutation(getAtelierConvertNepCompPlanMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — end a plan lineage
+ */
+export const getAtelierEndNepCompPlanUrl = (contractorId: string) => {
+  return `/api/atelier/finance/nep-comp/plans/${contractorId}/end`;
+};
+
+export const atelierEndNepCompPlan = async (
+  contractorId: string,
+  atelierNepStatusNoteInput?: AtelierNepStatusNoteInput,
+  options?: RequestInit,
+): Promise<AtelierEndNepCompPlan200> => {
+  return customFetch<AtelierEndNepCompPlan200>(
+    getAtelierEndNepCompPlanUrl(contractorId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepStatusNoteInput),
+    },
+  );
+};
+
+export const getAtelierEndNepCompPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierEndNepCompPlan>>,
+    TError,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierEndNepCompPlan>>,
+  TError,
+  { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierEndNepCompPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierEndNepCompPlan>>,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> }
+  > = (props) => {
+    const { contractorId, data } = props ?? {};
+
+    return atelierEndNepCompPlan(contractorId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierEndNepCompPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierEndNepCompPlan>>
+>;
+export type AtelierEndNepCompPlanMutationBody =
+  BodyType<AtelierNepStatusNoteInput>;
+export type AtelierEndNepCompPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — end a plan lineage
+ */
+export const useAtelierEndNepCompPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierEndNepCompPlan>>,
+    TError,
+    { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierEndNepCompPlan>>,
+  TError,
+  { contractorId: string; data: BodyType<AtelierNepStatusNoteInput> },
+  TContext
+> => {
+  return useMutation(getAtelierEndNepCompPlanMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — idempotent margin-share entitlement recompute
+ */
+export const getAtelierRecomputeNepEntitlementsUrl = () => {
+  return `/api/atelier/finance/nep-comp/recompute`;
+};
+
+export const atelierRecomputeNepEntitlements = async (
+  atelierNepRecomputeInput?: AtelierNepRecomputeInput,
+  options?: RequestInit,
+): Promise<AtelierRecomputeNepEntitlements200> => {
+  return customFetch<AtelierRecomputeNepEntitlements200>(
+    getAtelierRecomputeNepEntitlementsUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepRecomputeInput),
+    },
+  );
+};
+
+export const getAtelierRecomputeNepEntitlementsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>,
+    TError,
+    { data: BodyType<AtelierNepRecomputeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>,
+  TError,
+  { data: BodyType<AtelierNepRecomputeInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRecomputeNepEntitlements"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>,
+    { data: BodyType<AtelierNepRecomputeInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierRecomputeNepEntitlements(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRecomputeNepEntitlementsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>
+>;
+export type AtelierRecomputeNepEntitlementsMutationBody =
+  BodyType<AtelierNepRecomputeInput>;
+export type AtelierRecomputeNepEntitlementsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — idempotent margin-share entitlement recompute
+ */
+export const useAtelierRecomputeNepEntitlements = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>,
+    TError,
+    { data: BodyType<AtelierNepRecomputeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRecomputeNepEntitlements>>,
+  TError,
+  { data: BodyType<AtelierNepRecomputeInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierRecomputeNepEntitlementsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary NEP compensation — margin-share entitlement statements (comp viewers)
+ */
+export const getAtelierListNepEntitlementsUrl = (
+  params?: AtelierListNepEntitlementsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/finance/nep-comp/entitlements?${stringifiedParams}`
+    : `/api/atelier/finance/nep-comp/entitlements`;
+};
+
+export const atelierListNepEntitlements = async (
+  params?: AtelierListNepEntitlementsParams,
+  options?: RequestInit,
+): Promise<AtelierListNepEntitlements200> => {
+  return customFetch<AtelierListNepEntitlements200>(
+    getAtelierListNepEntitlementsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListNepEntitlementsQueryKey = (
+  params?: AtelierListNepEntitlementsParams,
+) => {
+  return [
+    `/api/atelier/finance/nep-comp/entitlements`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListNepEntitlementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListNepEntitlements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListNepEntitlementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListNepEntitlements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListNepEntitlementsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListNepEntitlements>>
+  > = ({ signal }) =>
+    atelierListNepEntitlements(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListNepEntitlements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListNepEntitlementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListNepEntitlements>>
+>;
+export type AtelierListNepEntitlementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — margin-share entitlement statements (comp viewers)
+ */
+
+export function useAtelierListNepEntitlements<
+  TData = Awaited<ReturnType<typeof atelierListNepEntitlements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListNepEntitlementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListNepEntitlements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListNepEntitlementsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary NEP compensation — record client acceptance (starts the 30-day clock with collection)
+ */
+export const getAtelierAcceptNepEntitlementUrl = (id: string) => {
+  return `/api/atelier/finance/nep-comp/entitlements/${id}/accept`;
+};
+
+export const atelierAcceptNepEntitlement = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierAcceptNepEntitlement200> => {
+  return customFetch<AtelierAcceptNepEntitlement200>(
+    getAtelierAcceptNepEntitlementUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierAcceptNepEntitlementMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierAcceptNepEntitlement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierAcceptNepEntitlement(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAcceptNepEntitlementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>
+>;
+
+export type AtelierAcceptNepEntitlementMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — record client acceptance (starts the 30-day clock with collection)
+ */
+export const useAtelierAcceptNepEntitlement = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAcceptNepEntitlement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierAcceptNepEntitlementMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — approve a payable entitlement for the next payment run (never auto-paid)
+ */
+export const getAtelierApproveNepEntitlementUrl = (id: string) => {
+  return `/api/atelier/finance/nep-comp/entitlements/${id}/approve`;
+};
+
+export const atelierApproveNepEntitlement = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierApproveNepEntitlement200> => {
+  return customFetch<AtelierApproveNepEntitlement200>(
+    getAtelierApproveNepEntitlementUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierApproveNepEntitlementMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveNepEntitlement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApproveNepEntitlement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierApproveNepEntitlement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApproveNepEntitlement>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierApproveNepEntitlement(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApproveNepEntitlementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApproveNepEntitlement>>
+>;
+
+export type AtelierApproveNepEntitlementMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary NEP compensation — approve a payable entitlement for the next payment run (never auto-paid)
+ */
+export const useAtelierApproveNepEntitlement = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveNepEntitlement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApproveNepEntitlement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierApproveNepEntitlementMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — void an entitlement (with reason)
+ */
+export const getAtelierVoidNepEntitlementUrl = (id: string) => {
+  return `/api/atelier/finance/nep-comp/entitlements/${id}/void`;
+};
+
+export const atelierVoidNepEntitlement = async (
+  id: string,
+  atelierNepVoidInput?: AtelierNepVoidInput,
+  options?: RequestInit,
+): Promise<AtelierVoidNepEntitlement200> => {
+  return customFetch<AtelierVoidNepEntitlement200>(
+    getAtelierVoidNepEntitlementUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepVoidInput),
+    },
+  );
+};
+
+export const getAtelierVoidNepEntitlementMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierVoidNepEntitlement>>,
+    TError,
+    { id: string; data: BodyType<AtelierNepVoidInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierVoidNepEntitlement>>,
+  TError,
+  { id: string; data: BodyType<AtelierNepVoidInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierVoidNepEntitlement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierVoidNepEntitlement>>,
+    { id: string; data: BodyType<AtelierNepVoidInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierVoidNepEntitlement(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierVoidNepEntitlementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierVoidNepEntitlement>>
+>;
+export type AtelierVoidNepEntitlementMutationBody =
+  BodyType<AtelierNepVoidInput>;
+export type AtelierVoidNepEntitlementMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — void an entitlement (with reason)
+ */
+export const useAtelierVoidNepEntitlement = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierVoidNepEntitlement>>,
+    TError,
+    { id: string; data: BodyType<AtelierNepVoidInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierVoidNepEntitlement>>,
+  TError,
+  { id: string; data: BodyType<AtelierNepVoidInput> },
+  TContext
+> => {
+  return useMutation(getAtelierVoidNepEntitlementMutationOptions(options));
+};
+
+/**
+ * @summary NEP compensation — founder edit of account origination attribution (audited)
+ */
+export const getAtelierUpdateAccountOriginationUrl = (accountId: string) => {
+  return `/api/atelier/finance/nep-comp/accounts/${accountId}/origination`;
+};
+
+export const atelierUpdateAccountOrigination = async (
+  accountId: string,
+  atelierNepOriginationInput: AtelierNepOriginationInput,
+  options?: RequestInit,
+): Promise<AtelierUpdateAccountOrigination200> => {
+  return customFetch<AtelierUpdateAccountOrigination200>(
+    getAtelierUpdateAccountOriginationUrl(accountId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepOriginationInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountOriginationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierNepOriginationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierNepOriginationInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountOrigination"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>,
+    { accountId: string; data: BodyType<AtelierNepOriginationInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierUpdateAccountOrigination(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountOriginationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>
+>;
+export type AtelierUpdateAccountOriginationMutationBody =
+  BodyType<AtelierNepOriginationInput>;
+export type AtelierUpdateAccountOriginationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — founder edit of account origination attribution (audited)
+ */
+export const useAtelierUpdateAccountOrigination = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierNepOriginationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountOrigination>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierNepOriginationInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateAccountOriginationMutationOptions(options),
+  );
+};
+
+/**
+ * @summary NEP compensation — founder flag of a material contribution to the sale (audited; changes payout tier)
+ */
+export const getAtelierSetEngagementMaterialContributionUrl = (
+  engagementId: string,
+) => {
+  return `/api/atelier/finance/nep-comp/engagements/${engagementId}/material-contribution`;
+};
+
+export const atelierSetEngagementMaterialContribution = async (
+  engagementId: string,
+  atelierNepMaterialContributionInput: AtelierNepMaterialContributionInput,
+  options?: RequestInit,
+): Promise<AtelierSetEngagementMaterialContribution200> => {
+  return customFetch<AtelierSetEngagementMaterialContribution200>(
+    getAtelierSetEngagementMaterialContributionUrl(engagementId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierNepMaterialContributionInput),
+    },
+  );
+};
+
+export const getAtelierSetEngagementMaterialContributionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>,
+    TError,
+    {
+      engagementId: string;
+      data: BodyType<AtelierNepMaterialContributionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>,
+  TError,
+  { engagementId: string; data: BodyType<AtelierNepMaterialContributionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierSetEngagementMaterialContribution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>,
+    {
+      engagementId: string;
+      data: BodyType<AtelierNepMaterialContributionInput>;
+    }
+  > = (props) => {
+    const { engagementId, data } = props ?? {};
+
+    return atelierSetEngagementMaterialContribution(
+      engagementId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSetEngagementMaterialContributionMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>
+  >;
+export type AtelierSetEngagementMaterialContributionMutationBody =
+  BodyType<AtelierNepMaterialContributionInput>;
+export type AtelierSetEngagementMaterialContributionMutationError =
+  ErrorType<unknown>;
+
+/**
+ * @summary NEP compensation — founder flag of a material contribution to the sale (audited; changes payout tier)
+ */
+export const useAtelierSetEngagementMaterialContribution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>,
+    TError,
+    {
+      engagementId: string;
+      data: BodyType<AtelierNepMaterialContributionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSetEngagementMaterialContribution>>,
+  TError,
+  { engagementId: string; data: BodyType<AtelierNepMaterialContributionInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierSetEngagementMaterialContributionMutationOptions(options),
+  );
+};
+
+/**
+ * Plan terms, accrued/paid time charges, margin-share entitlement
+statements and conversion progress for the signed-in non-equity
+partner. Returns hasPlan=false for anyone without an NEP plan.
+
+ * @summary Me lens — the caller's own NEP compensation view (self-scope, read-only)
+ */
+export const getAtelierGetMyNepCompUrl = () => {
+  return `/api/atelier/me/nep-comp`;
+};
+
+export const atelierGetMyNepComp = async (
+  options?: RequestInit,
+): Promise<AtelierMyNepComp> => {
+  return customFetch<AtelierMyNepComp>(getAtelierGetMyNepCompUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyNepCompQueryKey = () => {
+  return [`/api/atelier/me/nep-comp`] as const;
+};
+
+export const getAtelierGetMyNepCompQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyNepComp>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyNepComp>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetMyNepCompQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyNepComp>>
+  > = ({ signal }) => atelierGetMyNepComp({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyNepComp>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyNepCompQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyNepComp>>
+>;
+export type AtelierGetMyNepCompQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own NEP compensation view (self-scope, read-only)
+ */
+
+export function useAtelierGetMyNepComp<
+  TData = Awaited<ReturnType<typeof atelierGetMyNepComp>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyNepComp>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyNepCompQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -2252,6 +2252,314 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierMyApprovals"
+  /atelier/finance/nep-comp/plans:
+    get:
+      operationId: atelierListNepCompPlans
+      tags: [atelier]
+      summary: NEP compensation — all effective-dated plan rows (comp viewers)
+      responses:
+        "200":
+          description: Plan rows, newest effective date first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AtelierNepCompPlan"
+    post:
+      operationId: atelierCreateNepCompPlan
+      tags: [atelier]
+      summary: NEP compensation — create or revise a plan (founders/Finance)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepCompPlanInput"
+      responses:
+        "201":
+          description: Plan row created; contractor day rate synced
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, plan]
+                properties:
+                  ok: { type: boolean }
+                  plan:
+                    $ref: "#/components/schemas/AtelierNepCompPlan"
+        "400":
+          description: Invalid or missing plan terms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/finance/nep-comp/plans/{contractorId}:
+    get:
+      operationId: atelierGetNepCompPlanDetail
+      tags: [atelier]
+      summary: NEP compensation — one NEP's plan history, entitlements + conversion tracker
+      parameters:
+        - name: contractorId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Plan detail bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierNepCompPlanDetail"
+        "404":
+          description: Contractor or plan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/finance/nep-comp/plans/{contractorId}/convert:
+    post:
+      operationId: atelierConvertNepCompPlan
+      tags: [atelier]
+      summary: NEP compensation — record manual conversion to employment (closes pre-conversion accrual)
+      parameters:
+        - name: contractorId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepStatusNoteInput"
+      responses:
+        "200":
+          description: Plan lineage marked converted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+  /atelier/finance/nep-comp/plans/{contractorId}/end:
+    post:
+      operationId: atelierEndNepCompPlan
+      tags: [atelier]
+      summary: NEP compensation — end a plan lineage
+      parameters:
+        - name: contractorId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepStatusNoteInput"
+      responses:
+        "200":
+          description: Plan lineage ended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+  /atelier/finance/nep-comp/recompute:
+    post:
+      operationId: atelierRecomputeNepEntitlements
+      tags: [atelier]
+      summary: NEP compensation — idempotent margin-share entitlement recompute
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepRecomputeInput"
+      responses:
+        "200":
+          description: Recompute summary per contractor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /atelier/finance/nep-comp/entitlements:
+    get:
+      operationId: atelierListNepEntitlements
+      tags: [atelier]
+      summary: NEP compensation — margin-share entitlement statements (comp viewers)
+      parameters:
+        - name: contractorId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Entitlement rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AtelierNepEntitlement"
+  /atelier/finance/nep-comp/entitlements/{id}/accept:
+    post:
+      operationId: atelierAcceptNepEntitlement
+      tags: [atelier]
+      summary: NEP compensation — record client acceptance (starts the 30-day clock with collection)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Acceptance recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  dueDate: { type: string, nullable: true }
+                  status: { type: string }
+  /atelier/finance/nep-comp/entitlements/{id}/approve:
+    post:
+      operationId: atelierApproveNepEntitlement
+      tags: [atelier]
+      summary: NEP compensation — approve a payable entitlement for the next payment run (never auto-paid)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Entitlement approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "409":
+          description: Not payable yet (collection or acceptance missing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/finance/nep-comp/entitlements/{id}/void:
+    post:
+      operationId: atelierVoidNepEntitlement
+      tags: [atelier]
+      summary: NEP compensation — void an entitlement (with reason)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepVoidInput"
+      responses:
+        "200":
+          description: Entitlement voided
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+  /atelier/finance/nep-comp/accounts/{accountId}/origination:
+    patch:
+      operationId: atelierUpdateAccountOrigination
+      tags: [atelier]
+      summary: NEP compensation — founder edit of account origination attribution (audited)
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepOriginationInput"
+      responses:
+        "200":
+          description: Origination attribution updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+  /atelier/finance/nep-comp/engagements/{engagementId}/material-contribution:
+    post:
+      operationId: atelierSetEngagementMaterialContribution
+      tags: [atelier]
+      summary: NEP compensation — founder flag of a material contribution to the sale (audited; changes payout tier)
+      parameters:
+        - name: engagementId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierNepMaterialContributionInput"
+      responses:
+        "200":
+          description: Flag recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+  /atelier/me/nep-comp:
+    get:
+      operationId: atelierGetMyNepComp
+      tags: [atelier]
+      summary: Me lens — the caller's own NEP compensation view (self-scope, read-only)
+      description: |
+        Plan terms, accrued/paid time charges, margin-share entitlement
+        statements and conversion progress for the signed-in non-equity
+        partner. Returns hasPlan=false for anyone without an NEP plan.
+      responses:
+        "200":
+          description: Own NEP compensation bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMyNepComp"
   /atelier/me/pay:
     get:
       operationId: atelierGetMyPay
@@ -10753,6 +11061,211 @@ components:
           type: ["string", "null"]
           description: First payroll period the deduction applies to (YYYY-MM).
 
+    AtelierNepStatusNoteInput:
+      type: object
+      properties:
+        note: { type: string, nullable: true }
+    AtelierNepRecomputeInput:
+      type: object
+      properties:
+        contractorId: { type: string, nullable: true }
+    AtelierNepVoidInput:
+      type: object
+      properties:
+        reason: { type: string, nullable: true }
+    AtelierNepOriginationInput:
+      type: object
+      properties:
+        originatedByUserId: { type: string, nullable: true }
+        firstEngagementAt: { type: string, nullable: true }
+    AtelierNepMaterialContributionInput:
+      type: object
+      properties:
+        userId: { type: string, nullable: true }
+    AtelierNepCompPlan:
+      type: object
+      required:
+        - id
+        - contractorId
+        - effectiveFrom
+        - currency
+        - dayRateAmount
+        - marginSharePctSale
+        - marginSharePctOriginationOnly
+        - originationWindowMonths
+        - conversionRevenueThresholdUsd
+        - conversionMarginThresholdPct
+        - status
+      properties:
+        id: { type: string }
+        contractorId: { type: string }
+        contractorName: { type: string, nullable: true }
+        userId: { type: string, nullable: true }
+        effectiveFrom: { type: string }
+        currency: { type: string }
+        dayRateAmount: { type: number }
+        marginSharePctSale: { type: number }
+        marginSharePctOriginationOnly: { type: number }
+        originationWindowMonths: { type: number }
+        conversionRevenueThresholdUsd: { type: number }
+        conversionMarginThresholdPct: { type: number }
+        postConversionSalaryAmount: { type: number, nullable: true }
+        postConversionSalaryCurrency: { type: string, nullable: true }
+        postConversionVariableNote: { type: string, nullable: true }
+        status: { type: string, enum: [pre_conversion, converted, ended] }
+        convertedAt: { type: string, nullable: true }
+        endedAt: { type: string, nullable: true }
+        statusNote: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string }
+    AtelierNepCompPlanInput:
+      type: object
+      required:
+        - contractorId
+        - effectiveFrom
+        - dayRateAmount
+        - marginSharePctSale
+        - marginSharePctOriginationOnly
+        - originationWindowMonths
+        - conversionRevenueThresholdUsd
+        - conversionMarginThresholdPct
+      properties:
+        contractorId: { type: string }
+        effectiveFrom: { type: string }
+        currency: { type: string }
+        dayRateAmount: { type: number }
+        marginSharePctSale: { type: number }
+        marginSharePctOriginationOnly: { type: number }
+        originationWindowMonths: { type: number }
+        conversionRevenueThresholdUsd: { type: number }
+        conversionMarginThresholdPct: { type: number }
+        postConversionSalaryAmount: { type: number, nullable: true }
+        postConversionSalaryCurrency: { type: string, nullable: true }
+        postConversionVariableNote: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+    AtelierNepEntitlement:
+      type: object
+      required:
+        - id
+        - contractorId
+        - planId
+        - engagementId
+        - tier
+        - tierPct
+        - amountUsd
+        - status
+      properties:
+        id: { type: string }
+        contractorId: { type: string }
+        planId: { type: string }
+        engagementId: { type: string }
+        engagementName: { type: string, nullable: true }
+        accountId: { type: string, nullable: true }
+        accountName: { type: string, nullable: true }
+        tier: { type: string, enum: [sale, origination_only, none] }
+        tierPct: { type: number }
+        feesInvoicedUsd: { type: number }
+        feesCollectedUsd: { type: number }
+        directCostsUsd: { type: number }
+        ownTimeChargesUsd: { type: number }
+        projectProfitUsd: { type: number }
+        amountUsd: { type: number }
+        statement:
+          type: object
+          nullable: true
+          additionalProperties: true
+        fullyCollected: { type: boolean }
+        collectedAt: { type: string, nullable: true }
+        clientAcceptedAt: { type: string, nullable: true }
+        dueDate: { type: string, nullable: true }
+        status: { type: string, enum: [accruing, payable, approved, scheduled, paid, void] }
+        approvedAt: { type: string, nullable: true }
+        voidedAt: { type: string, nullable: true }
+        voidReason: { type: string, nullable: true }
+        paymentRunId: { type: string, nullable: true }
+        paidAt: { type: string, nullable: true }
+        remittanceRef: { type: string, nullable: true }
+    AtelierNepConversionProgress:
+      type: object
+      required:
+        - windowStart
+        - windowEnd
+        - attributableRevenueUsd
+        - revenueThresholdUsd
+        - revenueMet
+        - marginThresholdPct
+        - marginMet
+        - bothMet
+      properties:
+        windowStart: { type: string }
+        windowEnd: { type: string }
+        attributableRevenueUsd: { type: number }
+        revenueThresholdUsd: { type: number }
+        revenueMet: { type: boolean }
+        realisedMarginPct: { type: number, nullable: true }
+        marginThresholdPct: { type: number }
+        marginMet: { type: boolean }
+        bothMet: { type: boolean }
+        engagementsCounted: { type: number }
+    AtelierNepCompPlanDetail:
+      type: object
+      required: [contractor, planHistory, entitlements]
+      properties:
+        contractor:
+          type: object
+          required: [id, fullName, email]
+          properties:
+            id: { type: string }
+            fullName: { type: string }
+            email: { type: string }
+        currentPlan:
+          allOf:
+            - $ref: "#/components/schemas/AtelierNepCompPlan"
+          nullable: true
+        planHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierNepCompPlan"
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierNepEntitlement"
+        conversion:
+          allOf:
+            - $ref: "#/components/schemas/AtelierNepConversionProgress"
+          nullable: true
+    AtelierMyNepComp:
+      type: object
+      required: [hasPlan]
+      properties:
+        hasPlan: { type: boolean }
+        plan:
+          allOf:
+            - $ref: "#/components/schemas/AtelierNepCompPlan"
+          nullable: true
+        planHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierNepCompPlan"
+        timeCharges:
+          type: object
+          nullable: true
+          properties:
+            accruedUsd: { type: number }
+            paidUsd: { type: number }
+            invoices:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierNepEntitlement"
+        conversion:
+          allOf:
+            - $ref: "#/components/schemas/AtelierNepConversionProgress"
+          nullable: true
     AtelierMyPay:
       type: object
       required: [documents, bankRequests]

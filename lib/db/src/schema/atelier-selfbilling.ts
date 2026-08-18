@@ -55,7 +55,7 @@ export interface SelfBilledInvoiceLine {
 
 /** Snapshot of the rate source used at generation time. */
 export interface SelfBilledRateSnapshot {
-  source: "contractor_day_rate" | "partner_firm_hours" | "fallback";
+  source: "contractor_day_rate" | "nep_plan" | "partner_firm_hours" | "fallback";
   dayRateAmount: number | null;
   dayRateCurrency: string | null;
   ratePerHour: number;

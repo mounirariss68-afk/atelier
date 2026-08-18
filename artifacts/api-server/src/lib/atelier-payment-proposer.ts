@@ -30,6 +30,7 @@ import {
 import { and, eq, isNull, inArray, or } from "drizzle-orm";
 import { convertToUsd } from "./atelier-fx.js";
 import { proposeSupplierInvoiceAllocation } from "./atelier-entity-allocation.js";
+import { isoWeekStart, resolveContractorDayRateForDate } from "./atelier-nep-comp.js";
 
 const PARTNER_APPROVAL_THRESHOLD_USD = 250;
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
@@ -175,8 +176,16 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
       summary.contractorProposals.skipped++;
       continue;
     }
-    const ratePerHour = con.dayRateAmount ? con.dayRateAmount / 8 : DEFAULT_HOURLY_FALLBACK_USD;
-    const rateCurrency = con.dayRateCurrency ?? "USD";
+    // Effective-dated NEP plans win over the roster field, resolved as of
+    // the WORK week — future-dated revisions activate on their effective
+    // date without manual sync (Task #1298).
+    const wkStart = isoWeekStart(wk.weekIso);
+    const planRate = wkStart
+      ? await resolveContractorDayRateForDate(con.orgId, con.id, wkStart)
+      : null;
+    const effDayRate = planRate?.dayRateAmount ?? con.dayRateAmount;
+    const ratePerHour = effDayRate ? effDayRate / 8 : DEFAULT_HOURLY_FALLBACK_USD;
+    const rateCurrency = (planRate?.currency ?? con.dayRateCurrency) ?? "USD";
     // Resolve linked user (if any) so payeeUserId is a real user id when
     // the contractor has logged in; else fall back to contractor.id.
     let payeeUserId = con.id;

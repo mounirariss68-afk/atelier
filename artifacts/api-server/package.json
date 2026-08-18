@@ -93,6 +93,7 @@
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts",
     "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts",
     "test:self-billing": "tsx ./tests/self-billing/run.ts",
+    "test:nep-comp": "export CRM_TEST_DB_NAME=crm_test_nepcomp && tsx ./tests/nep-comp/run.ts",
     "test:cli-me": "tsx ./tests/cli-me/run.ts",
     "test:me-tasks": "tsx ./tests/me-tasks/run.ts",
     "test:task-assign": "tsx ./tests/task-assign/run.ts",

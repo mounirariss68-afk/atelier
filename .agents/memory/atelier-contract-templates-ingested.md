@@ -12,4 +12,4 @@ Task agents run on isolated DBs — only code merges back. A merged "ingest temp
 
 **Gotchas:** curl `-F file=@path` silently fails (HTTP 000) when the path has `,`/`&` — copy to a simple /tmp name first. Dev DB data won't be in production; the same ingestion must be repeated on the deployed app (or data migrated) before go-live.
 
-- Task-#1119-style orphaned async_plan chat jobs: `artifacts/api-server/scripts/retire-async-jobs-1119.ts` is idempotent — re-run on prod at go-live to mark runner-less queued/running jobs error and error out stuck async_dispatched turns.
+**Durable lesson:** idempotent one-off data scripts in `artifacts/api-server/scripts/` are dev-applied only — DB rows never merge, so each must be re-run on prod at go-live (grep that directory for seed/retire scripts when preparing a publish).

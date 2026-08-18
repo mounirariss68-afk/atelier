@@ -140,6 +140,7 @@ import ToolingSpend from "@/pages/finance/ToolingSpend";
 import BillingWorklist from "@/pages/finance/BillingWorklist";
 import FinanceClose from "@/pages/finance/FinanceClose";
 import FinancePayroll from "@/pages/finance/FinancePayroll";
+import FinanceNepComp from "@/pages/finance/FinanceNepComp";
 import LedgerPage from "@/pages/finance/LedgerPage";
 // Task #420 — Wave 8: FP&A driver-based plan surfaces. Renewals/Scenarios
 // supersede the simpler Task #440 stubs with the FP&A-engine versions.
@@ -819,6 +820,9 @@ function Router() {
         <Route path="/finance/close" component={FinanceClose} />
         {/* Task #655 — statutory payroll runs, EOSB, filings. */}
         <Route path="/finance/payroll" component={FinancePayroll} />
+        {/* Task #1298 — non-salaried NEP compensation (plans, margin-share
+            entitlements, conversion tracker). Comp-gated server-side. */}
+        <Route path="/finance/nep-comp" component={FinanceNepComp} />
         {/* Task #428 — Finance GL backbone: chart of accounts, journal,
             trial balance, Bookkeeper, exceptions, entity tagging. */}
         <Route path="/finance/ledger" component={LedgerPage} />

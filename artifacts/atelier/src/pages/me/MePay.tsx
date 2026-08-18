@@ -11,6 +11,7 @@ import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMyPay,
+  useAtelierGetMyNepComp,
   useAtelierCreateBankChangeRequest,
   getAtelierGetMyPayQueryKey,
   type AtelierMyPay,
@@ -81,8 +82,92 @@ export default function MePay() {
         </div>
       )}
       {!isContractor && <BankCard data={data} />}
+      {isContractor && <NepCompCard />}
       <SelfBilledInvoicesCard />
     </div>
+  );
+}
+
+// ============================================================
+// NEP compensation — Task #1298. Read-only self view of a non-
+// salaried non-equity-partner plan: plan terms, time charges,
+// margin-share entitlement statements and conversion progress.
+// Renders nothing for contractors without an NEP plan.
+// ============================================================
+function NepCompCard() {
+  const { data } = useAtelierGetMyNepComp();
+  if (!data?.hasPlan) return null;
+  const plan = data.plan ?? null;
+  const conv = data.conversion ?? null;
+  const usdFmt = (n: number | null | undefined) =>
+    n == null ? "—" : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  return (
+    <Card className="p-5" data-testid="me-nep-comp">
+      <h3 className="text-sm font-semibold">My compensation (non-equity partner)</h3>
+      {plan ? (
+        <div className="mt-3 grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
+          <Field label="Charge-out day rate" value={`${plan.currency} ${plan.dayRateAmount.toLocaleString()}/day`} />
+          <Field label="Margin share — sale tier" value={`${plan.marginSharePctSale}%`} />
+          <Field label="Margin share — origination only" value={`${plan.marginSharePctOriginationOnly}% (within ${plan.originationWindowMonths} months of first engagement)`} />
+          <Field label="Plan status" value={plan.status.replace("_", "-")} />
+          <Field
+            label="Conversion thresholds"
+            value={`${usdFmt(plan.conversionRevenueThresholdUsd)} rolling 12m + ${plan.conversionMarginThresholdPct}% margin`}
+          />
+          <Field
+            label="Post-conversion salary"
+            value={plan.postConversionSalaryAmount ? `${plan.postConversionSalaryCurrency ?? plan.currency} ${plan.postConversionSalaryAmount.toLocaleString()}/yr` : "agreed at conversion"}
+          />
+        </div>
+      ) : null}
+      {data.timeCharges ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md border border-border p-3">
+            <div className="text-xs text-text-faint">Time charges accrued (unpaid)</div>
+            <div className="mt-1 font-mono text-lg">{usdFmt(data.timeCharges.accruedUsd)}</div>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <div className="text-xs text-text-faint">Time charges paid</div>
+            <div className="mt-1 font-mono text-lg">{usdFmt(data.timeCharges.paidUsd)}</div>
+          </div>
+        </div>
+      ) : null}
+      {conv ? (
+        <div className="mt-4 rounded-md border border-border p-3 text-sm">
+          <div className="text-xs text-text-faint">Conversion progress ({conv.windowStart} → {conv.windowEnd})</div>
+          <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1">
+            <span>
+              Attributable revenue: <span className="font-mono">{usdFmt(conv.attributableRevenueUsd)}</span> / {usdFmt(conv.revenueThresholdUsd)}{" "}
+              {conv.revenueMet ? <MonoChip>met</MonoChip> : null}
+            </span>
+            <span>
+              Realised margin: <span className="font-mono">{conv.realisedMarginPct == null ? "—" : `${conv.realisedMarginPct}%`}</span> / {conv.marginThresholdPct}%{" "}
+              {conv.marginMet ? <MonoChip>met</MonoChip> : null}
+            </span>
+          </div>
+          {conv.bothMet ? (
+            <p className="mt-2 text-emerald-500">Both conversion thresholds met — eligible for conversion to full-time employment.</p>
+          ) : null}
+        </div>
+      ) : null}
+      {(data.entitlements ?? []).length > 0 ? (
+        <div className="mt-4">
+          <div className="text-xs text-text-faint">Margin-share entitlements</div>
+          <div className="mt-1 divide-y divide-border text-sm">
+            {(data.entitlements ?? []).map((e) => (
+              <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>{e.engagementName ?? e.engagementId}</span>
+                <span className="flex items-center gap-2">
+                  <MonoChip>{e.tier === "sale" ? `${e.tierPct}% sale` : e.tier === "origination_only" ? `${e.tierPct}% origination` : "no tier"}</MonoChip>
+                  <span className="text-xs text-text-faint">{e.status}{e.dueDate ? ` · due ${e.dueDate}` : ""}</span>
+                  <span className="font-mono">{usdFmt(e.amountUsd)}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

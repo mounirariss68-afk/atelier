@@ -123,7 +123,7 @@
 - [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss handlers use global db on purpose (withRls pins a conn across long LLM runs); isolation via RLS defaults.
 - [api-client-react new-hook wiring](api-client-react-barrel.md) — orval doesn't touch the hand-maintained src/index.ts barrel; add hook names there + rebuild with tsc -b --force.
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
-- [NEP scoped access](atelier-nep-access.md) — non_equity_partner = contractor login; ALL visibility via atelier-nep-access helpers (owned+granted accounts, opp invites w/ read-only parent); never inline checks.
+- [NEP scoped access](atelier-nep-access.md) — visibility ONLY via atelier-nep-access helpers; agreement flow in [nep-agreement-flow.md](nep-agreement-flow.md); comp plans in [atelier-nep-comp.md](atelier-nep-comp.md) (strict effective dating, no retroactive fallback; day rate syncs only from currently effective plan).
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
 - [Partner registration flow](atelier-partner-registration.md) — token validate-not-consume pre-auth uploads, magic-byte+base64 validation, path-scoped 16mb parser BEFORE global 100KB, contact suggestions REPLACE semantics.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — via:"log-only" means NOT delivered; Resend account quirks in [resend-email-delivery.md](resend-email-delivery.md).
@@ -132,10 +132,8 @@
 - [Invoice↔receipt pairing](atelier-invoice-receipt-pairing.md) — receipt pairs only on visible ref/amount match; paired invoice is born paid (never enters payment runs); receipt never becomes its own payable.
 - [Partner contracts & billing hub](atelier-partner-billing-hub.md) — dual invoice lifecycles keyed on `source`; bank-IBAN gate at approve+run-build; upload/run builds advisory-lock atomic ([atelier-supplier-invoices.md](atelier-supplier-invoices.md)).
 - [Home assigned-to-me roll-up](atelier-my-work-rollup.md) — /my-open-tasks merges activities+plan actions+RAID with server-built hrefs; owner writes must use shared isValidOrgOwner.
-- [NEP agreement flow](nep-agreement-flow.md) — roster auto-add NEP-only; v3 template ships via idempotent BOOT seed (no credentials), prod live on next publish.
 - [Expo Liquid Glass gating](expo-liquid-glass.md) — isLiquidGlassAvailable() THROWS without the native module (Expo Go/old builds); try/catch fail-closed; cards use translucent wash, not per-card blur.
-- [Reminder push notifications](atelier-push-notifications.md) — pushes ride the card insert's returning() (same dedupe key); EXPO_PUSH_BASE_URL stub; tap deep-link stash rules in [atelier-push-tap-deeplink.md](atelier-push-tap-deeplink.md).
-- [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; deterministic reminder cards, every mutation dismisses stale ones; delegation accept/decline rules in [atelier-task-delegation.md](atelier-task-delegation.md).
+- [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; every mutation dismisses stale reminder cards; delegation in [atelier-task-delegation.md](atelier-task-delegation.md); pushes ride card insert returning() ([atelier-push-notifications.md](atelier-push-notifications.md)).
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — shared glass kit, addBrandPage first, zero bottom margin or phantom pages; bio/card quirks in [atelier-bio-card.md](atelier-bio-card.md).
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
 - [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.

@@ -912,6 +912,30 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
+    "id": "finance.nep-comp",
+    "title": "NEP Comp",
+    "description": "NEP Comp — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
+    "path": "/finance/nep-comp",
+    "breadcrumb": [
+      "Finance",
+      "NEP Comp"
+    ],
+    "keywords": [],
+    "roles": [
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer"
+    ],
+    "parameterized": false
+  },
+  {
     "id": "finance.overview",
     "title": "Overview",
     "description": "Overview — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",

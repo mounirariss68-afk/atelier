@@ -25,6 +25,7 @@ import {
   atelierBankAccount,
   atelierBankSignatories,
   atelierContractorPayments,
+  atelierNepEntitlements,
   atelierPartnerFirmInvoices,
   atelierPartnerFirms,
   atelierLegalEntities,
@@ -385,9 +386,13 @@ function runWire(
       paidAt: it.paidAt?.toISOString() ?? null,
       // Task #1144 — flag unlinked supplier items that will export with blank
       // bank cells so signatories can spot them before approving the run.
+      // Task #1298 — NEP margin shares pay a contractor person; contractors
+      // have no system-registered IBAN (pay-hub policy), so the bank file
+      // always exports blank cells for finance to key manually. Flag them
+      // unconditionally so signatories see it before approving.
       missingBank: it.itemType === "partner_firm_invoice"
         ? Boolean(missingPayeeBankRefIds?.has(it.refId))
-        : false,
+        : it.itemType === "nep_margin_share",
     })),
   };
 }
@@ -526,7 +531,29 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
       ))
       .map((p) => p.id);
 
-    if (invoices.length === 0 && expenses.length === 0 && partnerInvoices.length === 0) {
+    // Task #1298 — approved NEP margin-share entitlements join the run as
+    // reviewable items. Approval happens in the founder/finance NEP-comp
+    // surface; nothing here auto-approves, and the claim below is
+    // conditional (status='approved' AND payment_run_id IS NULL).
+    const wantNepEntitlementIds = Array.isArray(req.body?.nepEntitlementIds)
+      ? (req.body.nepEntitlementIds as unknown[]).filter((x): x is string => typeof x === "string")
+      : null;
+    let nepEntitlements = await tx.select().from(atelierNepEntitlements).where(and(
+      eq(atelierNepEntitlements.orgId, me.orgId),
+      eq(atelierNepEntitlements.status, "approved"),
+      isNull(atelierNepEntitlements.paymentRunId),
+      isNull(atelierNepEntitlements.deletedAt),
+    ));
+    if (wantNepEntitlementIds) nepEntitlements = nepEntitlements.filter((e) => wantNepEntitlementIds.includes(e.id));
+    const nepContractorIds = [...new Set(nepEntitlements.map((e) => e.contractorId))];
+    const nepContractorRows = nepContractorIds.length
+      ? await tx.select({ id: atelierContractors.id, fullName: atelierContractors.fullName })
+          .from(atelierContractors)
+          .where(and(eq(atelierContractors.orgId, me.orgId), inArray(atelierContractors.id, nepContractorIds)))
+      : [];
+    const nepNameById = new Map(nepContractorRows.map((c) => [c.id, c.fullName]));
+
+    if (invoices.length === 0 && expenses.length === 0 && partnerInvoices.length === 0 && nepEntitlements.length === 0) {
       return { error: "no-eligible-items" as const, skippedMissingBank };
     }
 
@@ -534,7 +561,8 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
     const totalUsd = +(
       invoices.reduce((s, i) => s + i.totalUsd, 0) +
       expenses.reduce((s, e) => s + (e.usdAmount ?? 0), 0) +
-      partnerInvoices.reduce((s, p) => s + (p.usdAmount ?? 0), 0)
+      partnerInvoices.reduce((s, p) => s + (p.usdAmount ?? 0), 0) +
+      nepEntitlements.reduce((s, n) => s + n.amountUsd, 0)
     ).toFixed(2);
     const runNumber = await nextRunNumber();
     await tx.insert(atelierPaymentRuns).values({
@@ -546,7 +574,7 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
       legalEntityId: bank.legalEntityId ?? null,
       currency: bank.currency,
       status: "pending_signatures",
-      itemCount: invoices.length + expenses.length + partnerInvoices.length,
+      itemCount: invoices.length + expenses.length + partnerInvoices.length + nepEntitlements.length,
       totalUsd,
       makerUserId: me.id,
       makerName: me.name,
@@ -613,18 +641,41 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
         amountUsd: p.usdAmount ?? 0,
       });
     }
-    return { error: null, runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices };
+    // Task #1298 — claim + item per approved NEP margin-share entitlement.
+    for (const n of nepEntitlements) {
+      const claimed = await tx.update(atelierNepEntitlements).set({
+        status: "scheduled", paymentRunId: runId, updatedAt: new Date(),
+      }).where(and(
+        eq(atelierNepEntitlements.id, n.id),
+        eq(atelierNepEntitlements.status, "approved"),
+        isNull(atelierNepEntitlements.paymentRunId),
+      )).returning({ id: atelierNepEntitlements.id });
+      if (claimed.length === 0) continue;
+      await tx.insert(atelierPaymentRunItems).values({
+        id: rid("pri"),
+        orgId: me.orgId,
+        runId,
+        itemType: "nep_margin_share",
+        refId: n.id,
+        payeeName: nepNameById.get(n.contractorId) ?? n.contractorId,
+        description: `Margin share ${n.tierPct}% · ${n.engagementName ?? n.engagementId}${n.dueDate ? ` · due ${n.dueDate}` : ""}`,
+        amount: n.amountUsd,
+        currency: "USD",
+        amountUsd: n.amountUsd,
+      });
+    }
+    return { error: null, runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices, nepEntitlements };
     });
     if (built.error === "no-eligible-items") {
       res.status(409).json({ error: "no-eligible-items", message: "No approved self-billed invoices, partner invoices or unreimbursed approved expenses available." });
       return;
     }
-    const { runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices } = built;
+    const { runId, runNumber, totalUsd, skippedMissingBank, missingPayeeBank, invoices, expenses, partnerInvoices, nepEntitlements } = built;
     await audit({
       entityType: "payment_run", entityId: runId, actor: me,
       action: "finance.payment_run.build",
-      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), partnerInvoices: partnerInvoices.map((p) => p.id), skippedMissingBank, missingPayeeBank, totalUsd },
-      summary: `Built payment run ${runNumber}: ${invoices.length} invoice(s) + ${expenses.length} reimbursement(s) + ${partnerInvoices.length} partner invoice(s), $${totalUsd.toFixed(2)}.`,
+      payload: { runNumber, bankAccountId: bank.id, invoices: invoices.map((i) => i.id), expenses: expenses.map((e) => e.id), partnerInvoices: partnerInvoices.map((p) => p.id), nepEntitlements: nepEntitlements.map((n) => n.id), skippedMissingBank, missingPayeeBank, totalUsd },
+      summary: `Built payment run ${runNumber}: ${invoices.length} invoice(s) + ${expenses.length} reimbursement(s) + ${partnerInvoices.length} partner invoice(s) + ${nepEntitlements.length} NEP margin share(s), $${totalUsd.toFixed(2)}.`,
     });
     const [run] = await db.select().from(atelierPaymentRuns).where(eq(atelierPaymentRuns.id, runId));
     const items = await db.select().from(atelierPaymentRunItems).where(eq(atelierPaymentRunItems.runId, runId));
@@ -937,6 +988,9 @@ router.post("/finance/payables/payment-runs/:id/export-wio", async (req, res, ne
         // Contractor self-billed: contractors have no system IBAN — blank for manual fill-in
         return { iban: "", swift: "", bankName: "" };
       }
+      // Task #1298 — nep_margin_share pays a contractor person; same policy
+      // as contractor self-billed invoices: no system IBAN, exported blank
+      // and surfaced via the missingIban warning below for manual keying.
       return { iban: "", swift: "", bankName: "" };
     }
 
@@ -1025,6 +1079,11 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
         await db.update(atelierPartnerFirmInvoices).set({
           status: "paid", paidAt: now, paidByUserId: me.id, remittanceRef: ref, updatedAt: now,
         }).where(and(eq(atelierPartnerFirmInvoices.id, it.refId), eq(atelierPartnerFirmInvoices.status, "scheduled")));
+      } else if (it.itemType === "nep_margin_share") {
+        // Task #1298 — NEP margin-share entitlement settled with the run.
+        await db.update(atelierNepEntitlements).set({
+          status: "paid", paidAt: now, remittanceRef: ref, updatedAt: now,
+        }).where(and(eq(atelierNepEntitlements.id, it.refId), eq(atelierNepEntitlements.status, "scheduled")));
       }
     }
     await db.update(atelierPaymentRuns).set({ status: "paid", paidAt: now, updatedAt: now })
@@ -1077,6 +1136,11 @@ router.post("/finance/payables/payment-runs/:id/cancel", async (req, res, next) 
         await db.update(atelierPartnerFirmInvoices).set({
           status: "approved", paymentRunId: null, updatedAt: now,
         }).where(and(eq(atelierPartnerFirmInvoices.id, it.refId), eq(atelierPartnerFirmInvoices.status, "scheduled")));
+      } else if (it.itemType === "nep_margin_share") {
+        // Task #1298 — release the NEP entitlement back to approved.
+        await db.update(atelierNepEntitlements).set({
+          status: "approved", paymentRunId: null, updatedAt: now,
+        }).where(and(eq(atelierNepEntitlements.id, it.refId), eq(atelierNepEntitlements.status, "scheduled")));
       }
     }
     await db.update(atelierPaymentRuns).set({

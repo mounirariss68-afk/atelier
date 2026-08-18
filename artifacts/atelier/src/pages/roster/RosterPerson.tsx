@@ -382,6 +382,29 @@ function ProfileTab({
       {person.workerType === "employee" && viewerCanSeeComp && (
         <PayrollAdvancesCard personId={person.id} personName={person.fullName} />
       )}
+      {/* Task #1298 — non-salaried NEP compensation shortcut for comp viewers
+          on a contractor row (NEPs ride the contractor roster machinery).
+          The finance page itself resolves whether an NEP plan exists. */}
+      {person.workerType === "contractor" && viewerCanSeeComp && (
+        <Card className="p-4 md:col-span-2" data-testid="nep-comp-link-card">
+          <h3 className="font-mono text-xs uppercase text-text-mute">
+            Non-equity partner compensation
+          </h3>
+          <p className="mt-2 text-sm text-text-mute">
+            If this person is a non-salaried non-equity partner, their
+            charge-out day rate, margin-share plan, entitlement statements and
+            conversion tracker are managed on the Finance NEP compensation
+            page.
+          </p>
+          <Link
+            href={`/finance/nep-comp?contractorId=${encodeURIComponent(person.id)}`}
+            className="mt-2 inline-block text-sm underline"
+            data-testid="nep-comp-link"
+          >
+            Open NEP compensation →
+          </Link>
+        </Card>
+      )}
       {/* Task #1159 — comp-change history timeline for viewers with comp access. */}
       {viewerCanSeeComp && person.workerType === "employee" && (
         <CompHistorySection personId={person.id} />

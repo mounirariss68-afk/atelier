@@ -38,6 +38,7 @@ import {
 } from "@workspace/db";
 import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { convertToUsd } from "../atelier-fx.js";
+import { isoWeekStart, resolveContractorDayRateForDate } from "../atelier-nep-comp.js";
 import { runAgent } from "./runAgent.js";
 
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
@@ -255,9 +256,18 @@ async function executeSelfBillingClerk(
         });
         continue;
       }
-      const hasRate = con.dayRateAmount != null && con.dayRateAmount > 0;
-      const ratePerHour = hasRate ? con.dayRateAmount! / 8 : DEFAULT_HOURLY_FALLBACK_USD;
-      const rateCurrency = hasRate ? (con.dayRateCurrency ?? "USD") : "USD";
+      // Effective-dated NEP plans win over the roster field, resolved as of
+      // the WORK week — a future-dated revision starts pricing on its
+      // effective date without any manual sync (Task #1298).
+      const workDate = isoWeekStart(wk.weekIso);
+      const planRate = workDate
+        ? await resolveContractorDayRateForDate(con.orgId, con.id, workDate)
+        : null;
+      const effDayRate = planRate?.dayRateAmount ?? con.dayRateAmount;
+      const effCurrency = planRate?.currency ?? con.dayRateCurrency;
+      const hasRate = effDayRate != null && effDayRate > 0;
+      const ratePerHour = hasRate ? effDayRate! / 8 : DEFAULT_HOURLY_FALLBACK_USD;
+      const rateCurrency = hasRate ? (effCurrency ?? "USD") : "USD";
       if (!hasRate) {
         out.exceptions.push({
           code: "missing_day_rate",
@@ -295,9 +305,9 @@ async function executeSelfBillingClerk(
           currency: rateCurrency,
           lines: [],
           rateSnapshot: {
-            source: hasRate ? "contractor_day_rate" : "fallback",
-            dayRateAmount: con.dayRateAmount ?? null,
-            dayRateCurrency: con.dayRateCurrency ?? null,
+            source: planRate ? "nep_plan" : hasRate ? "contractor_day_rate" : "fallback",
+            dayRateAmount: effDayRate ?? null,
+            dayRateCurrency: effCurrency ?? null,
             ratePerHour,
             capturedAt: now,
           },

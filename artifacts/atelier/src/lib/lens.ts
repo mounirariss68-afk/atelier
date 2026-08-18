@@ -219,6 +219,8 @@ export const LENSES: readonly LensDef[] = [
       { id: "ledger", label: "Record", href: "/finance/ledger", icon: BookOpen },
       { id: "billing", label: "Bill & Collect", href: "/finance/billing", icon: Receipt },
       { id: "payables", label: "Pay", href: "/finance/payables", icon: Banknote },
+      // Task #1298 — non-salaried NEP compensation (comp-gated tab).
+      { id: "nep-comp", label: "NEP Comp", href: "/finance/nep-comp", icon: Banknote },
       { id: "close", label: "Close", href: "/finance/close", icon: Lock },
       { id: "plan", label: "Plan", href: "/finance/plan", icon: CalendarRange },
       { id: "reports", label: "Report", href: "/finance/reports", icon: BarChart3 },
@@ -322,6 +324,11 @@ export function financeSectionVisibleForRole(
 ): boolean {
   if (sectionId === "approvals") {
     return role === "founding_partner" || role === "partner" || role === "finance";
+  }
+  // Task #1298 — NEP compensation is comp data: founders/HR/Finance only
+  // (mirrors the server's canViewCompensation gate).
+  if (sectionId === "nep-comp") {
+    return role === "founding_partner" || role === "hr" || role === "finance";
   }
   return true;
 }

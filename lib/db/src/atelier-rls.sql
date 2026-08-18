@@ -85,7 +85,11 @@ DECLARE
     -- in the route layer. Shared/uploaded document bytes live in object
     -- storage under a firm-scoped key prefix and are only served via ACL'd
     -- routes.
-    'atelier_partner_engagement_grants','atelier_partner_shared_documents'
+    'atelier_partner_engagement_grants','atelier_partner_shared_documents',
+    -- Non-salaried NEP compensation: effective-dated plans + per-engagement
+    -- margin-share entitlements (sensitive comp/payout data; comp-visibility
+    -- role gates live in the route layer).
+    'atelier_nep_comp_plans','atelier_nep_entitlements'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

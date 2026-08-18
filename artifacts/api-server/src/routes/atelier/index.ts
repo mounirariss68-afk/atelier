@@ -120,6 +120,7 @@ import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
 import payrollRoutes from "./payrollRoutes";
+import nepCompRoutes from "./nepCompRoutes";
 import financePlanRoutes, { computeBacklogKpisForOrg } from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
@@ -555,6 +556,10 @@ router.use(financeComplyRoutes);
 // EOSB accruals/settlements, filing-calendar backfill. Finance-leadership
 // gated inside the router.
 router.use(payrollRoutes);
+// Task #1298 — Non-salaried NEP compensation: effective-dated plans,
+// origination/material-contribution attribution, margin-share
+// entitlements, conversion tracker + /me/nep-comp self view.
+router.use(nepCompRoutes);
 // Task #415 — Finance Plan: 13-week direct-method cash forecast and
 // backlog/pipeline coverage. Seed-only data.
 router.use(financePlanRoutes);

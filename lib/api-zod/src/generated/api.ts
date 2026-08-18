@@ -6025,6 +6025,458 @@ export const AtelierGetMyApprovalsResponse = zod.object({
 });
 
 /**
+ * @summary NEP compensation — all effective-dated plan rows (comp viewers)
+ */
+export const AtelierListNepCompPlansResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      contractorName: zod.string().nullish(),
+      userId: zod.string().nullish(),
+      effectiveFrom: zod.string(),
+      currency: zod.string(),
+      dayRateAmount: zod.number(),
+      marginSharePctSale: zod.number(),
+      marginSharePctOriginationOnly: zod.number(),
+      originationWindowMonths: zod.number(),
+      conversionRevenueThresholdUsd: zod.number(),
+      conversionMarginThresholdPct: zod.number(),
+      postConversionSalaryAmount: zod.number().nullish(),
+      postConversionSalaryCurrency: zod.string().nullish(),
+      postConversionVariableNote: zod.string().nullish(),
+      status: zod.enum(["pre_conversion", "converted", "ended"]),
+      convertedAt: zod.string().nullish(),
+      endedAt: zod.string().nullish(),
+      statusNote: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary NEP compensation — create or revise a plan (founders/Finance)
+ */
+export const AtelierCreateNepCompPlanBody = zod.object({
+  contractorId: zod.string(),
+  effectiveFrom: zod.string(),
+  currency: zod.string().optional(),
+  dayRateAmount: zod.number(),
+  marginSharePctSale: zod.number(),
+  marginSharePctOriginationOnly: zod.number(),
+  originationWindowMonths: zod.number(),
+  conversionRevenueThresholdUsd: zod.number(),
+  conversionMarginThresholdPct: zod.number(),
+  postConversionSalaryAmount: zod.number().nullish(),
+  postConversionSalaryCurrency: zod.string().nullish(),
+  postConversionVariableNote: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary NEP compensation — one NEP's plan history, entitlements + conversion tracker
+ */
+export const AtelierGetNepCompPlanDetailParams = zod.object({
+  contractorId: zod.coerce.string(),
+});
+
+export const AtelierGetNepCompPlanDetailResponse = zod.object({
+  contractor: zod.object({
+    id: zod.string(),
+    fullName: zod.string(),
+    email: zod.string(),
+  }),
+  currentPlan: zod
+    .object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      contractorName: zod.string().nullish(),
+      userId: zod.string().nullish(),
+      effectiveFrom: zod.string(),
+      currency: zod.string(),
+      dayRateAmount: zod.number(),
+      marginSharePctSale: zod.number(),
+      marginSharePctOriginationOnly: zod.number(),
+      originationWindowMonths: zod.number(),
+      conversionRevenueThresholdUsd: zod.number(),
+      conversionMarginThresholdPct: zod.number(),
+      postConversionSalaryAmount: zod.number().nullish(),
+      postConversionSalaryCurrency: zod.string().nullish(),
+      postConversionVariableNote: zod.string().nullish(),
+      status: zod.enum(["pre_conversion", "converted", "ended"]),
+      convertedAt: zod.string().nullish(),
+      endedAt: zod.string().nullish(),
+      statusNote: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    })
+    .nullish(),
+  planHistory: zod.array(
+    zod.object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      contractorName: zod.string().nullish(),
+      userId: zod.string().nullish(),
+      effectiveFrom: zod.string(),
+      currency: zod.string(),
+      dayRateAmount: zod.number(),
+      marginSharePctSale: zod.number(),
+      marginSharePctOriginationOnly: zod.number(),
+      originationWindowMonths: zod.number(),
+      conversionRevenueThresholdUsd: zod.number(),
+      conversionMarginThresholdPct: zod.number(),
+      postConversionSalaryAmount: zod.number().nullish(),
+      postConversionSalaryCurrency: zod.string().nullish(),
+      postConversionVariableNote: zod.string().nullish(),
+      status: zod.enum(["pre_conversion", "converted", "ended"]),
+      convertedAt: zod.string().nullish(),
+      endedAt: zod.string().nullish(),
+      statusNote: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  entitlements: zod.array(
+    zod.object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      planId: zod.string(),
+      engagementId: zod.string(),
+      engagementName: zod.string().nullish(),
+      accountId: zod.string().nullish(),
+      accountName: zod.string().nullish(),
+      tier: zod.enum(["sale", "origination_only", "none"]),
+      tierPct: zod.number(),
+      feesInvoicedUsd: zod.number().optional(),
+      feesCollectedUsd: zod.number().optional(),
+      directCostsUsd: zod.number().optional(),
+      ownTimeChargesUsd: zod.number().optional(),
+      projectProfitUsd: zod.number().optional(),
+      amountUsd: zod.number(),
+      statement: zod.record(zod.string(), zod.unknown()).nullish(),
+      fullyCollected: zod.boolean().optional(),
+      collectedAt: zod.string().nullish(),
+      clientAcceptedAt: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum([
+        "accruing",
+        "payable",
+        "approved",
+        "scheduled",
+        "paid",
+        "void",
+      ]),
+      approvedAt: zod.string().nullish(),
+      voidedAt: zod.string().nullish(),
+      voidReason: zod.string().nullish(),
+      paymentRunId: zod.string().nullish(),
+      paidAt: zod.string().nullish(),
+      remittanceRef: zod.string().nullish(),
+    }),
+  ),
+  conversion: zod
+    .object({
+      windowStart: zod.string(),
+      windowEnd: zod.string(),
+      attributableRevenueUsd: zod.number(),
+      revenueThresholdUsd: zod.number(),
+      revenueMet: zod.boolean(),
+      realisedMarginPct: zod.number().nullish(),
+      marginThresholdPct: zod.number(),
+      marginMet: zod.boolean(),
+      bothMet: zod.boolean(),
+      engagementsCounted: zod.number().optional(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary NEP compensation — record manual conversion to employment (closes pre-conversion accrual)
+ */
+export const AtelierConvertNepCompPlanParams = zod.object({
+  contractorId: zod.coerce.string(),
+});
+
+export const AtelierConvertNepCompPlanBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const AtelierConvertNepCompPlanResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary NEP compensation — end a plan lineage
+ */
+export const AtelierEndNepCompPlanParams = zod.object({
+  contractorId: zod.coerce.string(),
+});
+
+export const AtelierEndNepCompPlanBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const AtelierEndNepCompPlanResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary NEP compensation — idempotent margin-share entitlement recompute
+ */
+export const AtelierRecomputeNepEntitlementsBody = zod.object({
+  contractorId: zod.string().nullish(),
+});
+
+export const AtelierRecomputeNepEntitlementsResponse = zod.object({
+  ok: zod.boolean().optional(),
+  results: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+});
+
+/**
+ * @summary NEP compensation — margin-share entitlement statements (comp viewers)
+ */
+export const AtelierListNepEntitlementsQueryParams = zod.object({
+  contractorId: zod.coerce.string().optional(),
+  status: zod.coerce.string().optional(),
+});
+
+export const AtelierListNepEntitlementsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      planId: zod.string(),
+      engagementId: zod.string(),
+      engagementName: zod.string().nullish(),
+      accountId: zod.string().nullish(),
+      accountName: zod.string().nullish(),
+      tier: zod.enum(["sale", "origination_only", "none"]),
+      tierPct: zod.number(),
+      feesInvoicedUsd: zod.number().optional(),
+      feesCollectedUsd: zod.number().optional(),
+      directCostsUsd: zod.number().optional(),
+      ownTimeChargesUsd: zod.number().optional(),
+      projectProfitUsd: zod.number().optional(),
+      amountUsd: zod.number(),
+      statement: zod.record(zod.string(), zod.unknown()).nullish(),
+      fullyCollected: zod.boolean().optional(),
+      collectedAt: zod.string().nullish(),
+      clientAcceptedAt: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum([
+        "accruing",
+        "payable",
+        "approved",
+        "scheduled",
+        "paid",
+        "void",
+      ]),
+      approvedAt: zod.string().nullish(),
+      voidedAt: zod.string().nullish(),
+      voidReason: zod.string().nullish(),
+      paymentRunId: zod.string().nullish(),
+      paidAt: zod.string().nullish(),
+      remittanceRef: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary NEP compensation — record client acceptance (starts the 30-day clock with collection)
+ */
+export const AtelierAcceptNepEntitlementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierAcceptNepEntitlementResponse = zod.object({
+  ok: zod.boolean().optional(),
+  dueDate: zod.string().nullish(),
+  status: zod.string().optional(),
+});
+
+/**
+ * @summary NEP compensation — approve a payable entitlement for the next payment run (never auto-paid)
+ */
+export const AtelierApproveNepEntitlementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierApproveNepEntitlementResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary NEP compensation — void an entitlement (with reason)
+ */
+export const AtelierVoidNepEntitlementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierVoidNepEntitlementBody = zod.object({
+  reason: zod.string().nullish(),
+});
+
+export const AtelierVoidNepEntitlementResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary NEP compensation — founder edit of account origination attribution (audited)
+ */
+export const AtelierUpdateAccountOriginationParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierUpdateAccountOriginationBody = zod.object({
+  originatedByUserId: zod.string().nullish(),
+  firstEngagementAt: zod.string().nullish(),
+});
+
+export const AtelierUpdateAccountOriginationResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary NEP compensation — founder flag of a material contribution to the sale (audited; changes payout tier)
+ */
+export const AtelierSetEngagementMaterialContributionParams = zod.object({
+  engagementId: zod.coerce.string(),
+});
+
+export const AtelierSetEngagementMaterialContributionBody = zod.object({
+  userId: zod.string().nullish(),
+});
+
+export const AtelierSetEngagementMaterialContributionResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * Plan terms, accrued/paid time charges, margin-share entitlement
+statements and conversion progress for the signed-in non-equity
+partner. Returns hasPlan=false for anyone without an NEP plan.
+
+ * @summary Me lens — the caller's own NEP compensation view (self-scope, read-only)
+ */
+export const AtelierGetMyNepCompResponse = zod.object({
+  hasPlan: zod.boolean(),
+  plan: zod
+    .object({
+      id: zod.string(),
+      contractorId: zod.string(),
+      contractorName: zod.string().nullish(),
+      userId: zod.string().nullish(),
+      effectiveFrom: zod.string(),
+      currency: zod.string(),
+      dayRateAmount: zod.number(),
+      marginSharePctSale: zod.number(),
+      marginSharePctOriginationOnly: zod.number(),
+      originationWindowMonths: zod.number(),
+      conversionRevenueThresholdUsd: zod.number(),
+      conversionMarginThresholdPct: zod.number(),
+      postConversionSalaryAmount: zod.number().nullish(),
+      postConversionSalaryCurrency: zod.string().nullish(),
+      postConversionVariableNote: zod.string().nullish(),
+      status: zod.enum(["pre_conversion", "converted", "ended"]),
+      convertedAt: zod.string().nullish(),
+      endedAt: zod.string().nullish(),
+      statusNote: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    })
+    .nullish(),
+  planHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        contractorId: zod.string(),
+        contractorName: zod.string().nullish(),
+        userId: zod.string().nullish(),
+        effectiveFrom: zod.string(),
+        currency: zod.string(),
+        dayRateAmount: zod.number(),
+        marginSharePctSale: zod.number(),
+        marginSharePctOriginationOnly: zod.number(),
+        originationWindowMonths: zod.number(),
+        conversionRevenueThresholdUsd: zod.number(),
+        conversionMarginThresholdPct: zod.number(),
+        postConversionSalaryAmount: zod.number().nullish(),
+        postConversionSalaryCurrency: zod.string().nullish(),
+        postConversionVariableNote: zod.string().nullish(),
+        status: zod.enum(["pre_conversion", "converted", "ended"]),
+        convertedAt: zod.string().nullish(),
+        endedAt: zod.string().nullish(),
+        statusNote: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  timeCharges: zod
+    .object({
+      accruedUsd: zod.number().optional(),
+      paidUsd: zod.number().optional(),
+      invoices: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    })
+    .nullish(),
+  entitlements: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        contractorId: zod.string(),
+        planId: zod.string(),
+        engagementId: zod.string(),
+        engagementName: zod.string().nullish(),
+        accountId: zod.string().nullish(),
+        accountName: zod.string().nullish(),
+        tier: zod.enum(["sale", "origination_only", "none"]),
+        tierPct: zod.number(),
+        feesInvoicedUsd: zod.number().optional(),
+        feesCollectedUsd: zod.number().optional(),
+        directCostsUsd: zod.number().optional(),
+        ownTimeChargesUsd: zod.number().optional(),
+        projectProfitUsd: zod.number().optional(),
+        amountUsd: zod.number(),
+        statement: zod.record(zod.string(), zod.unknown()).nullish(),
+        fullyCollected: zod.boolean().optional(),
+        collectedAt: zod.string().nullish(),
+        clientAcceptedAt: zod.string().nullish(),
+        dueDate: zod.string().nullish(),
+        status: zod.enum([
+          "accruing",
+          "payable",
+          "approved",
+          "scheduled",
+          "paid",
+          "void",
+        ]),
+        approvedAt: zod.string().nullish(),
+        voidedAt: zod.string().nullish(),
+        voidReason: zod.string().nullish(),
+        paymentRunId: zod.string().nullish(),
+        paidAt: zod.string().nullish(),
+        remittanceRef: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  conversion: zod
+    .object({
+      windowStart: zod.string(),
+      windowEnd: zod.string(),
+      attributableRevenueUsd: zod.number(),
+      revenueThresholdUsd: zod.number(),
+      revenueMet: zod.boolean(),
+      realisedMarginPct: zod.number().nullish(),
+      marginThresholdPct: zod.number(),
+      marginMet: zod.boolean(),
+      bothMet: zod.boolean(),
+      engagementsCounted: zod.number().optional(),
+    })
+    .nullish(),
+});
+
+/**
  * Published pay/benefit documents, compensation summary, insurance
 scheme details, masked bank details and bank-change requests — all
 strictly for the signed-in person. File downloads go through
