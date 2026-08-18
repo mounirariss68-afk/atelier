@@ -1898,7 +1898,10 @@ router.get("/roster/legal-entities", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!canEditPayrollFields(me.role)) {
+    // Read gate matches the quick-add/invitation tier (partner-or-ops):
+    // partners can add people, so they need the entity names too. Only
+    // names/countries/currency are returned — no financial data.
+    if (!canEditPayrollFields(me.role) && me.role !== "partner") {
       res.status(403).json({ error: "person-edit-restricted" });
       return;
     }
@@ -1909,6 +1912,7 @@ router.get("/roster/legal-entities", async (req, res, next) => {
         shortName: atelierLegalEntities.shortName,
         country: atelierLegalEntities.country,
         baseCurrency: atelierLegalEntities.baseCurrency,
+        officeAddress: atelierLegalEntities.officeAddress,
       })
       .from(atelierLegalEntities)
       .where(and(eq(atelierLegalEntities.orgId, me.orgId), eq(atelierLegalEntities.status, "active")));
@@ -1919,6 +1923,7 @@ router.get("/roster/legal-entities", async (req, res, next) => {
         legalNameEn: e.legalNameEn,
         country: e.country,
         baseCurrency: e.baseCurrency || null,
+        officeAddress: e.officeAddress || null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
     res.json({ entities });

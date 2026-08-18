@@ -2,6 +2,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { ReferenceCombobox } from "@/components/ReferenceCombobox";
 import { countryDisplayName } from "@/lib/country-uae";
+import { FALLBACK_SENIORITIES } from "@/lib/rosterTitles";
 
 // =============================================================
 // Shared HR pickers (Task #509 / T5) — no raw-ID free text.
@@ -105,10 +106,27 @@ export function TitleSelect({
   const titles = useTitles();
   const options = React.useMemo(() => {
     const all = titles ?? [];
-    if (!workerType) return all;
-    return all.filter(
-      (t) => !t.workerTypes || t.workerTypes.length === 0 || t.workerTypes.includes(workerType),
-    );
+    const filtered = !workerType
+      ? all
+      : all.filter(
+          (t) =>
+            !t.workerTypes || t.workerTypes.length === 0 || t.workerTypes.includes(workerType),
+        );
+    if (filtered.length > 0) return filtered;
+    // Titles registry is empty by design (no seeding) — fall back to the
+    // shared legacy seniority list so the picker is never empty.
+    return FALLBACK_SENIORITIES.map((s, i) => ({
+      id: `fallback-${s}`,
+      title: s
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" "),
+      seniority: s,
+      rank: FALLBACK_SENIORITIES.length - i,
+      workerTypes: [],
+      status: "active",
+      notes: null,
+    })) satisfies TitleRow[];
   }, [titles, workerType]);
   return (
     <select
@@ -123,7 +141,9 @@ export function TitleSelect({
       {includeBlank && <option value="">Select title…</option>}
       {options.map((t) => (
         <option key={t.id} value={t.title}>
-          {t.title} · {t.seniority}
+          {t.title === t.seniority || t.id.startsWith("fallback-")
+            ? t.title
+            : `${t.title} · ${t.seniority}`}
         </option>
       ))}
     </select>
@@ -181,8 +201,9 @@ export function PartnerFirmSelect({
 }
 
 // -------------------------------------------------------------
-// Employing entity — sourced from firm-profile legal-entities
-// register. Selecting autofills office address + country.
+// Employing entity — sourced from the canonical legal-entity
+// registry (Finance Entities → GET /roster/legal-entities).
+// Selecting autofills office address + country.
 // -------------------------------------------------------------
 export interface LegalEntity {
   name: string;
@@ -195,16 +216,18 @@ export function useLegalEntities(): LegalEntity[] | null {
   const [rows, setRows] = React.useState<LegalEntity[] | null>(null);
   React.useEffect(() => {
     let mounted = true;
-    fetch("/api/atelier/firm-profile", { credentials: "include" })
+    fetch("/api/atelier/roster/legal-entities", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!mounted) return;
-        const payload =
-          (d?.published?.payload as Record<string, unknown> | undefined) ??
-          (d?.latestDraft?.payload as Record<string, unknown> | undefined) ??
-          {};
-        const entities = (payload.legalEntities as LegalEntity[] | undefined) ?? [];
-        setRows(entities);
+        const entities = ((d?.entities ?? []) as Array<Record<string, unknown>>).map(
+          (e) => ({
+            name: String(e.name ?? ""),
+            officeAddress: (e.officeAddress as string | undefined) || undefined,
+            country: (e.country as string | undefined) || undefined,
+          }),
+        );
+        setRows(entities.filter((e) => e.name));
       })
       .catch(() => mounted && setRows([]));
     return () => {

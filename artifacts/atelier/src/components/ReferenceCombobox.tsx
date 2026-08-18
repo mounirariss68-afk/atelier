@@ -97,9 +97,19 @@ export function useReferenceBootstrap(enabled: boolean = true): {
 
   const refetch = React.useCallback(async () => {
     invalidateReferenceBootstrap();
-    bootstrapPromise = fetchBootstrap();
-    const fresh = await bootstrapPromise;
-    setData(fresh);
+    setError(null);
+    setLoading(true);
+    try {
+      bootstrapPromise = fetchBootstrap();
+      const fresh = await bootstrapPromise;
+      setData(fresh);
+    } catch (err) {
+      bootstrapPromise = null;
+      setError(err as Error);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   return { data, loading, error, refetch };
@@ -164,7 +174,8 @@ export function ReferenceCombobox({
   disableFreeText = true,
 }: ReferenceComboboxProps) {
   const [open, setOpen] = React.useState(false);
-  const { data, loading, error } = useReferenceBootstrap();
+  const { data, loading, error, refetch } = useReferenceBootstrap();
+  const [retrying, setRetrying] = React.useState(false);
 
   const { items, label } = React.useMemo(() => {
     if (!data) return { items: [] as Array<{ key: string; display: string; node: React.ReactNode; row: CountryRow | IndustryRow | SubIndustryRow }>, label: "" };
@@ -278,14 +289,25 @@ export function ReferenceCombobox({
   const Icon = kind === "country" ? Globe : Building2;
 
   return (
-    <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
+    <Popover open={open} onOpenChange={(o) => !disabled && !error && setOpen(o)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           role="combobox"
           aria-expanded={open}
           aria-required={required}
-          disabled={disabled || loading || !!error}
+          disabled={disabled || loading}
+          onClick={(e) => {
+            // Failed lookups stay clickable: clicking retries the bootstrap
+            // fetch instead of leaving a permanently greyed-out control.
+            if (error && !disabled && !loading) {
+              e.preventDefault();
+              setRetrying(true);
+              refetch()
+                .catch(() => {})
+                .finally(() => setRetrying(false));
+            }
+          }}
           data-testid={testIdPrefix ? `${testIdPrefix}-trigger` : undefined}
           className={cn(
             "flex items-center gap-2 bg-bg-deep border border-border rounded text-text",
@@ -299,10 +321,10 @@ export function ReferenceCombobox({
           <span className="inline-flex items-center gap-2 truncate">
             <Icon className="w-3.5 h-3.5 shrink-0 opacity-70" />
             <span className="truncate">
-              {loading
+              {loading || retrying
                 ? "Loading…"
                 : error
-                ? "Lookup unavailable"
+                ? "Lookup failed — click to retry"
                 : label || placeholder || "Select…"}
             </span>
           </span>
