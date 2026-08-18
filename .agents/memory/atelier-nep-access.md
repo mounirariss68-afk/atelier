@@ -19,3 +19,6 @@ NEPs are roster CONTRACTORS (never employees / no new worker type) with a `non_e
 - Provisioning: `provisionPortalLogin` auto-detects NEP from the contractor row's notes matching /non[\s-]?equity\s+partner/i.
 - Frontend: NEP is NOT isSelfOnlyRole — it gets Me + a slimmed Clients lens (`clientsSectionVisibleForRole`); NEP is in both INTERNAL_ROLES and SELF_SCOPE in the screen-catalog generator.
 - Probe: tests/crm/nep-access-probe.ts covers grant/invite/revoke/creation/403 surfaces.
+
+## Mobile (atelier-mobile)
+Mobile tabs are unconditional (Chat/Expenses/Meetings/Me/Settings) — no org surfaces exist, so NEP needs no nav rework. The only two NEP-hostile endpoints mobile touched are role-gated client-side: Me "Letters" subtab hidden for role non_equity_partner (server 403s non-employees), and the Meetings AwayTodayStrip query is `enabled` only for founding_partner/partner (leadership-only endpoint). Offline probe: `pnpm --filter @workspace/api-server run test:nep-mobile` (scratch-DB, ephemeral persona, asserts every mobile boot/tab endpoint ≠403 and org surfaces stay 403).

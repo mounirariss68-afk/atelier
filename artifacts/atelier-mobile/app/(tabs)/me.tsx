@@ -1455,6 +1455,9 @@ export default function MeScreen() {
   // not trigger an extra network request.
   const payMeta = useAtelierGetMyPay();
   const isContractor = payMeta.data?.person?.workerType === "contractor";
+  // Task #1303 — mirror the web lens gating: non-equity partners keep the
+  // Me lens but employees-only surfaces (official letters) are hidden.
+  const isNonEquityPartner = profile.data?.user.role === "non_equity_partner";
 
   // Task #828 — refetch the document list whenever the Me tab regains
   // focus, so out-of-band changes (chat writes, another device) surface
@@ -1935,7 +1938,12 @@ export default function MeScreen() {
             [
               { key: "tasks", label: t("me.tabTasks") },
               { key: "documents", label: t("me.tabDocuments") },
-              { key: "letters", label: t("me.tabLetters") },
+              // Task #1303 — official letters are an employees-only surface
+              // (the server 403s non-employees). Hide the tab for
+              // non-equity partners instead of showing a dead-end section.
+              ...(isNonEquityPartner
+                ? []
+                : ([{ key: "letters", label: t("me.tabLetters") }] as const)),
               { key: "pay", label: isContractor ? t("me.tabPayContractor") : t("me.tabPay") },
             ] as const
           ).map((tab) => {

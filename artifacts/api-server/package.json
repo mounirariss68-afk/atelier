@@ -126,6 +126,7 @@
     "test:orphan-invoices": "tsx ./tests/crm/orphan-invoice-probe.ts",
     "test:app-navigation": "tsx tests/app-navigation/run.ts",
     "test:nep-flow": "tsx ./tests/crm/nep-flow-probe.ts",
+    "test:nep-mobile": "tsx ./tests/crm/nep-mobile-surface-probe.ts",
     "test:bookkeeper-collision": "tsx ./tests/crm/bookkeeper-collision-probe.ts",
     "test:push-prefs": "tsx ./tests/push-notif-prefs/run.ts",
     "test:gl-drill-through": "tsx ./tests/gl-drill-through/run.ts",

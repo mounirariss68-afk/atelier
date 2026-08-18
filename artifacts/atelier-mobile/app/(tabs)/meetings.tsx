@@ -50,6 +50,7 @@ import {
   WEB_TAB_BAR,
   hapticLight,
 } from "@/components/ui";
+import { useAuth } from "@/contexts/AuthContext";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
 import { AppHeader } from "@/components/AppHeader";
@@ -602,8 +603,15 @@ function AwayTodayStrip({ date }: { date?: string }) {
   const c = useColors();
   const rtl = useRTL();
   const { t } = useI18n();
+  const { user } = useAuth();
+  // Task #1303 — the endpoint is leadership-only (founding_partner/partner).
+  // Mirror the server gate here so other roles (employee, contractor,
+  // non_equity_partner) never fire a guaranteed-403 request on every mount.
+  const isLeadership =
+    user?.role === "founding_partner" || user?.role === "partner";
   const [openKey, setOpenKey] = useState<string | null>(null);
   const { data } = useQuery({
+    enabled: isLeadership,
     queryKey: ["roster-on-leave-today", date ?? "today"],
     queryFn: async (): Promise<{ away: AwayPerson[] } | null> => {
       try {
