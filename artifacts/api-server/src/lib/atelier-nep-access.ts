@@ -32,6 +32,43 @@ export interface NepAccountAccess {
   invitedOppIds: Set<string>;
 }
 
+/**
+ * Task #1304 — per-request memoization of nepAccessFor.
+ *
+ * GET /accounts (and other list surfaces) call canSeeAccount() once per row;
+ * for an NEP each call would otherwise re-run the 3–4 access queries
+ * (O(rows × queries)). Callers that hold a stable per-request object (the
+ * EngAccess from accessibleEngagementIds is ideal — it is resolved exactly
+ * once per request and threaded through every canSeeAccount call) can pass
+ * it as the cache key so the NEP access set resolves ONCE per request.
+ *
+ * The cache is a WeakMap keyed on that per-request object, so entries are
+ * garbage-collected with the request — no TTL, no cross-request staleness.
+ * Soft-revocation semantics are preserved: a NEW request always resolves a
+ * fresh access set.
+ */
+const nepAccessCache = new WeakMap<object, Map<string, Promise<NepAccountAccess>>>();
+
+export function nepAccessForCached(
+  cacheKey: object | null | undefined,
+  userId: string,
+): Promise<NepAccountAccess> {
+  if (!cacheKey) return nepAccessFor(userId);
+  let byUser = nepAccessCache.get(cacheKey);
+  if (!byUser) {
+    byUser = new Map();
+    nepAccessCache.set(cacheKey, byUser);
+  }
+  let p = byUser.get(userId);
+  if (!p) {
+    p = nepAccessFor(userId);
+    // Don't cache failures — let the next call retry.
+    p.catch(() => byUser!.delete(userId));
+    byUser.set(userId, p);
+  }
+  return p;
+}
+
 /** Resolve the complete NEP access set for one user in one query pass. */
 export async function nepAccessFor(userId: string): Promise<NepAccountAccess> {
   const [grants, invites, owned] = await Promise.all([

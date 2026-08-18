@@ -100,7 +100,7 @@ import {
 } from "../../lib/atelier-account-timeline.js";
 
 import {
-  nepAccessFor,
+  nepAccessForCached,
   nepCanSeeAccountId,
 } from "../../lib/atelier-nep-access.js";
 
@@ -125,7 +125,11 @@ export async function canSeeAccount(
   // access set (owned + granted accounts, plus read-limited parents of
   // invited opportunities). Never fall through to engagement grants.
   if (me.role === "non_equity_partner") {
-    const nep = await nepAccessFor(me.id);
+    // Task #1304 — memoize the NEP access set per request, keyed on the
+    // EngAccess object (resolved once per request and threaded through
+    // every canSeeAccount call), so list endpoints resolve it ONCE instead
+    // of once per row.
+    const nep = await nepAccessForCached(access, me.id);
     return nepCanSeeAccountId(nep, accountId);
   }
   if (access.all) return true;
