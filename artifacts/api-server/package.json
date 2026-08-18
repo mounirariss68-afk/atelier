@@ -112,6 +112,7 @@
     "test:chat-title": "tsx ./tests/crm/chat-title-probe.ts",
     "test:chat-account-brief": "tsx ./tests/crm/chat-account-brief-probe.ts",
     "test:chat-account-acl": "tsx ./tests/crm/chat-account-acl-probe.ts",
+    "test:nep-chat-acl": "tsx ./tests/crm/nep-chat-acl-probe.ts",
     "test:selfonly-refusal": "tsx ./tests/crm/selfonly-refusal-probe.ts",
     "test:finance-reports": "tsx ./tests/finance-reports/run.ts",
     "test:pricing-structures": "tsx ./tests/crm/pricing-structures-probe.ts",
