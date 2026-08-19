@@ -65,6 +65,10 @@ import {
   type TravelProfile,
 } from "../../lib/atelier-travel-profile.js";
 import { syncMsDisplayName } from "../../lib/atelier-ms-provisioning.js";
+import {
+  employingEntityName,
+  findActiveEmployingEntity,
+} from "../../lib/atelier-employing-entity.js";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
   loadPersonDocBytes,
@@ -130,7 +134,9 @@ export interface PersonWire {
   // Task #199 — non-sensitive prefill fields for the full Edit Person form.
   preferredName?: string | null;
   employmentStatus?: string | null;
+  legalEntityId?: string | null;
   employingEntity?: string | null;
+  employingEntityLegacyUnmatched?: boolean;
   homeCountry?: string | null;
   contractType?: string | null;
   avatarUrl?: string | null;
@@ -140,10 +146,9 @@ export interface PersonWire {
   baseCompensation?: number | null;
   dayRateInternalCost?: number | null;
   costToCognirisePerDay?: number | null;
-  // Task #660 — statutory payroll fields (employees, comp-gated). Edited
-  // ONLY via PATCH /roster/people/:id/payroll, never the general edit.
+  // Task #660 — statutory payroll fields (employees, comp-gated). Employing
+  // entity is canonical above; compensation fields remain payroll-only.
   baseCurrency?: string | null;
-  legalEntityId?: string | null;
   basicWageMonthly?: number | null;
   housingAllowanceMonthly?: number | null;
   schemeRegisteredOn?: string | null;
@@ -299,7 +304,9 @@ export function toBusinessWire(p: PersonWire): PersonWire {
     officeAddress: p.officeAddress ?? null,
     preferredName: p.preferredName ?? null,
     employmentStatus: p.employmentStatus ?? null,
+    legalEntityId: p.legalEntityId ?? null,
     employingEntity: p.employingEntity ?? null,
+    employingEntityLegacyUnmatched: p.employingEntityLegacyUnmatched ?? false,
     homeCountry: p.homeCountry ?? null,
     contractType: p.contractType ?? null,
     avatarUrl: p.avatarUrl ?? null,
@@ -444,6 +451,19 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   };
 
   const out: PersonWire[] = [];
+  const employeeEntityNames = new Map<string, string>();
+  if (wt === "all" || wt === "internal" || wt === "employee") {
+    const entities = await db
+      .select({
+        id: atelierLegalEntities.id,
+        shortName: atelierLegalEntities.shortName,
+        legalNameEn: atelierLegalEntities.legalNameEn,
+      })
+      .from(atelierLegalEntities);
+    for (const entity of entities) {
+      employeeEntityNames.set(entity.id, employingEntityName(entity));
+    }
+  }
 
   // Task #538 — name search also matches structured person fields
   // (preferred name / display name), so "find Mo" hits Mohammed whose
@@ -483,7 +503,13 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
         continue;
       if (opts.status && r.status !== opts.status) continue;
       if (!matchesCohort(r)) continue;
-      out.push(employeeToWire(r, opts.includeComp));
+      out.push(
+        employeeToWire(
+          r,
+          opts.includeComp,
+          r.legalEntityId ? employeeEntityNames.get(r.legalEntityId) ?? null : null,
+        ),
+      );
     }
   }
 
@@ -567,7 +593,13 @@ async function attachStructuredNames(wires: PersonWire[]): Promise<void> {
 function employeeToWire(
   r: typeof atelierEmployees.$inferSelect,
   includeComp: boolean,
+  resolvedEntityName: string | null,
 ): PersonWire {
+  const legacyEntity = r.employingEntity?.trim() || null;
+  const entityDisplay =
+    resolvedEntityName ??
+    legacyEntity ??
+    (r.legalEntityId ? "Unavailable registered entity" : null);
   const base: PersonWire = {
     id: r.id,
     workerType: "employee",
@@ -586,7 +618,10 @@ function employeeToWire(
     // Task #199 — prefill fields for the full Edit Person form.
     preferredName: r.preferredName ?? null,
     employmentStatus: r.employmentStatus ?? null,
-    employingEntity: r.employingEntity ?? null,
+    legalEntityId: r.legalEntityId ?? null,
+    employingEntity: entityDisplay,
+    employingEntityLegacyUnmatched:
+      resolvedEntityName === null && (r.legalEntityId !== null || legacyEntity !== null),
     // Task #1095 — home country (ISO-2) for entity-allocation travel rules.
     homeCountry: r.homeCountry ?? null,
     // Task #645 — public contact fields for the business-card vCard QR.
@@ -612,7 +647,6 @@ function employeeToWire(
     // Task #660 — statutory payroll fields (comp-gated prefill for the
     // payroll edit surface).
     base.baseCurrency = r.baseCurrency ?? null;
-    base.legalEntityId = r.legalEntityId ?? null;
     base.basicWageMonthly = r.basicWageMonthly ?? null;
     base.housingAllowanceMonthly = r.housingAllowanceMonthly ?? null;
     base.schemeRegisteredOn = r.schemeRegisteredOn ?? null;
@@ -704,7 +738,30 @@ async function getPersonRaw(
     .select()
     .from(atelierEmployees)
     .where(and(eq(atelierEmployees.id, id), isNull(atelierEmployees.deletedAt)));
-  if (emp) return employeeToWire(emp, includeComp);
+  if (emp) {
+    const entity = emp.legalEntityId
+      ? (
+          await db
+            .select({
+              shortName: atelierLegalEntities.shortName,
+              legalNameEn: atelierLegalEntities.legalNameEn,
+            })
+            .from(atelierLegalEntities)
+            .where(
+              and(
+                eq(atelierLegalEntities.id, emp.legalEntityId),
+                eq(atelierLegalEntities.orgId, emp.orgId),
+              ),
+            )
+            .limit(1)
+        )[0] ?? null
+      : null;
+    return employeeToWire(
+      emp,
+      includeComp,
+      entity ? employingEntityName(entity) : null,
+    );
+  }
 
   const [ct] = await db
     .select()
@@ -1427,7 +1484,7 @@ const employeeEditSchema = z
     country: zNullableTrimmed(120),
     employmentType: z.enum(["FTE", "fixed_term", "intern"]),
     employmentStatus: z.enum(["active", "notice", "on_leave", "terminated"]),
-    employingEntity: zNullableTrimmed(120),
+    legalEntityId: z.string().trim().min(1).max(80).nullable(),
     // Task #1095 — home country (ISO-2) feeding the entity-allocation
     // travel rules (home vs destination). HR/founding editable like the
     // rest of this schema.
@@ -1507,8 +1564,6 @@ const SENSITIVE_EDIT_FIELDS = new Set([
   "dayRateInternalCost",
   "baseCompensation",
   "baseCurrency",
-  // Task #660 — payroll linkage fields live on the dedicated payroll PATCH.
-  "legalEntityId",
   "basicWageMonthly",
   "housingAllowanceMonthly",
   "schemeRegisteredOn",
@@ -1596,6 +1651,14 @@ router.patch("/roster/people/:id", async (req, res, next) => {
       return;
     }
     const rawBody = (req.body ?? {}) as Record<string, unknown>;
+    if ("employingEntity" in rawBody) {
+      res.status(422).json({
+        error: "legacy-employing-entity-not-accepted",
+        fields: ["employingEntity"],
+        hint: "Use legalEntityId from the registered legal-entity selector.",
+      });
+      return;
+    }
 
     // Explicit rejection of sensitive fields — before schema parsing so the
     // caller gets a precise "locked" error rather than a generic unknown-key.
@@ -1658,6 +1721,20 @@ router.patch("/roster/people/:id", async (req, res, next) => {
       return;
     }
     const raw = row as unknown as Record<string, unknown>;
+
+    if ("legalEntityId" in patch && patch.legalEntityId != null) {
+      const entity = await findActiveEmployingEntity(
+        me.orgId,
+        String(patch.legalEntityId),
+      );
+      if (!entity) {
+        res.status(422).json({ error: "legal-entity-not-found" });
+        return;
+      }
+    }
+    if ("legalEntityId" in patch && raw.employingEntity != null) {
+      patch.employingEntity = null;
+    }
 
     // Task #538 — name fields flow through the person record. Pull them out
     // of the column patch, resolve the structured name (structured fields
@@ -2036,12 +2113,13 @@ export async function applyPayrollUpdate(args: {
     update[k] = v;
     changes.push({ field: k, from: before, to: after });
   }
-  if (entityRow && "legalEntityId" in update) {
-    const mirror = entityRow.shortName || entityRow.legalNameEn;
-    if ((raw.employingEntity ?? null) !== mirror) {
-      update.employingEntity = mirror;
-      changes.push({ field: "employingEntity", from: raw.employingEntity ?? null, to: mirror });
-    }
+  if ("legalEntityId" in update && raw.employingEntity != null) {
+    update.employingEntity = null;
+    changes.push({
+      field: "employingEntity",
+      from: raw.employingEntity,
+      to: null,
+    });
   }
   if (changes.length === 0) return { ok: false, code: "no-change", changes: [] };
 

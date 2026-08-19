@@ -291,7 +291,7 @@ defineSelfWriteCapability({
         confirmation: {
           summary:
             `Issue a ${def!.label.toLowerCase()} in ${langLabel}, addressed to ${addressee}, ` +
-            `on ${preview.entity.name} letterhead (your employing entity, resolved via ${preview.entityVia === "payroll" ? "your payroll record" : preview.entityVia === "name_match" ? "your roster entity" : "the firm default"}), ` +
+            `on ${preview.entity.name} letterhead (your employing entity, resolved via ${preview.entityVia === "registry_id" ? "the legal-entity registry" : preview.entityVia === "legacy_name" ? "a legacy roster label that still needs correction" : "the firm default"}), ` +
             `${deliveryText}` +
             (def!.salaryBearing ? ". It states your total salary (monthly and annual) only — no breakdown" : "") +
             (req.travelStart ? `. Travel window ${req.travelStart} → ${req.travelEnd}` : "") +

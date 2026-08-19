@@ -44,14 +44,14 @@ type EmployeeRow = typeof atelierEmployees.$inferSelect;
 
 // ------------------------------------------------------------------
 // Entity resolution — explicit rule (Task #845):
-// payroll legalEntityId → unambiguous name-match on the free-text
-// employingEntity label → default entity. Ambiguous matches fall to the
-// default and the `via` value surfaces what happened (confirm step).
+// Registry legalEntityId → legacy unambiguous name match → default entity.
+// A stale non-null ID never falls back to a label or a default: correction is
+// required before an official letter can be issued.
 // ------------------------------------------------------------------
 
 export type EntityResolution = {
   entity: SigningEntity | null;
-  via: "payroll" | "name_match" | "default" | "none";
+  via: "registry_id" | "legacy_name" | "default" | "none";
   ambiguous: boolean;
 };
 
@@ -63,7 +63,8 @@ export function resolveEmployingEntityFrom(
   const fallback = entities.find((e) => e.isDefault) ?? entities[0];
   if (emp.legalEntityId) {
     const hit = entities.find((e) => e.id === emp.legalEntityId);
-    if (hit) return { entity: hit, via: "payroll", ambiguous: false };
+    if (hit) return { entity: hit, via: "registry_id", ambiguous: false };
+    return { entity: null, via: "none", ambiguous: false };
   }
   const label = (emp.employingEntity ?? "").trim().toLowerCase();
   if (label) {
@@ -73,7 +74,7 @@ export function resolveEmployingEntityFrom(
         e.name.trim().toLowerCase().includes(label) ||
         label.includes(e.name.trim().toLowerCase()),
     );
-    if (matches.length === 1) return { entity: matches[0], via: "name_match", ambiguous: false };
+    if (matches.length === 1) return { entity: matches[0], via: "legacy_name", ambiguous: false };
     if (matches.length > 1) return { entity: fallback, via: "default", ambiguous: true };
   }
   return { entity: fallback, via: "default", ambiguous: false };

@@ -206,9 +206,11 @@ export function PartnerFirmSelect({
 // Selecting autofills office address + country.
 // -------------------------------------------------------------
 export interface LegalEntity {
+  id: string;
   name: string;
   officeAddress?: string;
   country?: string;
+  baseCurrency?: string;
   [k: string]: unknown;
 }
 
@@ -222,12 +224,14 @@ export function useLegalEntities(): LegalEntity[] | null {
         if (!mounted) return;
         const entities = ((d?.entities ?? []) as Array<Record<string, unknown>>).map(
           (e) => ({
+            id: String(e.id ?? ""),
             name: String(e.name ?? ""),
             officeAddress: (e.officeAddress as string | undefined) || undefined,
             country: (e.country as string | undefined) || undefined,
+            baseCurrency: (e.baseCurrency as string | undefined) || undefined,
           }),
         );
-        setRows(entities.filter((e) => e.name));
+        setRows(entities.filter((e) => e.id && e.name));
       })
       .catch(() => mounted && setRows([]));
     return () => {
@@ -241,32 +245,54 @@ export function EmployingEntitySelect({
   value,
   onChange,
   onSelectEntity,
+  legacyValue,
   testId,
 }: {
   value: string;
-  onChange: (name: string) => void;
+  onChange: (id: string) => void;
   onSelectEntity?: (entity: LegalEntity | null) => void;
+  legacyValue?: string | null;
   testId?: string;
 }): React.ReactElement {
   const entities = useLegalEntities();
+  const loading = entities === null;
+  const empty = entities?.length === 0;
   return (
-    <select
-      className={SELECT_CLS}
-      value={value}
-      onChange={(e) => {
-        onChange(e.target.value);
-        const ent = (entities ?? []).find((x) => x.name === e.target.value) ?? null;
-        onSelectEntity?.(ent);
-      }}
-      data-testid={testId}
-    >
-      <option value="">Select employing entity…</option>
-      {(entities ?? []).map((ent) => (
-        <option key={ent.name} value={ent.name}>
-          {ent.name}
+    <div className="space-y-1.5">
+      <select
+        className={SELECT_CLS}
+        value={value}
+        disabled={loading || empty}
+        onChange={(e) => {
+          onChange(e.target.value);
+          const ent = (entities ?? []).find((x) => x.id === e.target.value) ?? null;
+          onSelectEntity?.(ent);
+        }}
+        data-testid={testId}
+      >
+        <option value="">
+          {loading ? "Loading legal entities…" : empty ? "No legal entities registered" : "Select employing entity…"}
         </option>
-      ))}
-    </select>
+        {value && !(entities ?? []).some((ent) => ent.id === value) ? (
+          <option value={value}>Current entity is unavailable — choose another</option>
+        ) : null}
+        {(entities ?? []).map((ent) => (
+          <option key={ent.id} value={ent.id}>
+            {ent.name}
+          </option>
+        ))}
+      </select>
+      {empty ? (
+        <a className="text-xs text-sky-700 underline" href="/finance/entities">
+          Add legal entities in Finance
+        </a>
+      ) : null}
+      {!value && legacyValue?.trim() ? (
+        <p className="text-xs text-amber-700">
+          Legacy value “{legacyValue}” is not linked to the registry. Choose an entity to correct it.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

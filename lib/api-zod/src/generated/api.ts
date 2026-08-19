@@ -5308,7 +5308,10 @@ export const AtelierQuickAddRosterPersonBody = zod.object({
   title: zod.string().nullish(),
   country: zod.string().nullish().describe("ISO-3166 alpha-2"),
   startDate: zod.string().nullish().describe("YYYY-MM-DD"),
-  employingEntity: zod.string().nullish(),
+  legalEntityId: zod
+    .string()
+    .nullish()
+    .describe("Registered employing legal-entity ID"),
   vendorEntity: zod.string().nullish(),
   managerPersonId: zod
     .string()
@@ -5367,7 +5370,7 @@ export const atelierUpdateRosterPersonBodyHomeOfficeMax = 120;
 
 export const atelierUpdateRosterPersonBodyCountryMax = 120;
 
-export const atelierUpdateRosterPersonBodyEmployingEntityMax = 120;
+export const atelierUpdateRosterPersonBodyLegalEntityIdMax = 80;
 
 export const atelierUpdateRosterPersonBodyVendorEntityMax = 200;
 
@@ -5485,10 +5488,13 @@ export const AtelierUpdateRosterPersonBody = zod
     employmentStatus: zod
       .enum(["active", "notice", "on_leave", "terminated"])
       .optional(),
-    employingEntity: zod
+    legalEntityId: zod
       .string()
-      .max(atelierUpdateRosterPersonBodyEmployingEntityMax)
-      .nullish(),
+      .max(atelierUpdateRosterPersonBodyLegalEntityIdMax)
+      .nullish()
+      .describe(
+        "Registered employing legal-entity ID; free-text labels are not accepted",
+      ),
     contractType: zod
       .union([
         zod.literal("T&M"),
@@ -5776,6 +5782,136 @@ export const AtelierGetRosterPersonPersonalResponse = zod.object({
       email: zod.string().nullish(),
     }),
   ),
+});
+
+/**
+ * @summary Roster — list organisation-scoped invitations
+ */
+export const AtelierListRosterInvitationsResponse = zod.object({
+  invitations: zod.array(
+    zod.object({
+      id: zod.string(),
+      workerType: zod.enum(["employee", "contractor", "partner_firm_resource"]),
+      personDraft: zod.object({
+        fullName: zod.string(),
+        email: zod.string(),
+        legalEntityId: zod.string().nullish(),
+        employingEntityName: zod.string().nullish(),
+        employingEntityLegacyUnmatched: zod.boolean().optional(),
+      }),
+      sentAt: zod.coerce.date(),
+      expiresAt: zod.coerce.date().nullish(),
+      acceptedAt: zod.coerce.date().nullish(),
+      acceptedPersonId: zod.string().nullish(),
+      status: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Roster — create an invitation from an approved hiring source
+ */
+export const atelierCreateRosterInvitationBodyHonorificMax = 40;
+
+export const atelierCreateRosterInvitationBodyFirstNameMax = 120;
+
+export const atelierCreateRosterInvitationBodyMiddleNameMax = 120;
+
+export const atelierCreateRosterInvitationBodyLastNameMax = 120;
+
+export const atelierCreateRosterInvitationBodyPreferredNameMax = 120;
+
+export const atelierCreateRosterInvitationBodyExpiresInDaysMax = 60;
+
+export const AtelierCreateRosterInvitationBody = zod.object({
+  workerType: zod.enum(["employee", "contractor", "partner_firm_resource"]),
+  honorific: zod
+    .string()
+    .max(atelierCreateRosterInvitationBodyHonorificMax)
+    .nullish(),
+  firstName: zod
+    .string()
+    .min(1)
+    .max(atelierCreateRosterInvitationBodyFirstNameMax),
+  middleName: zod
+    .string()
+    .max(atelierCreateRosterInvitationBodyMiddleNameMax)
+    .nullish(),
+  lastName: zod
+    .string()
+    .min(1)
+    .max(atelierCreateRosterInvitationBodyLastNameMax),
+  preferredName: zod
+    .string()
+    .max(atelierCreateRosterInvitationBodyPreferredNameMax)
+    .nullish(),
+  email: zod.string().email(),
+  role: zod.string().nullish(),
+  seniority: zod.string().nullish(),
+  title: zod.string().nullish(),
+  country: zod.string().nullish(),
+  partnerFirmId: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  legalEntityId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Registered employing legal-entity ID; employee invitations only",
+    ),
+  sourceKind: zod.enum([
+    "hired_candidate",
+    "accepted_offer",
+    "partner_firm_resource",
+  ]),
+  sourceId: zod.string().min(1),
+  expiresInDays: zod
+    .number()
+    .min(1)
+    .max(atelierCreateRosterInvitationBodyExpiresInDaysMax)
+    .optional(),
+});
+
+export const AtelierCreateRosterInvitationResponse = zod.object({
+  ok: zod.boolean(),
+  id: zod.string(),
+  expiresAt: zod.coerce.date(),
+  onboardingId: zod.string(),
+});
+
+/**
+ * @summary Roster — resend an organisation-scoped invitation
+ */
+export const AtelierResendRosterInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierResendRosterInvitationResponse = zod.object({
+  ok: zod.boolean(),
+  expiresAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Roster — revoke an organisation-scoped invitation
+ */
+export const AtelierRevokeRosterInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierRevokeRosterInvitationResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Roster — accept an invitation and materialise the person
+ */
+export const AtelierAcceptRosterInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierAcceptRosterInvitationResponse = zod.object({
+  ok: zod.boolean(),
+  personId: zod.string(),
+  onboardingId: zod.string(),
 });
 
 /**

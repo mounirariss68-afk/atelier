@@ -28,7 +28,9 @@ interface Invitation {
     country?: string | null;
     partnerFirmId?: string | null;
     startDate?: string | null;
-    employingEntity?: string | null;
+    legalEntityId?: string | null;
+    employingEntityName?: string | null;
+    employingEntityLegacyUnmatched?: boolean;
   };
   sentByUserId: string;
   sentAt: string;
@@ -85,7 +87,7 @@ const emptyDraft = {
   country: "",
   partnerFirmId: "",
   startDate: "",
-  employingEntity: "",
+  legalEntityId: "",
   officeAddress: "",
 };
 
@@ -236,7 +238,10 @@ export default function RosterInvitations(): React.ReactElement {
           country: draft.country || null,
           partnerFirmId: draft.partnerFirmId || null,
           startDate: draft.startDate || null,
-          employingEntity: draft.employingEntity || null,
+          legalEntityId:
+            draft.workerType === "employee"
+              ? draft.legalEntityId || null
+              : null,
           sourceKind,
           sourceId,
         }),
@@ -444,11 +449,12 @@ export default function RosterInvitations(): React.ReactElement {
               testIdPrefix="invite-country"
             />
           </label>
+          {draft.workerType === "employee" && (
           <label className="space-y-1">
             <span className="font-mono text-[11px] uppercase text-text-mute">Employing entity</span>
             <EmployingEntitySelect
-              value={draft.employingEntity}
-              onChange={(name) => setDraft((d) => ({ ...d, employingEntity: name }))}
+              value={draft.legalEntityId}
+              onChange={(id) => setDraft((d) => ({ ...d, legalEntityId: id }))}
               onSelectEntity={(ent: LegalEntity | null) =>
                 setDraft((d) => ({
                   ...d,
@@ -459,6 +465,7 @@ export default function RosterInvitations(): React.ReactElement {
               testId="invite-employing-entity"
             />
           </label>
+          )}
           <label className="space-y-1">
             <span className="font-mono text-[11px] uppercase text-text-mute">Start date</span>
             <Input
@@ -526,8 +533,19 @@ export default function RosterInvitations(): React.ReactElement {
                 {r.personDraft.country && (
                   <MonoChip>{countryDisplayName(r.personDraft.country)}</MonoChip>
                 )}
-                {r.personDraft.employingEntity && (
-                  <MonoChip>{r.personDraft.employingEntity}</MonoChip>
+                {r.personDraft.employingEntityName && (
+                  <MonoChip
+                    tone={
+                      r.personDraft.employingEntityLegacyUnmatched
+                        ? "amber"
+                        : "default"
+                    }
+                  >
+                    {r.personDraft.employingEntityName}
+                    {r.personDraft.employingEntityLegacyUnmatched
+                      ? " · needs correction"
+                      : ""}
+                  </MonoChip>
                 )}
                 {r.expiresAt && <MonoChip>expires {r.expiresAt.slice(0, 10)}</MonoChip>}
               </div>

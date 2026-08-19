@@ -88,10 +88,11 @@ export interface AtelierRosterPersonEdit {
   employmentType?: AtelierRosterPersonEditEmploymentType;
   employmentStatus?: AtelierRosterPersonEditEmploymentStatus;
   /**
-   * @maxLength 120
+   * Registered employing legal-entity ID; free-text labels are not accepted
+   * @maxLength 80
    * @nullable
    */
-  employingEntity?: string | null;
+  legalEntityId?: string | null;
   /** @nullable */
   contractType?: AtelierRosterPersonEditContractType;
   /**

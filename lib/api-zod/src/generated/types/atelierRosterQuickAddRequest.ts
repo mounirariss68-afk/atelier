@@ -23,7 +23,8 @@ export interface AtelierRosterQuickAddRequest {
   country?: string | null;
   /** YYYY-MM-DD */
   startDate?: string | null;
-  employingEntity?: string | null;
+  /** Registered employing legal-entity ID */
+  legalEntityId?: string | null;
   vendorEntity?: string | null;
   /** Roster id of an existing employee to report to */
   managerPersonId?: string | null;

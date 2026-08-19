@@ -20,6 +20,7 @@ import type {
   AgentActivityItem,
   AgentCatalogEntry,
   AtelierAcceptNepEntitlement200,
+  AtelierAcceptRosterInvitation200,
   AtelierAccount360,
   AtelierAccountDuplicateCandidates,
   AtelierAccountDuplicateError,
@@ -106,6 +107,7 @@ import type {
   AtelierCreateOpportunityResponse,
   AtelierCreateRateCardVersion201,
   AtelierCreateRateCardVersionBody,
+  AtelierCreateRosterInvitation200,
   AtelierCreateStageTransition200,
   AtelierCredential,
   AtelierCredentialInput,
@@ -198,6 +200,7 @@ import type {
   AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
+  AtelierListRosterInvitations200,
   AtelierListSalaryProposals200,
   AtelierListSalaryProposalsParams,
   AtelierListSignatureRequestsParams,
@@ -308,6 +311,7 @@ import type {
   AtelierReplaceMyDocumentScan200,
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
+  AtelierResendRosterInvitation200,
   AtelierRespondToTaskBody,
   AtelierReverifyFactResult,
   AtelierReverseRepostJournal201,
@@ -315,6 +319,7 @@ import type {
   AtelierReviewReleaseInput,
   AtelierRevisePovInput,
   AtelierRevokeDocumentAccess200,
+  AtelierRosterInvitationCreateRequest,
   AtelierRosterPersonEdit,
   AtelierRosterPersonEditResponse,
   AtelierRosterPersonalView,
@@ -8139,6 +8144,437 @@ export function useAtelierGetRosterPersonPersonal<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Roster — list organisation-scoped invitations
+ */
+export const getAtelierListRosterInvitationsUrl = () => {
+  return `/api/atelier/roster/invitations`;
+};
+
+export const atelierListRosterInvitations = async (
+  options?: RequestInit,
+): Promise<AtelierListRosterInvitations200> => {
+  return customFetch<AtelierListRosterInvitations200>(
+    getAtelierListRosterInvitationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListRosterInvitationsQueryKey = () => {
+  return [`/api/atelier/roster/invitations`] as const;
+};
+
+export const getAtelierListRosterInvitationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListRosterInvitations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListRosterInvitations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListRosterInvitationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListRosterInvitations>>
+  > = ({ signal }) =>
+    atelierListRosterInvitations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListRosterInvitations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListRosterInvitationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListRosterInvitations>>
+>;
+export type AtelierListRosterInvitationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Roster — list organisation-scoped invitations
+ */
+
+export function useAtelierListRosterInvitations<
+  TData = Awaited<ReturnType<typeof atelierListRosterInvitations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListRosterInvitations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListRosterInvitationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Roster — create an invitation from an approved hiring source
+ */
+export const getAtelierCreateRosterInvitationUrl = () => {
+  return `/api/atelier/roster/invitations`;
+};
+
+export const atelierCreateRosterInvitation = async (
+  atelierRosterInvitationCreateRequest: AtelierRosterInvitationCreateRequest,
+  options?: RequestInit,
+): Promise<AtelierCreateRosterInvitation200> => {
+  return customFetch<AtelierCreateRosterInvitation200>(
+    getAtelierCreateRosterInvitationUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRosterInvitationCreateRequest),
+    },
+  );
+};
+
+export const getAtelierCreateRosterInvitationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRosterInvitation>>,
+    TError,
+    { data: BodyType<AtelierRosterInvitationCreateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateRosterInvitation>>,
+  TError,
+  { data: BodyType<AtelierRosterInvitationCreateRequest> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateRosterInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateRosterInvitation>>,
+    { data: BodyType<AtelierRosterInvitationCreateRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateRosterInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateRosterInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateRosterInvitation>>
+>;
+export type AtelierCreateRosterInvitationMutationBody =
+  BodyType<AtelierRosterInvitationCreateRequest>;
+export type AtelierCreateRosterInvitationMutationError = ErrorType<void>;
+
+/**
+ * @summary Roster — create an invitation from an approved hiring source
+ */
+export const useAtelierCreateRosterInvitation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRosterInvitation>>,
+    TError,
+    { data: BodyType<AtelierRosterInvitationCreateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateRosterInvitation>>,
+  TError,
+  { data: BodyType<AtelierRosterInvitationCreateRequest> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateRosterInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Roster — resend an organisation-scoped invitation
+ */
+export const getAtelierResendRosterInvitationUrl = (id: string) => {
+  return `/api/atelier/roster/invitations/${id}/resend`;
+};
+
+export const atelierResendRosterInvitation = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierResendRosterInvitation200> => {
+  return customFetch<AtelierResendRosterInvitation200>(
+    getAtelierResendRosterInvitationUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierResendRosterInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierResendRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierResendRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierResendRosterInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierResendRosterInvitation>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierResendRosterInvitation(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierResendRosterInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierResendRosterInvitation>>
+>;
+
+export type AtelierResendRosterInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Roster — resend an organisation-scoped invitation
+ */
+export const useAtelierResendRosterInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierResendRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierResendRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierResendRosterInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Roster — revoke an organisation-scoped invitation
+ */
+export const getAtelierRevokeRosterInvitationUrl = (id: string) => {
+  return `/api/atelier/roster/invitations/${id}/revoke`;
+};
+
+export const atelierRevokeRosterInvitation = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(
+    getAtelierRevokeRosterInvitationUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierRevokeRosterInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierRevokeRosterInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierRevokeRosterInvitation(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRevokeRosterInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>
+>;
+
+export type AtelierRevokeRosterInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Roster — revoke an organisation-scoped invitation
+ */
+export const useAtelierRevokeRosterInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRevokeRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierRevokeRosterInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Roster — accept an invitation and materialise the person
+ */
+export const getAtelierAcceptRosterInvitationUrl = (id: string) => {
+  return `/api/atelier/roster/invitations/${id}/accept`;
+};
+
+export const atelierAcceptRosterInvitation = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierAcceptRosterInvitation200> => {
+  return customFetch<AtelierAcceptRosterInvitation200>(
+    getAtelierAcceptRosterInvitationUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierAcceptRosterInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierAcceptRosterInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierAcceptRosterInvitation(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAcceptRosterInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>
+>;
+
+export type AtelierAcceptRosterInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Roster — accept an invitation and materialise the person
+ */
+export const useAtelierAcceptRosterInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAcceptRosterInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierAcceptRosterInvitationMutationOptions(options));
+};
 
 /**
  * @summary Me lens — the caller's own self-service notification cards

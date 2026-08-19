@@ -51,6 +51,7 @@ import {
   atelierStudioOffers,
   atelierAuthCredentials,
   atelierLoginActivationTokens,
+  atelierLegalEntities,
 } from "@workspace/db";
 import { runAccessSentinel } from "./rosterRoutes.js";
 import { canViewSensitivePeopleData } from "./personaRoles.js";
@@ -72,6 +73,11 @@ import {
   launchProvisioning,
   defaultProfileForWorkerType,
 } from "../../lib/atelier-ms-provisioning.js";
+import {
+  employingEntityName,
+  findActiveEmployingEntity,
+  matchLegacyEmployingEntity,
+} from "../../lib/atelier-employing-entity.js";
 
 const router: IRouter = Router();
 
@@ -512,15 +518,49 @@ router.get("/roster/invitations", async (req, res, next) => {
     const rows = await db
       .select()
       .from(atelierInvitations)
-      .where(isNull(atelierInvitations.deletedAt))
+      .where(
+        and(
+          eq(atelierInvitations.orgId, me.orgId),
+          isNull(atelierInvitations.deletedAt),
+        ),
+      )
       .orderBy(desc(atelierInvitations.sentAt));
+    const entities = await db
+      .select({
+        id: atelierLegalEntities.id,
+        orgId: atelierLegalEntities.orgId,
+        shortName: atelierLegalEntities.shortName,
+        legalNameEn: atelierLegalEntities.legalNameEn,
+      })
+      .from(atelierLegalEntities)
+      .where(eq(atelierLegalEntities.orgId, me.orgId));
+    const entityNames = new Map(
+      entities.map((entity) => [entity.id, employingEntityName(entity)]),
+    );
     // Auto-mark expired (read-side; don't write).
     const now = Date.now();
     res.json({
       invitations: rows.map((r) => ({
         id: r.id,
         workerType: r.workerType,
-        personDraft: r.personDraft,
+        personDraft: {
+          ...r.personDraft,
+          employingEntityName:
+            (r.personDraft.legalEntityId
+              ? entityNames.get(r.personDraft.legalEntityId)
+              : null) ??
+            r.personDraft.employingEntity ??
+            (r.personDraft.legalEntityId
+              ? "Unavailable registered entity"
+              : null),
+          employingEntityLegacyUnmatched:
+            Boolean(
+              (r.personDraft.legalEntityId &&
+                !entityNames.has(r.personDraft.legalEntityId)) ||
+                (!r.personDraft.legalEntityId &&
+                  r.personDraft.employingEntity?.trim()),
+            ),
+        },
         sentByUserId: r.sentByUserId,
         sentAt: r.sentAt.toISOString(),
         expiresAt: r.expiresAt?.toISOString() ?? null,
@@ -562,11 +602,22 @@ router.post("/roster/invitations", async (req, res, next) => {
       country?: string | null;
       partnerFirmId?: string | null;
       startDate?: string | null;
-      employingEntity?: string | null;
+      legalEntityId?: string | null;
       expiresInDays?: number;
       sourceKind?: string;
       sourceId?: string;
     };
+    if (
+      req.body &&
+      typeof req.body === "object" &&
+      "employingEntity" in (req.body as Record<string, unknown>)
+    ) {
+      res.status(422).json({
+        error: "legacy-employing-entity-not-accepted",
+        message: "Choose a registered legal entity; free-text employing entities are not accepted.",
+      });
+      return;
+    }
     const wt = body.workerType;
     if (!wt || !["employee", "contractor", "partner_firm_resource"].includes(wt)) {
       res.status(400).json({ error: "invalid-worker-type" });
@@ -617,7 +668,13 @@ router.post("/roster/invitations", async (req, res, next) => {
       const [cand] = await db
         .select({ id: atelierStudioCandidates.id, stage: atelierStudioCandidates.stage })
         .from(atelierStudioCandidates)
-        .where(and(eq(atelierStudioCandidates.id, sourceId), isNull(atelierStudioCandidates.deletedAt)));
+        .where(
+          and(
+            eq(atelierStudioCandidates.id, sourceId),
+            eq(atelierStudioCandidates.orgId, me.orgId),
+            isNull(atelierStudioCandidates.deletedAt),
+          ),
+        );
       if (!cand) {
         res.status(404).json({ error: "source-candidate-not-found" });
         return;
@@ -630,7 +687,13 @@ router.post("/roster/invitations", async (req, res, next) => {
       const [offer] = await db
         .select({ id: atelierStudioOffers.id, status: atelierStudioOffers.status })
         .from(atelierStudioOffers)
-        .where(and(eq(atelierStudioOffers.id, sourceId), isNull(atelierStudioOffers.deletedAt)));
+        .where(
+          and(
+            eq(atelierStudioOffers.id, sourceId),
+            eq(atelierStudioOffers.orgId, me.orgId),
+            isNull(atelierStudioOffers.deletedAt),
+          ),
+        );
       if (!offer) {
         res.status(404).json({ error: "source-offer-not-found" });
         return;
@@ -653,6 +716,7 @@ router.post("/roster/invitations", async (req, res, next) => {
         .where(
           and(
             eq(atelierPartnerFirmResources.id, sourceId),
+            eq(atelierPartnerFirmResources.orgId, me.orgId),
             isNull(atelierPartnerFirmResources.deletedAt),
           ),
         );
@@ -677,8 +741,21 @@ router.post("/roster/invitations", async (req, res, next) => {
     const id = rid("inv");
     const expDays = Math.max(1, Math.min(60, body.expiresInDays ?? 14));
     const expiresAt = new Date(Date.now() + expDays * 86400_000);
+    const legalEntityId = body.legalEntityId?.trim() || null;
+    if (legalEntityId && wt !== "employee") {
+      res.status(422).json({ error: "employee-only-employing-entity" });
+      return;
+    }
+    if (
+      legalEntityId &&
+      !(await findActiveEmployingEntity(me.orgId, legalEntityId))
+    ) {
+      res.status(422).json({ error: "legal-entity-not-found" });
+      return;
+    }
     await db.insert(atelierInvitations).values({
       id,
+      orgId: me.orgId,
       workerType: wt,
       personDraft: {
         fullName: draftFullName,
@@ -694,7 +771,7 @@ router.post("/roster/invitations", async (req, res, next) => {
         country: body.country ?? null,
         partnerFirmId: body.partnerFirmId ?? null,
         startDate: body.startDate ?? null,
-        employingEntity: body.employingEntity ?? null,
+        legalEntityId,
       },
       sourceKind,
       sourceId,
@@ -742,7 +819,13 @@ router.post("/roster/invitations/:id/resend", async (req, res, next) => {
     const [inv] = await db
       .select()
       .from(atelierInvitations)
-      .where(and(eq(atelierInvitations.id, req.params.id), isNull(atelierInvitations.deletedAt)));
+      .where(
+        and(
+          eq(atelierInvitations.id, req.params.id),
+          eq(atelierInvitations.orgId, me.orgId),
+          isNull(atelierInvitations.deletedAt),
+        ),
+      );
     if (!inv) {
       res.status(404).json({ error: "invitation-not-found" });
       return;
@@ -755,7 +838,12 @@ router.post("/roster/invitations/:id/resend", async (req, res, next) => {
     await db
       .update(atelierInvitations)
       .set({ sentAt: new Date(), expiresAt, status: "sent", updatedAt: new Date() })
-      .where(eq(atelierInvitations.id, inv.id));
+      .where(
+        and(
+          eq(atelierInvitations.id, inv.id),
+          eq(atelierInvitations.orgId, me.orgId),
+        ),
+      );
     await audit({
       entityType: "invitation",
       entityId: inv.id,
@@ -781,7 +869,13 @@ router.post("/roster/invitations/:id/revoke", async (req, res, next) => {
     const [inv] = await db
       .select()
       .from(atelierInvitations)
-      .where(and(eq(atelierInvitations.id, req.params.id), isNull(atelierInvitations.deletedAt)));
+      .where(
+        and(
+          eq(atelierInvitations.id, req.params.id),
+          eq(atelierInvitations.orgId, me.orgId),
+          isNull(atelierInvitations.deletedAt),
+        ),
+      );
     if (!inv) {
       res.status(404).json({ error: "invitation-not-found" });
       return;
@@ -798,7 +892,12 @@ router.post("/roster/invitations/:id/revoke", async (req, res, next) => {
         revokedByUserId: me.id,
         updatedAt: new Date(),
       })
-      .where(eq(atelierInvitations.id, inv.id));
+      .where(
+        and(
+          eq(atelierInvitations.id, inv.id),
+          eq(atelierInvitations.orgId, me.orgId),
+        ),
+      );
     await audit({
       entityType: "invitation",
       entityId: inv.id,
@@ -827,7 +926,13 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
     const [inv] = await db
       .select()
       .from(atelierInvitations)
-      .where(and(eq(atelierInvitations.id, req.params.id), isNull(atelierInvitations.deletedAt)));
+      .where(
+        and(
+          eq(atelierInvitations.id, req.params.id),
+          eq(atelierInvitations.orgId, me.orgId),
+          isNull(atelierInvitations.deletedAt),
+        ),
+      );
     if (!inv) {
       res.status(404).json({ error: "invitation-not-found" });
       return;
@@ -840,11 +945,44 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       await db
         .update(atelierInvitations)
         .set({ status: "expired", updatedAt: new Date() })
-        .where(eq(atelierInvitations.id, inv.id));
+        .where(
+          and(
+            eq(atelierInvitations.id, inv.id),
+            eq(atelierInvitations.orgId, me.orgId),
+          ),
+        );
       res.status(422).json({ error: "invitation-expired" });
       return;
     }
     const draft = inv.personDraft;
+    let acceptedLegalEntityId = draft.legalEntityId ?? null;
+    if (inv.workerType === "employee" && acceptedLegalEntityId) {
+      if (!(await findActiveEmployingEntity(me.orgId, acceptedLegalEntityId))) {
+        res.status(422).json({
+          error: "legal-entity-not-found",
+          message: "The invitation's employing legal entity is no longer active.",
+        });
+        return;
+      }
+    } else if (inv.workerType === "employee" && draft.employingEntity?.trim()) {
+      const legacyEntities = await db
+        .select({
+          id: atelierLegalEntities.id,
+          orgId: atelierLegalEntities.orgId,
+          shortName: atelierLegalEntities.shortName,
+          legalNameEn: atelierLegalEntities.legalNameEn,
+        })
+        .from(atelierLegalEntities)
+        .where(
+          and(
+            eq(atelierLegalEntities.orgId, me.orgId),
+            eq(atelierLegalEntities.status, "active"),
+          ),
+        );
+      acceptedLegalEntityId =
+        matchLegacyEmployingEntity(draft.employingEntity, legacyEntities)?.id ??
+        null;
+    }
     // Task #538 — create the person record first so the roster row links it.
     // Structured fields captured at invitation time win; older invitations
     // that only carry a fullName go through the shared parser.
@@ -873,6 +1011,7 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       personId = `emp_${rid("x").slice(2)}`;
       await db.insert(atelierEmployees).values({
         id: personId,
+        orgId: me.orgId,
         personId: personWrite.personId,
         fullName: personWrite.fullName,
         preferredName: personWrite.structured.preferredName ?? null,
@@ -882,13 +1021,18 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
         title: draft.title ?? null,
         country: draft.country ?? null,
         startDate: draft.startDate ?? null,
-        employingEntity: draft.employingEntity ?? null,
+        legalEntityId: acceptedLegalEntityId,
+        employingEntity:
+          acceptedLegalEntityId === null
+            ? draft.employingEntity ?? null
+            : null,
         status: "onboarding",
       });
     } else if (inv.workerType === "contractor") {
       personId = `ctr_${rid("x").slice(2)}`;
       await db.insert(atelierContractors).values({
         id: personId,
+        orgId: me.orgId,
         personId: personWrite.personId,
         fullName: personWrite.fullName,
         email: draft.email,
@@ -904,6 +1048,7 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       personId = `pfr_${rid("x").slice(2)}`;
       await db.insert(atelierPartnerFirmResources).values({
         id: personId,
+        orgId: me.orgId,
         personId: personWrite.personId,
         partnerFirmId: draft.partnerFirmId,
         fullName: personWrite.fullName,
@@ -923,7 +1068,12 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
         acceptedPersonId: personId,
         updatedAt: new Date(),
       })
-      .where(eq(atelierInvitations.id, inv.id));
+      .where(
+        and(
+          eq(atelierInvitations.id, inv.id),
+          eq(atelierInvitations.orgId, me.orgId),
+        ),
+      );
     // Rebind the draft onboarding (created at invitation time with placeholder
     // personId = "draft:<inv.id>") to the real materialised person, rather
     // than spawning a duplicate sequence. This preserves any progress made
@@ -1022,7 +1172,12 @@ router.get("/roster/onboarding", async (req, res, next) => {
           const [inv] = await db
             .select({ personDraft: atelierInvitations.personDraft })
             .from(atelierInvitations)
-            .where(eq(atelierInvitations.id, o.invitationId));
+            .where(
+              and(
+                eq(atelierInvitations.id, o.invitationId),
+                eq(atelierInvitations.orgId, me.orgId),
+              ),
+            );
           personName = inv?.personDraft?.fullName ?? null;
         }
         const steps = (stepsByOnb.get(o.id) ?? []).sort((a, b) => a.sortKey - b.sortKey);
@@ -1651,7 +1806,7 @@ router.post("/roster/people", async (req, res, next) => {
       title?: string | null;
       country?: string | null;
       startDate?: string | null;
-      employingEntity?: string | null;
+      legalEntityId?: string | null;
       vendorEntity?: string | null;
       managerPersonId?: string | null;
       runOnboarding?: boolean;
@@ -1659,6 +1814,17 @@ router.post("/roster/people", async (req, res, next) => {
       skipMsProvisioning?: boolean;
       msServiceProfile?: string | null;
     };
+    if (
+      req.body &&
+      typeof req.body === "object" &&
+      "employingEntity" in (req.body as Record<string, unknown>)
+    ) {
+      res.status(422).json({
+        error: "legacy-employing-entity-not-accepted",
+        message: "Choose a registered legal entity; free-text employing entities are not accepted.",
+      });
+      return;
+    }
     const wt = body.workerType;
     if (wt !== "employee" && wt !== "contractor") {
       // Partner-firm resources always flow through the partner-firm
@@ -1730,6 +1896,15 @@ router.post("/roster/people", async (req, res, next) => {
     }
     const runOnboarding = body.runOnboarding === true;
     const status = runOnboarding ? "onboarding" : "active";
+    const legalEntityId =
+      wt === "employee" ? body.legalEntityId?.trim() || null : null;
+    if (
+      legalEntityId &&
+      !(await findActiveEmployingEntity(me.orgId, legalEntityId))
+    ) {
+      res.status(422).json({ error: "legal-entity-not-found" });
+      return;
+    }
 
     // Person row (structured-name SoT) + roster row.
     const personWrite = await writePersonAndSync(db, {
@@ -1753,7 +1928,7 @@ router.post("/roster/people", async (req, res, next) => {
         title: body.title?.trim() || null,
         country: body.country?.trim() || null,
         startDate,
-        employingEntity: body.employingEntity?.trim() || null,
+        legalEntityId,
         status,
       });
     } else {

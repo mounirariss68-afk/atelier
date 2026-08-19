@@ -62,6 +62,7 @@ async function main(): Promise<void> {
     atelierAuditEvents,
     atelierAuthCredentials,
     atelierLoginActivationTokens,
+    atelierLegalEntities,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
   }
 
   const createdRosterIds: string[] = [];
+  const LEGAL_ENTITY_ID = `lent_test_qa_${STAMP}`;
   try {
     // Personas + a manager employee.
     for (const p of [
@@ -111,6 +113,13 @@ async function main(): Promise<void> {
       title: "Senior Manager",
       status: "active",
     });
+    await db.insert(atelierLegalEntities).values({
+      id: LEGAL_ENTITY_ID,
+      orgId: ORG,
+      legalNameEn: `QA Legal Entity ${STAMP}`,
+      shortName: `QA Entity ${STAMP}`,
+      country: "AE",
+    });
 
     // ==================================================================
     group("employee quick add \u2014 201 active + audit + list visibility");
@@ -123,6 +132,7 @@ async function main(): Promise<void> {
       title: "Consultant",
       country: "AE",
       startDate: "2026-07-01",
+      legalEntityId: LEGAL_ENTITY_ID,
       managerPersonId: MGR_PERSON,
     });
     check("201 created", e1.status === 201, `status=${e1.status} ${JSON.stringify(e1.json)}`);
@@ -133,7 +143,7 @@ async function main(): Promise<void> {
     const [empRow] = await db.select().from(atelierEmployees).where(eq(atelierEmployees.id, empRosterId ?? "missing"));
     check(
       "employee row active with person link + fields",
-      !!empRow && empRow.status === "active" && !!empRow.personId && empRow.country === "AE" && empRow.startDate === "2026-07-01",
+      !!empRow && empRow.status === "active" && !!empRow.personId && empRow.country === "AE" && empRow.startDate === "2026-07-01" && empRow.legalEntityId === LEGAL_ENTITY_ID && empRow.employingEntity === null,
       JSON.stringify(empRow ?? null),
     );
     if (empRow?.personId) {
@@ -222,6 +232,18 @@ async function main(): Promise<void> {
     // ==================================================================
     group("validation \u2014 409 dup email, 400 bad inputs");
     // ==================================================================
+    const freeTextEntity = await post(HR_ID, {
+      workerType: "employee",
+      firstName: "Free",
+      lastName: "Text",
+      email: `qa.freetext.${STAMP}@example.com`,
+      employingEntity: "DIFC",
+    });
+    check(
+      "free-text employing entity rejected",
+      freeTextEntity.status === 422 &&
+        freeTextEntity.json.error === "legacy-employing-entity-not-accepted",
+    );
     const dup = await post(HR_ID, {
       workerType: "employee",
       firstName: "Dupe",
@@ -278,6 +300,7 @@ async function main(): Promise<void> {
       await db.delete(atelierAuthCredentials).where(like(atelierAuthCredentials.email, `qa.%.${STAMP}@example.com`));
       await db.delete(atelierUsers).where(like(atelierUsers.email, `qa.%.${STAMP}@example.com`));
       await db.delete(atelierUsers).where(like(atelierUsers.id, `p_test_qa%_${STAMP}`));
+      await db.delete(atelierLegalEntities).where(eq(atelierLegalEntities.id, LEGAL_ENTITY_ID));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, MGR_PERSON));
       await db.delete(atelierPersons).where(like(atelierPersons.lastName, `%${STAMP}`));
     } catch (err) {

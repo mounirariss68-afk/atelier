@@ -3213,7 +3213,8 @@ export interface AtelierRosterQuickAddRequest {
   country?: string | null;
   /** YYYY-MM-DD */
   startDate?: string | null;
-  employingEntity?: string | null;
+  /** Registered employing legal-entity ID */
+  legalEntityId?: string | null;
   vendorEntity?: string | null;
   /** Roster id of an existing employee to report to */
   managerPersonId?: string | null;
@@ -3223,6 +3224,113 @@ export interface AtelierRosterQuickAddRequest {
   createLogin?: boolean;
   skipMsProvisioning?: boolean;
   msServiceProfile?: AtelierRosterQuickAddRequestMsServiceProfile;
+}
+
+export type AtelierRosterInvitationCreateRequestWorkerType =
+  (typeof AtelierRosterInvitationCreateRequestWorkerType)[keyof typeof AtelierRosterInvitationCreateRequestWorkerType];
+
+export const AtelierRosterInvitationCreateRequestWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+  partner_firm_resource: "partner_firm_resource",
+} as const;
+
+export type AtelierRosterInvitationCreateRequestSourceKind =
+  (typeof AtelierRosterInvitationCreateRequestSourceKind)[keyof typeof AtelierRosterInvitationCreateRequestSourceKind];
+
+export const AtelierRosterInvitationCreateRequestSourceKind = {
+  hired_candidate: "hired_candidate",
+  accepted_offer: "accepted_offer",
+  partner_firm_resource: "partner_firm_resource",
+} as const;
+
+export interface AtelierRosterInvitationCreateRequest {
+  workerType: AtelierRosterInvitationCreateRequestWorkerType;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
+  email: string;
+  /** @nullable */
+  role?: string | null;
+  /** @nullable */
+  seniority?: string | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  partnerFirmId?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /**
+   * Registered employing legal-entity ID; employee invitations only
+   * @nullable
+   */
+  legalEntityId?: string | null;
+  sourceKind: AtelierRosterInvitationCreateRequestSourceKind;
+  /** @minLength 1 */
+  sourceId: string;
+  /**
+   * @minimum 1
+   * @maximum 60
+   */
+  expiresInDays?: number;
+}
+
+export type AtelierRosterInvitationWorkerType =
+  (typeof AtelierRosterInvitationWorkerType)[keyof typeof AtelierRosterInvitationWorkerType];
+
+export const AtelierRosterInvitationWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+  partner_firm_resource: "partner_firm_resource",
+} as const;
+
+export type AtelierRosterInvitationPersonDraft = {
+  fullName: string;
+  email: string;
+  /** @nullable */
+  legalEntityId?: string | null;
+  /** @nullable */
+  employingEntityName?: string | null;
+  employingEntityLegacyUnmatched?: boolean;
+  [key: string]: unknown;
+};
+
+export interface AtelierRosterInvitation {
+  id: string;
+  workerType: AtelierRosterInvitationWorkerType;
+  personDraft: AtelierRosterInvitationPersonDraft;
+  sentAt: string;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  acceptedAt?: string | null;
+  /** @nullable */
+  acceptedPersonId?: string | null;
+  status: string;
 }
 
 /**
@@ -3486,10 +3594,11 @@ export interface AtelierRosterPersonEdit {
   employmentType?: AtelierRosterPersonEditEmploymentType;
   employmentStatus?: AtelierRosterPersonEditEmploymentStatus;
   /**
-   * @maxLength 120
+   * Registered employing legal-entity ID; free-text labels are not accepted
+   * @maxLength 80
    * @nullable
    */
-  employingEntity?: string | null;
+  legalEntityId?: string | null;
   /** @nullable */
   contractType?: AtelierRosterPersonEditContractType;
   /**
@@ -10012,6 +10121,28 @@ export type AtelierCreateMyEmergencyContact201 = {
 
 export type AtelierUpdateMyEmergencyContact200 = {
   contact: AtelierEmergencyContact;
+};
+
+export type AtelierListRosterInvitations200 = {
+  invitations: AtelierRosterInvitation[];
+};
+
+export type AtelierCreateRosterInvitation200 = {
+  ok: boolean;
+  id: string;
+  expiresAt: string;
+  onboardingId: string;
+};
+
+export type AtelierResendRosterInvitation200 = {
+  ok: boolean;
+  expiresAt: string;
+};
+
+export type AtelierAcceptRosterInvitation200 = {
+  ok: boolean;
+  personId: string;
+  onboardingId: string;
 };
 
 export type AtelierListMyTasks200 = {

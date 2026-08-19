@@ -165,6 +165,16 @@ app.listen(port, (err) => {
         "./lib/atelier-expense-taxonomy"
       );
       await ensureExpenseTaxonomy();
+      const { backfillEmployeeEmployingEntityIds } = await import(
+        "./lib/atelier-employing-entity"
+      );
+      const employingEntities = await backfillEmployeeEmployingEntityIds();
+      if (employingEntities.filled > 0 || employingEntities.unmatched > 0) {
+        logger.info(
+          { ...employingEntities },
+          "Employee employing-entity ID backfill complete",
+        );
+      }
       // Task #654 — idempotent backfill of engagement legal_entity_id from
       // unambiguous invoice history (only touches rows with NULL entity).
       const { backfillEngagementLegalEntities } = await import(

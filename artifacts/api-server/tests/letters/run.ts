@@ -122,15 +122,16 @@ const mk = (id: string, name: string, isDefault = false): SigningEntity =>
   }) as SigningEntity;
 const ents = [mk("e1", "Cognirise Dubai LLC", true), mk("e2", "Cognirise Turkey AS"), mk("e3", "Cognirise KSA")];
 check(
-  "payroll id wins",
-  resolveEmployingEntityFrom(ents, { legalEntityId: "e2", employingEntity: "Cognirise Dubai LLC" }).entity!.id === "e2",
+  "registry id wins",
+  resolveEmployingEntityFrom(ents, { legalEntityId: "e2", employingEntity: "Cognirise Dubai LLC" }).entity!.id === "e2" &&
+    resolveEmployingEntityFrom(ents, { legalEntityId: "e2", employingEntity: "Cognirise Dubai LLC" }).via === "registry_id",
 );
 const nm = resolveEmployingEntityFrom(ents, { legalEntityId: null, employingEntity: "cognirise turkey as" });
-check("name match", nm.entity!.id === "e2" && nm.via === "name_match");
+check("legacy name match is marked", nm.entity!.id === "e2" && nm.via === "legacy_name");
 const amb = resolveEmployingEntityFrom(ents, { legalEntityId: null, employingEntity: "Cognirise" });
 check("ambiguous falls to default (never guesses)", amb.via === "default" && amb.ambiguous && amb.entity!.id === "e1");
 const fb = resolveEmployingEntityFrom(ents, { legalEntityId: "missing", employingEntity: "" });
-check("fallback to default", fb.via === "default" && fb.entity!.id === "e1");
+check("stale registry ID fails closed", fb.via === "none" && fb.entity === null);
 check("no entities → none", resolveEmployingEntityFrom([], { legalEntityId: null, employingEntity: "" }).via === "none");
 
 // 4. Total salary ------------------------------------------------------------

@@ -8,11 +8,8 @@
  * pattern), and marking it paid posts the cash side (Dr 2100 / Cr 1000).
  * No WPS/GOSI, no bank files — those are explicitly out of scope.
  *
- * Employee → entity attribution: `atelier_employees.employing_entity`
- * holds a jurisdiction token (DIFC | ADGM | KSA | Other), not an entity
- * id. We match it against the legal entity's jurisdiction / short name /
- * legal name (case-insensitive contains). Unattributable employees are
- * surfaced on the run as `excluded` rows, never silently dropped.
+ * Employee → entity attribution uses the canonical legalEntityId. Historical
+ * rows without an ID may still use the legacy label matcher until corrected.
  */
 
 import { and, eq, isNull } from "drizzle-orm";
@@ -32,8 +29,9 @@ function round2(n: number): number {
 type EntityRow = typeof atelierLegalEntities.$inferSelect;
 type EmployeeRow = typeof atelierEmployees.$inferSelect;
 
-/** True when the employee's employingEntity token matches this entity. */
+/** ID first; name fallback is restricted to historical rows with no ID. */
 export function employeeMatchesEntity(emp: EmployeeRow, entity: EntityRow): boolean {
+  if (emp.legalEntityId) return emp.legalEntityId === entity.id;
   const token = (emp.employingEntity ?? "").trim().toLowerCase();
   if (!token || token === "other") return false;
   const hay = [entity.jurisdiction, entity.shortName, entity.legalNameEn]

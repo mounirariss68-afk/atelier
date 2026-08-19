@@ -42,6 +42,8 @@ async function main(): Promise<void> {
     atelierPartnerFirms,
     atelierPartnerFirmResources,
     atelierAuditEvents,
+    atelierLegalEntities,
+    atelierInvitations,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -74,6 +76,9 @@ async function main(): Promise<void> {
   const PFR_ROW = `pfr_t199_${STAMP}`;
   const FIRM_A = `pf_t199a_${STAMP}`;
   const FIRM_B = `pf_t199b_${STAMP}`;
+  const ENTITY_OLD = `lent_t199_old_${STAMP}`;
+  const ENTITY_NEW = `lent_t199_new_${STAMP}`;
+  const FOREIGN_INVITATION = `inv_foreign_t199_${STAMP}`;
 
   try {
     const personas = [
@@ -110,6 +115,7 @@ async function main(): Promise<void> {
       title: "Analyst",
       seniority: "analyst",
       startDate: "2025-01-01",
+      employingEntity: `Legacy Entity ${STAMP}`,
       iban: "AE070331234567890123456",
     });
     await db.insert(atelierEmployees).values({
@@ -137,6 +143,66 @@ async function main(): Promise<void> {
       fullName: "PFR Target",
       role: "Engineer",
     });
+    await db.insert(atelierLegalEntities).values([
+      {
+        id: ENTITY_OLD,
+        orgId: ORG,
+        legalNameEn: `Legacy Entity ${STAMP}`,
+        shortName: `Legacy ${STAMP}`,
+        country: "AE",
+      },
+      {
+        id: ENTITY_NEW,
+        orgId: ORG,
+        legalNameEn: `New Entity ${STAMP}`,
+        shortName: `New ${STAMP}`,
+        country: "AE",
+      },
+    ]);
+    await db.insert(atelierInvitations).values({
+      id: FOREIGN_INVITATION,
+      orgId: `other_org_${STAMP}`,
+      workerType: "employee",
+      personDraft: {
+        fullName: "Foreign Invitee",
+        email: `foreign_${STAMP}@example.com`,
+      },
+      sentByUserId: FP_ID,
+      status: "sent",
+    });
+    const { backfillEmployeeEmployingEntityIds } = await import(
+      "../../src/lib/atelier-employing-entity.js"
+    );
+    await backfillEmployeeEmployingEntityIds();
+    const [backfilled] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.id, EMP_ROW));
+    check(
+      "legacy employing-entity name backfills to registry ID",
+      backfilled?.legalEntityId === ENTITY_OLD,
+    );
+    const invitationList = await call(
+      "GET",
+      "/roster/invitations",
+      FP_ID,
+    );
+    check(
+      "invitation list excludes other organisations",
+      invitationList.status === 200 &&
+        !(invitationList.body?.invitations ?? []).some(
+          (inv: any) => inv.id === FOREIGN_INVITATION,
+        ),
+    );
+    const foreignRevoke = await call(
+      "POST",
+      `/roster/invitations/${FOREIGN_INVITATION}/revoke`,
+      FP_ID,
+    );
+    check(
+      "invitation mutations cannot cross organisations",
+      foreignRevoke.status === 404,
+    );
 
     // ================================================================
     group("gating");
@@ -169,8 +235,8 @@ async function main(): Promise<void> {
     );
     const getAsCons = await call("GET", `/roster/people/${EMP_ROW}`, CONS_ID);
     check(
-      "GET person viewerCanEdit=false for consultant",
-      getAsCons.status === 200 && !getAsCons.body?.viewerCanEdit,
+      "consultant person detail is restricted",
+      getAsCons.status === 403,
     );
 
     // ================================================================
@@ -204,14 +270,26 @@ async function main(): Promise<void> {
     // ================================================================
     group("employee edit (hr)");
     // ================================================================
+    const legacyEntityWrite = await call(
+      "PATCH",
+      `/roster/people/${EMP_ROW}`,
+      HR_ID,
+      { employingEntity: "DIFC" },
+    );
+    check(
+      "free-text employing entity is rejected",
+      legacyEntityWrite.status === 422 &&
+        legacyEntityWrite.body?.error === "legacy-employing-entity-not-accepted",
+    );
     const empEdit = await call("PATCH", `/roster/people/${EMP_ROW}`, HR_ID, {
-      fullName: "Edit Target Renamed",
+      firstName: "Edit",
+      lastName: "Target Renamed",
       preferredName: "ET",
       title: "Senior Analyst",
       seniority: "consultant",
       employmentType: "fixed_term",
       employmentStatus: "notice",
-      employingEntity: "DIFC",
+      legalEntityId: ENTITY_NEW,
       homeOffice: "Dubai",
       noticePeriodDays: 60,
       country: "UAE",
@@ -232,6 +310,10 @@ async function main(): Promise<void> {
       empEdit.body?.changes?.some((c: any) => c.field === "nationality" && c.to === "EG"),
     );
     const [empRow] = await db.select().from(atelierEmployees).where(eq(atelierEmployees.id, EMP_ROW));
+    check(
+      "employee stores registry ID and clears legacy text",
+      empRow?.legalEntityId === ENTITY_NEW && empRow?.employingEntity === null,
+    );
     check(
       "employee row persisted",
       empRow?.fullName === "Edit Target Renamed" &&
@@ -274,7 +356,7 @@ async function main(): Promise<void> {
     // ================================================================
     group("contractor edit (partner)");
     // ================================================================
-    const ctEdit = await call("PATCH", `/roster/people/${CT_ROW}`, PARTNER_ID, {
+    const ctEdit = await call("PATCH", `/roster/people/${CT_ROW}`, HR_ID, {
       vendorEntity: "Vendor LLC",
       contractType: "retainer",
       country: "KSA",
@@ -284,7 +366,7 @@ async function main(): Promise<void> {
       ctEdit.status === 200 && ctEdit.body?.changes?.length === 3,
       `status=${ctEdit.status} ${JSON.stringify(ctEdit.body?.changes ?? ctEdit.body)}`,
     );
-    const ctEmployeeField = await call("PATCH", `/roster/people/${CT_ROW}`, PARTNER_ID, {
+    const ctEmployeeField = await call("PATCH", `/roster/people/${CT_ROW}`, HR_ID, {
       employmentStatus: "active",
     });
     check("employee-only field on contractor \u2192 422", ctEmployeeField.status === 422);
@@ -314,6 +396,8 @@ async function main(): Promise<void> {
       await db.delete(atelierContractors).where(eq(atelierContractors.id, CT_ROW));
       await db.delete(atelierPartnerFirmResources).where(eq(atelierPartnerFirmResources.id, PFR_ROW));
       await db.delete(atelierPartnerFirms).where(like(atelierPartnerFirms.id, `pf_t199%_${STAMP}`));
+      await db.delete(atelierLegalEntities).where(like(atelierLegalEntities.id, `lent_t199_%_${STAMP}`));
+      await db.delete(atelierInvitations).where(eq(atelierInvitations.id, FOREIGN_INVITATION));
       await db.delete(atelierUsers).where(like(atelierUsers.id, `p_test_%${STAMP}`));
     } catch (e) {
       console.error("cleanup error:", e);

@@ -2069,6 +2069,107 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierRosterPersonalView"
+  /atelier/roster/invitations:
+    get:
+      operationId: atelierListRosterInvitations
+      tags: [atelier]
+      summary: Roster — list organisation-scoped invitations
+      responses:
+        "200":
+          description: Invitations for the caller's organisation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierRosterInvitation" }
+    post:
+      operationId: atelierCreateRosterInvitation
+      tags: [atelier]
+      summary: Roster — create an invitation from an approved hiring source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierRosterInvitationCreateRequest"
+      responses:
+        "200":
+          description: Invitation and draft onboarding created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id, expiresAt, onboardingId]
+                properties:
+                  ok: { type: boolean }
+                  id: { type: string }
+                  expiresAt: { type: string, format: date-time }
+                  onboardingId: { type: string }
+        "422":
+          description: Invalid source or legal-entity reference
+  /atelier/roster/invitations/{id}/resend:
+    post:
+      operationId: atelierResendRosterInvitation
+      tags: [atelier]
+      summary: Roster — resend an organisation-scoped invitation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invitation resent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, expiresAt]
+                properties:
+                  ok: { type: boolean }
+                  expiresAt: { type: string, format: date-time }
+  /atelier/roster/invitations/{id}/revoke:
+    post:
+      operationId: atelierRevokeRosterInvitation
+      tags: [atelier]
+      summary: Roster — revoke an organisation-scoped invitation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invitation revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+  /atelier/roster/invitations/{id}/accept:
+    post:
+      operationId: atelierAcceptRosterInvitation
+      tags: [atelier]
+      summary: Roster — accept an invitation and materialise the person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, personId, onboardingId]
+                properties:
+                  ok: { type: boolean }
+                  personId: { type: string }
+                  onboardingId: { type: string }
   /atelier/me/notifications:
     get:
       operationId: atelierListMyNotifications
@@ -9770,7 +9871,10 @@ components:
           type: string
           nullable: true
           description: YYYY-MM-DD
-        employingEntity: { type: string, nullable: true }
+        legalEntityId:
+          type: string
+          nullable: true
+          description: Registered employing legal-entity ID
         vendorEntity: { type: string, nullable: true }
         managerPersonId:
           type: string
@@ -9787,6 +9891,59 @@ components:
           type: string
           nullable: true
           enum: [employee, contractor]
+
+    AtelierRosterInvitationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [workerType, firstName, lastName, email, sourceKind, sourceId]
+      properties:
+        workerType:
+          type: string
+          enum: [employee, contractor, partner_firm_resource]
+        honorific: { type: ["string", "null"], maxLength: 40 }
+        firstName: { type: string, minLength: 1, maxLength: 120 }
+        middleName: { type: ["string", "null"], maxLength: 120 }
+        lastName: { type: string, minLength: 1, maxLength: 120 }
+        preferredName: { type: ["string", "null"], maxLength: 120 }
+        email: { type: string, format: email }
+        role: { type: ["string", "null"] }
+        seniority: { type: ["string", "null"] }
+        title: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        partnerFirmId: { type: ["string", "null"] }
+        startDate: { type: ["string", "null"] }
+        legalEntityId:
+          type: ["string", "null"]
+          description: Registered employing legal-entity ID; employee invitations only
+        sourceKind:
+          type: string
+          enum: [hired_candidate, accepted_offer, partner_firm_resource]
+        sourceId: { type: string, minLength: 1 }
+        expiresInDays: { type: integer, minimum: 1, maximum: 60 }
+
+    AtelierRosterInvitation:
+      type: object
+      required: [id, workerType, personDraft, sentAt, status]
+      properties:
+        id: { type: string }
+        workerType:
+          type: string
+          enum: [employee, contractor, partner_firm_resource]
+        personDraft:
+          type: object
+          required: [fullName, email]
+          properties:
+            fullName: { type: string }
+            email: { type: string }
+            legalEntityId: { type: ["string", "null"] }
+            employingEntityName: { type: ["string", "null"] }
+            employingEntityLegacyUnmatched: { type: boolean }
+          additionalProperties: true
+        sentAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        acceptedAt: { type: ["string", "null"], format: date-time }
+        acceptedPersonId: { type: ["string", "null"] }
+        status: { type: string }
 
     AtelierRosterQuickAddResponse:
       type: object
@@ -9838,7 +9995,10 @@ components:
         country: { type: ["string", "null"], maxLength: 120 }
         employmentType: { type: string, enum: [FTE, fixed_term, intern] }
         employmentStatus: { type: string, enum: [active, notice, on_leave, terminated] }
-        employingEntity: { type: ["string", "null"], maxLength: 120 }
+        legalEntityId:
+          type: ["string", "null"]
+          maxLength: 80
+          description: Registered employing legal-entity ID; free-text labels are not accepted
         contractType: { type: ["string", "null"], enum: ["T&M", fixed_fee, retainer, null] }
         vendorEntity: { type: ["string", "null"], maxLength: 200 }
         partnerFirmId: { type: string, maxLength: 80 }

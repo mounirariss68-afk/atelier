@@ -2642,7 +2642,9 @@ export const atelierEmployees = pgTable(
     gender: text("gender").notNull().default("unspecified"), // female | male | unspecified
     nationality: text("nationality"), // ISO-3166 alpha-2 country code, nullable
     employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
-    employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)
+    // Legacy display-only label. New writes use legalEntityId exclusively;
+    // unmatched historical values remain readable until manually corrected.
+    employingEntity: text("employing_entity"),
     // Task #1095 — home country (ISO-3166 alpha-2) for the entity-allocation
     // travel rules (home vs destination). Editable by HR/founding via the
     // roster PATCH; the home *entity* resolves via legalEntityId first.
@@ -2650,9 +2652,9 @@ export const atelierEmployees = pgTable(
     startDate: text("start_date"), // ISO date
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | on_leave | offboarded
-    // Task #655 — statutory payroll linkage. `legalEntityId` FKs the employing
-    // atelier_legal_entities row (payroll runs group by it; falls back to the
-    // org's single active entity when null). Wage split: `basicWageMonthly`
+    // Canonical ID-backed employing-entity reference, shared by roster,
+    // onboarding, letters and payroll. Payroll runs group by it. Wage split:
+    // `basicWageMonthly`
     // (contractual basic, excl. allowances — EOSB basis in AE/QA) and
     // `housingAllowanceMonthly` (GOSI/GRSIA base add-on). When basic is null
     // the whole monthly wage (baseCompensation/12) is treated as basic.
@@ -3479,6 +3481,8 @@ export const atelierInvitations = pgTable(
         country?: string | null;
         partnerFirmId?: string | null;
         startDate?: string | null;
+        legalEntityId?: string | null;
+        // Legacy invitations created before the ID-backed selector.
         employingEntity?: string | null;
       }>()
       .notNull(),

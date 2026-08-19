@@ -51,6 +51,8 @@ interface Person {
   preferredName?: string | null;
   employmentStatus?: string | null;
   employingEntity?: string | null;
+  legalEntityId?: string | null;
+  employingEntityLegacyUnmatched?: boolean;
   contractType?: string | null;
   partnerFirmId?: string | null;
   // Task #744 — employees only; membership numbers may arrive masked.
@@ -272,7 +274,18 @@ function ProfileTab({
           Employment details
         </h3>
         <Field label="Employment type" value={person.employmentType} />
-        <Field label="Employing entity" value={person.employingEntity} />
+        <Field
+          label="Employing entity"
+          value={
+            person.employingEntity
+              ? `${person.employingEntity}${
+                  person.employingEntityLegacyUnmatched
+                    ? " — legacy value; needs correction"
+                    : ""
+                }`
+              : null
+          }
+        />
         <Field label="Home office" value={person.homeOffice} />
         {person.workerType === "contractor" && (
           <Field label="Vendor entity" value={person.vendorEntity} />

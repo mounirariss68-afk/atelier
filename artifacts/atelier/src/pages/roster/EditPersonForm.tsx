@@ -13,6 +13,10 @@ import { Card, MonoChip } from "@/components/ui/primitives";
 import { CountryCombobox } from "@/components/CountryCombobox";
 import { countryCode, countryName } from "@/lib/countries";
 import { useRosterTitles, FALLBACK_SENIORITIES } from "@/lib/rosterTitles";
+import {
+  EmployingEntitySelect,
+  type LegalEntity,
+} from "./rosterPickers";
 
 /**
  * Task #199 — full "Edit person" form on the roster person page.
@@ -46,6 +50,7 @@ export interface EditablePerson {
   employmentType?: string | null;
   employmentStatus?: string | null;
   employingEntity?: string | null;
+  employingEntityLegacyUnmatched?: boolean;
   contractType?: string | null;
   vendorEntity?: string | null;
   partnerFirmId?: string | null;
@@ -75,7 +80,6 @@ export interface EditablePerson {
 // Task #660 — payroll draft, saved via the dedicated payroll PATCH (raw
 // fetch — payroll routes stay off the codegen'd OpenAPI surface).
 type PayrollDraft = {
-  legalEntityId: string;
   baseCompensation: string;
   baseCurrency: string;
   basicWageMonthly: string;
@@ -85,7 +89,6 @@ type PayrollDraft = {
 
 function payrollDraftFrom(p: EditablePerson): PayrollDraft {
   return {
-    legalEntityId: p.legalEntityId ?? "",
     baseCompensation: p.baseCompensation != null ? String(p.baseCompensation) : "",
     baseCurrency: p.baseCurrency ?? "",
     basicWageMonthly: p.basicWageMonthly != null ? String(p.basicWageMonthly) : "",
@@ -93,14 +96,6 @@ function payrollDraftFrom(p: EditablePerson): PayrollDraft {
       p.housingAllowanceMonthly != null ? String(p.housingAllowanceMonthly) : "",
     schemeRegisteredOn: p.schemeRegisteredOn ?? "",
   };
-}
-
-interface PayrollEntityOption {
-  id: string;
-  name: string;
-  country: string;
-  baseCurrency: string | null;
-  officeAddress?: string | null;
 }
 
 type Draft = {
@@ -118,7 +113,7 @@ type Draft = {
   country: string;
   employmentType: string;
   employmentStatus: string;
-  legalEntityName: string;
+  legalEntityId: string;
   contractType: string;
   vendorEntity: string;
   partnerFirmId: string;
@@ -155,7 +150,7 @@ function blankDraft(): Draft {
     country: "",
     employmentType: "FTE",
     employmentStatus: "active",
-    legalEntityName: "",
+    legalEntityId: "",
     contractType: "",
     vendorEntity: "",
     partnerFirmId: "",
@@ -187,7 +182,7 @@ function draftFrom(p: EditablePerson | null, personalEmail: string | null): Draf
     country: p.country ?? "",
     employmentType: p.employmentType ?? "FTE",
     employmentStatus: p.employmentStatus ?? "active",
-    legalEntityName: "",
+    legalEntityId: p.legalEntityId ?? "",
     contractType: p.contractType ?? "",
     vendorEntity: p.vendorEntity ?? "",
     partnerFirmId: p.partnerFirmId ?? "",
@@ -259,9 +254,8 @@ export function EditPersonForm({
   } | null>(null);
   // Task #660 — payroll fields (comp-gated, employees only).
   const showPayroll = !isCreate && isEmployee && viewerCanSeeComp;
-  const [payrollEntities, setPayrollEntities] = React.useState<PayrollEntityOption[]>([]);
   const [payroll, setPayroll] = React.useState<PayrollDraft>(() =>
-    person ? payrollDraftFrom(person) : { legalEntityId: "", baseCompensation: "", baseCurrency: "", basicWageMonthly: "", housingAllowanceMonthly: "", schemeRegisteredOn: "" },
+    person ? payrollDraftFrom(person) : { baseCompensation: "", baseCurrency: "", basicWageMonthly: "", housingAllowanceMonthly: "", schemeRegisteredOn: "" },
   );
   const [payrollSaving, setPayrollSaving] = React.useState(false);
   const mutation = useAtelierUpdateRosterPerson();
@@ -294,15 +288,6 @@ export function EditPersonForm({
       fetch(`/api/atelier/roster/partner-firms`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : { firms: [] }))
         .then((d) => alive && setFirms(d.firms ?? []))
-        .catch(() => undefined);
-    }
-    if (isEmployee && (showPayroll || isCreate)) {
-      // Task #660 — active legal-entity register. In create mode this
-      // supplies the same canonical selector used by payroll and maps the
-      // selected name to the quick-add endpoint's existing field.
-      fetch(`/api/atelier/roster/legal-entities`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : { entities: [] }))
-        .then((d) => alive && setPayrollEntities(d.entities ?? []))
         .catch(() => undefined);
     }
     if (isCreate) {
@@ -379,6 +364,8 @@ export function EditPersonForm({
       if (draft.employmentType !== base.employmentType) patch.employmentType = draft.employmentType;
       if (draft.employmentStatus !== base.employmentStatus)
         patch.employmentStatus = draft.employmentStatus;
+      if (draft.legalEntityId !== base.legalEntityId)
+        patch.legalEntityId = draft.legalEntityId || null;
       if (draft.noticePeriodDays !== base.noticePeriodDays && draft.noticePeriodDays.trim()) {
         const n = Number(draft.noticePeriodDays);
         if (!Number.isInteger(n) || n < 0 || n > 365)
@@ -425,9 +412,6 @@ export function EditPersonForm({
     if (!showPayroll) return null;
     const base = payrollDraftFrom(person!);
     const patch: Record<string, unknown> = {};
-    if (payroll.legalEntityId !== base.legalEntityId) {
-      patch.legalEntityId = payroll.legalEntityId || null;
-    }
     const num = (key: "baseCompensation" | "basicWageMonthly" | "housingAllowanceMonthly", label: string, allowZero: boolean) => {
       if (payroll[key] === base[key]) return null;
       const s = payroll[key].trim();
@@ -476,10 +460,7 @@ export function EditPersonForm({
       title: draft.title.trim() || null,
       country: draft.country || null,
       startDate: draft.startDate || null,
-      // The create API deliberately still uses this field name. It receives
-      // the selected canonical legal entity's display name, never a free-text
-      // "Employing entity" value from an edit-style patch.
-      employingEntity: isEmployee ? draft.legalEntityName || null : null,
+      legalEntityId: isEmployee ? draft.legalEntityId || null : null,
       vendorEntity: isContractor ? draft.vendorEntity.trim() || null : null,
       managerPersonId: managerPersonId || null,
       runOnboarding,
@@ -767,39 +748,40 @@ export function EditPersonForm({
                   <option value="terminated">terminated</option>
                 </select>
               </FieldWrap>}
-              {isCreate && (
-                <FieldWrap label="Employing legal entity">
-                  <select
-                    className={input}
-                    value={payroll.legalEntityId}
-                    data-testid="create-payroll-entity"
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      const entity = payrollEntities.find((x) => x.id === id);
-                      const patch: Partial<Draft> = { legalEntityName: entity?.name ?? "" };
-                      // Quick-add persists country and the legacy display
-                      // name; the richer location/payroll defaults are only
-                      // applied by the existing-person payroll editor, whose
-                      // dedicated audited endpoint persists them.
-                      if (entity?.country && !draft.country.trim())
-                        patch.country = countryCode(entity.country) ?? entity.country;
-                      set(patch);
+              <FieldWrap label="Employing legal entity">
+                <EmployingEntitySelect
+                  value={draft.legalEntityId}
+                  legacyValue={
+                    person?.employingEntityLegacyUnmatched
+                      ? person.employingEntity
+                      : null
+                  }
+                  testId={
+                    isCreate
+                      ? "create-payroll-entity"
+                      : "edit-employing-entity"
+                  }
+                  onChange={(id) => set({ legalEntityId: id })}
+                  onSelectEntity={(entity: LegalEntity | null) => {
+                    const patch: Partial<Draft> = {};
+                    if (entity?.officeAddress && !draft.officeAddress.trim())
+                      patch.officeAddress = entity.officeAddress;
+                    if (entity?.country && !draft.country.trim())
+                      patch.country =
+                        countryCode(entity.country) ?? entity.country;
+                    if (Object.keys(patch).length > 0) set(patch);
+                    if (entity?.baseCurrency) {
                       setPayroll((current) => ({
                         ...current,
-                        legalEntityId: id,
+                        baseCurrency:
+                          current.baseCurrency.trim()
+                            ? current.baseCurrency
+                            : entity.baseCurrency ?? "",
                       }));
-                    }}
-                  >
-                    <option value="">— not linked —</option>
-                    {payrollEntities.map((entity) => (
-                      <option key={entity.id} value={entity.id}>
-                        {entity.name} ({entity.country}
-                        {entity.baseCurrency ? ` · ${entity.baseCurrency}` : ""})
-                      </option>
-                    ))}
-                  </select>
-                </FieldWrap>
-              )}
+                    }
+                  }}
+                />
+              </FieldWrap>
               {!isCreate && <FieldWrap label="Home office">
                 <input className={input} value={draft.homeOffice} maxLength={120}
                   onChange={(e) => set({ homeOffice: e.target.value })} data-testid="edit-homeoffice" />
@@ -907,43 +889,6 @@ export function EditPersonForm({
             </Link>
           )}
           <div className="grid gap-3 md:grid-cols-2">
-            <FieldWrap label="Employing legal entity *">
-              <select className={input} value={payroll.legalEntityId} data-testid="edit-payroll-entity"
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const ent = payrollEntities.find((x) => x.id === id);
-                  const autofill: Partial<Draft> = {};
-                  // The payroll entity selector replaces the retired
-                  // employing-entity field as the one canonical source for
-                  // location defaults. Values already entered by the editor
-                  // remain authoritative.
-                  if (ent?.officeAddress && !draft.officeAddress.trim())
-                    autofill.officeAddress = ent.officeAddress;
-                  if (ent?.country && !draft.country.trim())
-                    autofill.country = countryCode(ent.country) ?? ent.country;
-                  if (Object.keys(autofill).length > 0) set(autofill);
-                  setPayroll((p) => ({
-                    ...p,
-                    legalEntityId: id,
-                    // Autofill the entity's base currency when none set yet —
-                    // payroll runs are single-currency per entity.
-                    baseCurrency:
-                      id && ent?.baseCurrency && !p.baseCurrency.trim()
-                        ? ent.baseCurrency
-                        : p.baseCurrency,
-                  }));
-                }}>
-                <option value="">— not linked —</option>
-                {payroll.legalEntityId && !payrollEntities.some((x) => x.id === payroll.legalEntityId) && (
-                  <option value={payroll.legalEntityId}>{payroll.legalEntityId}</option>
-                )}
-                {payrollEntities.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name} ({x.country}{x.baseCurrency ? ` · ${x.baseCurrency}` : ""})
-                  </option>
-                ))}
-              </select>
-            </FieldWrap>
             <FieldWrap label="Base currency *">
               <input className={input} value={payroll.baseCurrency} maxLength={3} placeholder="AED"
                 onChange={(e) => setPayroll((p) => ({ ...p, baseCurrency: e.target.value.toUpperCase() }))}
