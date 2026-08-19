@@ -197,6 +197,9 @@ export function TopNav() {
   // same roles as before (founding_partner | hr).
   const firmMenuItems: Array<{ href: string; label: string; icon: LucideIcon; gated?: boolean }> = [
     { href: "/atelier", label: "Atelier", icon: Palette },
+    // The email-template download is available from this page. Keep this
+    // aligned with the page and download endpoint's founding partner / HR ACL.
+    { href: "/atelier/firm-profile", label: "Firm Profile", icon: FileText, gated: true },
     { href: "/press", label: "Press", icon: Newspaper },
     { href: "/guardhouse", label: "Guardhouse", icon: Shield },
     { href: "/reports", label: "Reports", icon: BarChart3 },
