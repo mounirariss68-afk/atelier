@@ -28,6 +28,7 @@
     "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",
     "test:client-meeting": "tsx ./tests/crm/client-meeting-probe.ts",
     "test:chat-doc-download": "tsx ./tests/crm/chat-doc-download-probe.ts",
+    "test:email-template-package": "tsx ./tests/crm/email-template-package-probe.ts",
     "test:finance-docs": "tsx ./tests/crm/chat-finance-docs-probe.ts",
     "test:classify-narration": "tsx ./tests/crm/classify-narration-probe.ts",
     "test:partner-reg-docs": "NODE_ENV=test tsx ./tests/crm/partner-registration-docs-probe.ts",

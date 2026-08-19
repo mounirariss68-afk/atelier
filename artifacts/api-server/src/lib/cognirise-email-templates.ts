@@ -79,6 +79,11 @@ function logoBase64(): string {
   return cachedLogoB64;
 }
 
+/** Internal package-export seam; outbound email rendering continues unchanged. */
+export function getCogniriseEmailLogoBase64(): string {
+  return logoBase64();
+}
+
 export function renderCogniriseEmail(o: CogniriseEmailOptions): {
   html: string;
   text: string;

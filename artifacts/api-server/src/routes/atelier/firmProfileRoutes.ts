@@ -33,6 +33,12 @@ import {
   loadPersonDocBytes,
   dropPersonDocBytes,
 } from "../../lib/personDocStorage.js";
+import {
+  buildCogniriseEmailTemplatePackage,
+  COGNIRISE_EMAIL_TEMPLATE_FILENAME,
+} from "../../lib/cognirise-email-template-package.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import { assertAuditAction } from "./auditContract.js";
 
 const router: IRouter = Router();
 
@@ -117,6 +123,36 @@ router.get("/firm-profile/versions", async (req, res) => {
     .where(orgScope(me))
     .orderBy(desc(atelierFirmProfile.version));
   res.json({ versions: rows.map(toWire) });
+});
+
+// @cli-skip: protected binary download; the Firm Profile page uses a direct link.
+router.get("/firm-profile/email-template.zip", async (req, res): Promise<void> => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensurePublisher(me, res)) return;
+  const zip = await buildCogniriseEmailTemplatePackage();
+  assertAuditAction("document.downloaded");
+  await audit({
+    entityType: "firm_profile",
+    entityId: "cognirise_navy_statement_email_template",
+    actor: me,
+    action: "document.downloaded",
+    payload: {
+      kind: "cognirise_email_template_zip",
+      template: "cognirise_navy_statement",
+      filename: COGNIRISE_EMAIL_TEMPLATE_FILENAME,
+      format: "zip",
+    },
+    summary: `${me.name} downloaded the Cognirise Navy Statement email template package`,
+  });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader(
+    "Content-Disposition",
+    contentDispositionFilename("attachment", COGNIRISE_EMAIL_TEMPLATE_FILENAME),
+  );
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(zip);
 });
 
 // ---- create draft from agent ----

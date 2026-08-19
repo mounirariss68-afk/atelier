@@ -142,19 +142,23 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   // loudly if it can't be packaged — a silent miss would make the prod
   // boot seed a no-op.
   const runtimeAssets = [
-    "scripts/assets/non-equity-partner-agreement-template-v3.docx",
+    { source: "scripts/assets/non-equity-partner-agreement-template-v3.docx", destination: "assets/non-equity-partner-agreement-template-v3.docx" },
     // Task #1007 — approved Cognirise backdrop artwork for the PDF brand kit.
-    "assets/pdf-bg-light.jpg",
-    "assets/pdf-bg-dark.jpg",
-    "assets/pdf-logo-white.png",
-    "assets/pdf-riser-avatar.png",
+    { source: "assets/pdf-bg-light.jpg", destination: "assets/pdf-bg-light.jpg" },
+    { source: "assets/pdf-bg-dark.jpg", destination: "assets/pdf-bg-dark.jpg" },
+    { source: "assets/pdf-logo-white.png", destination: "assets/pdf-logo-white.png" },
+    { source: "assets/pdf-riser-avatar.png", destination: "assets/pdf-riser-avatar.png" },
+    // Navy Statement email renderer reads this from disk at send/package time.
+    { source: "src/lib/email-assets/cognirise-logo.png", destination: "email-assets/cognirise-logo.png" },
+    // The template ZIP embeds the exact canonical TypeScript source.
+    { source: "src/lib/cognirise-email-templates.ts", destination: "cognirise-email-templates.ts" },
   ];
-  await mkdir(path.resolve(distDir, "assets"), { recursive: true });
-  for (const rel of runtimeAssets) {
-    const src = path.resolve(artifactDir, rel);
-    const dest = path.resolve(distDir, "assets", path.basename(rel));
+  for (const { source, destination } of runtimeAssets) {
+    const src = path.resolve(artifactDir, source);
+    const dest = path.resolve(distDir, destination);
+    await mkdir(path.dirname(dest), { recursive: true });
     await copyFile(src, dest);
-    if ((await stat(dest)).size === 0) throw new Error(`Runtime asset copied empty: ${rel}`);
+    if ((await stat(dest)).size === 0) throw new Error(`Runtime asset copied empty: ${source}`);
   }
 }
 

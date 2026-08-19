@@ -717,7 +717,17 @@ export default function FirmProfile() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div>
         <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Front of House</div>
-        <h1 className="text-xl font-semibold text-text">Firm Profile</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-text">Firm Profile</h1>
+          <a
+            href={`${API_BASE}/firm-profile/email-template.zip`}
+            className="whitespace-nowrap px-3 py-1.5 rounded text-xs font-mono uppercase tracking-widest border border-border text-text-mute hover:text-text hover:border-gold transition-colors"
+            data-testid="download-cognirise-email-template"
+            title="Download the portable Cognirise Navy Statement email template"
+          >
+            Download email template ↓
+          </a>
+        </div>
         <p className="text-sm text-text-mute max-w-2xl">
           Canonical source of brand copy. The Brand Profile Writer drafts new versions; founding partners and HR publish.
           Every proposal, deck and Salon page reads from the latest <strong>published</strong> row.
