@@ -1,9 +1,15 @@
 import * as React from "react";
-import { Link } from "wouter";
-import { useAtelierUpdateRosterPerson } from "@workspace/api-client-react";
-import type { AtelierRosterPersonEdit } from "@workspace/api-client-react";
+import { Link, useLocation } from "wouter";
+import {
+  useAtelierQuickAddRosterPerson,
+  useAtelierUpdateRosterPerson,
+} from "@workspace/api-client-react";
+import type {
+  AtelierRosterPersonEdit,
+  AtelierRosterQuickAddRequest,
+} from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
-// Task #509 (T4) — shared country picker + titles registry + legal-entity register.
+// Task #509 (T4) — shared country picker + titles registry.
 import { CountryCombobox } from "@/components/CountryCombobox";
 import { countryCode, countryName } from "@/lib/countries";
 import { useRosterTitles, FALLBACK_SENIORITIES } from "@/lib/rosterTitles";
@@ -94,6 +100,7 @@ interface PayrollEntityOption {
   name: string;
   country: string;
   baseCurrency: string | null;
+  officeAddress?: string | null;
 }
 
 type Draft = {
@@ -111,7 +118,7 @@ type Draft = {
   country: string;
   employmentType: string;
   employmentStatus: string;
-  employingEntity: string;
+  legalEntityName: string;
   contractType: string;
   vendorEntity: string;
   partnerFirmId: string;
@@ -124,13 +131,6 @@ type Draft = {
   officeAddress: string;
 };
 
-interface LegalEntityRow {
-  name: string;
-  jurisdiction?: string | null;
-  officeAddress?: string | null;
-  country?: string | null;
-}
-
 // Best-effort split of a legacy full name when structured fields are absent.
 function splitLegacy(fullName: string | null | undefined): { first: string; middle: string; last: string } {
   const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
@@ -139,7 +139,38 @@ function splitLegacy(fullName: string | null | undefined): { first: string; midd
   return { first: parts[0], middle: parts.slice(1, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
+function blankDraft(): Draft {
+  return {
+    honorific: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    preferredName: "",
+    email: "",
+    personalEmail: "",
+    seniority: "",
+    title: "",
+    role: "",
+    homeOffice: "",
+    country: "",
+    employmentType: "FTE",
+    employmentStatus: "active",
+    legalEntityName: "",
+    contractType: "",
+    vendorEntity: "",
+    partnerFirmId: "",
+    startDate: "",
+    endDate: "",
+    noticePeriodDays: "",
+    nationality: "",
+    gender: "",
+    cellPhones: [],
+    officeAddress: "",
+  };
+}
+
+function draftFrom(p: EditablePerson | null, personalEmail: string | null): Draft {
+  if (!p) return blankDraft();
   const legacy = p.firstName && p.lastName ? null : splitLegacy(p.fullName);
   return {
     honorific: p.honorific ?? "",
@@ -156,7 +187,7 @@ function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
     country: p.country ?? "",
     employmentType: p.employmentType ?? "FTE",
     employmentStatus: p.employmentStatus ?? "active",
-    employingEntity: p.employingEntity ?? "",
+    legalEntityName: "",
     contractType: p.contractType ?? "",
     vendorEntity: p.vendorEntity ?? "",
     partnerFirmId: p.partnerFirmId ?? "",
@@ -165,7 +196,10 @@ function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
     noticePeriodDays:
       p.noticePeriodDays != null ? String(p.noticePeriodDays) : "",
     nationality: p.nationality ?? "",
-    gender: p.gender ?? "unspecified",
+    // Legacy `unspecified` values are intentionally represented as blank in
+    // this form. Leaving the field untouched therefore never sends a gender
+    // patch for those records.
+    gender: p.gender === "female" || p.gender === "male" ? p.gender : "",
     cellPhones: (p.cellPhones ?? []).map((c) => ({ ...c })),
     officeAddress: p.officeAddress ?? "",
   };
@@ -173,35 +207,65 @@ function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
 
 export function EditPersonForm({
   person,
+  createWorkerType = "employee",
   viewerCanEditTitle,
   viewerCanSeeComp = false,
   onSaved,
+  onCreated,
   onClose,
 }: {
-  person: EditablePerson;
+  person: EditablePerson | null;
+  /** Worker type used while the form is creating a new roster person. */
+  createWorkerType?: "employee" | "contractor";
   viewerCanEditTitle: boolean;
   viewerCanSeeComp?: boolean;
   onSaved: (updated: Record<string, unknown>) => void;
+  onCreated?: (created: { id: string; fullName: string }) => void;
   onClose: () => void;
 }) {
-  const isEmployee = person.workerType === "employee";
-  const isContractor = person.workerType === "contractor";
-  const isPfr = person.workerType === "partner_firm_resource";
+  const isCreate = !person;
+  const [createType, setCreateType] = React.useState<"employee" | "contractor">(createWorkerType);
+  const workerType = person?.workerType ?? createType;
+  const isEmployee = workerType === "employee";
+  const isContractor = workerType === "contractor";
+  const isPfr = workerType === "partner_firm_resource";
+  const [, navigate] = useLocation();
 
   // personalEmail lives outside the person wire — prefill from the
   // personal-data view (editors are all personnel-contract viewers).
   const [personalEmail0, setPersonalEmail0] = React.useState<string | null>(null);
   const [personalLoaded, setPersonalLoaded] = React.useState(isPfr);
   const [firms, setFirms] = React.useState<Array<{ id: string; name: string }>>([]);
-  const [legalEntities, setLegalEntities] = React.useState<LegalEntityRow[]>([]);
   const [draft, setDraft] = React.useState<Draft>(() => draftFrom(person, null));
   const [error, setError] = React.useState<string | null>(null);
+  const [runOnboarding, setRunOnboarding] = React.useState(false);
+  const [createLogin, setCreateLogin] = React.useState(false);
+  const [managerPersonId, setManagerPersonId] = React.useState("");
+  const [managers, setManagers] = React.useState<
+    Array<{ id: string; fullName: string; title: string | null }>
+  >([]);
+  const [success, setSuccess] = React.useState<{
+    id: string;
+    fullName: string;
+    status: string;
+    onboardingId: string | null;
+    login: {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      activationUrl?: string;
+      welcomeEmail?: { sent?: boolean; status?: string } | null;
+    } | null;
+  } | null>(null);
   // Task #660 — payroll fields (comp-gated, employees only).
-  const showPayroll = person.workerType === "employee" && viewerCanSeeComp;
+  const showPayroll = !isCreate && isEmployee && viewerCanSeeComp;
   const [payrollEntities, setPayrollEntities] = React.useState<PayrollEntityOption[]>([]);
-  const [payroll, setPayroll] = React.useState<PayrollDraft>(() => payrollDraftFrom(person));
+  const [payroll, setPayroll] = React.useState<PayrollDraft>(() =>
+    person ? payrollDraftFrom(person) : { legalEntityId: "", baseCompensation: "", baseCurrency: "", basicWageMonthly: "", housingAllowanceMonthly: "", schemeRegisteredOn: "" },
+  );
   const [payrollSaving, setPayrollSaving] = React.useState(false);
   const mutation = useAtelierUpdateRosterPerson();
+  const quickAddMutation = useAtelierQuickAddRosterPerson();
   // Task #509 (T4) — seniority options from the titles registry; when the
   // registry is empty we fall back to the legacy hardcoded ladder.
   const { titles } = useRosterTitles();
@@ -214,7 +278,7 @@ export function EditPersonForm({
 
   React.useEffect(() => {
     let alive = true;
-    if (!isPfr) {
+    if (!isCreate && !isPfr && person) {
       fetch(`/api/atelier/roster/people/${person.id}/personal`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -232,40 +296,43 @@ export function EditPersonForm({
         .then((d) => alive && setFirms(d.firms ?? []))
         .catch(() => undefined);
     }
-    if (isEmployee) {
-      // Task #509 (T4) — employing-entity picker sourced from the firm's
-      // legal-entity register (carries office address + country per entity).
-      fetch(`/api/atelier/firm-profile`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!alive || !d) return;
-          // Firm-profile wire shape is { published, latestDraft, canPublish };
-          // the register lives under <version>.payload.legalEntities.
-          const payload =
-            (d?.published?.payload as Record<string, unknown> | undefined) ??
-            (d?.latestDraft?.payload as Record<string, unknown> | undefined) ??
-            {};
-          const entities = (payload.legalEntities ?? []) as LegalEntityRow[];
-          setLegalEntities(entities);
-        })
-        .catch(() => undefined);
-    }
-    if (showPayroll) {
-      // Task #660 — active legal-entity register for the payroll link picker.
+    if (isEmployee && (showPayroll || isCreate)) {
+      // Task #660 — active legal-entity register. In create mode this
+      // supplies the same canonical selector used by payroll and maps the
+      // selected name to the quick-add endpoint's existing field.
       fetch(`/api/atelier/roster/legal-entities`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : { entities: [] }))
         .then((d) => alive && setPayrollEntities(d.entities ?? []))
         .catch(() => undefined);
     }
+    if (isCreate) {
+      fetch("/api/atelier/roster/people?workerType=employee", { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : { people: [] }))
+        .then((d) =>
+          alive &&
+          setManagers(
+            ((d.people ?? []) as Array<{
+              id: string;
+              fullName: string;
+              title: string | null;
+              status: string;
+            }>)
+              .filter((p) => p.status === "active")
+              .map((p) => ({ id: p.id, fullName: p.fullName, title: p.title })),
+          ),
+        )
+        .catch(() => alive && setManagers([]));
+    }
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [person.id]);
+  }, [person?.id, isCreate, isEmployee, isPfr, showPayroll]);
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
   const buildPatch = (): AtelierRosterPersonEdit | { error: string } => {
+    if (!person) return { error: "Create mode uses the roster create flow." };
     const base = draftFrom(person, personalEmail0);
     const patch: Record<string, unknown> = {};
     const strOrNull = (s: string) => (s.trim() ? s.trim() : null);
@@ -312,7 +379,6 @@ export function EditPersonForm({
       if (draft.employmentType !== base.employmentType) patch.employmentType = draft.employmentType;
       if (draft.employmentStatus !== base.employmentStatus)
         patch.employmentStatus = draft.employmentStatus;
-      diffStr("employingEntity", "employingEntity", true);
       if (draft.noticePeriodDays !== base.noticePeriodDays && draft.noticePeriodDays.trim()) {
         const n = Number(draft.noticePeriodDays);
         if (!Number.isInteger(n) || n < 0 || n > 365)
@@ -357,7 +423,7 @@ export function EditPersonForm({
   // Task #660 — dirty payroll fields → body for the dedicated payroll PATCH.
   const buildPayrollPatch = (): Record<string, unknown> | { error: string } | null => {
     if (!showPayroll) return null;
-    const base = payrollDraftFrom(person);
+    const base = payrollDraftFrom(person!);
     const patch: Record<string, unknown> = {};
     if (payroll.legalEntityId !== base.legalEntityId) {
       patch.legalEntityId = payroll.legalEntityId || null;
@@ -391,8 +457,67 @@ export function EditPersonForm({
     return Object.keys(patch).length > 0 ? patch : null;
   };
 
+  const buildCreateBody = (): AtelierRosterQuickAddRequest | { error: string } => {
+    if (!draft.firstName.trim() || !draft.lastName.trim())
+      return { error: "First and last name are required." };
+    if (!draft.email.trim().includes("@")) return { error: "Work email must be a valid email address." };
+    if (draft.startDate && draft.endDate && draft.endDate < draft.startDate)
+      return { error: "End date cannot be before the start date." };
+    return {
+      workerType: createType,
+      honorific: draft.honorific.trim() || null,
+      firstName: draft.firstName.trim(),
+      middleName: draft.middleName.trim() || null,
+      lastName: draft.lastName.trim(),
+      preferredName: isEmployee ? draft.preferredName.trim() || null : null,
+      email: draft.email.trim(),
+      role: draft.role.trim() || null,
+      seniority: draft.seniority.trim() || null,
+      title: draft.title.trim() || null,
+      country: draft.country || null,
+      startDate: draft.startDate || null,
+      // The create API deliberately still uses this field name. It receives
+      // the selected canonical legal entity's display name, never a free-text
+      // "Employing entity" value from an edit-style patch.
+      employingEntity: isEmployee ? draft.legalEntityName || null : null,
+      vendorEntity: isContractor ? draft.vendorEntity.trim() || null : null,
+      managerPersonId: managerPersonId || null,
+      runOnboarding,
+      createLogin,
+    };
+  };
+
   const save = async () => {
     setError(null);
+    if (isCreate) {
+      const createBody = buildCreateBody();
+      if ("error" in createBody) {
+        setError(createBody.error);
+        return;
+      }
+      try {
+        const created = await quickAddMutation.mutateAsync({ data: createBody });
+        onCreated?.({ id: created.id, fullName: created.fullName });
+        setSuccess({
+          id: created.id,
+          fullName: created.fullName,
+          status: created.status,
+          onboardingId: created.onboardingId ?? null,
+          login: (created.login as {
+            ok?: boolean;
+            error?: string;
+            message?: string;
+            activationUrl?: string;
+            welcomeEmail?: { sent?: boolean; status?: string } | null;
+          } | null) ?? null,
+        });
+      } catch (e: unknown) {
+        const err = e as { data?: { message?: string; error?: string }; message?: string; status?: number };
+        if (err.status === 409) setError("That work email is already in use by someone else.");
+        else setError(err.data?.message ?? err.data?.error ?? err.message ?? "Failed to add person.");
+      }
+      return;
+    }
     const patch = buildPatch();
     if ("error" in patch && typeof patch.error === "string" && Object.keys(patch).length === 1) {
       setError(patch.error);
@@ -411,12 +536,12 @@ export function EditPersonForm({
     try {
       let saved: Record<string, unknown> | null = null;
       if (Object.keys(body).length > 0) {
-        const resp = await mutation.mutateAsync({ id: person.id, data: body });
+        const resp = await mutation.mutateAsync({ id: person!.id, data: body });
         saved = resp.person as Record<string, unknown>;
       }
       if (payrollPatch) {
         setPayrollSaving(true);
-        const r = await fetch(`/api/atelier/roster/people/${person.id}/payroll`, {
+        const r = await fetch(`/api/atelier/roster/people/${person!.id}/payroll`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -451,14 +576,103 @@ export function EditPersonForm({
     "glass-surface border border-border-soft rounded px-2 py-1 text-text text-xs w-full";
   const label = "text-[10px] font-mono uppercase tracking-widest text-text-mute";
 
+  if (success) {
+    return (
+      <Card className="p-4 space-y-4" data-testid="create-person-success">
+        <div>
+          <h3 className="font-mono text-xs uppercase text-text-mute">
+            {success.fullName} is on the roster
+          </h3>
+          <p className="mt-2 text-sm text-text-mute">
+            Added as {workerType} · status <span className="font-mono">{success.status}</span>
+            {success.onboardingId ? " · onboarding checklist started" : ""}.
+          </p>
+        </div>
+        {success.login?.ok && success.login.activationUrl && (
+          <div className="space-y-2">
+            <p className="text-sm text-text-mute">
+              Portal login created. The one-time activation link expires in 72 hours and is shown
+              only once. Welcome email:{" "}
+              {success.login.welcomeEmail?.sent
+                ? "sent"
+                : success.login.welcomeEmail?.status ?? "not sent"}
+              .
+            </p>
+            <div
+              className="bg-bg-deep/60 border border-line rounded p-3 font-mono text-xs break-all select-all"
+              data-testid="quick-add-activation-link"
+            >
+              {success.login.activationUrl}
+            </div>
+          </div>
+        )}
+        {success.login?.ok === false && (
+          <p className="text-sm text-red-500 font-mono" data-testid="quick-add-login-error">
+            Person added, but the portal login couldn’t be created:{" "}
+            {success.login.message ?? success.login.error}. You can create it later from
+            Onboarding.
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-3 py-1"
+            data-testid="quick-add-done"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => {
+              onClose();
+              navigate(`/roster/people/${success.id}`);
+            }}
+            className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-3 py-1 rounded"
+            data-testid="quick-add-view-person"
+          >
+            View person
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-4 space-y-4" data-testid="edit-person-form">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h3 className="font-mono text-xs uppercase text-text-mute">
-          Edit person · {person.fullName}
+          {isCreate ? "Add person to the roster" : `Edit person · ${person!.fullName}`}
         </h3>
-        <MonoChip>pay &amp; bank fields stay locked to finance flows</MonoChip>
+        {!isCreate && <MonoChip>pay &amp; bank fields stay locked to finance flows</MonoChip>}
       </div>
+
+      {isCreate && (
+        <section className="space-y-3">
+          <p className="text-sm text-text-mute">
+            For people who are already hired or historical joiners. Formal recruits should use the{" "}
+            <Link href="/roster/invitations" className="text-gold hover:underline">
+              hiring flow
+            </Link>
+            .
+          </p>
+          <div className="flex gap-2">
+            {(["employee", "contractor"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setCreateType(type)}
+                className={`px-3 py-1.5 rounded text-xs font-mono uppercase tracking-widest border transition-colors ${
+                  createType === type
+                    ? "bg-gold text-bg border-gold"
+                    : "border-border text-text-mute hover:text-text"
+                }`}
+                data-testid={`quick-add-type-${type}`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Identity */}
       <section className="space-y-2">
@@ -491,15 +705,15 @@ export function EditPersonForm({
             <input className={input} value={draft.email} maxLength={320} type="email"
               onChange={(e) => set({ email: e.target.value })} data-testid="edit-email" />
           </FieldWrap>
-          {!isPfr && (
+          {!isPfr && !isCreate && (
             <FieldWrap label={`Personal email${personalLoaded ? "" : " (loading…)"}`}>
               <input className={input} value={draft.personalEmail} maxLength={320} type="email"
                 disabled={!personalLoaded}
                 onChange={(e) => set({ personalEmail: e.target.value })} data-testid="edit-personalemail" />
             </FieldWrap>
           )}
-          {isEmployee && viewerCanEditTitle && (
-            <FieldWrap label="Job title (HR / Founding Partner only)">
+          {isEmployee && (isCreate || viewerCanEditTitle) && (
+            <FieldWrap label={isCreate ? "Job title" : "Job title (HR / Founding Partner only)"}>
               <input className={input} value={draft.title} maxLength={120}
                 onChange={(e) => set({ title: e.target.value })} data-testid="edit-title" />
             </FieldWrap>
@@ -536,15 +750,15 @@ export function EditPersonForm({
         <div className="grid gap-3 md:grid-cols-2">
           {isEmployee && (
             <>
-              <FieldWrap label="Employment type">
+              {!isCreate && <FieldWrap label="Employment type">
                 <select className={input} value={draft.employmentType}
                   onChange={(e) => set({ employmentType: e.target.value })} data-testid="edit-employmenttype">
                   <option value="FTE">FTE</option>
                   <option value="fixed_term">fixed term</option>
                   <option value="intern">intern</option>
                 </select>
-              </FieldWrap>
-              <FieldWrap label="Employment status">
+              </FieldWrap>}
+              {!isCreate && <FieldWrap label="Employment status">
                 <select className={input} value={draft.employmentStatus}
                   onChange={(e) => set({ employmentStatus: e.target.value })} data-testid="edit-employmentstatus">
                   <option value="active">active</option>
@@ -552,47 +766,48 @@ export function EditPersonForm({
                   <option value="on_leave">on leave</option>
                   <option value="terminated">terminated</option>
                 </select>
-              </FieldWrap>
-              <FieldWrap label="Employing entity">
-                {legalEntities.length > 0 ? (
-                  <select className={input} value={draft.employingEntity} data-testid="edit-employingentity"
+              </FieldWrap>}
+              {isCreate && (
+                <FieldWrap label="Employing legal entity">
+                  <select
+                    className={input}
+                    value={payroll.legalEntityId}
+                    data-testid="create-payroll-entity"
                     onChange={(e) => {
-                      const name = e.target.value;
-                      const ent = legalEntities.find((le) => le.name === name);
-                      const patch: Partial<Draft> = { employingEntity: name };
-                      // Autofill office address + country from the register;
-                      // both remain editable below (country is overridable).
-                      if (ent?.officeAddress && !draft.officeAddress.trim()) patch.officeAddress = ent.officeAddress;
-                      if (ent?.country) {
-                        const iso = countryCode(ent.country) ?? ent.country;
-                        if (!draft.country.trim()) patch.country = iso;
-                      }
+                      const id = e.target.value;
+                      const entity = payrollEntities.find((x) => x.id === id);
+                      const patch: Partial<Draft> = { legalEntityName: entity?.name ?? "" };
+                      // Quick-add persists country and the legacy display
+                      // name; the richer location/payroll defaults are only
+                      // applied by the existing-person payroll editor, whose
+                      // dedicated audited endpoint persists them.
+                      if (entity?.country && !draft.country.trim())
+                        patch.country = countryCode(entity.country) ?? entity.country;
                       set(patch);
-                    }}>
-                    <option value="">—</option>
-                    {legalEntities.some((le) => le.name === draft.employingEntity) || !draft.employingEntity ? null : (
-                      <option value={draft.employingEntity}>{draft.employingEntity}</option>
-                    )}
-                    {legalEntities.map((le) => (
-                      <option key={le.name} value={le.name}>
-                        {le.name}{le.jurisdiction ? ` (${le.jurisdiction})` : ""}
+                      setPayroll((current) => ({
+                        ...current,
+                        legalEntityId: id,
+                      }));
+                    }}
+                  >
+                    <option value="">— not linked —</option>
+                    {payrollEntities.map((entity) => (
+                      <option key={entity.id} value={entity.id}>
+                        {entity.name} ({entity.country}
+                        {entity.baseCurrency ? ` · ${entity.baseCurrency}` : ""})
                       </option>
                     ))}
                   </select>
-                ) : (
-                  <input className={input} value={draft.employingEntity} maxLength={120}
-                    placeholder="DIFC / ADGM / KSA / Other"
-                    onChange={(e) => set({ employingEntity: e.target.value })} data-testid="edit-employingentity" />
-                )}
-              </FieldWrap>
-              <FieldWrap label="Home office">
+                </FieldWrap>
+              )}
+              {!isCreate && <FieldWrap label="Home office">
                 <input className={input} value={draft.homeOffice} maxLength={120}
                   onChange={(e) => set({ homeOffice: e.target.value })} data-testid="edit-homeoffice" />
-              </FieldWrap>
-              <FieldWrap label="Notice period (days)">
+              </FieldWrap>}
+              {!isCreate && <FieldWrap label="Notice period (days)">
                 <input className={input} value={draft.noticePeriodDays} inputMode="numeric"
                   onChange={(e) => set({ noticePeriodDays: e.target.value })} data-testid="edit-noticeperiod" />
-              </FieldWrap>
+              </FieldWrap>}
             </>
           )}
           {isContractor && (
@@ -601,7 +816,7 @@ export function EditPersonForm({
                 <input className={input} value={draft.vendorEntity} maxLength={200}
                   onChange={(e) => set({ vendorEntity: e.target.value })} data-testid="edit-vendorentity" />
               </FieldWrap>
-              <FieldWrap label="Contract type">
+              {!isCreate && <FieldWrap label="Contract type">
                 <select className={input} value={draft.contractType}
                   onChange={(e) => set({ contractType: e.target.value })} data-testid="edit-contracttype">
                   <option value="">—</option>
@@ -609,7 +824,7 @@ export function EditPersonForm({
                   <option value="fixed_fee">fixed fee</option>
                   <option value="retainer">retainer</option>
                 </select>
-              </FieldWrap>
+              </FieldWrap>}
             </>
           )}
           {isPfr && (
@@ -617,7 +832,7 @@ export function EditPersonForm({
               <select className={input} value={draft.partnerFirmId}
                 onChange={(e) => set({ partnerFirmId: e.target.value })} data-testid="edit-partnerfirm">
                 {firms.length === 0 && draft.partnerFirmId && (
-                  <option value={draft.partnerFirmId}>{person.partnerFirmName ?? draft.partnerFirmId}</option>
+                    <option value={draft.partnerFirmId}>{person!.partnerFirmName ?? draft.partnerFirmId}</option>
                 )}
                 {firms.map((f) => (
                   <option key={f.id} value={f.id}>{f.name}</option>
@@ -625,19 +840,19 @@ export function EditPersonForm({
               </select>
             </FieldWrap>
           )}
-          <FieldWrap label="Start date (correction only)">
+          <FieldWrap label={isCreate ? "Start date" : "Start date (correction only)"}>
             <input className={input} type="date" value={draft.startDate}
               onChange={(e) => set({ startDate: e.target.value })} data-testid="edit-startdate" />
           </FieldWrap>
-          <FieldWrap label="End date (correction only)">
+          {!isCreate && <FieldWrap label="End date (correction only)">
             <input className={input} type="date" value={draft.endDate}
               onChange={(e) => set({ endDate: e.target.value })} data-testid="edit-enddate" />
-          </FieldWrap>
+          </FieldWrap>}
         </div>
       </section>
 
       {/* Contact */}
-      {!isPfr && (
+      {!isPfr && !isCreate && (
         <section className="space-y-2">
           <div className={label}>Contact</div>
           {draft.cellPhones.map((c, i) => (
@@ -681,7 +896,7 @@ export function EditPersonForm({
           <div className={label}>Payroll (statutory)</div>
           {/* Task #1137 — subtle warning when current comp differs from the
               signed contract; links to the salary review queue. */}
-          {person.compDiffersFromContract === true && (
+          {person?.compDiffersFromContract === true && (
             <Link href="/people/reward/salary">
               <div
                 className="flex items-center gap-2 rounded border border-warn/40 bg-warn/5 px-2 py-1 text-[11px] text-warn hover:border-warn/70"
@@ -697,6 +912,16 @@ export function EditPersonForm({
                 onChange={(e) => {
                   const id = e.target.value;
                   const ent = payrollEntities.find((x) => x.id === id);
+                  const autofill: Partial<Draft> = {};
+                  // The payroll entity selector replaces the retired
+                  // employing-entity field as the one canonical source for
+                  // location defaults. Values already entered by the editor
+                  // remain authoritative.
+                  if (ent?.officeAddress && !draft.officeAddress.trim())
+                    autofill.officeAddress = ent.officeAddress;
+                  if (ent?.country && !draft.country.trim())
+                    autofill.country = countryCode(ent.country) ?? ent.country;
+                  if (Object.keys(autofill).length > 0) set(autofill);
                   setPayroll((p) => ({
                     ...p,
                     legalEntityId: id,
@@ -758,29 +983,29 @@ export function EditPersonForm({
           viewers. These fields are deliberately read-only here: bank details
           change only via the HR-approved bank-change flow, and pay data via
           the finance flows. */}
-      {viewerCanSeeComp && (
+      {!isCreate && viewerCanSeeComp && (
         <section className="space-y-2" data-testid="edit-comp-section">
           <div className={label}>Compensation &amp; banking (read-only)</div>
           <div className="grid gap-3 md:grid-cols-2">
             <FieldWrap label="Payroll country">
-              <input className={input} value={countryName(person.payrollCountry) ?? person.payrollCountry ?? ""} disabled readOnly data-testid="edit-payrollcountry-ro" />
+              <input className={input} value={countryName(person!.payrollCountry) ?? person!.payrollCountry ?? ""} disabled readOnly data-testid="edit-payrollcountry-ro" />
             </FieldWrap>
             <FieldWrap label="Day rate">
               <input
                 className={input}
                 value={
-                  person.dayRateAmount != null
-                    ? `${(person.dayRateAmount / 100).toLocaleString()} ${person.dayRateCurrency ?? ""}`
+                  person!.dayRateAmount != null
+                    ? `${(person!.dayRateAmount / 100).toLocaleString()} ${person!.dayRateCurrency ?? ""}`
                     : ""
                 }
                 disabled readOnly data-testid="edit-dayrate-ro"
               />
             </FieldWrap>
             <FieldWrap label="IBAN">
-              <input className={input} value={person.iban ?? ""} disabled readOnly data-testid="edit-iban-ro" />
+              <input className={input} value={person!.iban ?? ""} disabled readOnly data-testid="edit-iban-ro" />
             </FieldWrap>
             <FieldWrap label="SWIFT">
-              <input className={input} value={person.swift ?? ""} disabled readOnly data-testid="edit-swift-ro" />
+              <input className={input} value={person!.swift ?? ""} disabled readOnly data-testid="edit-swift-ro" />
             </FieldWrap>
           </div>
           <p className="text-[11px] text-text-faint">
@@ -799,37 +1024,105 @@ export function EditPersonForm({
             <CountryCombobox value={draft.country} allowClear testIdPrefix="edit-country"
               onChange={(iso) => set({ country: iso })} />
           </FieldWrap>
-          <FieldWrap label="Nationality">
+          {!isCreate && <FieldWrap label="Nationality">
             <CountryCombobox value={draft.nationality} allowClear testIdPrefix="edit-nationality"
               onChange={(iso) => set({ nationality: iso })} />
-          </FieldWrap>
-          <FieldWrap label="Gender (self-identified)">
+          </FieldWrap>}
+          {!isCreate && <FieldWrap label="Gender">
             <select className={input} value={draft.gender}
               onChange={(e) => set({ gender: e.target.value })} data-testid="edit-gender">
-              <option value="unspecified">unspecified</option>
-              <option value="female">female</option>
-              <option value="male">male</option>
+              <option value="" disabled>—</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
             </select>
-          </FieldWrap>
+          </FieldWrap>}
         </div>
       </section>
 
+      {isCreate && (
+        <section className="border-t border-border-soft pt-3 space-y-3" data-testid="create-person-options">
+          <FieldWrap label="Manager (optional)">
+            <select
+              className={input}
+              value={managerPersonId}
+              onChange={(e) => setManagerPersonId(e.target.value)}
+              data-testid="quick-add-manager"
+            >
+              <option value="">No manager</option>
+              {managers.map((manager) => (
+                <option key={manager.id} value={manager.id}>
+                  {manager.fullName}
+                  {manager.title ? ` · ${manager.title}` : ""}
+                </option>
+              ))}
+            </select>
+          </FieldWrap>
+          <label className="flex items-start gap-2 text-sm text-text-mute">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={runOnboarding}
+              onChange={(e) => setRunOnboarding(e.target.checked)}
+              data-testid="quick-add-run-onboarding"
+            />
+            <span>
+              Run the onboarding checklist
+              <span className="block text-[11px] text-text-faint">
+                They’ll start as <span className="font-mono">onboarding</span> with the standard{" "}
+                {workerType} sequence; otherwise they’re <span className="font-mono">active</span>{" "}
+                immediately.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-text-mute">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={createLogin}
+              onChange={(e) => setCreateLogin(e.target.checked)}
+              data-testid="quick-add-create-login"
+            />
+            <span>
+              Send welcome invitation &amp; create portal login
+              <span className="block text-[11px] text-text-faint">
+                A one-time activation link lets them choose their own password. Untick for a
+                roster-only record with no login.
+              </span>
+            </span>
+          </label>
+        </section>
+      )}
+
       <div className="flex items-center justify-end gap-2 pt-1 border-t border-border-soft">
         {error && (
-          <span className="text-warn text-[11px] mr-auto" data-testid="edit-error">{error}</span>
+          <span
+            className="text-warn text-[11px] mr-auto"
+            data-testid={isCreate ? "quick-add-error" : "edit-error"}
+          >
+            {error}
+          </span>
         )}
         <button
           onClick={onClose}
-          disabled={mutation.isPending || payrollSaving}
-          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-3 py-1">
+          disabled={mutation.isPending || quickAddMutation.isPending || payrollSaving}
+          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-3 py-1"
+          data-testid={isCreate ? "quick-add-cancel" : undefined}
+        >
           Cancel
         </button>
         <button
           onClick={save}
-          disabled={mutation.isPending || payrollSaving}
+          disabled={mutation.isPending || quickAddMutation.isPending || payrollSaving}
           className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-3 py-1 rounded disabled:opacity-50"
-          data-testid="edit-save">
-          {mutation.isPending || payrollSaving ? "Saving…" : "Save changes"}
+          data-testid={isCreate ? "quick-add-submit" : "edit-save"}
+        >
+          {mutation.isPending || quickAddMutation.isPending || payrollSaving
+            ? isCreate
+              ? "Adding…"
+              : "Saving…"
+            : isCreate
+              ? "Add to roster"
+              : "Save changes"}
         </button>
       </div>
     </Card>

@@ -519,13 +519,15 @@ function DemographicsEditor({
   onUpdated: (p: Person) => void;
 }) {
   const [editing, setEditing] = React.useState(false);
-  const [gender, setGender] = React.useState(person.gender ?? "unspecified");
+  const normalizedGender = (value: string | null | undefined) =>
+    value === "female" || value === "male" ? value : "";
+  const [gender, setGender] = React.useState(normalizedGender(person.gender));
   const [nationality, setNationality] = React.useState(person.nationality ?? "");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    setGender(person.gender ?? "unspecified");
+    setGender(normalizedGender(person.gender));
     setNationality(person.nationality ?? "");
   }, [person.id, person.gender, person.nationality]);
 
@@ -537,7 +539,7 @@ function DemographicsEditor({
       >
         <Field label="Nationality" value={countryName(person.nationality)} />
         <Field
-          label="Gender (self-identified)"
+          label="Gender"
           value={
             person.gender && person.gender !== "unspecified"
               ? person.gender.replace("_", "-")
@@ -568,7 +570,7 @@ function DemographicsEditor({
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            gender,
+            ...(gender ? { gender } : {}),
             nationality: nationality.trim() ? nationality.trim().toUpperCase() : null,
           }),
         },
@@ -599,16 +601,16 @@ function DemographicsEditor({
         </span>
       </label>
       <label className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-text-mute">Gender (self-identified)</span>
+        <span className="text-text-mute">Gender</span>
         <select
           value={gender}
           onChange={(e) => setGender(e.target.value)}
           className="bg-bg-elevate border border-border-soft rounded px-2 py-0.5 text-text text-xs"
           data-testid="demographics-gender"
         >
-          <option value="unspecified">unspecified</option>
-          <option value="female">female</option>
-          <option value="male">male</option>
+          <option value="" disabled>—</option>
+          <option value="female">Female</option>
+          <option value="male">Male</option>
         </select>
       </label>
       <div className="flex items-center justify-end gap-2">

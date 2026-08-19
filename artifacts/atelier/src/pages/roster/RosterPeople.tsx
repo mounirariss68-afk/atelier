@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Users, Filter, X, UserPlus } from "lucide-react";
 import { countryName } from "@/lib/countries";
 import { useAuth } from "@/lib/auth";
-import { QuickAddPersonDialog } from "./QuickAddPersonDialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { EditPersonForm } from "./EditPersonForm";
 
 // Task #759 — quick-add gate mirrors the server's invitation/quick-add
 // permission (isPartnerOrOps): founding partner, partner, finance, HR.
@@ -77,6 +78,7 @@ export default function RosterPeople() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const canQuickAdd = QUICK_ADD_ROLES.has(user?.role ?? "");
+  const viewerCanEditTitle = ["founding_partner", "hr"].includes(user?.role ?? "");
   const [quickAddOpen, setQuickAddOpen] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [people, setPeople] = React.useState<PersonRow[] | null>(null);
@@ -225,11 +227,23 @@ export default function RosterPeople() {
       </div>
 
       {canQuickAdd && (
-        <QuickAddPersonDialog
+        <Dialog
           open={quickAddOpen}
           onOpenChange={setQuickAddOpen}
-          onCreated={() => setReloadKey((k) => k + 1)}
-        />
+        >
+          <DialogContent
+            className="max-w-4xl max-h-[90vh] overflow-y-auto"
+            data-testid="add-person-dialog"
+          >
+            <EditPersonForm
+              person={null}
+              viewerCanEditTitle={viewerCanEditTitle}
+              onSaved={() => undefined}
+              onCreated={() => setReloadKey((key) => key + 1)}
+              onClose={() => setQuickAddOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
       {activeChips.length > 0 && (
