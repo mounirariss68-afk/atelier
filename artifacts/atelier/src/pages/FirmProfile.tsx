@@ -63,6 +63,64 @@ interface FirmProfileResponse {
   canPublish: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Firm-profile rows predate parts of the current payload contract. Normalize
+ * those legacy rows at the API boundary so rendering and editing never call
+ * array methods on a missing field.
+ */
+function normalizeFirmPayload(value: unknown): FirmPayload {
+  const source = isRecord(value) ? value : {};
+  const text = (key: string) => (typeof source[key] === "string" ? source[key] : "");
+  const stringList = (key: string) =>
+    Array.isArray(source[key])
+      ? source[key].filter((item): item is string => typeof item === "string")
+      : [];
+  const recordList = (key: string) =>
+    Array.isArray(source[key]) ? source[key].filter(isRecord) : [];
+  const brandColors = isRecord(source.brandColors)
+    ? {
+        primary:
+          typeof source.brandColors.primary === "string" ? source.brandColors.primary : undefined,
+        ink: typeof source.brandColors.ink === "string" ? source.brandColors.ink : undefined,
+        gold: typeof source.brandColors.gold === "string" ? source.brandColors.gold : undefined,
+      }
+    : undefined;
+
+  return {
+    ...source,
+    firmName: text("firmName"),
+    tagline: text("tagline"),
+    missionStatement: text("missionStatement"),
+    voiceAttributes: stringList("voiceAttributes"),
+    principles: recordList("principles").map((item) => ({
+      name: typeof item.name === "string" ? item.name : "",
+      description: typeof item.description === "string" ? item.description : "",
+    })),
+    boilerplateShort: text("boilerplateShort"),
+    boilerplateLong: text("boilerplateLong"),
+    capabilitiesPitch: text("capabilitiesPitch"),
+    differentiators: stringList("differentiators"),
+    proofPoints: recordList("proofPoints").map((item) => ({
+      label: typeof item.label === "string" ? item.label : "",
+      metric: typeof item.metric === "string" ? item.metric : "",
+    })),
+    legalEntities: recordList("legalEntities").map((item) => ({
+      name: typeof item.name === "string" ? item.name : "",
+      jurisdiction: typeof item.jurisdiction === "string" ? item.jurisdiction : "",
+    })),
+    contactBlock: text("contactBlock"),
+    brandColors,
+  };
+}
+
+function normalizeFirmRow(row: FirmRow): FirmRow {
+  return { ...row, payload: normalizeFirmPayload(row.payload) };
+}
+
 const API_BASE = `${(import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/"}api/atelier`;
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(API_BASE + path, {
@@ -91,8 +149,12 @@ export default function FirmProfile() {
         api<FirmProfileResponse>("/firm-profile"),
         api<{ versions: FirmRow[] }>("/firm-profile/versions"),
       ]);
-      setProfile(p);
-      setVersions(v.versions);
+      setProfile({
+        ...p,
+        published: p.published ? normalizeFirmRow(p.published) : null,
+        latestDraft: p.latestDraft ? normalizeFirmRow(p.latestDraft) : null,
+      });
+      setVersions(Array.isArray(v.versions) ? v.versions.map(normalizeFirmRow) : []);
     } catch (e) {
       setErr((e as Error).message);
     }
