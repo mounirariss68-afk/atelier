@@ -45,10 +45,16 @@ export function confidenceBand(confidence: number | null | undefined): "green" |
 const str = (v: unknown): string | null =>
   typeof v === "string" && v.trim() ? v.trim() : null;
 
-// ---------------------------------------------------------------------------
-// Receipts / expense invoices → VisionReceiptExtraction-shaped payload
-// ---------------------------------------------------------------------------
-
+/** Date fields: the OpenAPI contract declares `format: date`, but the LIVE
+ * service returns ISO datetimes ("2026-07-02T00:00:00.000Z") — observed in
+ * the 2026-08-23 live smoke. Accept both shapes and canonicalize to
+ * YYYY-MM-DD; anything else → null (callers flag/skip, never guess). */
+export function cognidocsDateOnly(v: unknown): string | null {
+  const s = str(v);
+  if (!s) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ].*)?$/.exec(s);
+  return m ? m[1] : null;
+}
 /** Best-effort mapping of a CogniDocs category key onto the legacy expense
  * category hints. Unknown keys map to undefined — the Expense Auditor owns
  * the final category call, this is only a draft hint. */
@@ -72,7 +78,8 @@ export function composeReceiptRawText(inv: CognidocsInvoiceResult): string {
   const lines: string[] = [];
   if (inv.vendorName) lines.push(`vendor: ${inv.vendorName}`);
   if (inv.invoiceRef) lines.push(`reference: ${inv.invoiceRef}`);
-  if (inv.issueDate) lines.push(`date: ${inv.issueDate}`);
+  const issueDate = cognidocsDateOnly(inv.issueDate) ?? str(inv.issueDate);
+  if (issueDate) lines.push(`date: ${issueDate}`);
   const cur = inv.currency ?? "";
   const money = (v: number | null | undefined) =>
     typeof v === "number" && Number.isFinite(v) ? amount10kToMajor(v).toFixed(2) : null;
@@ -106,7 +113,7 @@ export function receiptExtractionFromJob(job: CognidocsParseJob): VisionReceiptE
   if (!merchant && total === undefined) return { unreadable: true };
   return {
     merchant: merchant ?? undefined,
-    date: str(inv.issueDate) ?? undefined,
+    date: cognidocsDateOnly(inv.issueDate) ?? undefined,
     total,
     tax: optAmount(inv.taxAmount10k) ?? 0,
     subtotal: optAmount(inv.subtotalAmount10k),
@@ -160,7 +167,7 @@ export function supplierFieldsFromJob(job: CognidocsParseJob): {
       amount: optAmount(inv.totalAmount10k) ?? null,
       currency: str(inv.currency)?.toUpperCase().slice(0, 3) ?? null,
       reference: str(inv.invoiceRef),
-      invoiceDate: str(inv.issueDate),
+      invoiceDate: cognidocsDateOnly(inv.issueDate),
       periodLabel: null,
       notes:
         inv.reconciliation?.matchesTotal === false
@@ -210,13 +217,12 @@ export function statementRowsFromJob(
   for (const t of stmt.transactions ?? []) {
     // The guide promises calendar dates as YYYY-MM-DD, but the live service
     // serializes them as full ISO 8601 timestamps ("2026-08-03T00:00:00.000Z").
-    // Accept both by taking the LITERAL date part of the string — never a
+    // cognidocsDateOnly takes the LITERAL date part of the string — never a
     // timezone-shifting Date parse. Anything else stays flagged, not guessed.
     const rawDate = str(t.date);
-    const dateMatch = rawDate?.match(/^(\d{4}-\d{2}-\d{2})(?:T\S*)?$/);
-    const date = dateMatch ? dateMatch[1] : null;
+    const date = cognidocsDateOnly(t.date);
     const desc = str(t.description) ?? str(t.rawDescription) ?? "";
-    const snippet = `${rawDate ?? "?"} ${desc}`.slice(0, 160);
+    const snippet = `${date ?? rawDate ?? "?"} ${desc}`.slice(0, 160);
     if (!date) {
       flagged.push({ dateToken: rawDate ?? "?", snippet, reason: "unparseable posting date", confidence: 0.3 });
       continue;

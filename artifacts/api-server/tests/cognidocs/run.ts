@@ -264,6 +264,9 @@ async function main() {
             { date: "04/08/2026", description: "Bad date", rawDescription: null, amount10k: 10_000, currency: null, direction: "debit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
             // Zero amount → flagged.
             { date: "2026-08-05", description: "Zero", rawDescription: null, amount10k: 0, currency: null, direction: "debit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
+            // LIVE shape (2026-08-23 smoke): ISO datetime despite the spec's
+            // `format: date` — must normalize to YYYY-MM-DD, not flag.
+            { date: "2026-08-06T00:00:00.000Z", description: "Datetime shape", rawDescription: null, amount10k: 10_000_000, currency: null, direction: "debit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
           ],
         },
       },
@@ -271,9 +274,14 @@ async function main() {
     const conv = statementRowsFromJob(stmtJob, "USD");
     check(
       "convert: statement signs obey direction only (×10k → majors)",
-      conv?.rows.length === 3 &&
+      conv?.rows.length === 4 &&
         conv.rows[0].amount === 15250 && conv.rows[1].amount === 5000 && conv.rows[2].amount === -2310.75,
       conv?.rows,
+    );
+    check(
+      "convert: live ISO-datetime posting dates normalize to YYYY-MM-DD",
+      conv?.rows[3]?.postedDate === "2026-08-06" && conv.rows[3].amount === -1000,
+      conv?.rows[3],
     );
     check(
       "convert: date/amount/direction problems each flag with a named reason",
@@ -285,7 +293,7 @@ async function main() {
     );
     check(
       "convert: confidence = jobConf × usable-row share",
-      conv?.confidence === +(0.8 * (3 / 6)).toFixed(3),
+      conv?.confidence === +(0.8 * (4 / 7)).toFixed(3),
       conv?.confidence,
     );
     check("convert: no statement payload → null", statementRowsFromJob(completedJob({}), "USD") === null);
@@ -363,7 +371,7 @@ async function main() {
         documentType: "invoice", parserPath: null, confidence: null, statement: null,
         invoice: {
           id: "cdinv_1", vendorKey: null, vendorName: "Vendor LLC", invoiceRef: "INV-9",
-          issueDate: "2026-08-01", dueDate: null, currency: "aed",
+          issueDate: "2026-08-01T00:00:00.000Z", dueDate: null, currency: "aed",
           subtotalAmount10k: 1_000_000, taxAmount10k: 50_000, totalAmount10k: 1_050_000,
           categoryKey: null, lineItems: manyItems,
           reconciliation: { lineItemSum10k: 1_500_000, matchesTotal: false, delta10k: 450_000 },
@@ -379,6 +387,11 @@ async function main() {
       sup,
     );
     check("convert: line items capped at 50", (sup?.fields.lineItems ?? []).length === 50);
+    check(
+      "convert: invoice issueDate normalizes ISO datetime → date-only",
+      sup?.fields.invoiceDate === "2026-08-01",
+      sup?.fields.invoiceDate,
+    );
     check(
       "convert: reconciliation mismatch surfaces as a notes warning",
       /line item/i.test(sup?.fields.notes ?? "") || /match/i.test(sup?.fields.notes ?? ""),
@@ -400,6 +413,23 @@ async function main() {
       }),
     );
     check("convert: receipt without merchant AND total → unreadable", bare.unreadable === true, bare);
+
+    // Receipt date arrives as an ISO datetime from the live service —
+    // extraction + rawText must both carry the normalized date-only form.
+    const dated = receiptExtractionFromJob(
+      completedJob({
+        confidence: 90,
+        result: {
+          documentType: "receipt", parserPath: null, confidence: null, statement: null,
+          invoice: defaultInvoicePayload({ issueDate: "2026-08-05T00:00:00.000Z" }),
+        },
+      }),
+    );
+    check(
+      "convert: receipt ISO-datetime issueDate normalizes to date-only",
+      dated.date === "2026-08-05" && /date: 2026-08-05(\n|$)/.test(dated.rawText ?? ""),
+      { date: dated.date, rawText: dated.rawText },
+    );
   }
 
   await cd.close();
