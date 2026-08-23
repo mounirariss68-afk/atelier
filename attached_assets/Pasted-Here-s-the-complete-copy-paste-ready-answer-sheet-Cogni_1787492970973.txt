@@ -1,0 +1,45 @@
+Here's the complete, copy-paste-ready answer sheet:
+
+---
+
+# CogniDocs → Cognirise Atelier: Integration Q&A
+
+**1. Base URL**
+The API is served under `/api`, and the OpenAPI spec intentionally declares only the relative server URL. The production base URL is `https://<production-domain>/api` — we'll share the exact production domain with you directly alongside the API key (it isn't discoverable from the spec).
+
+**2. API key & legal acceptance**
+Correct — key creation is a human, signed-in console flow: **Settings → API keys → Create key** (name the key, choose Live or Sandbox; the `cdk_...` token is displayed exactly once, so store it immediately). Terms/Privacy acceptance is an account-level gate, already satisfied on our side.
+
+The key will be issued from **support@cognirise.ai**, which is the firm's CogniDocs account. One account for the whole firm is the right model: all documents, deduplication, and usage are scoped to the account, not to the key. We can issue multiple keys under that account (e.g. one per environment or service) — they all share the same document pool.
+
+**3. Plan & quota**
+Not a constraint for you: support@cognirise.ai is on an **unlimited Enterprise plan** — unlimited monthly documents, no overage charges, unlimited API keys. You don't need to size Atelier against a document quota.
+
+**4. Sandbox key**
+Yes. The Enterprise plan includes sandbox access with **unlimited sandbox documents**, tracked entirely separately from live usage. We'll create a dedicated Sandbox key for your dev/testing — sandbox jobs never touch live data or usage.
+
+**5. UAE bank coverage**
+You don't need to track bank coverage at all. CogniDocs is template-first, and it **automatically generates and saves a statement template after every successful parse** — so coverage grows with usage on its own. A statement from a bank we haven't seen before (e.g. Wio) is handled by the AI parsing path, and a template is learned from that success so subsequent statements with the same layout parse faster and more deterministically. If a statement genuinely can't be parsed, the job fails explicitly with an error — you will never receive a silently empty result.
+
+**6. Languages**
+- **Digital PDFs (embedded text)**: English, Arabic, and Turkish are supported today, including bilingual Arabic+English layouts.
+- **Scanned/photographed documents (OCR)**: currently English-only. **Arabic and Turkish OCR is planned on our roadmap.** Until it ships, Arabic/Turkish receipt *photos* are not reliably supported — please continue routing those through your own OCR, or send us samples so we can prioritize.
+
+**7. Duplicate invoices**
+Deduplication is per-account, keyed on normalized vendor + invoice reference (invoices without a reference are never deduplicated). A resubmission does **not** error: you get the normal `202` + job, the job completes successfully, and the result contains the **existing canonical invoice with the same `invoice.id`** as the original submission. Nothing on the original invoice is modified.
+
+This cannot conflict with Atelier's own duplicate checks — but today there's no explicit duplicate marker either, so the reliable signal is: same `invoice.id` as a previous submission ⇒ duplicate. **We are adding an explicit duplicate indicator to the job result** so you won't need to compare IDs.
+
+**8. Result retention & rate limits**
+- **Retention**: parse results are kept **indefinitely** until explicitly deleted from the account — no TTL, no expiry. You can poll or re-fetch results at any time without fear of them disappearing.
+- **Rate limits**: there are currently **no 429 rate limits on document uploads**. The hard limits are: 1 file per request, 20 MiB per file. A formal rate-limit policy (with documented 429 + `Retry-After` behavior) is planned; Enterprise accounts will remain effectively unthrottled by default. Until then, please keep batch uploads to a modest client-side concurrency as a courtesy.
+
+**9. Webhooks**
+Polling only today: `POST /documents` → `202` with a job, then `GET /jobs/{jobId}` until `completed`/`failed`. **Webhook callbacks for job completion are planned** (HMAC-signed POSTs to URLs you register, with retries); polling will remain fully supported. We'll notify you when webhooks are available so you can switch over.
+
+**10. HEIC**
+Not supported today — accepted formats are PDF, CSV, PNG, JPEG, and WEBP, so please keep converting HEIC → JPEG/PNG on your side **for now**. **Native HEIC support (server-side conversion) is planned**, and we'll let you know when you can drop the client-side conversion step.
+
+---
+
+That's the full set. The five "planned" items referenced above correspond to draft Tasks #325–#329, which are awaiting your approval.
