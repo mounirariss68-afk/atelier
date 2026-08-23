@@ -15,7 +15,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import multer from "multer";
 import { and, eq, isNull, desc, inArray, sql } from "drizzle-orm";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   db,
   atelierUsers,
@@ -26,12 +26,16 @@ import {
   atelierAuditEvents,
   atelierPeriodCloseLock,
 } from "@workspace/db";
-import { parseBankStatement } from "../../lib/bank-parsers/index.js";
+import { parseBankStatement, rowsToCanonicalCsv } from "../../lib/bank-parsers/index.js";
 import {
-  parsePdfStatementText,
-  pdfRowsToCanonicalCsv,
-  PDF_STATEMENT_CONFIDENCE_FLOOR,
-} from "../../lib/bank-parsers/pdf-statement.js";
+  CognidocsError,
+  getCognidocsJob,
+  parseCognidocsDocument,
+} from "../../lib/cognidocs/client.js";
+import {
+  statementRowsFromJob,
+  COGNIDOCS_STATEMENT_CONFIDENCE_FLOOR,
+} from "../../lib/cognidocs/convert.js";
 import {
   autoMatchImport,
   deriveStatementExceptions,
@@ -399,10 +403,33 @@ router.post("/import", async (req, res) => {
 });
 
 // Task #1071 — multipart statement-file upload (CSV / Xero export).
+// Task #1316 — cap raised to CogniDocs' 20MB document limit (scanned
+// multi-page statement PDFs regularly exceed the old 4MiB cap).
 const statementUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { files: 1, fileSize: 4 * 1024 * 1024 },
+  limits: { files: 1, fileSize: 20 * 1024 * 1024 },
 });
+
+// Task #1316 — preview→confirm binding for PDF statement imports. Phase 1
+// parses the PDF through CogniDocs and returns the preview plus the parse
+// jobId and an HMAC signature binding that jobId to the file's sha256.
+// Phase 2 (confirm) requires jobId+signature, re-fetches the SAME job
+// (results are retained) and rebuilds identical rows — the client can
+// never swap in a different file or job between preview and confirm.
+const STMT_IMPORT_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+function statementJobSignature(jobId: string, fileBytes: Buffer): string {
+  const fileSha = createHash("sha256").update(fileBytes).digest("hex");
+  return createHmac("sha256", STMT_IMPORT_SECRET).update(`stmt-import\n${jobId}\n${fileSha}`).digest("hex");
+}
+function verifyStatementJobSignature(jobId: string, fileBytes: Buffer, got: string): boolean {
+  const want = statementJobSignature(jobId, fileBytes);
+  if (got.length !== want.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(got, "utf8"), Buffer.from(want, "utf8"));
+  } catch {
+    return false;
+  }
+}
 // @cli-skip: file-upload statement import; no CLI tool shape
 router.post("/import-file", (req, res) => {
   statementUpload.single("file")(req, res, async (err: unknown) => {
@@ -410,7 +437,10 @@ router.post("/import-file", (req, res) => {
     if (denyAll(req, res)) return;
     const me = ensure(req, res); if (!me) return;
     if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-    const b = req.body as { bankAccountId?: string; statementDate?: string; source?: string; notes?: string; confirm?: string };
+    const b = req.body as {
+      bankAccountId?: string; statementDate?: string; source?: string; notes?: string;
+      confirm?: string; cognidocsJobId?: string; signature?: string;
+    };
     const file = req.file;
     if (!file || !b.bankAccountId || !b.statementDate)
       return res.status(400).json({ error: "invalid_input", message: "file, bankAccountId and statementDate are required." });
@@ -421,33 +451,71 @@ router.post("/import-file", (req, res) => {
     let raw: string;
     let source: "csv" | "xero";
     if (isPdf) {
-      // Task #1111 — PDF statements go through the same GUARDED extraction
-      // as the chat import (Task #1094): date-anchored rows with per-row
-      // confidence; ambiguous rows are flagged and SKIPPED, never guessed;
-      // low overall confidence refuses with CSV-export guidance. The web
-      // flow is two-phase: without confirm=true the route returns a preview
-      // of extracted + flagged rows and imports nothing.
+      // Task #1316 — PDF statements parse through CogniDocs. Rows with an
+      // unclear debit/credit direction or unusable date/amount are flagged
+      // and SKIPPED, never guessed; low overall confidence refuses with
+      // CSV-export guidance. The web flow is two-phase: without
+      // confirm=true the route parses, returns a preview of extracted +
+      // flagged rows plus a signed jobId, and imports nothing; the confirm
+      // phase re-fetches the SAME job so preview and import always agree.
       const [acct] = await db.select().from(atelierBankAccount)
         .where(and(eq(atelierBankAccount.id, b.bankAccountId), eq(atelierBankAccount.orgId, me.orgId)));
       if (!acct) return res.status(404).json({ error: "not_found", message: "Bank account not found." });
-      const { extractAttachment } = await import("../../lib/atelier-cli/attachments/extractors.js");
-      const extracted = await extractAttachment({
-        fileName: file.originalname ?? "statement.pdf",
-        mime: file.mimetype || "application/pdf",
-        bytes: file.buffer,
-      });
-      const pdfText = (extracted.normalizedText ?? "").trim();
-      const parsed = parsePdfStatementText(pdfText, acct.currency);
-      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
-        return res.status(400).json({
-          error: "pdf_low_confidence",
-          message: `We couldn't confidently extract transaction rows from this PDF${parsed.flagged.length > 0 ? ` (${parsed.flagged.length} candidate row(s) were too ambiguous to trust — amounts are never guessed)` : ""} — export a CSV from your bank and upload that instead.`,
+      let job: Awaited<ReturnType<typeof getCognidocsJob>>;
+      try {
+        if (b.confirm === "true") {
+          const jobId = (b.cognidocsJobId ?? "").trim();
+          const signature = (b.signature ?? "").trim();
+          if (!jobId || !signature || !verifyStatementJobSignature(jobId, file.buffer, signature)) {
+            return res.status(400).json({
+              error: "preview_required",
+              message: "The confirm step must carry the preview's parse token for the same file — re-upload to preview again.",
+            });
+          }
+          job = await getCognidocsJob(jobId);
+        } else {
+          job = await parseCognidocsDocument({
+            bytes: file.buffer,
+            fileName: file.originalname ?? "statement.pdf",
+            mimeType: "application/pdf",
+            declaredType: "auto",
+          });
+        }
+      } catch (err) {
+        if (err instanceof CognidocsError && (err.code === "not-configured" || err.code === "auth")) {
+          return res.status(503).json({
+            error: "parsing_unavailable",
+            message: "Document parsing isn't available right now (the parsing service isn't configured). You can still import a CSV export from your bank.",
+          });
+        }
+        return res.status(422).json({
+          error: "pdf_parse_failed",
+          message: `The PDF couldn't be parsed (${err instanceof Error ? err.message : "parse error"}) — export a CSV from your bank and upload that instead.`,
         });
       }
-      // Deterministic parser: the confirm phase re-parses the same bytes and
-      // must see identical rows, so the canonical CSV (and therefore the
-      // dedupe hash) is stable across preview + confirm.
-      raw = pdfRowsToCanonicalCsv(parsed.rows);
+      if (job.status !== "completed") {
+        return res.status(422).json({
+          error: "pdf_parse_failed",
+          message: "The statement parse did not complete — please retry in a moment.",
+        });
+      }
+      const parsed = statementRowsFromJob(job, acct.currency);
+      if (!parsed) {
+        return res.status(422).json({
+          error: "not_a_statement",
+          message: "This document did not parse as a bank statement — it may be an invoice or letter. Upload a statement PDF or a CSV export.",
+        });
+      }
+      if (parsed.rows.length === 0 || parsed.confidence < COGNIDOCS_STATEMENT_CONFIDENCE_FLOOR) {
+        return res.status(400).json({
+          error: "pdf_low_confidence",
+          message: `We couldn't confidently extract transaction rows from this PDF${parsed.flagged.length > 0 ? ` (${parsed.flagged.length} row(s) were too ambiguous to trust — amounts and directions are never guessed)` : ""} — export a CSV from your bank and upload that instead.`,
+        });
+      }
+      // Deterministic conversion of a retained job: the confirm phase sees
+      // identical rows, so the canonical CSV (and therefore the dedupe
+      // hash) is stable across preview + confirm.
+      raw = rowsToCanonicalCsv(parsed.rows);
       source = "csv";
       if (b.confirm !== "true") {
         return res.json({
@@ -458,6 +526,9 @@ router.post("/import-file", (req, res) => {
               rowsExtracted: parsed.rows.length,
               flaggedRows: parsed.flagged.length,
               confidence: parsed.confidence,
+              ...(parsed.warning ? { warning: parsed.warning } : {}),
+              cognidocsJobId: job.id,
+              signature: statementJobSignature(job.id, file.buffer),
               rows: parsed.rows.slice(0, 200).map((r) => ({
                 postedDate: r.postedDate, amount: r.amount, currency: r.currency,
                 counterparty: r.counterpartyNameRaw, reference: r.referenceRaw,

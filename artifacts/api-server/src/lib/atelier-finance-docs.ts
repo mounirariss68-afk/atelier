@@ -7,14 +7,16 @@
  * logic is forked between surfaces: same system prompt, same JSON
  * contract, same normalization.
  *
- * `parseSupplierInvoiceText` is the chat-side supplier-invoice parser:
- * the UI upload form takes manually keyed fields, so chat prefills them
- * from the attached PDF's extracted text and the user confirms before
- * anything is written. Low-confidence / missing fields are surfaced —
- * never guessed.
+ * `parseSupplierInvoiceDoc` is the chat-side supplier-invoice parser
+ * (CogniDocs since Task #1316): the UI upload form takes manually keyed
+ * fields, so chat prefills them from the attached PDF bytes and the user
+ * confirms before anything is written. Low-confidence / missing fields
+ * are surfaced — never guessed.
  */
 
 import { extractFirstJsonObject } from "./atelier-agents/runner.js";
+import { CognidocsError, parseCognidocsDocument } from "./cognidocs/client.js";
+import { supplierFieldsFromJob } from "./cognidocs/convert.js";
 
 export const BANK_LETTER_SYSTEM = `You are a treasury analyst digitizing official bank letters and account-confirmation documents (UAE and international banks: IBAN letters, account-opening confirmations, bank reference letters). Documents may be bilingual Arabic/English; prefer English strings for Latin fields.
 
@@ -146,25 +148,6 @@ export async function extractBankLetterFields(args: {
 // Supplier-invoice parsing (chat pipeline only — the UI form is manual).
 // ---------------------------------------------------------------------------
 
-const SUPPLIER_INVOICE_SYSTEM = `You are an accounts-payable clerk digitizing supplier invoices (UAE and international; possibly bilingual Arabic/English — prefer English strings for Latin fields).
-
-Extract ONLY facts present in the invoice text. Never invent amounts, references, or names. Use null for anything the document does not state. The "amount" must be the TOTAL payable (including VAT) as printed.
-
-Return a single JSON object with this exact shape (all keys present):
-{
-  "confidence": number (0-1, your overall confidence that this is a supplier invoice AND the key fields are correct),
-  "fields": {
-    "supplierName": string|null (the issuing supplier's legal/trading name — NOT the bill-to party),
-    "amount": number|null (total payable, numeric),
-    "currency": string|null (ISO 4217 3-letter code),
-    "reference": string|null (invoice number / reference as printed),
-    "invoiceDate": string|null (YYYY-MM-DD),
-    "periodLabel": string|null (billing period if stated, e.g. "2026-07" or "Jul 2026"),
-    "notes": string|null (one short line of anything a reviewer should know, else null),
-    "lineItems": array|null (the printed itemization when the invoice shows line rows; each item {"description": string, "qty": number|null, "unitAmount": number|null, "amount": number|null}. Copy rows as printed — never invent, split, or merge lines. null when the document prints no itemization)
-  }
-}`;
-
 export interface SupplierInvoiceLineItemParsed {
   description: string;
   qty: number | null;
@@ -189,136 +172,85 @@ export type SupplierInvoiceParseResult =
       ok: true;
       confidence: number;
       fields: SupplierInvoiceFields;
-      /** Task #1267 — true when the itemized reply hit the token cap and we
-       *  recovered with a header-only retry; line items were dropped, not
-       *  the whole parse. Callers should tell the reviewer itemization was
-       *  skipped rather than pretend the invoice printed none. */
+      /** Task #1316 — CogniDocs' stable invoice id: the same underlying
+       *  invoice re-uploaded later yields the same id, so it is persisted
+       *  as an extra duplicate-detection signal. */
+      cognidocsInvoiceId?: string | null;
+      /** Task #1267 — kept for wire compatibility; the CogniDocs parser
+       *  never truncates itemization. */
       lineItemsTruncated?: boolean;
     }
-  | { ok: false; errorCode: "parse-non-json" | "parse-timeout" | "parse-failed"; errorMessage: string };
+  | {
+      ok: false;
+      errorCode: "parse-not-configured" | "parse-timeout" | "parse-failed";
+      errorMessage: string;
+    };
 
-/** One model round for the supplier-invoice parser. Task #1267: surfaces
- *  stop_reason so the caller can detect max_tokens truncation. */
-async function supplierInvoiceModelCall(args: {
-  text: string;
-  contextLabel: string;
-  headerOnly: boolean;
-  /** Absolute epoch-ms deadline shared across the initial call AND any
-   *  truncation retry, so the two-call recovery never doubles the 90s
-   *  operation budget. */
-  deadlineAt: number;
-}): Promise<{ raw: string; stopReason: string | null }> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  const ac = new AbortController();
-  const remainingMs = args.deadlineAt - Date.now();
-  if (remainingMs <= 0) {
-    const err = new Error("supplier-invoice parse deadline exhausted");
-    err.name = "AbortError";
-    throw err;
-  }
-  const timer = setTimeout(() => ac.abort(), remainingMs);
-  const headerOnlyNote = args.headerOnly
-    ? `\n\nIMPORTANT OVERRIDE: Do NOT itemize. Set "lineItems" to null regardless of what the document prints — return header fields only.`
-    : "";
-  const resp = await anthropic.messages
-    .create(
-      {
-        model: "claude-sonnet-4-5",
-        // Task #1267 — 1024 tokens silently truncated itemized invoices
-        // (stop_reason max_tokens → broken JSON → blank clarification).
-        max_tokens: 8192,
-        system: `${SUPPLIER_INVOICE_SYSTEM}${headerOnlyNote}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
-        messages: [
-          {
-            role: "user",
-            content: `${args.contextLabel}\n\nExtracted invoice text:\n<<<\n${args.text.slice(0, 60_000)}\n>>>`,
-          },
-        ],
-      },
-      { signal: ac.signal },
-    )
-    .finally(() => clearTimeout(timer));
-  const block = resp.content[0];
-  return {
-    raw: block && block.type === "text" ? block.text.trim() : "",
-    stopReason: (resp as { stop_reason?: string | null }).stop_reason ?? null,
-  };
-}
-
-function supplierInvoiceFieldsFromJson(json: string): { confidence: number; fields: SupplierInvoiceFields } {
-  const parsed = JSON.parse(json) as Record<string, unknown>;
-  const f = (parsed.fields ?? {}) as Record<string, unknown>;
-  const str = (v: unknown): string | null =>
-    typeof v === "string" && v.trim() ? v.trim() : null;
-  const num = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v) ? v : null;
-  const confidence =
-    typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
-      ? Math.max(0, Math.min(1, parsed.confidence))
-      : 0;
-  return {
-    confidence,
-    fields: {
-      supplierName: str(f.supplierName),
-      amount: num(f.amount),
-      currency: str(f.currency)?.toUpperCase().slice(0, 3) ?? null,
-      reference: str(f.reference),
-      invoiceDate: str(f.invoiceDate),
-      periodLabel: str(f.periodLabel),
-      notes: str(f.notes),
-      lineItems: normalizeParsedLineItems(f.lineItems),
-    },
-  };
-}
-
-export async function parseSupplierInvoiceText(args: {
-  text: string;
-  contextLabel: string;
+/**
+ * Task #1316 — parse a supplier invoice document (bytes, usually PDF)
+ * through CogniDocs. Same result contract as the retired text-based
+ * model parser: callers keep their confidence floor and clarification
+ * flow untouched.
+ */
+export async function parseSupplierInvoiceDoc(args: {
+  bytes: Buffer;
+  fileName?: string | null;
+  mimeType?: string;
+  /** Cap the submit+poll budget (default is the client's own timeout).
+   *  Synchronous HTTP surfaces (UI upload) pass a short budget so the
+   *  request never outlives the proxy; a timeout is a normal parse-failed
+   *  outcome there, not a crash. */
+  timeoutMs?: number;
 }): Promise<SupplierInvoiceParseResult> {
-  // Safe diagnostics only: never log document-derived content (invoice text,
-  // model replies, labels) — bounded metadata like codes and lengths only.
-  const logFail = (errorCode: string, detail: { stop_reason: string | null } & Record<string, unknown>) =>
+  // Safe diagnostics only: never log document-derived content — bounded
+  // metadata like codes and byte counts only.
+  const logFail = (errorCode: string, detail: Record<string, unknown>) =>
     console.error(`[supplier-invoice-parse] ${errorCode}`, {
-      textLength: args.text.length,
+      byteLength: args.bytes.length,
       ...detail,
     });
-  const deadlineAt = Date.now() + 90_000;
   try {
-    let { raw, stopReason } = await supplierInvoiceModelCall({ ...args, headerOnly: false, deadlineAt });
-    let lineItemsTruncated = false;
-    // Task #1267 — a max_tokens cut produces syntactically broken JSON.
-    // Never discard the whole parse: retry ONCE header-only so supplier /
-    // amount / currency / reference still prefill; itemization degrades
-    // gracefully with a note instead of a blank clarification.
-    if (stopReason === "max_tokens") {
-      logFail("truncated-retrying-header-only", { stop_reason: stopReason, replyLength: raw.length });
-      const retry = await supplierInvoiceModelCall({ ...args, headerOnly: true, deadlineAt });
-      raw = retry.raw;
-      stopReason = retry.stopReason;
-      lineItemsTruncated = true;
-      if (stopReason === "max_tokens") {
-        logFail("parse-truncated", { stop_reason: stopReason, replyLength: raw.length, attempt: "header-only-retry" });
-        return { ok: false, errorCode: "parse-failed", errorMessage: "The AI reply was cut off twice (token limit)." };
-      }
+    const job = await parseCognidocsDocument({
+      bytes: args.bytes,
+      fileName: args.fileName?.trim() || "invoice.pdf",
+      mimeType: args.mimeType ?? "application/pdf",
+      // This surface is semantically an invoice upload, so declare it:
+      // CogniDocs routes straight to the invoice parser. Result-shape
+      // validation still applies — a document that is not actually an
+      // invoice yields no invoice payload and fails loud below, instead
+      // of forcing invoice fields out of, say, a bank statement.
+      declaredType: "invoice",
+      timeoutMs: args.timeoutMs,
+    });
+    const mapped = supplierFieldsFromJob(job);
+    if (!mapped) {
+      logFail("parse-failed", { reason: "no-invoice-result", detectedType: job.detectedType });
+      return {
+        ok: false,
+        errorCode: "parse-failed",
+        errorMessage:
+          "The document did not parse as an invoice — it may be a statement or an unreadable scan.",
+      };
     }
-    const json = extractFirstJsonObject(
-      raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, ""),
-    );
-    if (!json) {
-      logFail("parse-non-json", { stop_reason: stopReason, replyLength: raw.length });
-      return { ok: false, errorCode: "parse-non-json", errorMessage: "The AI returned no structured result." };
-    }
-    const { confidence, fields } = supplierInvoiceFieldsFromJson(json);
-    if (lineItemsTruncated) fields.lineItems = null;
-    return { ok: true, confidence, fields, ...(lineItemsTruncated ? { lineItemsTruncated: true } : {}) };
+    return {
+      ok: true,
+      confidence: mapped.confidence,
+      fields: mapped.fields,
+      cognidocsInvoiceId: mapped.cognidocsInvoiceId,
+    };
   } catch (err) {
-    const aborted = err instanceof Error && err.name === "AbortError";
-    const errorCode = aborted ? "parse-timeout" : "parse-failed";
-    logFail(errorCode, { stop_reason: null, error: err instanceof Error ? err.message : String(err) });
+    const code = err instanceof CognidocsError ? err.code : null;
+    const errorCode =
+      code === "timeout"
+        ? "parse-timeout"
+        : code === "not-configured" || code === "auth"
+          ? "parse-not-configured"
+          : "parse-failed";
+    logFail(errorCode, { cognidocsCode: code, error: err instanceof Error ? err.message : String(err) });
     return {
       ok: false,
       errorCode,
-      errorMessage: err instanceof Error ? err.message : "AI parse error",
+      errorMessage: err instanceof Error ? err.message : "Document parse error",
     };
   }
 }

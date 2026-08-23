@@ -4515,6 +4515,11 @@ export const atelierPartnerFirmInvoices = pgTable(
     supplierBankHolder: text("supplier_bank_holder"),
     // Task #875 — partner-submitted invoice metadata + PDF blob.
     reference: text("reference"),
+    // Task #1316 — CogniDocs' stable invoice id from the parse job. The
+    // same underlying invoice re-uploaded later (different scan, same
+    // document) yields the same id, so it is a third duplicate signal
+    // alongside sha256 and firm+reference. Null for unparsed uploads.
+    cognidocsInvoiceId: text("cognidocs_invoice_id"),
     // Task #1250 — parsed invoice line items (chat ingest captures them
     // when the document prints an itemization; null = not itemizable).
     lineItems: jsonb("line_items").$type<SupplierInvoiceLineItem[]>(),

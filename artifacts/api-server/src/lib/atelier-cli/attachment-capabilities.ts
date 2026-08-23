@@ -112,11 +112,7 @@ import {
   type DocChunk,
   type LoadedAttachment,
 } from "./attachments/index.js";
-import { extractPdfText, renderPdfPageImage } from "../atelier-merchant/pdf.js";
-import {
-  extractReceiptFromText,
-  extractReceiptWithVision,
-} from "../atelier-receipt-parse.js";
+import { parseReceiptDocViaCognidocs } from "../cognidocs/receipt.js";
 import { searchDocumentChunks, setChunkScope } from "./attachments/retrieval.js";
 import { wrapAttachment } from "./prompt-guard.js";
 import {
@@ -130,14 +126,13 @@ import { entityNavPath } from "./orchestrator-capabilities.js";
 
 /**
  * Task #1263 — shared receipt-parse fallback for chat-attached PDF
- * invoices. Fixture/vision-extracted attachments carry `merchant:` /
+ * invoices. Fixture/parser-extracted attachments carry `merchant:` /
  * `total:` headers in their extracted text; real PDF invoices never do.
- * When header parsing misses on a PDF, run the SAME pipeline the manual
- * "Parse receipt" button uses (pdf text layer → OCR → vision on a
- * rendered page) and translate the result into the header form. The
- * headers are persisted back onto the extracted-document row so the
- * confirm pass (and any later re-run) regex-matches deterministically
- * without a second model call.
+ * When header parsing misses on a PDF, run the SAME parser the manual
+ * "Parse receipt" button uses (CogniDocs since Task #1316) and translate
+ * the result into the header form. The headers are persisted back onto
+ * the extracted-document row so the confirm pass (and any later re-run)
+ * regex-matches deterministically without a second parse call.
  *
  * Fail-soft: any error returns null and the caller degrades to the
  * existing manual-entry draft.
@@ -149,13 +144,7 @@ async function parsePdfReceiptViaSharedPipeline(
   if (!att.encryptedRef) return null;
   const bytes = await loadAttachmentBytes(att.encryptedRef);
   if (!bytes) return null;
-  const pdf = await extractPdfText(new Uint8Array(bytes));
-  const vx = pdf.quality.isUsable
-    ? await extractReceiptFromText(pdf.text)
-    : await extractReceiptWithVision(
-        await renderPdfPageImage(new Uint8Array(bytes), 1, 200),
-        "image/png",
-      );
+  const vx = await parseReceiptDocViaCognidocs(bytes, "application/pdf", att.fileName);
   const total = Number(vx.total);
   if (vx.unreadable || !vx.merchant || !Number.isFinite(total) || total <= 0) {
     return null;

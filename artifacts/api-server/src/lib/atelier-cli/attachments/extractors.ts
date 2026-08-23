@@ -28,7 +28,7 @@ import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { extractText as unpdfExtractText, getDocumentProxy } from "unpdf";
 import { RECEIPT_FIXTURES } from "../../atelier-receipt-fixtures.js";
-import { extractReceiptWithVision } from "../../atelier-receipt-parse.js";
+import { parseReceiptDocViaCognidocs } from "../../cognidocs/receipt.js";
 import { isHeicPayload, convertHeicToJpeg } from "../../atelier-heic.js";
 
 export type DocKind =
@@ -319,11 +319,12 @@ export function extractEmlNestedParts(buf: Buffer): NestedEmlPart[] {
  * fixture or corrupt payload, so we never spend a vision call on it. */
 const MIN_VISION_IMAGE_BYTES = 4096;
 
+// Task #1316 — image types CogniDocs accepts (GIF support was dropped with
+// the in-house vision extractor; HEIC converts to JPEG below).
 const VISION_MEDIA_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/gif",
 ]);
 
 async function extractImage(fileName: string, mime: string, buf: Buffer): Promise<ExtractedDoc> {
@@ -348,10 +349,10 @@ async function extractImage(fileName: string, mime: string, buf: Buffer): Promis
       warnings: [],
     };
   }
-  // Task #598 — no fixture: run the shared vision receipt extractor so a
-  // real photo taken on the phone yields real merchant/amount/date text.
-  // Tiny payloads (test buffers, corrupt files) skip the vision call and
-  // keep the deterministic no-fixture warning.
+  // Task #598 — no fixture: run the shared receipt parser (CogniDocs since
+  // Task #1316) so a real photo taken on the phone yields real
+  // merchant/amount/date text. Tiny payloads (test buffers, corrupt files)
+  // skip the parse call and keep the deterministic no-fixture warning.
   if (buf.byteLength >= MIN_VISION_IMAGE_BYTES) {
     try {
       let bytes = buf;
@@ -361,7 +362,7 @@ async function extractImage(fileName: string, mime: string, buf: Buffer): Promis
         mediaType = "image/jpeg";
       }
       if (!VISION_MEDIA_TYPES.has(mediaType)) mediaType = "image/jpeg";
-      const vx = await extractReceiptWithVision(bytes, mediaType);
+      const vx = await parseReceiptDocViaCognidocs(bytes, mediaType, fileName);
       if (vx.unreadable || !vx.merchant || typeof vx.total !== "number") {
         return {
           kind: "image",

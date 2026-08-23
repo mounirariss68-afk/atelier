@@ -9,9 +9,11 @@
  *   1. Detects the tooling vendor from the supplier name (substring, ci).
  *   2. Extracts PDF text (text-layer first, OCR fallback — same pipeline
  *      the receipt/attachment pipeline uses) from the stored blob.
- *   3. Runs the SAME Anthropic import pattern as parseSupplierInvoiceText
- *      (claude-sonnet-4-5, strict JSON, 90s abort) to mine line items,
- *      subtotal, VAT, credits and currency.
+ *   3. Runs a strict-JSON Anthropic import (claude-sonnet-4-5, 90s abort)
+ *      to mine line items, subtotal, VAT, credits and currency.
+ *      (Deliberately NOT CogniDocs — Task #1316 kept mining on the text
+ *      pipeline because it needs credits/discount semantics CogniDocs
+ *      does not expose.)
  *   4. Applies a HARD reconciliation gate: sum(items) == subtotal AND
  *      subtotal - credits + vat ≈ invoice total (both within 0.05). If it
  *      fails, the extraction is stored with status "unreconciled" and NO

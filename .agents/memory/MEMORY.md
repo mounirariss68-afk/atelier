@@ -58,6 +58,7 @@
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
 - [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).
 - [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
+- [CogniDocs parsing](cognidocs-parsing.md) — receipts/invoices/statements parse ONLY via CogniDocs (×10k ints, sign from `direction` only, jobId replay, cognidocs_invoice_id dedupe, stub-test pattern).
 - [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external; watchdog in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md); enrichment in [atelier-receipt-enrichment.md](atelier-receipt-enrichment.md); vision OCR in [chat-receipt-vision.md](chat-receipt-vision.md).
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (alias→memory→fuzzy→keyword→AI); org aliases learned from corrections apply pre-memory; wallet routes raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.

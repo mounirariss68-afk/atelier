@@ -53,6 +53,8 @@ import { evaluateAutoPost } from "../../lib/atelier-finance-autopolicy.js";
 import { loadFinanceAutopilotThresholds } from "../../lib/atelier-finance-autopilot-settings.js";
 // Task #1251 — vendor invoice line-item mining trigger.
 import { detectVendorKey, triggerVendorInvoiceMining } from "../../lib/atelier-vendor-invoice-mining.js";
+import { parseSupplierInvoiceDoc, type SupplierInvoiceFields } from "../../lib/atelier-finance-docs.js";
+import { cognidocsConfigured } from "../../lib/cognidocs/client.js";
 
 export type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -1662,6 +1664,10 @@ export async function createSupplierInvoiceCore(args: {
   /** Task #1250 — printed line items parsed from the document (chat
    * ingest); stored verbatim, null when the invoice has no itemization. */
   lineItems?: Array<{ description: string; qty: number | null; unitAmount: number | null; amount: number | null }> | null;
+  /** Task #1316 — CogniDocs' stable invoice id from the parse job: the same
+   * underlying invoice re-uploaded later yields the same id, so it joins
+   * sha256 and firm+reference as a duplicate signal. */
+  cognidocsInvoiceId?: string | null;
   /** Task #1250 — proof-of-payment receipt paired at ingest time. When
    * set, the invoice is recorded already-paid (status "paid"): it never
    * enters the review→approve→payment-run path, so the same bill can't
@@ -1782,14 +1788,17 @@ export async function createSupplierInvoiceCore(args: {
   const fx = await convertToUsd(amount, currency, now);
   const id = rid("spi");
 
-  // Duplicate detection: same file bytes (sha256) or same
-  // supplier+reference among live (non-rejected) AP rows of any
+  // Duplicate detection: same file bytes (sha256), same
+  // supplier+reference, or same CogniDocs invoice id (Task #1316 — the
+  // parser recognises the same underlying invoice across different
+  // scans/exports) among live (non-rejected) AP rows of any
   // source — flagged as 409 with the existing row so a second
   // payable is never created silently. The check + insert run in
   // one transaction behind a per-org advisory lock, so two
   // concurrent uploads of the same invoice serialize instead of
   // both observing "no duplicate" and double-inserting. Rejected
   // rows deliberately don't block re-upload.
+  const cognidocsInvoiceId = args.cognidocsInvoiceId?.trim() || null;
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`atelier_supplier_invoice_upload:${me.orgId}`}))`,
@@ -1805,6 +1814,9 @@ export async function createSupplierInvoiceCore(args: {
           sql`lower(${atelierPartnerFirmInvoices.partnerFirmName}) = lower(${firm?.name ?? supplierName})`,
           sql`lower(${atelierPartnerFirmInvoices.reference}) = lower(${reference})`,
         ),
+        ...(cognidocsInvoiceId
+          ? [eq(atelierPartnerFirmInvoices.cognidocsInvoiceId, cognidocsInvoiceId)]
+          : []),
       ),
     )).limit(1);
     if (dupe) return { dupe } as const;
@@ -1850,6 +1862,7 @@ export async function createSupplierInvoiceCore(args: {
       ...(args.lineItems && args.lineItems.length > 0 ? { lineItems: args.lineItems } : {}),
       source: "internal_upload",
       reference,
+      cognidocsInvoiceId,
       periodLabel,
       invoiceDate,
       submittedByUserId: me.id,
@@ -1871,11 +1884,19 @@ export async function createSupplierInvoiceCore(args: {
       status: 409,
       body: {
         error: "duplicate-invoice",
-        matchedBy: dupe.sha256 === sha256 ? "file" : "reference",
+        matchedBy:
+          dupe.sha256 === sha256
+            ? "file"
+            : dupe.reference?.toLowerCase() === reference.toLowerCase() &&
+                dupe.partnerFirmName.toLowerCase() === (firm?.name ?? supplierName).toLowerCase()
+              ? "reference"
+              : "cognidocs",
         existing: supplierInvoiceWire(dupe, undefined, null, me),
         message: dupe.sha256 === sha256
           ? `This exact PDF was already uploaded (${dupe.reference ?? dupe.id}, status ${dupe.status}).`
-          : `An invoice with reference ${reference} from ${dupe.partnerFirmName} already exists (status ${dupe.status}).`,
+          : dupe.reference?.toLowerCase() === reference.toLowerCase()
+            ? `An invoice with reference ${reference} from ${dupe.partnerFirmName} already exists (status ${dupe.status}).`
+            : `The parser recognised this as the same invoice already filed as ${dupe.reference ?? dupe.id} from ${dupe.partnerFirmName} (status ${dupe.status}).`,
       },
     };
   }
@@ -2126,24 +2147,66 @@ router.post("/finance/payables/supplier-invoices", (req, res, next) => {
       if (!me) return;
       const file = req.file;
       if (!file || file.size === 0) { res.status(400).json({ error: "file-required" }); return; }
+      // Task #1316 — parse the uploaded document through CogniDocs on this
+      // surface too, so the billing-hub upload gets the same extraction as
+      // chat ingest: the stable CogniDocs invoice id joins the dedupe check,
+      // and parsed fields fill in anything the user left blank. User-typed
+      // values ALWAYS win (parse never overwrites user input). The parse is
+      // best-effort here — this is a manual-entry form, so a parse failure
+      // is reported in the response but never blocks a complete submission.
+      let parsedFields: SupplierInvoiceFields | null = null;
+      let cognidocsInvoiceId: string | null = null;
+      let parse: { status: "ok" | "failed" | "unavailable"; error?: string };
+      if (cognidocsConfigured()) {
+        // Short budget: this is a synchronous HTTP request behind the proxy,
+        // so it must answer well before held-request 502 territory.
+        const parsedDoc = await parseSupplierInvoiceDoc({
+          bytes: file.buffer,
+          fileName: file.originalname,
+          mimeType: looksLikePdf(file.buffer) ? "application/pdf" : file.mimetype,
+          timeoutMs: 45_000,
+        });
+        if (parsedDoc.ok) {
+          parsedFields = parsedDoc.fields;
+          cognidocsInvoiceId = parsedDoc.cognidocsInvoiceId ?? null;
+          parse = { status: "ok" };
+        } else {
+          parse = { status: "failed", error: parsedDoc.errorCode };
+        }
+      } else {
+        parse = { status: "unavailable", error: "parse-not-configured" };
+      }
+      const bodyAmountRaw = req.body?.amount;
+      const bodyAmountGiven =
+        bodyAmountRaw != null && String(bodyAmountRaw).trim() !== "";
+      const typedOr = (v: unknown, fallback: string | null): string | null => {
+        const s = typeof v === "string" ? v.trim() : "";
+        return s !== "" ? s : fallback;
+      };
       const out = await createSupplierInvoiceCore({
         me,
         fileBuffer: file.buffer,
         fileName: file.originalname,
-        supplierName: typeof req.body?.supplierName === "string" ? req.body.supplierName : "",
-        amount: Number(req.body?.amount),
-        currency: typeof req.body?.currency === "string" ? req.body.currency : "",
-        reference: typeof req.body?.reference === "string" ? req.body.reference : "",
-        periodLabel: typeof req.body?.periodLabel === "string" ? req.body.periodLabel : null,
-        invoiceDate: typeof req.body?.invoiceDate === "string" ? req.body.invoiceDate : null,
-        notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+        supplierName: typedOr(req.body?.supplierName, parsedFields?.supplierName ?? null) ?? "",
+        // Typed-but-invalid amounts stay invalid (core rejects) — the parsed
+        // amount only fills a genuinely absent field.
+        amount: bodyAmountGiven ? Number(bodyAmountRaw) : (parsedFields?.amount ?? Number.NaN),
+        currency: typedOr(req.body?.currency, parsedFields?.currency ?? null) ?? "",
+        reference: typedOr(req.body?.reference, parsedFields?.reference ?? null) ?? "",
+        periodLabel: typedOr(req.body?.periodLabel, parsedFields?.periodLabel ?? null),
+        invoiceDate: typedOr(req.body?.invoiceDate, parsedFields?.invoiceDate ?? null),
+        notes: typedOr(req.body?.notes, null),
         partnerFirmId: typeof req.body?.partnerFirmId === "string" ? req.body.partnerFirmId : null,
         legalEntityId: typeof req.body?.legalEntityId === "string" ? req.body.legalEntityId : null,
         supplierBankIban: typeof req.body?.supplierBankIban === "string" ? req.body.supplierBankIban : null,
         supplierBankHolder: typeof req.body?.supplierBankHolder === "string" ? req.body.supplierBankHolder : null,
+        lineItems: parsedFields?.lineItems ?? null,
+        cognidocsInvoiceId,
         via: "ui_upload",
       });
-      res.status(out.status).json(out.body);
+      res.status(out.status).json(
+        out.body && typeof out.body === "object" ? { ...out.body, parse } : out.body,
+      );
     } catch (err) { next(err); }
   });
 });

@@ -42,7 +42,7 @@ import {
   detectInvoiceReceiptPairs,
   extractBankLetterFields,
   normalizeParsedLineItems,
-  parseSupplierInvoiceText,
+  parseSupplierInvoiceDoc,
   receiptMatchesInvoice,
   verifyPairedReceipt,
   type FinanceDocKind,
@@ -58,11 +58,12 @@ import {
   importStatementCore,
   storeStatementObject,
 } from "../../routes/atelier/bankRoutes.js";
+import { rowsToCanonicalCsv } from "../bank-parsers/index.js";
+import { CognidocsError, getCognidocsJob, parseCognidocsDocument } from "../cognidocs/client.js";
 import {
-  parsePdfStatementText,
-  pdfRowsToCanonicalCsv,
-  PDF_STATEMENT_CONFIDENCE_FLOOR,
-} from "../bank-parsers/pdf-statement.js";
+  statementRowsFromJob,
+  COGNIDOCS_STATEMENT_CONFIDENCE_FLOOR,
+} from "../cognidocs/convert.js";
 
 // ---------------------------------------------------------------------
 // Commit-token defense (see .agents/memory/chat-commit-token.md). The
@@ -382,6 +383,7 @@ defineCapability({
       periodLabel: { type: "string" },
       notes: { type: "string" },
       lineItems: { type: "array" },
+      cognidocsInvoiceId: { type: "string", description: "Internal: parser-issued dedupe pin from phase 1 — never set manually" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -426,28 +428,28 @@ defineCapability({
     // may fill it in phase 1. Always normalized so preview and commit agree.
     let lineItems = normalizeParsedLineItems(input.lineItems);
 
-    // Phase 1 only: prefill missing fields from the document text via
-    // the shared AI parser. Fail-soft — a parse failure degrades to a
-    // clarification asking for the fields, never a dead end and never
-    // a guessed value.
+    // Phase 1 only: prefill missing fields from the document via the
+    // shared CogniDocs parser (Task #1316 — bytes in, structured fields
+    // out). Fail-soft — a parse failure degrades to a clarification
+    // asking for the fields, never a dead end and never a guessed value.
     let parseConfidence: number | null = null;
-    // Task #1267 — distinguish "no readable text" from "AI reader failed"
-    // and surface a truncation-degraded itemization instead of hiding it.
     let parseErrorCode: string | null = null;
-    let parseLineItemsTruncated = false;
+    // Task #1316 — CogniDocs' stable invoice id, pinned through phase 2 as
+    // an extra dedupe signal (same underlying invoice ⇒ same id).
+    let cognidocsInvoiceId: string | null = null;
     // Defense-in-depth: only a `confirm:true` carrying the phase-1 HMAC
     // token commits; anything else (incl. a model-forged confirm) degrades
     // to the phase-1 preview below.
     if (!isVerifiedCommit("ingest_supplier_invoice", input)) {
       const needParse = !supplierName || amount == null || !currency || !reference;
-      const text = (loaded.extracted?.normalizedText ?? "").trim();
-      if (needParse && text.length >= 40) {
-        const parsed = await parseSupplierInvoiceText({
-          text,
-          contextLabel: `Attachment file name: ${loaded.attachment.fileName}`,
+      if (needParse) {
+        const parsed = await parseSupplierInvoiceDoc({
+          bytes,
+          fileName: loaded.attachment.fileName,
         });
         if (parsed.ok) {
           parseConfidence = parsed.confidence;
+          cognidocsInvoiceId = parsed.cognidocsInvoiceId ?? null;
           supplierName = supplierName ?? parsed.fields.supplierName;
           amount = amount ?? parsed.fields.amount;
           currency = currency ?? parsed.fields.currency;
@@ -455,7 +457,6 @@ defineCapability({
           invoiceDate = invoiceDate ?? parsed.fields.invoiceDate;
           periodLabel = periodLabel ?? parsed.fields.periodLabel;
           lineItems = lineItems ?? parsed.fields.lineItems;
-          parseLineItemsTruncated = parsed.lineItemsTruncated === true;
         } else {
           parseErrorCode = parsed.errorCode;
         }
@@ -484,8 +485,8 @@ defineCapability({
             question:
               parseConfidence == null
                 ? parseErrorCode != null
-                  ? `The document's text extracted fine, but the AI reader failed while parsing it (${parseErrorCode}). Please try again, or type ${missing.map((m) => m.label.toLowerCase()).join(", ")} yourself.`
-                  : `The document had no readable text for ${missing.map((m) => m.label.toLowerCase()).join(", ")} — please provide ${missing.length > 1 ? "them" : "it"}.`
+                  ? `The document couldn't be parsed (${parseErrorCode}). Please try again, or type ${missing.map((m) => m.label.toLowerCase()).join(", ")} yourself.`
+                  : `I couldn't read ${missing.map((m) => m.label.toLowerCase()).join(", ")} from the document — please provide ${missing.length > 1 ? "them" : "it"}.`
                 : `I read the invoice but couldn't confidently find ${missing.map((m) => m.label.toLowerCase()).join(", ")} — please provide ${missing.length > 1 ? "them" : "it"} (I never guess amounts).`,
             tool: "ingest_supplier_invoice",
             partial,
@@ -532,9 +533,7 @@ defineCapability({
       }
       const itemsSummary = lineItems
         ? ` Captured ${lineItems.length} printed line item${lineItems.length === 1 ? "" : "s"} from the document.`
-        : parseLineItemsTruncated
-          ? " The invoice's itemization was too long to read reliably, so the line items were skipped — header totals are captured; add itemization manually if needed."
-          : " No itemizable line rows are printed on the document, so no itemization is stored.";
+        : " No itemizable line rows are printed on the document, so no itemization is stored.";
       // Registered-firm link parity: exact case-insensitive name match
       // only (same as picking the firm in the UI selector); no fuzzy
       // guessing. New/unmatched suppliers stay unlinked.
@@ -578,6 +577,7 @@ defineCapability({
                 ...(notes ? { notes } : {}),
                 ...(receiptAttachmentId ? { receiptAttachmentId } : {}),
                 ...(lineItems ? { lineItems } : {}),
+                ...(cognidocsInvoiceId ? { cognidocsInvoiceId } : {}),
                 confirm: true,
               };
               pin.commitToken = commitTokenFor("ingest_supplier_invoice", pin);
@@ -627,6 +627,8 @@ defineCapability({
       partnerFirmId: firm?.id ?? null,
       lineItems,
       paymentReceipt,
+      // Token-verified pin from phase 1 (never model-forgeable).
+      cognidocsInvoiceId: str(input.cognidocsInvoiceId, 200),
       via: "chat",
     });
     const navigateTo = { path: "/finance/payables/supplier-invoices", when: "on_commit" as const };
@@ -949,6 +951,7 @@ defineCapability({
       bankAccountId: { type: "string" },
       statementDate: { type: "string", description: "YYYY-MM-DD statement date; defaults to today" },
       notes: { type: "string" },
+      cognidocsJobId: { type: "string", description: "Internal: parse-job pin issued by phase 1 — never set manually" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -973,26 +976,76 @@ defineCapability({
     if (!bytes || bytes.length === 0) {
       return { ok: false, errorCode: "file_missing", errorMessage: "The attachment bytes could not be loaded." };
     }
-    // Task #1094 — PDF statements are accepted through GUARDED extraction:
-    // date-anchored row segmentation with per-row confidence; rows with
-    // ambiguous amounts or unclear direction are flagged (never guessed); a
-    // low overall confidence refuses with the CSV-export fallback. The
-    // extraction gate runs BEFORE the bank-account clarification so an
-    // unparseable PDF gets the CSV guidance immediately instead of a
-    // pointless account question.
+    // Task #1316 — PDF statements parse through CogniDocs. Rows with an
+    // unclear debit/credit direction or unusable date/amount are flagged
+    // (never guessed); a low overall confidence refuses with the
+    // CSV-export fallback. The parse runs BEFORE the bank-account
+    // clarification so an unparseable PDF gets the CSV guidance
+    // immediately instead of a pointless account question. Phase 1
+    // submits the document and pins the CogniDocs jobId; the
+    // token-verified phase 2 re-fetches the SAME job (results are
+    // retained), so preview and commit see identical rows by construction.
     const isPdf =
       looksLikePdf(bytes) ||
       loaded.attachment.mime === "application/pdf" ||
       /\.pdf$/i.test(loaded.attachment.fileName);
-    const pdfText = isPdf ? (loaded.extracted?.normalizedText ?? "").trim() : "";
     let raw = "";
+    let statementJob: Awaited<ReturnType<typeof getCognidocsJob>> | null = null;
     if (isPdf) {
-      const gate = parsePdfStatementText(pdfText);
-      if (gate.rows.length === 0 || gate.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
+      const pinnedJobId =
+        isVerifiedCommit("import_bank_statement", input) &&
+        typeof input.cognidocsJobId === "string" &&
+        input.cognidocsJobId
+          ? input.cognidocsJobId
+          : null;
+      try {
+        statementJob = pinnedJobId
+          ? await getCognidocsJob(pinnedJobId)
+          : await parseCognidocsDocument({
+              bytes,
+              fileName: loaded.attachment.fileName || "statement.pdf",
+              mimeType: "application/pdf",
+              declaredType: "auto",
+            });
+      } catch (err) {
+        const code = err instanceof CognidocsError ? err.code : null;
+        if (code === "not-configured" || code === "auth") {
+          return {
+            ok: false,
+            errorCode: "parsing_unavailable",
+            errorMessage:
+              "Document parsing isn't available right now (the parsing service isn't configured). You can still import a CSV export from your bank.",
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "pdf_parse_failed",
+          errorMessage: `The PDF couldn't be parsed (${err instanceof Error ? err.message : "parse error"}) — export a CSV from your bank and attach that instead.`,
+        };
+      }
+      if (statementJob.status !== "completed") {
+        return {
+          ok: false,
+          errorCode: "pdf_parse_failed",
+          errorMessage: "The statement parse did not complete — please try again in a moment.",
+        };
+      }
+      // Currency-independent gate (row identity does not depend on the
+      // account currency; the final conversion re-runs post-selection).
+      const gate = statementRowsFromJob(statementJob, "USD");
+      if (!gate) {
+        return {
+          ok: false,
+          errorCode: "not_a_statement",
+          errorMessage:
+            "This document did not parse as a bank statement — it may be an invoice or letter. Attach a bank/credit-card statement PDF or a CSV export.",
+        };
+      }
+      if (gate.rows.length === 0 || gate.confidence < COGNIDOCS_STATEMENT_CONFIDENCE_FLOOR) {
         return {
           ok: false,
           errorCode: "pdf_low_confidence",
-          errorMessage: `I couldn't confidently extract transaction rows from this PDF${gate.flagged.length > 0 ? ` (${gate.flagged.length} candidate row(s) were too ambiguous to trust — I never guess amounts)` : ""} — export a CSV from your bank and attach that instead.`,
+          errorMessage: `I couldn't confidently extract transaction rows from this PDF${gate.flagged.length > 0 ? ` (${gate.flagged.length} row(s) were too ambiguous to trust — I never guess amounts or directions)` : ""} — export a CSV from your bank and attach that instead.`,
         };
       }
     } else {
@@ -1050,8 +1103,9 @@ defineCapability({
         ? input.statementDate
         : new Date().toISOString().slice(0, 10);
 
-    // PDF path: re-parse with the account's currency as default (the parser
-    // is deterministic, so phase 1 and phase 2 see identical rows and the
+    // PDF path: convert the SAME CogniDocs job's rows with the account's
+    // currency as default (conversion is deterministic and the job is
+    // pinned, so phase 1 and phase 2 see identical rows and the
     // canonical-CSV dedupe hash is stable), then serialise the importable
     // rows into the canonical CSV the SHARED importStatementCore consumes —
     // identical dedupe and audit behavior to a CSV upload.
@@ -1064,9 +1118,9 @@ defineCapability({
     } | null = null;
     let source: "csv" | "xero";
     if (isPdf) {
-      const parsed = parsePdfStatementText(pdfText, acct.currency);
-      if (parsed.rows.length === 0 || parsed.confidence < PDF_STATEMENT_CONFIDENCE_FLOOR) {
-        // Currency default cannot raise confidence, but keep the guard.
+      const parsed = statementRowsFromJob(statementJob!, acct.currency);
+      if (!parsed || parsed.rows.length === 0 || parsed.confidence < COGNIDOCS_STATEMENT_CONFIDENCE_FLOOR) {
+        // Currency default cannot change the row set, but keep the guard.
         return {
           ok: false,
           errorCode: "pdf_low_confidence",
@@ -1074,7 +1128,7 @@ defineCapability({
             "I couldn't confidently extract transaction rows from this PDF — export a CSV from your bank and attach that instead.",
         };
       }
-      raw = pdfRowsToCanonicalCsv(parsed.rows);
+      raw = rowsToCanonicalCsv(parsed.rows);
       source = "csv";
       pdfMeta = {
         rowsExtracted: parsed.rows.length,
@@ -1130,6 +1184,9 @@ defineCapability({
               const pin: Record<string, unknown> = {
                 attachmentId, bankAccountId, statementDate,
                 ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
+                // Task #1316 — bind the commit to the exact parse job the
+                // preview showed (covered by the HMAC commit token).
+                ...(statementJob ? { cognidocsJobId: statementJob.id } : {}),
                 confirm: true,
               };
               pin.commitToken = commitTokenFor("import_bank_statement", pin);

@@ -4,7 +4,7 @@
  * Used by BOTH the Me-lens parse endpoint (self-scope, mobile + portal) and
  * the Wallet parse endpoint (approver-facing). One code path:
  *
- *   receipt bytes → (image → vision) | (PDF → text layer → OCR → vision)
+ *   receipt bytes → CogniDocs parse (images AND PDFs — Task #1316)
  *   → Expense Auditor → FX + policy → layered merchant resolution
  *     (org memory → global DB / keyword / fuzzy → AI legacy mapping)
  *   → expense row update + audit event.
@@ -24,7 +24,8 @@ import {
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage.js";
 import { loadAttachmentBytes, CLI_ENC_PREFIX } from "./atelier-cli/attachments/storage.js";
 import { isHeicPayload, convertHeicToJpeg } from "./atelier-heic.js";
-import { extractPdfText, renderPdfPageImage } from "./atelier-merchant/pdf.js";
+import { CognidocsError } from "./cognidocs/client.js";
+import { parseReceiptDocViaCognidocs } from "./cognidocs/receipt.js";
 import { matchMerchant } from "./atelier-merchant/matcher.js";
 import { normalizeMerchant } from "./atelier-merchant/normalizer.js";
 import { lookupMerchantMemory } from "./atelier-expense-categorizer.js";
@@ -41,11 +42,13 @@ type ExpenseRow = typeof atelierExpenses.$inferSelect;
 type UserRow = typeof atelierUsers.$inferSelect;
 type ExpenseAuditorProposal = Awaited<ReturnType<typeof runExpenseAuditor>>["proposal"];
 
+// Task #1316 — CogniDocs accepts PDF/PNG/JPEG/WEBP. HEIC/HEIF stay
+// accepted here because we convert them to JPEG before parsing; GIF was
+// dropped with the in-house vision extractor (CogniDocs takes no GIF).
 export const RECEIPT_PARSE_MEDIA = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/gif",
   "image/heic",
   "image/heif",
   "application/pdf",
@@ -111,26 +114,6 @@ export interface VisionReceiptExtraction {
     reasons: string[];
   };
 }
-
-const EXTRACT_FIELDS_SPEC =
-  "merchant (string), merchantOriginalScript (string, ONLY when the merchant name on the receipt is printed in a non-Latin script — the name exactly as printed), date (YYYY-MM-DD if visible), total (number, grand total), tax (number, 0 if none), currency (3-letter ISO code), country (short code like KSA/UAE/US if inferable), category (one of flight|hotel|meal|gift|software|mileage|per_diem|taxi|other), rawText (the visible text, condensed), confidence (green if crisp and unambiguous, amber if partly readable, red if barely readable), unreadable (true ONLY if this is not a receipt/invoice or nothing is readable), subtotal (number, OPTIONAL — the printed pre-tax subtotal/net amount ONLY when the receipt explicitly prints one; omit otherwise), totalMentions (array of numbers, OPTIONAL — when the grand total amount is printed more than once, every printed occurrence; omit when printed only once), details (OPTIONAL object, see rules below)";
-
-const EXTRACT_GUIDANCE = `
-Amount-reading rules (CRITICAL — misreading an amount is the worst possible failure):
-- Currency symbols and marks are NEVER digits. Arabic and regional currency glyphs (د.إ for AED, ر.س / ﷼ for SAR, ج.م for EGP, د.ك for KWD, ₺ for TRY) printed directly before or after a number are part of the currency, not the amount — "د.إ657.72" means 657.72, NEVER 4657.72. Do not let any part of a currency glyph become a leading or trailing digit.
-- Masked card-number fragments (e.g. "···· 4722", "**** 4722", "ending in 4722") are never amounts and must never merge into an adjacent amount.
-- Read every amount digit-for-digit exactly as printed. When the same total is printed in more than one place, all occurrences must agree — if they seem to disagree, re-read them before answering.
-- Sanity-check yourself: when a subtotal and tax are printed, subtotal + tax must equal the total. If your reading fails that arithmetic, re-read the amounts.
-
-Multilingual rules: receipts may be in English, Arabic, or Turkish. Extract fields the same way regardless of language. Always return "merchant" in Latin script — transliterate Arabic names and keep Turkish names as written but in Latin characters; when the printed name uses a non-Latin script, also return it verbatim in "merchantOriginalScript". Keep the original-language text in "rawText".
-
-The "details" object carries category-specific enrichment. Include a sub-object ONLY when the receipt explicitly prints that information — NEVER infer, guess, or fabricate any detail. Omit "details" entirely (or any sub-field) when the information is not printed. Sub-objects (all fields optional strings unless noted):
-- trip (taxi / ride-hailing e.g. Uber, Careem, Bolt, BiTaksi): { pickup, dropoff, datetime (trip date/time as printed) }
-- flight (flight ticket/invoice): { route (e.g. "IST → DXB", use IATA codes when printed), airline, travelClass (economy|premium_economy|business|first as printed), passenger, reference (ticket number or PNR) }
-- stay (hotel): { checkIn (YYYY-MM-DD), checkOut (YYYY-MM-DD), nights (number), city }
-- covers (restaurant/entertainment): number of covers/guests, ONLY if printed
-- rental (car rental): { period (e.g. "2026-07-01 to 2026-07-04"), pickupLocation, returnLocation, vehicleClass }
-- billingPeriod (subscription/software invoice): { service (service/plan name), start (YYYY-MM-DD), end (YYYY-MM-DD) }`;
 
 // ---- Task #652 — arithmetic cross-check of extracted amounts -------------
 //
@@ -285,94 +268,6 @@ export function validateReceiptAmounts(
   }
 
   return finish(rawText ? "ok" : "skipped");
-}
-
-function parseModelJson(text: string): VisionReceiptExtraction {
-  const stripped = text
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```\s*$/i, "")
-    .trim();
-  const start = stripped.indexOf("{");
-  const end = stripped.lastIndexOf("}");
-  if (start === -1 || end <= start) {
-    throw new Error("extract-non-json");
-  }
-  return JSON.parse(stripped.slice(start, end + 1)) as VisionReceiptExtraction;
-}
-
-export async function extractReceiptWithVision(
-  bytes: Buffer,
-  mediaType: string,
-): Promise<VisionReceiptExtraction> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  const ac = new AbortController();
-  const timer = setTimeout(
-    () => ac.abort(),
-    Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000),
-  );
-  try {
-    const resp = await anthropic.messages.create(
-      {
-        model: "claude-haiku-4-5",
-        max_tokens: 2048,
-        system: `You are an expense-receipt OCR extractor. Read the receipt image and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.\n${EXTRACT_GUIDANCE}`,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: mediaType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
-                  data: bytes.toString("base64"),
-                },
-              },
-              { type: "text", text: "Extract this receipt." },
-            ],
-          },
-        ],
-      },
-      { signal: ac.signal },
-    );
-    const block = resp.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
-    return validateReceiptAmounts(parseModelJson(text));
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-export async function extractReceiptFromText(
-  rawText: string,
-): Promise<VisionReceiptExtraction> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  const ac = new AbortController();
-  const timer = setTimeout(
-    () => ac.abort(),
-    Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000),
-  );
-  try {
-    const resp = await anthropic.messages.create(
-      {
-        model: "claude-haiku-4-5",
-        max_tokens: 2048,
-        system: `You are an expense-receipt/invoice extractor. Read the extracted document text and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.\n${EXTRACT_GUIDANCE}`,
-        messages: [
-          {
-            role: "user",
-            content: `Extract this receipt/invoice text:\n\n${rawText.slice(0, 20000)}`,
-          },
-        ],
-      },
-      { signal: ac.signal },
-    );
-    const block = resp.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
-    return validateReceiptAmounts(parseModelJson(text));
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function isIsoDate(s: unknown): s is string {
@@ -555,6 +450,7 @@ export async function parseReceiptForExpense(args: {
 
   let bytes: Buffer;
   let mediaType: string;
+  let fileNameHint: string | null = null;
   if (ref.startsWith(CLI_ENC_PREFIX)) {
     // Task #1263 — chat-created expenses store `enc:cli:<attachmentId>`
     // (the CLI attachment id, whose row carries the actual blob pointer).
@@ -581,6 +477,7 @@ export async function parseReceiptForExpense(args: {
       return { ok: false, status: 404, body: { error: "no-receipt" } };
     }
     bytes = loaded;
+    fileNameHint = att?.fileName ?? null;
     mediaType = (att?.mime ?? "").split(";")[0].trim().toLowerCase();
     if (!mediaType || mediaType === "application/octet-stream") {
       mediaType = sniffMediaType(bytes);
@@ -592,6 +489,7 @@ export async function parseReceiptForExpense(args: {
       const dl = await svc.downloadObject(file, 60);
       mediaType = (dl.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
       bytes = Buffer.from(await dl.arrayBuffer());
+      fileNameHint = ref.split("/").pop() ?? null;
     } catch (err) {
       if (err instanceof ObjectNotFoundError) {
         return { ok: false, status: 404, body: { error: "no-receipt" } };
@@ -634,7 +532,7 @@ export async function parseReceiptForExpense(args: {
       status: 422,
       body: {
         error: "unsupported-receipt-type",
-        message: "Receipt parsing supports photos (JPEG/PNG/WebP/GIF/HEIC) and PDF invoices.",
+        message: "Receipt parsing supports photos (JPEG/PNG/WebP/HEIC) and PDF invoices.",
         mediaType,
       },
     };
@@ -654,30 +552,25 @@ export async function parseReceiptForExpense(args: {
     };
   }
 
-  // PDFs: text layer → tesseract OCR → vision-on-render fallback.
+  // Task #1316 — one CogniDocs parse for images AND PDFs; the server-side
+  // arithmetic cross-check (Task #652) still runs on the structured result.
   let vision: VisionReceiptExtraction;
-  let extractionMethod: "vision" | "pdf_text_layer" | "pdf_ocr" | "pdf_vision" = "vision";
+  const extractionMethod = "cognidocs";
   try {
-    if (isPdf) {
-      const pdf = await extractPdfText(new Uint8Array(bytes));
-      if (pdf.quality.isUsable) {
-        extractionMethod = pdf.method === "text_layer" ? "pdf_text_layer" : "pdf_ocr";
-        vision = await extractReceiptFromText(pdf.text);
-        if (!vision.rawText) vision.rawText = pdf.text.slice(0, 4000);
-      } else {
-        extractionMethod = "pdf_vision";
-        const pageImage = await renderPdfPageImage(new Uint8Array(bytes), 1, 200);
-        vision = await extractReceiptWithVision(pageImage, "image/png");
-      }
-    } else {
-      vision = await extractReceiptWithVision(bytes, mediaType);
-    }
+    vision = validateReceiptAmounts(
+      await parseReceiptDocViaCognidocs(bytes, mediaType, fileNameHint),
+    );
   } catch (err) {
+    // Config/auth problems are the service's fault, not the document's —
+    // surface them as a retryable 503, never a "bad receipt" 422.
+    const isServiceFault =
+      err instanceof CognidocsError && (err.code === "not-configured" || err.code === "auth");
     return {
       ok: false,
-      status: 422,
+      status: isServiceFault ? 503 : 422,
       body: {
-        error: "receipt-parse-failed",
+        error: isServiceFault ? "parsing-unavailable" : "receipt-parse-failed",
+        ...(err instanceof CognidocsError ? { code: err.code } : {}),
         message: err instanceof Error ? err.message : String(err),
       },
     };

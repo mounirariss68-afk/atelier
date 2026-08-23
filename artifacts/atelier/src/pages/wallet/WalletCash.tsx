@@ -81,6 +81,11 @@ interface PdfPreview {
   rowsExtracted: number;
   flaggedRows: number;
   confidence: number;
+  warning?: string;
+  // Task #1316 — preview→confirm binding: the confirm request must echo the
+  // parse jobId + server signature so the import uses exactly the rows shown.
+  cognidocsJobId?: string;
+  signature?: string;
   rows: PdfPreviewRow[];
   flagged: Array<{ dateToken: string; snippet: string; reason: string }>;
 }
@@ -118,7 +123,12 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
       form.append("bankAccountId", accountId);
       form.append("statementDate", statementDate);
       if (source !== "auto") form.append("source", source);
-      if (confirm) form.append("confirm", "true");
+      if (confirm) {
+        form.append("confirm", "true");
+        // Task #1316 — PDF confirms re-use the previewed parse job.
+        if (pdfPreview?.cognidocsJobId) form.append("cognidocsJobId", pdfPreview.cognidocsJobId);
+        if (pdfPreview?.signature) form.append("signature", pdfPreview.signature);
+      }
       const r = await fetch("/api/atelier/wallet/bank/import-file", {
         method: "POST", credentials: "include", body: form,
       });
@@ -188,6 +198,9 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
             )}
             . Review before importing.
           </div>
+          {pdfPreview.warning && (
+            <div className="text-[11px] font-mono text-warning" data-testid="pdf-preview-warning">{pdfPreview.warning}</div>
+          )}
           <div className="max-h-64 overflow-auto border border-border-soft rounded">
             <table className="w-full text-[11px] font-mono">
               <thead>

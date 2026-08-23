@@ -14,11 +14,12 @@
  *   7. Parse-endpoint media/caps constants
  *   8. Seed alias maps (EU/NA label → taxonomy pair)
  *   9. Task #500 enrichment sanitize + description composition
- *  10. Task #506 stub-Anthropic probe: blurry/partial receipt texts must
- *      never gain invented details (details absent, summary unchanged)
+ *  10. Task #1316 CogniDocs stub probe: blurry/partial/unreadable receipts
+ *      map ×10k amounts + job confidence onto the legacy extraction shape,
+ *      never gain invented details, and a failed job throws typed
+ *  12. Task #652 arithmetic cross-check of parsed amounts (still runs on
+ *      the structured CogniDocs fields at every call site)
  */
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import {
   normalizeMerchant,
   extractCoreMerchant,
@@ -200,11 +201,14 @@ async function main() {
   const { RECEIPT_PARSE_MEDIA, sanitizeReceiptDetails, formatReceiptDetails, composeEnrichedSummary } = await import(
     "../../src/lib/atelier-receipt-parse.js"
   );
-  for (const m of ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif", "application/pdf"]) {
+  for (const m of ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"]) {
     check(`media allows ${m}`, RECEIPT_PARSE_MEDIA.has(m));
   }
   check("media rejects octet-stream", !RECEIPT_PARSE_MEDIA.has("application/octet-stream"));
   check("media rejects svg", !RECEIPT_PARSE_MEDIA.has("image/svg+xml"));
+  // Task #1316 — GIF was dropped with the in-house vision extractor
+  // (CogniDocs accepts PDF/PNG/JPEG/WEBP only; HEIC converts to JPEG).
+  check("media rejects gif (dropped with CogniDocs switch)", !RECEIPT_PARSE_MEDIA.has("image/gif"));
 
   // 7b. Task #554 — HEIC detection + conversion
   {
@@ -308,95 +312,100 @@ async function main() {
   check("compose empty base → detail only", composeEnrichedSummary("", covers) === "4 covers");
   check("compose both empty", composeEnrichedSummary(null, undefined) === "");
 
-  // 10. Task #506 — stub-Anthropic probe: blurry/partial receipt texts must
-  // never end up with invented enrichment details. The stub serves the canned
-  // extraction the prompt demands for low-quality input (no `details` key, or
-  // a malformed hallucinated one that sanitizeReceiptDetails must drop), and
-  // we assert the final proposal-side values: details === undefined and the
-  // composed summary is byte-identical to the base summary.
-  const { extractReceiptFromText } = await import(
-    "../../src/lib/atelier-receipt-parse.js"
+  // 10. Task #1316 — CogniDocs-backed receipt parsing (offline stub). One
+  // shared parse path for photos AND PDFs: structured fields come back from
+  // the company's own document reader, amounts are integers ×10,000, the
+  // job confidence (0–100) maps onto the green/amber/red band, and a
+  // document with no invoice payload is `unreadable` — never a guessed
+  // expense. Enrichment `details` no longer exist at parse time, so the
+  // "never invent details" contract holds by construction; the sanitize +
+  // compose helpers still guard any legacy stored payloads.
+  const { startCognidocsStub, defaultInvoicePayload } = await import(
+    "../helpers/cognidocs-stub.js"
+  );
+  const cd = await startCognidocsStub();
+  const { parseReceiptDocViaCognidocs } = await import(
+    "../../src/lib/cognidocs/receipt.js"
+  );
+  const { CognidocsError } = await import("../../src/lib/cognidocs/client.js");
+  const tinyPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
   );
 
-  const cannedQueue: Array<Record<string, unknown>> = [];
-  const stub = createServer((req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
-      const canned = cannedQueue.shift() ?? { unreadable: true };
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({
-          id: "msg_stub",
-          type: "message",
-          role: "assistant",
-          model: "claude-haiku-4-5",
-          stop_reason: "end_turn",
-          content: [{ type: "text", text: JSON.stringify(canned) }],
-          usage: { input_tokens: 10, output_tokens: 10 },
-        }),
-      );
-    });
-  });
-  await new Promise<void>((r) => stub.listen(0, "127.0.0.1", r));
-  const stubPort = (stub.address() as AddressInfo).port;
-  // The anthropic client reads env at (lazy) import time inside
-  // extractReceiptFromText — set it before the first call.
-  process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL = `http://127.0.0.1:${stubPort}`;
-  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY = "stub-key";
-
   try {
-    // (a) Blurry taxi receipt: model follows the prompt and omits `details`.
-    cannedQueue.push({
-      merchant: "Careem",
-      total: 48.5,
+    // (a) Blurry taxi receipt: sparse fields + low job confidence → red band,
+    // ×10k amounts converted exactly, category key mapped to the legacy hint.
+    cd.state.confidence = 30;
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Careem",
+      invoiceRef: null,
+      issueDate: null,
       currency: "AED",
-      category: "taxi",
-      rawText: "C▌reem ... 48.5▌ AED [rest illegible]",
-      confidence: "red",
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 485_000,
+      categoryKey: "taxi_rideshare",
     });
-    const blurry = await extractReceiptFromText("C▌reem 48.5▌ [smudged]");
-    check("blurry: model omits details", blurry.details === undefined);
+    const blurry = await parseReceiptDocViaCognidocs(tinyPng, "image/jpeg", "careem.jpg");
+    check(
+      "blurry: ×10k fields mapped",
+      blurry.merchant === "Careem" && blurry.total === 48.5 && blurry.currency === "AED",
+      JSON.stringify({ merchant: blurry.merchant, total: blurry.total }),
+    );
+    check("blurry: low job confidence → red band", blurry.confidence === "red", blurry.confidence);
+    check("blurry: category hint mapped", blurry.category === "taxi", blurry.category);
+    check("blurry: no invented details", blurry.details === undefined);
     const blurryDetails = sanitizeReceiptDetails(blurry.details);
-    check("blurry: sanitized details stay absent", blurryDetails === undefined);
     const blurryBase = "Taxi ride, amount partially readable.";
     check(
       "blurry: summary unchanged",
       composeEnrichedSummary(blurryBase, blurryDetails) === blurryBase,
     );
-
-    // (b) Partial hotel receipt: model hallucinates a malformed details
-    // object (non-ISO dates, blank city, zero nights) — sanitizer drops it all.
-    cannedQueue.push({
-      merchant: "Hilton",
-      total: 900,
-      currency: "SAR",
-      category: "hotel",
-      rawText: "HILTON ... TOTAL 900 [torn edge]",
-      confidence: "amber",
-      details: {
-        stay: { checkIn: "early July", checkOut: "sometime", nights: 0, city: "  " },
-        trip: "n/a",
-        covers: -1,
-        madeUpKey: { foo: "bar" },
-      },
-    });
-    const partial = await extractReceiptFromText("HILTON TOTAL 900 [torn]");
-    const partialDetails = sanitizeReceiptDetails(partial.details);
     check(
-      "partial: hallucinated malformed details dropped",
-      partialDetails === undefined,
-      JSON.stringify(partialDetails),
+      "blurry: rawText synthesized deterministically from fields",
+      (blurry.rawText ?? "").includes("vendor: Careem") &&
+        (blurry.rawText ?? "").includes("total: AED 48.50"),
+      blurry.rawText,
     );
+
+    // (b) Partial hotel receipt photo: mid confidence → amber; the SAME call
+    // path handles images (no separate vision extractor anymore) and the
+    // submitted mime type reaches the parser untouched.
+    cd.state.confidence = 65;
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Hilton",
+      invoiceRef: null,
+      issueDate: null,
+      currency: "SAR",
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 9_000_000,
+      categoryKey: "hotel_accommodation",
+    });
+    const partial = await parseReceiptDocViaCognidocs(tinyPng, "image/png", "hilton.png");
+    check(
+      "partial: mid confidence → amber, total mapped",
+      partial.confidence === "amber" && partial.total === 900 && partial.category === "hotel",
+      JSON.stringify({ c: partial.confidence, t: partial.total, cat: partial.category }),
+    );
+    check("partial: no invented details", sanitizeReceiptDetails(partial.details) === undefined);
     const partialBase = "Hotel stay, receipt partially torn.";
     check(
       "partial: summary unchanged",
-      composeEnrichedSummary(partialBase, partialDetails) === partialBase,
+      composeEnrichedSummary(partialBase, sanitizeReceiptDetails(partial.details)) === partialBase,
+    );
+    check(
+      "partial: photo mime submitted as-is (one path for photos and PDFs)",
+      cd.state.lastSubmit?.mimeType === "image/png" &&
+        cd.state.lastSubmit?.declaredType === "auto",
+      JSON.stringify({ mime: cd.state.lastSubmit?.mimeType, dt: cd.state.lastSubmit?.declaredType }),
     );
 
-    // (c) Unreadable scrap: model flags unreadable, no details anywhere.
-    cannedQueue.push({ unreadable: true, confidence: "red", rawText: "" });
-    const scrap = await extractReceiptFromText("▌▌▌▌");
+    // (c) Unreadable scrap: parse completes but yields no invoice payload →
+    // unreadable, never a guessed expense.
+    cd.state.invoice = null;
+    const scrap = await parseReceiptDocViaCognidocs(tinyPng, "image/jpeg");
     check("scrap: unreadable flagged", scrap.unreadable === true);
     check(
       "scrap: no details, summary unchanged",
@@ -405,122 +414,53 @@ async function main() {
           "Unreadable receipt.",
     );
 
-    // Guardrail in the prompt itself: the no-fabrication instruction must
-    // stay in the extraction guidance that both vision & text paths share.
-    const src = await import("node:fs/promises").then((fs) =>
-      fs.readFile(
-        new URL("../../src/lib/atelier-receipt-parse.ts", import.meta.url),
-        "utf8",
-      ),
-    );
+    // (d) A FAILED parse job throws the typed error (fail-loud) — callers
+    // map it to a 422/503, never a silent fallback.
+    cd.state.failNext = "corrupt file";
+    let parseErr: unknown = null;
+    try {
+      await parseReceiptDocViaCognidocs(tinyPng, "image/png");
+    } catch (e) {
+      parseErr = e;
+    }
     check(
-      "prompt keeps no-fabrication rule",
-      src.includes("NEVER infer, guess, or fabricate") &&
-        src.includes('Omit "details" entirely'),
+      "failed job throws typed CognidocsError(parse-failed)",
+      parseErr instanceof CognidocsError && parseErr.code === "parse-failed",
+      String(parseErr),
     );
 
-    // 11. Task #510 — same stub probe, but through the VISION (photo) path:
-    // extractReceiptWithVision must also refuse invented details. We feed a
-    // tiny 1x1 PNG buffer; the stub serves canned extractions with omitted or
-    // hallucinated-malformed details, and we assert the proposal-side values
-    // mirror section 10: details === undefined, summary byte-identical.
-    const { extractReceiptWithVision } = await import(
-      "../../src/lib/atelier-receipt-parse.js"
-    );
-    const tinyPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
-
-    // (a) Blurry photo: model follows the prompt and omits `details`.
-    cannedQueue.push({
-      merchant: "Careem",
-      total: 48.5,
-      currency: "AED",
-      category: "taxi",
-      rawText: "C▌reem ... 48.5▌ AED [photo blurry]",
-      confidence: "red",
-    });
-    const visBlurry = await extractReceiptWithVision(tinyPng, "image/png");
-    check("vision blurry: model omits details", visBlurry.details === undefined);
-    const visBlurryDetails = sanitizeReceiptDetails(visBlurry.details);
-    check("vision blurry: sanitized details stay absent", visBlurryDetails === undefined);
-    const visBlurryBase = "Taxi ride, photo blurry.";
-    check(
-      "vision blurry: summary unchanged",
-      composeEnrichedSummary(visBlurryBase, visBlurryDetails) === visBlurryBase,
-    );
-
-    // (b) Photo of a torn hotel receipt: model hallucinates a malformed
-    // details object — sanitizer must drop every part of it.
-    cannedQueue.push({
-      merchant: "Hilton",
-      total: 900,
-      currency: "SAR",
-      category: "hotel",
-      rawText: "HILTON ... TOTAL 900 [photo cut off]",
-      confidence: "amber",
-      details: {
-        stay: { checkIn: "early July", checkOut: "sometime", nights: 0, city: "  " },
-        flight: { route: "", airline: 42 },
-        covers: -3,
-        inventedKey: { foo: "bar" },
-      },
-    });
-    const visPartial = await extractReceiptWithVision(tinyPng, "image/png");
-    const visPartialDetails = sanitizeReceiptDetails(visPartial.details);
-    check(
-      "vision partial: hallucinated malformed details dropped",
-      visPartialDetails === undefined,
-      JSON.stringify(visPartialDetails),
-    );
-    const visPartialBase = "Hotel stay, photo partially cut off.";
-    check(
-      "vision partial: summary unchanged",
-      composeEnrichedSummary(visPartialBase, visPartialDetails) === visPartialBase,
-    );
-
-    // (c) Unreadable photo: model flags unreadable, no details anywhere.
-    cannedQueue.push({ unreadable: true, confidence: "red", rawText: "" });
-    const visScrap = await extractReceiptWithVision(tinyPng, "image/png");
-    check("vision scrap: unreadable flagged", visScrap.unreadable === true);
-    check(
-      "vision scrap: no details, summary unchanged",
-      sanitizeReceiptDetails(visScrap.details) === undefined &&
-        composeEnrichedSummary("Unreadable receipt photo.", sanitizeReceiptDetails(visScrap.details)) ===
-          "Unreadable receipt photo.",
-    );
-    // 12. Task #652 — currency-glyph amount misreads. A real Airbnb receipt
-    // (total د.إ657.72, tax د.إ85.79) was extracted as 4657.72/485.79 with
-    // green confidence — the dirham glyph read as a leading "4". The shared
-    // pipeline must arithmetically cross-check and self-correct (or downgrade)
-    // before any consumer trusts the numbers.
+    // 12. Task #652 — arithmetic cross-check of extracted amounts. The
+    // validator survives the CogniDocs switch: subtotal/tax/total come from
+    // independently parsed printed fields, so the subtotal+tax=total check
+    // stays meaningful.
     const { validateReceiptAmounts, amountInText } = await import(
       "../../src/lib/atelier-receipt-parse.js"
     );
 
-    // (a) End-to-end through the stubbed extractor: misread total+tax, but
-    // subtotal read correctly → unambiguous stray-leading-digit fix.
-    cannedQueue.push({
-      merchant: "Airbnb",
-      total: 4657.72,
-      tax: 485.79,
-      subtotal: 571.93,
+    // (a) Call-site composition: internally inconsistent parsed amounts
+    // (the historic Airbnb glyph misread: 4657.72/485.79 vs subtotal 571.93)
+    // must NEVER survive with green confidence. The synthesized rawText
+    // prints the same wrong numbers, so the correction is blocked as
+    // contradicted → downgraded to needs-review, amounts untouched.
+    cd.state.confidence = 95;
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Airbnb",
+      invoiceRef: null,
       currency: "AED",
-      country: "UAE",
-      category: "hotel",
-      rawText:
-        "Airbnb receipt\n2 nights\nSubtotal د.إ571.93\nVAT د.إ85.79\nTotal (AED) د.إ657.72\nVISA ···· 4722 د.إ657.72",
-      confidence: "green",
+      subtotalAmount10k: 5_719_300,
+      taxAmount10k: 4_857_900,
+      totalAmount10k: 46_577_200,
+      categoryKey: "hotel_accommodation",
     });
-    const airbnb = await extractReceiptFromText("Airbnb Total د.إ657.72 ...");
-    check("airbnb: total corrected", airbnb.total === 657.72, String(airbnb.total));
-    check("airbnb: tax corrected", airbnb.tax === 85.79, String(airbnb.tax));
+    const airbnb = validateReceiptAmounts(
+      await parseReceiptDocViaCognidocs(tinyPng, "image/jpeg"),
+    );
     check(
-      "airbnb: validation stamped corrected",
-      airbnb.amountValidation?.status === "corrected",
+      "airbnb: inconsistent amounts downgraded, never green",
+      airbnb.confidence === "amber" && airbnb.amountValidation?.status === "downgraded",
       JSON.stringify(airbnb.amountValidation),
     );
+    check("airbnb: total not silently rewritten", airbnb.total === 4657.72, String(airbnb.total));
 
     // (b) Correct values pass through untouched (green stays green).
     const good = validateReceiptAmounts({
@@ -613,16 +553,8 @@ async function main() {
     check("amountInText: substring guarded", amountInText("Total 4,657.72", 657.72) === false);
     check("amountInText: comma form found", amountInText("Total 4,657.72", 4657.72) === true);
     check("amountInText: plain found", amountInText("Total 657.72", 657.72) === true);
-
-    // (i) Prompt guardrails present in the shared guidance.
-    check(
-      "prompt keeps currency-glyph rules",
-      src.includes("Currency symbols and marks are NEVER digits") &&
-        src.includes("د.إ657.72") &&
-        src.includes("card-number fragments"),
-    );
   } finally {
-    stub.close();
+    await cd.close();
   }
 
   // ---- report ----

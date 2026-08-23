@@ -16,6 +16,7 @@
     "atelier:spine-backfill": "tsx ./src/scripts/atelier-spine-backfill.ts",
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "test:merchant-parse": "tsx ./tests/merchant-parse/run.ts",
+    "test:cognidocs": "tsx ./tests/cognidocs/run.ts",
     "test:payroll-statutory": "tsx ./tests/payroll-statutory/run.ts",
     "test:wio-export": "NODE_ENV=test tsx ./tests/wio-export/run.ts",
     "test:tooling-costs": "NODE_ENV=test tsx ./tests/tooling-costs/run.ts",

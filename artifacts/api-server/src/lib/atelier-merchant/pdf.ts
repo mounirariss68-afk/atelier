@@ -95,7 +95,7 @@ async function extractTextLayer(
 }
 
 /** Render one PDF page to a PNG buffer via pdftoppm. */
-export async function renderPdfPageImage(
+async function renderPdfPageImage(
   pdfData: Uint8Array,
   pageNumber: number,
   dpi: number = DEFAULT_DPI,

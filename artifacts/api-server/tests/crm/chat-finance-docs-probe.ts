@@ -1,30 +1,37 @@
 /**
  * Task #1090 — Riser finance-document pipelines (offline probe).
  *
- * Pins, on a scratch DB with a stub Anthropic server (env set BEFORE
- * any capability import, so the AI parse/extract calls stay offline):
+ * Pins, on a scratch DB with a stub Anthropic server (bank letters) AND a
+ * stub CogniDocs server (invoice/statement parsing — Task #1316), env set
+ * BEFORE any capability import so every parse stays offline:
  *
  *   1. classify_finance_document: invoice PDF → supplier_invoice with
  *      recommended tool; statement CSV → bank_statement; garbage →
  *      low-confidence with an ask-one-question nextStep (never guess).
- *   2. ingest_supplier_invoice: AI prefill → confirmation envelope →
- *      confirm commits via the SAME payables core (status submitted,
- *      source internal_upload); a repeat confirm reports alreadyFiled
- *      (dedupe 409 surfaced as success, not error). Low-confidence
- *      parse → clarification, no confirmation.
+ *   2. ingest_supplier_invoice: CogniDocs prefill (×10k ints → majors) →
+ *      confirmation envelope → confirm commits via the SAME payables core
+ *      (status submitted, source internal_upload); repeat confirm reports
+ *      alreadyFiled. Low job confidence (< the 0.6 floor) → correction
+ *      clarification, never a guessed commit.
+ *   2c. Task #1316 failure modes: failed job / non-invoice payload /
+ *      missing keys each fail LOUD with named codes; a 40-row itemized
+ *      invoice survives end-to-end; CogniDocs' stable invoice id is a
+ *      third dedupe signal across re-uploads with different bytes+ref.
  *   3. import_bank_statement: single account auto-picks → confirm →
  *      rows imported + navigateTo recon; repeat confirm →
  *      alreadyImported; a second account makes phase 1 return a
- *      bank-account clarification. Task #1094: a well-formed PDF
- *      statement extracts rows with per-row confidence, previews them
- *      in the confirmation, imports through the SAME core (dedupe on
- *      repeat), while a garbage/non-statement PDF is refused with the
- *      CSV-export guidance.
+ *      bank-account clarification. PDF statements (Task #1316): sign
+ *      comes ONLY from the explicit direction field (|amount| × direction;
+ *      direction-less rows are flagged and skipped, never guessed), a
+ *      non-statement PDF refuses with not_a_statement + CSV guidance,
+ *      low job confidence refuses with pdf_low_confidence, and phase 2
+ *      re-fetches the pinned parse job so preview and commit see
+ *      identical rows (dedupe on repeat).
  *   4. save_bank_letter_account: two entities → entity clarification;
  *      with entity → extraction proposal confirmation → confirm creates
  *      the bank-account row (iban/swift/holder + entity link).
  *   5. Role clamps: employee / contractor / board_observer never see
- *      the four tools in their catalog slice; founding_partner does.
+ *      the finance-doc tools in their catalog slice; founding_partner does.
  *
  * Run: pnpm --filter @workspace/api-server exec tsx tests/crm/chat-finance-docs-probe.ts
  */
@@ -33,6 +40,7 @@ process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 import "./scratch-db.js";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { startCognidocsStub, defaultInvoicePayload } from "../helpers/cognidocs-stub.js";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -46,23 +54,16 @@ function check(name: string, ok: boolean, detail?: unknown) {
 const TAG = `probe1090_${Date.now()}`;
 const ORG = "aico";
 
-// Mutable stub knobs.
+// Mutable stub knobs (Anthropic stub — bank letters only since Task #1316).
 const stubState = {
-  invoiceConfidence: 0.95,
-  invoiceCalls: 0,
   letterCalls: 0,
-  // Task #1250 — per-section override of the parsed invoice fields
-  // (incl. lineItems); null = the default Gulf Office Supplies payload.
-  invoiceFields: null as Record<string, unknown> | null,
-  // Task #1267 — queue of forced replies for the invoice parser: each entry
-  // is served once (in order) INSTEAD of the normal payload. Lets probes
-  // simulate a max_tokens-truncated first reply.
-  invoiceForcedReplies: [] as Array<{ text: string; stopReason: string }>,
-  // Records whether the header-only retry override reached the model.
-  sawHeaderOnlyOverride: false,
 };
 
 async function main() {
+  // ---- stub CogniDocs server (before any capability import) ----
+  const cd = await startCognidocsStub();
+  cd.state.invoice = defaultInvoicePayload();
+
   // ---- stub Anthropic server (before any capability import) ----
   const stub = createServer((req, res) => {
     let body = "";
@@ -83,29 +84,6 @@ async function main() {
           usage: { input_tokens: 10, output_tokens: 10 },
         }));
       };
-      if (systemText.includes("accounts-payable clerk")) {
-        stubState.invoiceCalls++;
-        if (systemText.includes("Do NOT itemize")) stubState.sawHeaderOnlyOverride = true;
-        const forced = stubState.invoiceForcedReplies.shift();
-        if (forced) {
-          reply(forced.text, forced.stopReason);
-          return;
-        }
-        reply(JSON.stringify({
-          confidence: stubState.invoiceConfidence,
-          fields: stubState.invoiceFields ?? {
-            supplierName: "Gulf Office Supplies LLC",
-            amount: 4725.5,
-            currency: "AED",
-            reference: "INV-2026-0815",
-            invoiceDate: "2026-08-01",
-            periodLabel: null,
-            notes: null,
-            lineItems: null,
-          },
-        }));
-        return;
-      }
       if (systemText.includes("treasury analyst")) {
         stubState.letterCalls++;
         reply(JSON.stringify({
@@ -304,13 +282,14 @@ async function main() {
     const p3: any = await ingestInv.run(p1.confirmation.pending.input, mkCtx() as any);
     check("invoice: repeat confirm → alreadyFiled success", p3.ok === true && p3.data?.alreadyFiled === true, p3);
 
-    // Low-confidence parse → clarification (never a guessed commit).
-    stubState.invoiceConfidence = 0.3;
+    // Low-confidence parse (CogniDocs job confidence 30 → 0.3, below the
+    // 0.6 floor) → correction clarification (never a guessed commit).
+    cd.state.confidence = 30;
     const lowPdf = await makePdf(["TAX INVOICE", `blurry scan ${TAG}`, "Amount Due: AED ????", "Invoice No: smudged", "Subtotal VAT Bill To Due Date"]);
     const lowAtt = await ingest(`low-conf-${TAG}.pdf`, "application/pdf", lowPdf);
     const pl: any = await ingestInv.run({ attachmentId: lowAtt }, mkCtx() as any);
     check("invoice: low-confidence parse → clarification, no confirmation", !!pl.clarification && !pl.confirmation, pl);
-    stubState.invoiceConfidence = 0.95;
+    cd.state.confidence = 95;
   }
 
   // =============== 2b) Task #1250 — invoice+receipt pairing ===============
@@ -338,19 +317,19 @@ async function main() {
       ingest(`pair-invoice-${TAG}.pdf`, "application/pdf", pairInvoicePdf),
       ingest(`payment-receipt-${TAG}.pdf`, "application/pdf", pairReceiptPdf),
     ]);
-    stubState.invoiceFields = {
-      supplierName: "Desert Print Co LLC",
-      amount: 1234.5,
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Desert Print Co LLC",
+      invoiceRef: pairRef,
+      issueDate: "2026-08-14",
       currency: "AED",
-      reference: pairRef,
-      invoiceDate: "2026-08-14",
-      periodLabel: null,
-      notes: null,
+      subtotalAmount10k: 11_757_400,
+      taxAmount10k: 587_600,
+      totalAmount10k: 12_345_000,
       lineItems: [
-        { description: "Banner printing", qty: 2, unitAmount: 500, amount: 1000 },
-        { description: "Design fee", qty: 1, unitAmount: 175.74, amount: 175.74 },
+        { description: "Banner printing", quantity10k: 20_000, unitPriceAmount10k: 5_000_000, amount10k: 10_000_000 },
+        { description: "Design fee", quantity10k: 10_000, unitPriceAmount10k: 1_757_400, amount10k: 1_757_400 },
       ],
-    };
+    });
 
     // Pair detection during classification (ingest preview routing).
     const c: any = await classify.run({ attachmentIds: [pairInvAtt, pairRcptAtt] }, mkCtx() as any);
@@ -507,16 +486,16 @@ async function main() {
     check("pair: still exactly ONE record after the duplicate attempt", rowsAfter.length === 1, rowsAfter.length);
 
     // Itemization transparency: a document with NO printed line rows says why.
-    stubState.invoiceFields = {
-      supplierName: "Flat Fee Consulting FZE",
-      amount: 900,
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Flat Fee Consulting FZE",
+      invoiceRef: `FLAT-${String(Date.now()).slice(-6)}`,
+      issueDate: "2026-08-15",
       currency: "AED",
-      reference: `FLAT-${String(Date.now()).slice(-6)}`,
-      invoiceDate: "2026-08-15",
-      periodLabel: null,
-      notes: null,
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 9_000_000,
       lineItems: null,
-    };
+    });
     const flatPdf = await makePdf([
       "TAX INVOICE",
       "Flat Fee Consulting FZE",
@@ -531,94 +510,88 @@ async function main() {
       !!f1.confirmation && /No itemizable line rows/i.test(f1.confirmation?.summary ?? ""),
       f1.confirmation?.summary,
     );
-    stubState.invoiceFields = null;
+    cd.state.invoice = defaultInvoicePayload();
   }
 
-  // =============== 2c) Task #1267 — max_tokens truncation recovery ===============
+  // =============== 2c) Task #1316 — CogniDocs failure modes + dedupe id ===============
   {
-    const { parseSupplierInvoiceText } = await import("../../src/lib/atelier-finance-docs.js");
+    const { parseSupplierInvoiceDoc } = await import("../../src/lib/atelier-finance-docs.js");
+    const probeBytes = await makePdf(["TAX INVOICE", "Anything LLC", `unit ${TAG}`, "Amount Due: AED 1.00"]);
 
-    // Unit-level: a max_tokens-truncated reply degrades to a HEADER-ONLY
-    // parse (retry without itemization), never parse-non-json.
-    const truncRef = `TRUNC-${String(Date.now()).slice(-6)}`;
-    const truncatedJson = `{"confidence":0.95,"fields":{"supplierName":"Replit Inc","amount":250.48,"currency":"USD","reference":"${truncRef}","invoiceDate":"2026-08-01","periodLabel":null,"notes":null,"lineItems":[{"description":"Agent usage","qty":1,"unitAmount":9.9`;
-    stubState.invoiceForcedReplies = [
-      { text: truncatedJson, stopReason: "max_tokens" },
-    ];
-    stubState.sawHeaderOnlyOverride = false;
-    // The retry payload DELIBERATELY includes line items — the parser must
-    // force lineItems to null after a truncation recovery regardless.
-    stubState.invoiceFields = {
-      supplierName: "Replit Inc", amount: 250.48, currency: "USD",
-      reference: truncRef, invoiceDate: "2026-08-01",
-      periodLabel: null, notes: null,
-      lineItems: [{ description: "should be discarded", qty: 1, unitAmount: 1, amount: 1 }],
-    };
-    const trunc = await parseSupplierInvoiceText({ text: "x".repeat(200), contextLabel: "trunc probe" });
+    // Unit: a FAILED CogniDocs job → parse-failed (named, fail-loud).
+    cd.state.failNext = "unreadable scan";
+    const failedParse = await parseSupplierInvoiceDoc({ bytes: probeBytes, fileName: "unit.pdf" });
     check(
-      "truncation: max_tokens reply degrades to header-only parse (not parse-non-json)",
-      trunc.ok === true && trunc.fields.supplierName === "Replit Inc" &&
-        trunc.fields.amount === 250.48 && trunc.fields.reference === truncRef &&
-        trunc.fields.lineItems === null && trunc.lineItemsTruncated === true,
-      trunc,
-    );
-    check("truncation: retry carried the header-only override", stubState.sawHeaderOnlyOverride === true);
-    check("truncation: forced-reply queue fully consumed (exactly one retry)", stubState.invoiceForcedReplies.length === 0);
-
-    // Double truncation (retry ALSO cut off) fails loud with parse-failed.
-    stubState.invoiceForcedReplies = [
-      { text: truncatedJson, stopReason: "max_tokens" },
-      { text: truncatedJson, stopReason: "max_tokens" },
-    ];
-    const twice = await parseSupplierInvoiceText({ text: "x".repeat(200), contextLabel: "trunc twice probe" });
-    check(
-      "truncation: cut off twice → parse-failed (named, not non-json)",
-      twice.ok === false && twice.errorCode === "parse-failed" && /cut off/i.test(twice.errorMessage),
-      twice,
+      "parse: failed job → parse-failed",
+      failedParse.ok === false && failedParse.errorCode === "parse-failed",
+      failedParse,
     );
 
-    // End-to-end: an ingest whose FIRST parse reply truncates still returns
-    // a confirmation with the header fields prefis + a truncation note —
-    // never the blank "couldn't read supplier name..." clarification.
-    stubState.invoiceForcedReplies = [{ text: truncatedJson, stopReason: "max_tokens" }];
-    const truncPdf = await makePdf([
-      "TAX INVOICE", "Replit Inc",
-      `Invoice No: ${truncRef}`,
-      "Bill To: Cognirise Consulting FZ-LLC",
-      ...Array.from({ length: 60 }, (_, i) => `Item ${i + 1}: Agent usage project-${i + 1}  $3.90`),
-      "Amount Due: USD 250.48",
+    // Unit: a completed job with NO invoice payload (the document is a
+    // statement or unreadable) → parse-failed with the shape message,
+    // never invoice fields forced out of a non-invoice.
+    cd.state.invoice = null;
+    const notInvoice = await parseSupplierInvoiceDoc({ bytes: probeBytes, fileName: "unit.pdf" });
+    check(
+      "parse: no invoice payload → parse-failed 'did not parse as an invoice'",
+      notInvoice.ok === false &&
+        notInvoice.errorCode === "parse-failed" &&
+        /did not parse as an invoice/i.test(notInvoice.errorMessage),
+      notInvoice,
+    );
+
+    // Unit: neither API key configured → parse-not-configured (loud).
+    const savedSandboxKey = process.env.COGNIDOCS_SANDBOX_API_KEY;
+    delete process.env.COGNIDOCS_SANDBOX_API_KEY;
+    delete process.env.COGNIDOCS_API_KEY;
+    const noKeys = await parseSupplierInvoiceDoc({ bytes: probeBytes, fileName: "unit.pdf" });
+    check(
+      "parse: no API keys → parse-not-configured, never a silent fallback",
+      noKeys.ok === false && noKeys.errorCode === "parse-not-configured",
+      noKeys,
+    );
+    process.env.COGNIDOCS_SANDBOX_API_KEY = savedSandboxKey;
+    cd.state.invoice = defaultInvoicePayload();
+
+    // e2e: an ingest whose parse FAILS degrades to a clarification naming
+    // the error code — asks for the fields, never a dead end or a guess.
+    cd.state.failNext = "corrupt file";
+    const failPdf = await makePdf([
+      "TAX INVOICE", "Mystery Vendor LLC",
+      `fail ${TAG}`, "Subtotal VAT Bill To Due Date",
+      "Amount Due: AED ????",
     ]);
-    const truncAtt = await ingest(`replit-usage-${TAG}.pdf`, "application/pdf", truncPdf);
-    const t1: any = await ingestInv.run({ attachmentId: truncAtt }, mkCtx() as any);
+    const failAtt = await ingest(`fail-${TAG}.pdf`, "application/pdf", failPdf);
+    const f2: any = await ingestInv.run({ attachmentId: failAtt }, mkCtx() as any);
     check(
-      "truncation e2e: confirmation with header prefills, no blank clarification",
-      !!t1.confirmation && !t1.clarification &&
-        t1.confirmation?.pending?.input?.supplierName === "Replit Inc" &&
-        t1.confirmation?.pending?.input?.amount === 250.48 &&
-        t1.confirmation?.pending?.input?.reference === truncRef,
-      t1.clarification ?? t1.confirmation?.pending?.input,
-    );
-    check(
-      "truncation e2e: summary notes itemization was skipped (not 'none printed')",
-      /too long to read reliably/i.test(t1.confirmation?.summary ?? ""),
-      t1.confirmation?.summary,
+      "parse failure e2e: clarification names the parse error code",
+      !!f2.clarification && /couldn't be parsed/i.test(f2.clarification?.question ?? "") &&
+        /parse-failed/.test(f2.clarification?.question ?? ""),
+      f2.clarification?.question,
     );
 
-    // Long itemized invoice (many line rows) parses end-to-end when the
-    // reply FITS the new budget: all items survive into the confirmation.
+    // Long itemized invoice: 40 printed line rows (×10k ints) survive
+    // end-to-end into the confirmation — CogniDocs never truncates.
     const longRef = `LONG-${String(Date.now()).slice(-6)}`;
-    const manyItems = Array.from({ length: 40 }, (_, i) => ({
-      description: `Project row ${i + 1}`, qty: 1, unitAmount: 5, amount: 5,
-    }));
-    stubState.invoiceFields = {
-      supplierName: "Replit Inc", amount: 210, currency: "USD",
-      reference: longRef, invoiceDate: "2026-08-01",
-      periodLabel: "2026-07", notes: null, lineItems: manyItems,
-    };
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Replit Inc",
+      invoiceRef: longRef,
+      issueDate: "2026-08-01",
+      currency: "USD",
+      subtotalAmount10k: 2_000_000,
+      taxAmount10k: 100_000,
+      totalAmount10k: 2_100_000,
+      lineItems: Array.from({ length: 40 }, (_, i) => ({
+        description: `Project row ${i + 1}`,
+        quantity10k: 10_000,
+        unitPriceAmount10k: 50_000,
+        amount10k: 50_000,
+      })),
+    });
     const longPdf = await makePdf([
       "TAX INVOICE", "Replit Inc", `Invoice No: ${longRef}`,
       "Bill To: Cognirise Consulting FZ-LLC",
-      ...manyItems.map((it, i) => `Item ${i + 1}: ${it.description}  $5.00`),
+      ...Array.from({ length: 40 }, (_, i) => `Item ${i + 1}: Project row ${i + 1}  $5.00`),
       "Amount Due: USD 210.00",
     ]);
     const longAtt = await ingest(`replit-long-${TAG}.pdf`, "application/pdf", longPdf);
@@ -627,28 +600,61 @@ async function main() {
       "long invoice: 40 line rows parse end-to-end into the confirmation",
       !!l1.confirmation &&
         (l1.confirmation?.pending?.input?.lineItems ?? []).length === 40 &&
-        /40 printed line item/.test(l1.confirmation?.summary ?? ""),
+        /40 printed line item/.test(l1.confirmation?.summary ?? "") &&
+        l1.confirmation?.pending?.input?.amount === 210,
       { n: (l1.confirmation?.pending?.input?.lineItems ?? []).length, summary: l1.confirmation?.summary },
     );
 
-    // Parse-failure copy: an AI-reader failure names itself and offers a
-    // retry — distinct from the "no readable text" copy.
-    stubState.invoiceForcedReplies = [{ text: "sorry, I cannot help with that", stopReason: "end_turn" }];
-    const failPdf = await makePdf([
-      "TAX INVOICE", "Mystery Vendor LLC",
-      "Invoice No: unreadable", "Subtotal VAT Bill To Due Date",
-      "Amount Due: AED ????",
-    ]);
-    const failAtt = await ingest(`fail-${TAG}.pdf`, "application/pdf", failPdf);
-    const f2: any = await ingestInv.run({ attachmentId: failAtt }, mkCtx() as any);
+    // Task #1316 — CogniDocs' stable invoice.id is a THIRD dedupe signal:
+    // the same underlying bill re-uploaded as a DIFFERENT file (different
+    // bytes AND a differently-printed reference) still dedupes to
+    // alreadyFiled because CogniDocs recognizes the same invoice.
+    const cdRef = `CDID-${String(Date.now()).slice(-6)}`;
+    cd.state.invoice = defaultInvoicePayload({
+      id: `cdinv_${TAG}`,
+      vendorName: "Stable Docs LLC",
+      invoiceRef: cdRef,
+      issueDate: "2026-08-16",
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 5_000_000,
+    });
+    const cdPdfA = await makePdf(["TAX INVOICE", "Stable Docs LLC", `Invoice No: ${cdRef}`, "Amount Due: AED 500.00"]);
+    const cdAttA = await ingest(`stable-a-${TAG}.pdf`, "application/pdf", cdPdfA);
+    const s1: any = await ingestInv.run({ attachmentId: cdAttA }, mkCtx() as any);
     check(
-      "parse failure: clarification says the AI reader failed (retry or type), not 'no readable text'",
-      !!f2.clarification && /AI reader failed/i.test(f2.clarification?.question ?? "") &&
-        /parse-non-json/.test(f2.clarification?.question ?? ""),
-      f2.clarification?.question,
+      "cognidocs-id: phase 1 pins the parser-issued invoice id",
+      !!s1.confirmation && s1.confirmation?.pending?.input?.cognidocsInvoiceId === `cdinv_${TAG}`,
+      s1.confirmation?.pending?.input,
     );
-    stubState.invoiceFields = null;
-    stubState.invoiceForcedReplies = [];
+    const s2: any = await ingestInv.run(s1.confirmation.pending.input, mkCtx() as any);
+    check("cognidocs-id: first upload commits", s2.ok === true && !s2.data?.alreadyFiled, s2);
+    // Re-upload: different bytes, different printed reference — same id.
+    cd.state.invoice = defaultInvoicePayload({
+      id: `cdinv_${TAG}`,
+      vendorName: "Stable Docs LLC",
+      invoiceRef: `${cdRef}-COPY`,
+      issueDate: "2026-08-16",
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 5_000_000,
+    });
+    const cdPdfB = await makePdf(["TAX INVOICE", "Stable Docs LLC", `Invoice No: ${cdRef}-COPY`, "resent copy", "Amount Due: AED 500.00"]);
+    const cdAttB = await ingest(`stable-b-${TAG}.pdf`, "application/pdf", cdPdfB);
+    const s3: any = await ingestInv.run({ attachmentId: cdAttB }, mkCtx() as any);
+    check("cognidocs-id: re-upload phase 1 previews", !!s3.confirmation, s3);
+    const s4: any = await ingestInv.run(s3.confirmation.pending.input, mkCtx() as any);
+    check(
+      "cognidocs-id: different bytes + reference, same id → alreadyFiled",
+      s4.ok === true && s4.data?.alreadyFiled === true,
+      s4,
+    );
+    const stableRows = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.cognidocsInvoiceId, `cdinv_${TAG}`),
+    ));
+    check("cognidocs-id: exactly ONE row for the underlying bill", stableRows.length === 1, stableRows.length);
+    cd.state.invoice = defaultInvoicePayload();
   }
 
   // =============== 3) bank statement pipeline ===============
@@ -694,27 +700,48 @@ async function main() {
     );
     check("statement: forged confirm without valid token → preview, no import", !!forged.confirmation && forged.data?.rowsImported == null, forged);
 
-    // Task #1094 — garbage PDF (an invoice, not a statement) still gets the
-    // CSV-export guidance: its single date row has multiple amounts
-    // (subtotal/VAT/total), so extraction confidence is low → refuse.
+    // Task #1316 — a non-statement PDF (CogniDocs returns an invoice
+    // payload, no statement payload) refuses with not_a_statement + the
+    // CSV-export guidance, never forces rows out of an invoice.
     const pdfStmtAtt = await ingest(`stmt-${TAG}.pdf`, "application/pdf", invoicePdf);
     const pPdf: any = await importStmt.run({ attachmentId: pdfStmtAtt }, mkCtx() as any);
     check(
-      "statement: non-statement PDF → low-confidence refusal with CSV guidance",
-      pPdf.ok === false && pPdf.errorCode === "pdf_low_confidence" && /csv/i.test(pPdf.errorMessage ?? ""),
+      "statement: non-statement PDF → not_a_statement refusal with CSV guidance",
+      pPdf.ok === false && pPdf.errorCode === "not_a_statement" && /csv/i.test(pPdf.errorMessage ?? ""),
       pPdf,
     );
 
-    // Task #1094 — well-formed PDF statement: rows extracted, previewed,
-    // imported through the shared core, deduped on repeat.
+    // CogniDocs statement fixtures (the stub replays these; row identity
+    // is stub-driven, the PDF bytes only need to look like a PDF).
+    const stmtResult = (transactions: any[]): any => ({
+      bankId: null, bankName: "Emirates NBD", statementType: "bank_statement",
+      currency: "AED", accountRef: "****3456", periodStart: "2026-08-01",
+      periodEnd: "2026-08-31", partialImportWarning: null, transactions,
+    });
+    const txn = (t: { date: string; amount10k: number; direction: "debit" | "credit" | null } & Record<string, unknown>): any => ({
+      description: null, rawDescription: null, currency: null, balance10k: null,
+      normalizedMerchant: null, parsedMerchant: null, category: null, ...t,
+    });
+
+    // Task #1316 — well-formed PDF statement: sign comes ONLY from the
+    // explicit direction field (magnitude = |amount10k|), a direction-less
+    // row is flagged and skipped, rows import through the shared core and
+    // dedupe on repeat (phase 2 re-fetches the pinned parse job).
+    cd.state.invoice = null;
+    cd.state.statement = stmtResult([
+      txn({ date: "2026-08-02", description: "Acme Client incoming wire", rawDescription: `ref ${TAG}-PDF-1`, amount10k: 152_500_000, direction: "credit" }),
+      txn({ date: "2026-08-04", description: "DEWA utility bill payment", amount10k: 23_107_500, direction: "debit" }),
+      txn({ date: "2026-08-06", description: "Du Telecom monthly plan", rawDescription: `ref ${TAG}-PDF-2`, amount10k: 7_950_000, direction: "debit" }),
+      // Negative printed amount10k WITH explicit debit direction: the
+      // magnitude is |amount|, the sign obeys direction alone.
+      txn({ date: "2026-08-07", description: "Office rent payment", amount10k: -80_000_000, direction: "debit" }),
+      // No direction marker → flagged, never guessed.
+      txn({ date: "2026-08-08", description: "Misc entry", amount10k: 1_234_500, direction: null }),
+    ]);
     const stmtPdf = await makePdf([
       "Emirates NBD — Account Statement",
       "Account: Operating AED  ****3456",
-      `2026-08-02 Acme Client incoming wire ref ${TAG}-PDF-1 +15,250.00 CR`,
-      "2026-08-04 DEWA utility bill payment -2,310.75",
-      `2026-08-06 Du Telecom monthly plan ref ${TAG}-PDF-2 -795.00 DR`,
-      "2026-08-07 Office rent payment 8,000.00", // unsigned outflow wording
-      "2026-08-08 Misc entry 123.45", // no sign, no direction wording → flagged
+      `statement fixture ${TAG}`,
     ]);
     const goodPdfAtt = await ingest(`statement-${TAG}.pdf`, "application/pdf", stmtPdf);
     const q1: any = await importStmt.run(
@@ -733,19 +760,19 @@ async function main() {
     const du = rows.find((r) => /du telecom/i.test(r.counterparty ?? ""));
     const rent = rows.find((r) => /rent/i.test(r.counterparty ?? ""));
     check(
-      "statement PDF: explicit +CR / - / DR signs land correctly",
+      "statement PDF: ×10k amounts land as majors with direction-driven signs",
       wire?.amount === 15250 && wire?.confidence >= 0.7 &&
         dewa?.amount === -2310.75 && du?.amount === -795,
       rows,
     );
     check(
-      "statement PDF: unsigned amount with outflow wording imports NEGATIVE with kind=payment",
+      "statement PDF: negative amount10k + explicit debit → magnitude |amount|, sign from direction, kind=payment",
       rent?.amount === -8000 && rent?.confidence >= 0.7 && rent?.kind === "payment",
       rent,
     );
     const pdfFlagged = (q1.data?.preview?.pdf?.flagged ?? []) as any[];
     check(
-      "statement PDF: unsigned amount without direction wording is flagged, never guessed",
+      "statement PDF: direction-less row is flagged, never guessed",
       q1.data?.preview?.pdf?.flaggedRows === 1 &&
         pdfFlagged.some((f) => /misc entry/i.test(f.snippet ?? "") && /direction unclear/i.test(f.reason ?? "")) &&
         !rows.some((r) => Math.abs(r.amount) === 123.45),
@@ -777,88 +804,80 @@ async function main() {
     check("statement PDF: repeat confirm → alreadyImported (same dedupe as CSV)",
       q3.ok === true && q3.data?.alreadyImported === true, q3);
 
-    // Task #1112 — debit/credit-column layout: with a recognised
-    // Debit|Credit|Balance header, two-amount rows resolve their direction
-    // by exact running-balance arithmetic (trailing Balance column is used
-    // for verification only, never imported); a row whose arithmetic does
-    // not check out stays flagged, never guessed.
-    const dcPdf = await makePdf([
-      `ACME BANK — Statement of Account ${TAG}`,
-      "Currency AED",
-      "Date Description Debit Credit Balance",
-      "Opening Balance 10,000.00",
-      "Transaction details for the period",
-      `01/08/2026 Client payment ref ${TAG}-DC-1 2,500.00 12,500.00`, // credit
-      "02/08/2026 Office rent 8,000.00 4,500.00", // debit (despite no wording sign)
-      "03/08/2026 Misc entry 100.00 4,600.00", // credit despite neutral wording
-      "04/08/2026 Odd row 500.00 9,999.99", // arithmetic mismatch → flagged
-      "05/08/2026 Bank fee 99.99 9,900.00", // re-anchored on 9,999.99 → debit
+    // Task #1316 — sign convention edge: a credit row whose printed
+    // amount10k is NEGATIVE still lands POSITIVE (magnitude from |amount|,
+    // sign from the explicit direction field ONLY).
+    cd.state.statement = stmtResult([
+      txn({ date: "2026-08-12", description: "Refund from vendor", rawDescription: `ref ${TAG}-SIGN-1`, amount10k: -50_000_000, direction: "credit" }),
+      txn({ date: "2026-08-13", description: "Card fee", amount10k: 990_000, direction: "debit" }),
     ]);
-    const dcAtt = await ingest(`statement-dc-${TAG}.pdf`, "application/pdf", dcPdf);
+    const signPdf = await makePdf([`ACME BANK — Statement ${TAG} SIGN`, "sign-convention fixture"]);
+    const signAtt = await ingest(`statement-sign-${TAG}.pdf`, "application/pdf", signPdf);
     const d1: any = await importStmt.run(
-      { attachmentId: dcAtt, statementDate: "2026-08-12", bankAccountId: acctId },
+      { attachmentId: signAtt, statementDate: "2026-08-12", bankAccountId: acctId },
       mkCtx() as any,
     );
-    const dcRows = (d1.data?.preview?.pdf?.rows ?? []) as any[];
-    const dcFlagged = (d1.data?.preview?.pdf?.flagged ?? []) as any[];
+    const signRows = (d1.data?.preview?.pdf?.rows ?? []) as any[];
+    const refund = signRows.find((r) => /refund/i.test(r.counterparty ?? ""));
+    const fee = signRows.find((r) => /card fee/i.test(r.counterparty ?? ""));
     check(
-      "statement PDF (debit/credit columns): phase 1 previews 4 balance-verified rows",
-      !!d1.confirmation && d1.data?.preview?.pdf?.rowsExtracted === 4 && dcRows.length === 4,
-      d1.data?.preview?.pdf,
-    );
-    const dcCredit = dcRows.find((r) => /client payment/i.test(r.counterparty ?? ""));
-    const dcRent = dcRows.find((r) => /office rent/i.test(r.counterparty ?? ""));
-    const dcMisc = dcRows.find((r) => /misc entry/i.test(r.counterparty ?? ""));
-    const dcFee = dcRows.find((r) => /bank fee/i.test(r.counterparty ?? ""));
-    check(
-      "statement PDF (debit/credit columns): signs derived from balance arithmetic, balance column ignored",
-      dcCredit?.amount === 2500 && dcRent?.amount === -8000 && dcRent?.kind === "payment" &&
-        dcMisc?.amount === 100 && dcFee?.amount === -99.99 &&
-        // balance figures must never be imported as amounts
-        !dcRows.some((r) => [10000, 12500, 4500, 4600, 9999.99, 9900].includes(Math.abs(r.amount))),
-      dcRows,
-    );
-    check(
-      "statement PDF (debit/credit columns): arithmetic-mismatch row is flagged, never guessed",
-      d1.data?.preview?.pdf?.flaggedRows === 1 &&
-        dcFlagged.some((f) => /odd row/i.test(f.snippet ?? "") && /balance arithmetic/i.test(f.reason ?? "")),
-      dcFlagged,
-    );
-    const d2: any = await importStmt.run(d1.confirmation.pending.input, mkCtx() as any);
-    check(
-      "statement PDF (debit/credit columns): confirm imports the 4 verified rows",
-      d2.ok === true && d2.data?.rowsImported === 4,
-      d2,
-    );
-    const dcTxns = await db.select().from(atelierBankTransaction).where(and(
-      eq(atelierBankTransaction.orgId, ORG),
-      eq(atelierBankTransaction.statementImportId, d2.data?.importId ?? ""),
-    ));
-    check(
-      "statement PDF (debit/credit columns): stored signs match the balance-verified directions",
-      dcTxns.length === 4 &&
-        dcTxns.filter((t: any) => Number(t.amount) < 0).length === 2 &&
-        dcTxns.some((t: any) => Number(t.amount) === -8000) &&
-        dcTxns.some((t: any) => Number(t.amount) === 2500),
-      dcTxns.map((t: any) => ({ amount: t.amount, kind: t.kind })),
+      "statement PDF (sign edge): negative amount10k + credit direction → POSITIVE row",
+      !!d1.confirmation && d1.data?.preview?.pdf?.rowsExtracted === 2 &&
+        refund?.amount === 5000 && fee?.amount === -99,
+      signRows,
     );
 
-    // Same layout but NO recognisable header → two-amount rows stay
-    // ambiguous and the whole PDF refuses with CSV guidance (never guesses).
-    const noHdrPdf = await makePdf([
-      `ACME BANK — Statement of Account ${TAG} NOHDR`,
-      "01/08/2026 Client payment 2,500.00 12,500.00",
-      "02/08/2026 Office rent 8,000.00 4,500.00",
-    ]);
-    const noHdrAtt = await ingest(`statement-nohdr-${TAG}.pdf`, "application/pdf", noHdrPdf);
-    const dNo: any = await importStmt.run(
-      { attachmentId: noHdrAtt, statementDate: "2026-08-12", bankAccountId: acctId },
+    // Low overall job confidence (40 < the 0.6 floor) refuses with the
+    // CSV guidance even though every row is individually well-formed.
+    cd.state.confidence = 40;
+    const dLow: any = await importStmt.run(
+      { attachmentId: signAtt, statementDate: "2026-08-12", bankAccountId: acctId },
       mkCtx() as any,
     );
     check(
-      "statement PDF (no column header): multi-amount rows still refuse with CSV guidance",
-      dNo.ok === false && dNo.errorCode === "pdf_low_confidence" && /csv/i.test(dNo.errorMessage ?? ""),
-      dNo,
+      "statement PDF: low job confidence → pdf_low_confidence with CSV guidance",
+      dLow.ok === false && dLow.errorCode === "pdf_low_confidence" && /csv/i.test(dLow.errorMessage ?? ""),
+      dLow,
+    );
+    cd.state.confidence = 95;
+
+    // Every row direction-less → zero importable rows → refuse (never
+    // guesses a sign to force an import through).
+    cd.state.statement = stmtResult([
+      txn({ date: "2026-08-14", description: "Ambiguous one", amount10k: 25_000_000, direction: null }),
+      txn({ date: "2026-08-15", description: "Ambiguous two", amount10k: 12_500_000, direction: null }),
+    ]);
+    const ambPdf = await makePdf([`ACME BANK — Statement ${TAG} AMB`, "all-ambiguous fixture"]);
+    const ambAtt = await ingest(`statement-amb-${TAG}.pdf`, "application/pdf", ambPdf);
+    const dAmb: any = await importStmt.run(
+      { attachmentId: ambAtt, statementDate: "2026-08-15", bankAccountId: acctId },
+      mkCtx() as any,
+    );
+    check(
+      "statement PDF: all rows direction-less → refusal mentioning the ambiguous rows",
+      dAmb.ok === false && dAmb.errorCode === "pdf_low_confidence" &&
+        /csv/i.test(dAmb.errorMessage ?? "") && /2 row/.test(dAmb.errorMessage ?? ""),
+      dAmb,
+    );
+
+    // Forged PDF confirm: confirm:true with a bogus pinned cognidocsJobId
+    // and no valid commit token degrades to a fresh phase-1 preview (a
+    // NEW parse submit) — never a write, never a fetch of the forged job.
+    cd.state.statement = stmtResult([
+      txn({ date: "2026-08-16", description: "Legit row", amount10k: 10_000_000, direction: "credit" }),
+    ]);
+    const forgedPdf: any = await importStmt.run(
+      {
+        attachmentId: ambAtt, statementDate: "2026-08-16", bankAccountId: acctId,
+        cognidocsJobId: "cdj_forged_nonexistent", confirm: true, commitToken: "deadbeef",
+      },
+      mkCtx() as any,
+    );
+    check(
+      "statement PDF: forged confirm with bogus jobId → re-preview via fresh parse, no import",
+      !!forgedPdf.confirmation && forgedPdf.data?.rowsImported == null &&
+        forgedPdf.confirmation?.pending?.input?.cognidocsJobId !== "cdj_forged_nonexistent",
+      forgedPdf,
     );
 
     // Unknown account id must be rejected, never silently re-picked.
@@ -936,16 +955,16 @@ async function main() {
 
     // File an UNPAID supplier invoice first (the bill arrived last week).
     const lateRef = `LATE-${String(Date.now()).slice(-6)}`;
-    stubState.invoiceFields = {
-      supplierName: "Oasis Catering LLC",
-      amount: 777.25,
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Oasis Catering LLC",
+      invoiceRef: lateRef,
+      issueDate: "2026-08-10",
       currency: "AED",
-      reference: lateRef,
-      invoiceDate: "2026-08-10",
-      periodLabel: null,
-      notes: null,
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 7_772_500,
       lineItems: null,
-    };
+    });
     const lateInvPdf = await makePdf([
       "TAX INVOICE",
       "Oasis Catering LLC",
@@ -959,7 +978,6 @@ async function main() {
     check("attach: unpaid invoice phase 1 previews", !!li1.confirmation, li1);
     const li2: any = await ingestInv.run(li1.confirmation.pending.input, mkCtx() as any);
     check("attach: unpaid invoice committed", li2.ok === true, li2);
-    stubState.invoiceFields = null;
     const [lateRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
       eq(atelierPartnerFirmInvoices.orgId, ORG),
       eq(atelierPartnerFirmInvoices.reference, lateRef),
@@ -1066,14 +1084,16 @@ async function main() {
     // One receipt can NEVER pay two bills: a SECOND invoice printing the
     // same reference exists, but attaching the already-used receipt to it
     // by explicit invoiceId is refused org-wide on the receipt hash.
-    stubState.invoiceFields = {
-      supplierName: "Oasis Catering LLC",
-      amount: 777.25,
+    cd.state.invoice = defaultInvoicePayload({
+      vendorName: "Oasis Catering LLC",
+      invoiceRef: `${lateRef}B`,
+      issueDate: "2026-08-12",
       currency: "AED",
-      reference: `${lateRef}B`,
-      invoiceDate: "2026-08-12",
-      periodLabel: null, notes: null, lineItems: null,
-    };
+      subtotalAmount10k: null,
+      taxAmount10k: null,
+      totalAmount10k: 7_772_500,
+      lineItems: null,
+    });
     const twinInvPdf = await makePdf([
       "TAX INVOICE",
       "Oasis Catering LLC",
@@ -1085,7 +1105,7 @@ async function main() {
     const ti1: any = await ingestInv.run({ attachmentId: twinInvAtt }, mkCtx() as any);
     const ti2: any = await ingestInv.run(ti1.confirmation.pending.input, mkCtx() as any);
     check("attach: second bill filed unpaid", ti2.ok === true, ti2);
-    stubState.invoiceFields = null;
+    cd.state.invoice = defaultInvoicePayload();
     const [twinRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
       eq(atelierPartnerFirmInvoices.orgId, ORG),
       eq(atelierPartnerFirmInvoices.reference, `${lateRef}B`),
@@ -1201,7 +1221,130 @@ async function main() {
     }
   }
 
+  // =============== 6) REST billing-hub upload parses via CogniDocs ===============
+  // The multipart upload surface (POST /finance/payables/supplier-invoices)
+  // must get the same extraction as chat ingest: parsed fields fill blanks,
+  // user-typed values always win, the stable CogniDocs invoice id joins the
+  // dedupe check, and a parse failure never blocks a complete manual entry.
+  {
+    const appMod = await import("../../src/app.js");
+    const app = appMod.default;
+    const server = app.listen(0);
+    await new Promise<void>((r) => server.once("listening", () => r()));
+    const { port } = server.address() as AddressInfo;
+    const upload = async (fields: Record<string, string>, bytes: Buffer, name: string) => {
+      const fd = new FormData();
+      fd.append("file", new Blob([new Uint8Array(bytes)], { type: "application/pdf" }), name);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/atelier/finance/payables/supplier-invoices`,
+        { method: "POST", headers: { cookie: `atelier_persona=${IDS.fp}` }, body: fd },
+      );
+      const txt = await res.text();
+      let parsed: any = null;
+      try { parsed = txt ? JSON.parse(txt) : null; } catch { parsed = txt; }
+      return { status: res.status, body: parsed };
+    };
+
+    // (a) file-only upload — everything comes from the parse.
+    const restRef = `REST-${TAG}-1`;
+    cd.state.invoice = defaultInvoicePayload({
+      id: `cdinv_rest_${TAG}`,
+      vendorName: `Rest Upload Vendor ${TAG}`,
+      invoiceRef: restRef,
+      issueDate: "2026-08-20",
+      currency: "AED",
+      subtotalAmount10k: 31_428_600,
+      taxAmount10k: 1_571_400,
+      totalAmount10k: 33_000_000, // AED 3,300.00
+    });
+    const up1 = await upload(
+      {},
+      await makePdf([`REST UPLOAD INVOICE ${TAG}`, `Ref: ${restRef}`, "Amount Due: AED 3,300.00"]),
+      `rest-invoice-${TAG}.pdf`,
+    );
+    check("rest upload: file-only submission succeeds via parsed fields", up1.status === 201, { status: up1.status, body: up1.body });
+    check("rest upload: parse note reports ok", up1.body?.parse?.status === "ok", up1.body?.parse);
+    check(
+      "rest upload: parsed fields fill supplier/amount/reference/currency",
+      up1.body?.item?.supplierName === `Rest Upload Vendor ${TAG}` &&
+        up1.body?.item?.reference === restRef &&
+        Number(up1.body?.item?.amount) === 3300 &&
+        up1.body?.item?.currency === "AED",
+      up1.body?.item,
+    );
+    check(
+      "rest upload: submits declaredType 'invoice' (typed surface)",
+      cd.state.lastSubmit?.declaredType === "invoice",
+      cd.state.lastSubmit?.declaredType,
+    );
+    const [restRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.cognidocsInvoiceId, `cdinv_rest_${TAG}`),
+    ));
+    check("rest upload: CogniDocs invoice id persisted on the row", !!restRow, restRow?.id);
+
+    // (b) same underlying invoice, DIFFERENT bytes + DIFFERENT printed ref —
+    // only the CogniDocs id can catch this duplicate.
+    cd.state.invoice = defaultInvoicePayload({
+      id: `cdinv_rest_${TAG}`,
+      vendorName: `Rest Upload Vendor ${TAG}`,
+      invoiceRef: `REST-${TAG}-rescan`,
+      totalAmount10k: 33_000_000,
+    });
+    const up1b = await upload(
+      {},
+      await makePdf([`REST UPLOAD INVOICE ${TAG} rescanned copy`, "Amount Due: AED 3,300.00"]),
+      `rest-invoice-rescan-${TAG}.pdf`,
+    );
+    check(
+      "rest upload: repeated CogniDocs id dedupes even across bytes+reference",
+      up1b.status === 409,
+      { status: up1b.status, body: up1b.body },
+    );
+
+    // (c) typed fields ALWAYS win over parsed values.
+    cd.state.invoice = defaultInvoicePayload({
+      id: `cdinv_rest2_${TAG}`,
+      vendorName: "Parsed Vendor Should Lose",
+      invoiceRef: `REST-${TAG}-parsed`,
+      currency: "AED",
+      totalAmount10k: 99_990_000,
+    });
+    const up2 = await upload(
+      { supplierName: `Typed Vendor ${TAG}`, amount: "1200.5", currency: "USD", reference: `REST-${TAG}-typed` },
+      await makePdf([`ANOTHER REST INVOICE ${TAG}`]),
+      `rest-invoice2-${TAG}.pdf`,
+    );
+    check(
+      "rest upload: user-typed fields win over parsed values",
+      up2.status === 201 &&
+        up2.body?.item?.supplierName === `Typed Vendor ${TAG}` &&
+        up2.body?.item?.reference === `REST-${TAG}-typed` &&
+        Number(up2.body?.item?.amount) === 1200.5 &&
+        up2.body?.item?.currency === "USD",
+      { status: up2.status, item: up2.body?.item },
+    );
+
+    // (d) parse failure + complete manual fields → invoice still created,
+    // failure surfaced in the response (reported, never silently dropped).
+    cd.state.failNext = "processing_error";
+    const up3 = await upload(
+      { supplierName: `Manual Vendor ${TAG}`, amount: "500", currency: "AED", reference: `REST-${TAG}-manual` },
+      await makePdf([`MANUAL REST INVOICE ${TAG}`]),
+      `rest-invoice3-${TAG}.pdf`,
+    );
+    check(
+      "rest upload: parse failure never blocks a complete manual submission",
+      up3.status === 201 && up3.body?.parse?.status === "failed",
+      { status: up3.status, parse: up3.body?.parse },
+    );
+
+    await new Promise<void>((r) => server.close(() => r()));
+  }
+
   stub.close();
+  await cd.close();
   console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }

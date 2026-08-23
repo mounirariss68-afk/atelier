@@ -51,4 +51,35 @@ export function classifyKind(amount: number, hint: string | null): BankTxnKind {
   return "other";
 }
 
+function csvCell(v: string | number | null): string {
+  const s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * Task #1316 — serialise normalised rows into the canonical CSV shape the
+ * shared `importStatementCore` consumes, so a parsed PDF statement runs
+ * through the exact same dedupe + audit semantics as a CSV upload.
+ * Deterministic: the same rows always produce the same text (and therefore
+ * the same dedupe hash). Amounts serialise at 4 decimal places — CogniDocs
+ * amounts are integers ×10,000, so 4dp is lossless and keeps 3-decimal
+ * currencies (KWD/BHD/OMR) exact through the CSV round-trip.
+ */
+export function rowsToCanonicalCsv(rows: ParsedBankRow[]): string {
+  const lines = ["date,amount,counterparty,reference,currency,kind"];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.postedDate,
+        r.amount.toFixed(4),
+        csvCell(r.counterpartyNameRaw),
+        csvCell(r.referenceRaw),
+        r.currency,
+        r.kind,
+      ].join(","),
+    );
+  }
+  return lines.join("\n");
+}
+
 export { parseCsv, parseXero };
