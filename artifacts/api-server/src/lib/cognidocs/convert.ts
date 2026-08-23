@@ -208,11 +208,17 @@ export function statementRowsFromJob(
   const rows: StatementPreviewRow[] = [];
   const flagged: FlaggedStatementRow[] = [];
   for (const t of stmt.transactions ?? []) {
-    const date = str(t.date);
+    // The guide promises calendar dates as YYYY-MM-DD, but the live service
+    // serializes them as full ISO 8601 timestamps ("2026-08-03T00:00:00.000Z").
+    // Accept both by taking the LITERAL date part of the string — never a
+    // timezone-shifting Date parse. Anything else stays flagged, not guessed.
+    const rawDate = str(t.date);
+    const dateMatch = rawDate?.match(/^(\d{4}-\d{2}-\d{2})(?:T\S*)?$/);
+    const date = dateMatch ? dateMatch[1] : null;
     const desc = str(t.description) ?? str(t.rawDescription) ?? "";
-    const snippet = `${date ?? "?"} ${desc}`.slice(0, 160);
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      flagged.push({ dateToken: date ?? "?", snippet, reason: "unparseable posting date", confidence: 0.3 });
+    const snippet = `${rawDate ?? "?"} ${desc}`.slice(0, 160);
+    if (!date) {
+      flagged.push({ dateToken: rawDate ?? "?", snippet, reason: "unparseable posting date", confidence: 0.3 });
       continue;
     }
     if (typeof t.amount10k !== "number" || !Number.isFinite(t.amount10k) || t.amount10k === 0) {

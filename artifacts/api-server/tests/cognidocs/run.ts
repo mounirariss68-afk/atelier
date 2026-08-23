@@ -294,6 +294,39 @@ async function main() {
       );
     }
 
+    // Live service serializes transaction dates as full ISO 8601 timestamps
+    // ("2026-08-03T00:00:00.000Z") even though the guide says YYYY-MM-DD.
+    // The converter must take the LITERAL date part (no timezone-shifting
+    // Date parse) and still flag genuinely unparseable tokens.
+    {
+      const isoJob = completedJob({
+        confidence: 95,
+        result: {
+          documentType: "bank_statement", parserPath: null, confidence: null, invoice: null,
+          statement: {
+            bankId: null, bankName: null, statementType: "bank_statement", currency: "AED",
+            accountRef: null, periodStart: null, periodEnd: null, partialImportWarning: null,
+            transactions: [
+              { date: "2026-08-03T00:00:00.000Z", description: "ISO timestamp row", rawDescription: null, amount10k: 150_000_000, currency: null, direction: "credit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
+              { date: "2026-08-05", description: "Bare date row", rawDescription: null, amount10k: 22_005_000, currency: null, direction: "debit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
+              { date: "03/08/2026", description: "Garbage date row", rawDescription: null, amount10k: 10_000, currency: null, direction: "debit", balance10k: null, normalizedMerchant: null, parsedMerchant: null, category: null },
+            ],
+          },
+        },
+      });
+      const iso = statementRowsFromJob(isoJob, "AED");
+      check(
+        "convert: ISO-timestamp posting dates accepted literally, bare dates unchanged, garbage still flagged",
+        iso?.rows.length === 2 &&
+          iso.rows[0].postedDate === "2026-08-03" &&
+          iso.rows[0].amount === 15000 &&
+          iso.rows[1].postedDate === "2026-08-05" &&
+          iso.flagged.length === 1 &&
+          iso.flagged[0].reason === "unparseable posting date",
+        { rows: iso?.rows.map((r) => [r.postedDate, r.amount]), flagged: iso?.flagged },
+      );
+    }
+
     // Invoice: ×10k mapping, 50-item cap, reconciliation warning.
     const manyItems = Array.from({ length: 60 }, (_, i) => ({
       description: `Row ${i + 1}`, quantity10k: 10_000, unitPriceAmount10k: 25_000, amount10k: 25_000, taxAmount10k: null,
