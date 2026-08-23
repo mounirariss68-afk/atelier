@@ -292,6 +292,56 @@ async function main() {
     cd.state.confidence = 95;
   }
 
+  // =============== 2d) Task #1318 — password-protected invoice PDF ===============
+  // Banks/vendors email locked PDFs: the ingest asks for the password via a
+  // clarification (NEVER storing it — not in the partial, not in the pin),
+  // a wrong password gets a distinct incorrect-password retry, and the
+  // right one flows into a normal confirmation + commit.
+  {
+    const PW = `pw-${TAG}`;
+    cd.state.requiredPassword = PW;
+    cd.state.invoice = defaultInvoicePayload({ invoiceRef: `LOCK-${TAG}` });
+    const lockPdf = await makePdf(["TAX INVOICE", "Gulf Office Supplies LLC", `Invoice No: LOCK-${TAG}`, "Amount Due: AED 4,725.50"]);
+    const lockAtt = await ingest(`locked-invoice-${TAG}.pdf`, "application/pdf", lockPdf);
+    const w1: any = await ingestInv.run({ attachmentId: lockAtt }, mkCtx() as any);
+    check(
+      "invoice locked: phase 1 → password clarification, never a generic failure",
+      w1.ok === true && !!w1.clarification && w1.clarification.field === "password" &&
+        !w1.confirmation && /password-protected/i.test(w1.clarification.question ?? ""),
+      w1.clarification ?? w1,
+    );
+    check(
+      "invoice locked: clarification partial never carries the password",
+      !("password" in (w1.clarification?.partial ?? {})),
+      w1.clarification?.partial,
+    );
+    const w2: any = await ingestInv.run({ ...w1.clarification.partial, password: "wrong-pass" }, mkCtx() as any);
+    check(
+      "invoice locked: wrong password → distinct incorrect-password retry",
+      !!w2.clarification && w2.clarification.field === "password" &&
+        /didn't unlock/i.test(w2.clarification.question ?? "") &&
+        !("password" in (w2.clarification?.partial ?? {})),
+      w2.clarification ?? w2,
+    );
+    const w3: any = await ingestInv.run({ ...w2.clarification.partial, password: PW }, mkCtx() as any);
+    check("invoice locked: correct password → normal confirmation", !!w3.confirmation, w3);
+    check(
+      "invoice locked: password reached the parser but never the commit pin",
+      cd.state.lastSubmit?.password === PW &&
+        !("password" in (w3.confirmation?.pending?.input ?? {})),
+      { lastPw: cd.state.lastSubmit?.password, pinKeys: Object.keys(w3.confirmation?.pending?.input ?? {}) },
+    );
+    const w4: any = await ingestInv.run(w3.confirmation.pending.input, mkCtx() as any);
+    check("invoice locked: confirm commits (no re-parse, no password needed)", w4.ok === true && !w4.confirmation, w4);
+    const [lockRow] = await db.select().from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.orgId, ORG),
+      eq(atelierPartnerFirmInvoices.reference, `LOCK-${TAG}`),
+    ));
+    check("invoice locked: committed row exists", !!lockRow, lockRow?.id);
+    cd.state.requiredPassword = null;
+    cd.state.invoice = defaultInvoicePayload();
+  }
+
   // =============== 2b) Task #1250 — invoice+receipt pairing ===============
   {
     const pairRef = `YBJGOJ-${String(Date.now()).slice(-6)}`;
@@ -886,6 +936,470 @@ async function main() {
       mkCtx() as any,
     );
     check("statement: unknown account id → not_found", pBad.ok === false && pBad.errorCode === "not_found", pBad);
+
+    // Task #1318 — password-protected statement PDF. The password is asked
+    // via clarification and never persisted; when a later clarification
+    // (which bank account?) follows the unlocked parse, its partial pins
+    // the parse job (jobId + HMAC token) so the continuation re-fetches it
+    // instead of re-parsing — otherwise the never-stored password would be
+    // re-asked in a loop.
+    {
+      const PW = `stmt-pw-${TAG}`;
+      cd.state.requiredPassword = PW;
+      cd.state.invoice = null;
+      cd.state.statement = stmtResult([
+        txn({ date: "2026-08-18", description: "Locked wire in", rawDescription: `ref ${TAG}-LOCK-1`, amount10k: 100_000_000, direction: "credit" }),
+        txn({ date: "2026-08-19", description: "Locked fee", amount10k: 5_000_000, direction: "debit" }),
+      ]);
+      const lockPdf = await makePdf([`ACME BANK — Statement ${TAG} LOCKED`, "password fixture"]);
+      const lockAtt = await ingest(`statement-locked-${TAG}.pdf`, "application/pdf", lockPdf);
+      const l1: any = await importStmt.run({ attachmentId: lockAtt, statementDate: "2026-08-19" }, mkCtx() as any);
+      check(
+        "statement locked: phase 1 → password clarification, never a generic failure",
+        l1.ok === true && !!l1.clarification && l1.clarification.field === "password" &&
+          /password-protected/i.test(l1.clarification.question ?? "") &&
+          !("password" in (l1.clarification?.partial ?? {})),
+        l1.clarification ?? l1,
+      );
+      const l2: any = await importStmt.run({ ...l1.clarification.partial, password: "wrong" }, mkCtx() as any);
+      check(
+        "statement locked: wrong password → distinct incorrect-password retry",
+        !!l2.clarification && l2.clarification.field === "password" &&
+          /didn't unlock/i.test(l2.clarification.question ?? ""),
+        l2.clarification ?? l2,
+      );
+      // Correct password, but no bankAccountId → the NEXT clarification
+      // must pin the unlocked parse job.
+      const l3: any = await importStmt.run({ ...l2.clarification.partial, password: PW }, mkCtx() as any);
+      check(
+        "statement locked: correct password → bankAccountId clarification pinning jobId + token, no password",
+        !!l3.clarification && l3.clarification.field === "bankAccountId" &&
+          typeof l3.clarification.partial?.cognidocsJobId === "string" &&
+          typeof l3.clarification.partial?.cognidocsJobToken === "string" &&
+          !("password" in (l3.clarification?.partial ?? {})),
+        l3.clarification?.partial,
+      );
+      // Continuation WITHOUT the password must reuse the job, not re-parse
+      // (requiredPassword is still armed — a re-submit would 422).
+      const submitsBefore = cd.state.submits;
+      const l4: any = await importStmt.run({ ...l3.clarification.partial, bankAccountId: acctId }, mkCtx() as any);
+      check(
+        "statement locked: clarification continuation re-fetches the pinned job (no re-submit, no password re-ask)",
+        !!l4.confirmation && cd.state.submits === submitsBefore &&
+          l4.data?.preview?.pdf?.rowsExtracted === 2,
+        { submitsBefore, submitsAfter: cd.state.submits, out: l4.clarification ?? l4.confirmation?.summary },
+      );
+      check(
+        "statement locked: confirm pin carries jobId but never the password",
+        l4.confirmation?.pending?.input?.cognidocsJobId === l3.clarification.partial.cognidocsJobId &&
+          !("password" in (l4.confirmation?.pending?.input ?? {})),
+        Object.keys(l4.confirmation?.pending?.input ?? {}),
+      );
+      // A forged clarify-token must NOT unlock the pin path: it degrades to
+      // a fresh parse, which (still locked) re-asks for the password.
+      const forgedTok: any = await importStmt.run(
+        {
+          attachmentId: lockAtt, statementDate: "2026-08-19", bankAccountId: acctId,
+          cognidocsJobId: l3.clarification.partial.cognidocsJobId, cognidocsJobToken: "deadbeef",
+        },
+        mkCtx() as any,
+      );
+      check(
+        "statement locked: forged clarify token → fresh parse → password clarification (no pin reuse)",
+        !!forgedTok.clarification && forgedTok.clarification.field === "password",
+        forgedTok.clarification ?? forgedTok,
+      );
+      const l5: any = await importStmt.run(l4.confirmation.pending.input, mkCtx() as any);
+      check(
+        "statement locked: confirm imports rows while the document is still locked upstream",
+        l5.ok === true && l5.data?.rowsImported === 2,
+        l5,
+      );
+      cd.state.requiredPassword = null;
+      cd.state.statement = null;
+    }
+  }
+
+  // =============== 3b) Task #1318 — password answers through the REAL orchestrator ===============
+  // Capability-level tests call tool.run directly, so they can't see what
+  // runTurn PERSISTS. This section drives wrong → correct password answers
+  // through the real chat turn path and asserts the password never lands in
+  // ANY durable or streamed surface — turn prompt, frames, toolCalls,
+  // pendingWrite pin, session rolling summary/title, session facts — while
+  // the CogniDocs stub still receives it BYTE-FOR-BYTE (no trim, no cap).
+  {
+    const CLI: any = await import("../../src/lib/atelier-cli/index.js");
+    const { runTurn, SENSITIVE_PROMPT_PLACEHOLDER, stripSensitiveValues } = CLI;
+    const { atelierCliSessions, atelierCliTurns, atelierCliSessionFacts } =
+      (await import("@workspace/db")) as any;
+
+    // Pure helper semantics first.
+    const scrubbed = stripSensitiveValues({
+      a: 1, password: "s3cret", nested: { password: "s3cret", keep: "x" },
+      arr: [{ password: "s3cret" }],
+    });
+    check(
+      "e2e helper: stripSensitiveValues deep-REMOVES password keys, keeps the rest",
+      scrubbed.password === undefined && scrubbed.nested.password === undefined &&
+        scrubbed.arr[0].password === undefined && scrubbed.a === 1 && scrubbed.nested.keep === "x",
+      scrubbed,
+    );
+
+    // Byte-exactness fixture: leading/trailing spaces, >200 chars, and a
+    // command-opener first word ("show") that the bare-prompt freshness
+    // gate would misroute as a fresh request if the sensitive bypass
+    // regressed. PWMARK is the distinctive needle for leak scans.
+    const PWMARK = `pw-${TAG}`;
+    const PW = ` show ${"x".repeat(205)} ${PWMARK} `;
+    const WRONG = `totally-wrong-${PWMARK}`;
+    cd.state.requiredPassword = PW;
+    cd.state.invoice = null;
+    cd.state.statement = {
+      bankId: null, bankName: "Emirates NBD", statementType: "bank_statement",
+      currency: "AED", accountRef: "****3456", periodStart: "2026-08-01",
+      periodEnd: "2026-08-31", partialImportWarning: null,
+      transactions: [{
+        date: "2026-08-21", description: "E2E locked wire", rawDescription: `ref ${TAG}-E2ELOCK`,
+        amount10k: 12_345_600, direction: "credit", currency: null, balance10k: null,
+        normalizedMerchant: null, parsedMerchant: null, category: null,
+      }],
+    };
+    const e2ePdf = await makePdf([`E2E LOCKED STATEMENT ${TAG}`]);
+    const e2eAtt = await ingest(`e2e-locked-${TAG}.pdf`, "application/pdf", e2ePdf);
+
+    // Seed the paused source turn the way a real locked upload leaves it
+    // (awaiting_clarification on field "password"), in a fresh session so
+    // the first answer exercises the rehydrate-from-DB prompt REPAIR path.
+    const sessId = `clis_${TAG}_pw`;
+    const srcTurn = `clit_${TAG}_pwsrc`;
+    await db.insert(atelierCliSessions).values({
+      id: sessId, orgId: ORG, userId: IDS.fp, title: null,
+    });
+    await db.insert(atelierCliTurns).values({
+      id: srcTurn, orgId: ORG, sessionId: sessId, userId: IDS.fp,
+      status: "awaiting_clarification",
+      prompt: "import the locked statement (e2e probe)",
+      frames: [{
+        type: "needs_clarification",
+        data: {
+          step: 0, tool: "import_bank_statement", field: "password",
+          question: "This statement PDF is password-protected — what's the password?",
+          partial: { attachmentId: e2eAtt, statementDate: "2026-08-21", bankAccountId: `bank_${TAG}_1` },
+          fields: [{ field: "password", label: "PDF password" }],
+        },
+      }],
+    });
+
+    const persona = fpPersona as any;
+
+    // ---- turn 1: WRONG password via explicit continuation ----
+    const emitted1: any[] = [];
+    const r1: any = await runTurn(
+      { prompt: WRONG, continuesTurnId: srcTurn, sessionId: sessId },
+      { persona, emit: (f: any) => emitted1.push(f) },
+    );
+    check(
+      "e2e locked: wrong password → distinct incorrect-password re-ask through runTurn",
+      emitted1.some((f) => f.type === "needs_clarification" &&
+        f.data?.field === "password" && /didn't unlock/i.test(f.data?.question ?? "")),
+      emitted1.map((f) => f.type),
+    );
+    check(
+      "e2e locked: wrong password never streamed back in any frame",
+      !JSON.stringify(emitted1).includes(WRONG),
+      null,
+    );
+    const [row1] = await db.select().from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, r1.turnId));
+    check(
+      "e2e locked: wrong-password turn prompt persisted as placeholder (rehydrated repair path)",
+      row1?.prompt === SENSITIVE_PROMPT_PLACEHOLDER,
+      row1?.prompt,
+    );
+    check(
+      "e2e locked: wrong password nowhere in the persisted turn row",
+      !!row1 && !JSON.stringify(row1).includes(WRONG),
+      null,
+    );
+
+    // ---- turn 2: CORRECT password as a BARE prompt (no continuesTurnId).
+    // Starts with a command opener + >200 chars: without the sensitive
+    // gate bypass this would be misrouted as a fresh request.
+    const emitted2: any[] = [];
+    const r2: any = await runTurn(
+      { prompt: PW, sessionId: sessId },
+      { persona, emit: (f: any) => emitted2.push(f) },
+    );
+    check(
+      "e2e locked: correct password (bare prompt) → confirmation preview, not a fresh request",
+      r2.status === "awaiting_confirmation" &&
+        emitted2.some((f) => f.type === "needs_confirmation"),
+      { status: r2.status, types: emitted2.map((f) => f.type) },
+    );
+    check(
+      "e2e locked: password reached CogniDocs BYTE-FOR-BYTE (spaces + length preserved, no cap)",
+      cd.state.lastSubmit?.password === PW,
+      { gotLen: cd.state.lastSubmit?.password?.length, wantLen: PW.length },
+    );
+    const tcFrame = emitted2.find((f) => f.type === "tool_call");
+    check(
+      "e2e locked: streamed tool_call frame input has the password key REMOVED",
+      !!tcFrame && !("password" in (tcFrame.data?.input ?? {})) &&
+        tcFrame.data?.input?.attachmentId === e2eAtt,
+      tcFrame?.data?.input && Object.keys(tcFrame.data.input),
+    );
+    check(
+      "e2e locked: password never streamed back in any frame",
+      !JSON.stringify(emitted2).includes(PWMARK),
+      null,
+    );
+    const [row2] = await db.select().from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, r2.turnId));
+    check(
+      "e2e locked: correct-password turn prompt persisted as placeholder (pre-insert path)",
+      row2?.prompt === SENSITIVE_PROMPT_PLACEHOLDER,
+      row2?.prompt,
+    );
+    check(
+      "e2e locked: password nowhere in persisted frames/toolCalls/pendingWrite",
+      !!row2 && !JSON.stringify(row2).includes(PWMARK),
+      null,
+    );
+    check(
+      "e2e locked: pendingWrite pin present but password-free (confirm re-fetches by jobId)",
+      !!row2?.pendingWrite && !("password" in ((row2.pendingWrite as any)?.input ?? {})) &&
+        typeof (row2.pendingWrite as any)?.input?.cognidocsJobId === "string",
+      row2?.pendingWrite && Object.keys((row2.pendingWrite as any)?.input ?? {}),
+    );
+
+    // ---- durable session surfaces: rolling summary, title, facts ----
+    await new Promise((r) => setTimeout(r, 400)); // fire-and-forget title
+    const [sess] = await db.select().from(atelierCliSessions)
+      .where(eq(atelierCliSessions.id, sessId));
+    check(
+      "e2e locked: session rolling summary + title never contain the password",
+      !!sess && !JSON.stringify(sess).includes(PWMARK) && !JSON.stringify(sess).includes(WRONG),
+      null,
+    );
+    const factRows = await db.select().from(atelierCliSessionFacts)
+      .where(eq(atelierCliSessionFacts.sessionId, sessId));
+    check(
+      "e2e locked: session facts never contain the password",
+      !JSON.stringify(factRows).includes(PWMARK) && !JSON.stringify(factRows).includes(WRONG),
+      null,
+    );
+
+    // ---- HTTP ingress coverage: the REAL /cli/turn route must not trim,
+    // truncate, or misroute password answers. Ingress historically trimmed
+    // every prompt, rejected >4000 chars, and cut clarificationValues at
+    // 2000 chars — all of which silently corrupt a valid password before
+    // runTurn can see the pending sensitive clarification.
+    const appMod = await import("../../src/app.js");
+    const appSrv = appMod.default.listen(0);
+    await new Promise<void>((r) => appSrv.once("listening", () => r()));
+    const { port: cliPort } = appSrv.address() as AddressInfo;
+    const sseTurn = async (bodyObj: Record<string, unknown>) => {
+      const res = await fetch(`http://127.0.0.1:${cliPort}/api/atelier/cli/turn`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `atelier_persona=${IDS.fp}`,
+        },
+        body: JSON.stringify(bodyObj),
+      });
+      const text = await res.text();
+      const frames: Array<{ type: string; data: any }> = [];
+      const re = /event: ([^\n]+)\ndata: ([^\n]*)\n/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text))) {
+        try {
+          frames.push({ type: m[1], data: JSON.parse(m[2]) });
+        } catch {
+          frames.push({ type: m[1], data: m[2] });
+        }
+      }
+      return { status: res.status, text, frames };
+    };
+    const seedLockedAsk = async (suffix: string, attId: string) => {
+      const sid = `clis_${TAG}_${suffix}`;
+      const tid = `clit_${TAG}_${suffix}src`;
+      await db.insert(atelierCliSessions).values({
+        id: sid, orgId: ORG, userId: IDS.fp, title: `locked ${suffix}`,
+      });
+      await db.insert(atelierCliTurns).values({
+        id: tid, orgId: ORG, sessionId: sid, userId: IDS.fp,
+        status: "awaiting_clarification",
+        prompt: `import the locked statement (${suffix})`,
+        frames: [{
+          type: "needs_clarification",
+          data: {
+            step: 0, tool: "import_bank_statement", field: "password",
+            question: "This statement PDF is password-protected — what's the password?",
+            partial: { attachmentId: attId, statementDate: "2026-08-21", bankAccountId: `bank_${TAG}_1` },
+            fields: [{ field: "password", label: "PDF password" }],
+          },
+        }],
+      });
+      return { sid, tid };
+    };
+
+    // Ordinary requests keep the old limits (regression guard).
+    const tooLong = await sseTurn({ prompt: "x".repeat(4500) });
+    check(
+      "http ingress: ordinary 4500-char prompt still rejected prompt-too-long",
+      tooLong.status === 400 && tooLong.text.includes("prompt-too-long"),
+      { status: tooLong.status },
+    );
+
+    // Flow B — leading/trailing-whitespace password over HTTP.
+    const HPWMARK = `hpw-${TAG}`;
+    const HPW = `  ${HPWMARK} ${"y".repeat(80)} `;
+    const HWRONG = ` nope-${HPWMARK} `;
+    cd.state.requiredPassword = HPW;
+    const httpPdf = await makePdf([`HTTP LOCKED STATEMENT ${TAG}`]);
+    const httpAtt = await ingest(`http-locked-${TAG}.pdf`, "application/pdf", httpPdf);
+    const flowB = await seedLockedAsk("pwh", httpAtt);
+
+    // Wrong password via explicit continuesTurnId (ingress detection path 1).
+    const b1 = await sseTurn({
+      sessionId: flowB.sid, continuesTurnId: flowB.tid, prompt: HWRONG,
+    });
+    check(
+      "http locked: wrong password → incorrect-password re-ask over the wire",
+      b1.frames.some((f) => f.type === "needs_clarification" &&
+        f.data?.field === "password" && /didn't unlock/i.test(f.data?.question ?? "")),
+      b1.frames.map((f) => f.type),
+    );
+    check(
+      "http locked: wrong password never appears in the SSE stream",
+      !b1.text.includes(HWRONG.trim()),
+      null,
+    );
+    // Correct password as a BARE prompt with sessionId only (ingress
+    // detection path 2 — in-memory draft), spaces + length preserved.
+    const b2 = await sseTurn({ sessionId: flowB.sid, prompt: HPW });
+    check(
+      "http locked: correct whitespace-wrapped password (bare prompt) → confirmation",
+      b2.frames.some((f) => f.type === "needs_confirmation"),
+      b2.frames.map((f) => f.type),
+    );
+    check(
+      "http locked: password reached CogniDocs byte-for-byte THROUGH HTTP ingress (no trim)",
+      cd.state.lastSubmit?.password === HPW,
+      { gotLen: cd.state.lastSubmit?.password?.length, wantLen: HPW.length },
+    );
+    check(
+      "http locked: password never appears in the SSE stream",
+      !b2.text.includes(HPWMARK),
+      null,
+    );
+    const bRows = await db.select().from(atelierCliTurns)
+      .where(eq(atelierCliTurns.sessionId, flowB.sid));
+    check(
+      "http locked: no persisted turn row in the session contains the password",
+      bRows.length >= 3 && !JSON.stringify(bRows).includes(HPWMARK),
+      { rows: bRows.length },
+    );
+    check(
+      "http locked: answer turns persist the placeholder prompt",
+      bRows.filter((r: any) => r.prompt === SENSITIVE_PROMPT_PLACEHOLDER).length === 2,
+      bRows.map((r: any) => r.prompt),
+    );
+
+    // Flow C — clarificationValues password EXCEEDING the ordinary
+    // 2000-char value cap, answered with sessionId only and a COLD
+    // in-memory draft (ingress detection path 3 — DB fallback, i.e. the
+    // post-restart case; runTurn rehydrates from the same row).
+    const VPWMARK = `vpw-${TAG}`;
+    const VPW = ` ${"z".repeat(2400)}-${VPWMARK} `;
+    cd.state.requiredPassword = VPW;
+    const valPdf = await makePdf([`VALUES LOCKED STATEMENT ${TAG}`]);
+    const valAtt = await ingest(`values-locked-${TAG}.pdf`, "application/pdf", valPdf);
+    const flowC = await seedLockedAsk("pwv", valAtt);
+    const c1 = await sseTurn({
+      sessionId: flowC.sid,
+      prompt: "here is the password",
+      clarificationValues: { password: VPW },
+    });
+    check(
+      "http locked: >2000-char clarificationValues password → confirmation (no truncation)",
+      c1.frames.some((f) => f.type === "needs_confirmation"),
+      c1.frames.map((f) => f.type),
+    );
+    check(
+      "http locked: oversized password reached CogniDocs byte-for-byte (spaces + full length)",
+      cd.state.lastSubmit?.password === VPW,
+      { gotLen: cd.state.lastSubmit?.password?.length, wantLen: VPW.length },
+    );
+    const cRows = await db.select().from(atelierCliTurns)
+      .where(eq(atelierCliTurns.sessionId, flowC.sid));
+    check(
+      "http locked: oversized password nowhere in persisted rows; prompt is placeholder",
+      !JSON.stringify(cRows).includes(VPWMARK) &&
+        cRows.some((r: any) => r.prompt === SENSITIVE_PROMPT_PLACEHOLDER),
+      { rows: cRows.length },
+    );
+
+    // Flow D — reset-language passwords must NOT be misrouted. The intent
+    // classifier's deterministic reset matcher accepts "reset" / "start
+    // over" anywhere in a fresh prompt; a pending sensitive clarification
+    // must suppress that routing entirely, or the password forces a NEW
+    // session, orphans the ask, and persists raw as a fresh prompt.
+    cd.state.requiredPassword = "reset";
+    const rstPdf = await makePdf([`RESET LOCKED STATEMENT ${TAG}`]);
+    const rstAtt = await ingest(`reset-locked-${TAG}.pdf`, "application/pdf", rstPdf);
+    const flowD = await seedLockedAsk("pwr", rstAtt);
+    const sessionsBefore = (await db.select({ id: atelierCliSessions.id })
+      .from(atelierCliSessions)).length;
+    // Wrong password CONTAINING reset language, bare prompt.
+    const D_WRONG = " start over please ";
+    const d1 = await sseTurn({ sessionId: flowD.sid, prompt: D_WRONG });
+    const d1Final = d1.frames.find((f) => f.type === "final");
+    check(
+      "http locked: password containing 'start over' stays in the SAME session (no reset)",
+      d1Final?.data?.sessionId === flowD.sid,
+      d1Final?.data,
+    );
+    check(
+      "http locked: reset-language wrong password → incorrect-password re-ask, not a fresh turn",
+      d1.frames.some((f) => f.type === "needs_clarification" &&
+        f.data?.field === "password" && /didn't unlock/i.test(f.data?.question ?? "")),
+      d1.frames.map((f) => f.type),
+    );
+    // Correct password EXACTLY equal to reset language.
+    const d2 = await sseTurn({ sessionId: flowD.sid, prompt: "reset" });
+    const d2Final = d2.frames.find((f) => f.type === "final");
+    check(
+      "http locked: password exactly 'reset' continues the pending ask → confirmation",
+      d2Final?.data?.sessionId === flowD.sid &&
+        d2.frames.some((f) => f.type === "needs_confirmation"),
+      { final: d2Final?.data, types: d2.frames.map((f) => f.type) },
+    );
+    check(
+      "http locked: literal 'reset' reached CogniDocs byte-for-byte",
+      cd.state.lastSubmit?.password === "reset",
+      cd.state.lastSubmit?.password,
+    );
+    const dRows = await db.select().from(atelierCliTurns)
+      .where(eq(atelierCliTurns.sessionId, flowD.sid));
+    check(
+      "http locked: both reset-language answers persist placeholder prompts, no leak",
+      dRows.length === 3 &&
+        dRows.filter((r: any) => r.prompt === SENSITIVE_PROMPT_PLACEHOLDER).length === 2 &&
+        !JSON.stringify(dRows).includes(D_WRONG),
+      dRows.map((r: any) => r.prompt),
+    );
+    const sessionsAfter = (await db.select({ id: atelierCliSessions.id })
+      .from(atelierCliSessions)).length;
+    check(
+      "http locked: no fresh session was created by reset-language answers",
+      sessionsAfter === sessionsBefore,
+      { sessionsBefore, sessionsAfter },
+    );
+
+    appSrv.close();
+    cd.state.requiredPassword = null;
+    cd.state.statement = null;
   }
 
   // =============== 4) bank letter pipeline ===============
@@ -1339,6 +1853,74 @@ async function main() {
       up3.status === 201 && up3.body?.parse?.status === "failed",
       { status: up3.status, parse: up3.body?.parse },
     );
+
+    // (e) Task #1318 — the web bank-import surface: a locked statement PDF
+    // 422s with pdf_password_required (prompt, not generic failure), a wrong
+    // password 422s with pdf_password_incorrect, the right password parses,
+    // and the signed confirm re-fetches the job WITHOUT the password.
+    {
+      const PW = `rest-pw-${TAG}`;
+      cd.state.requiredPassword = PW;
+      cd.state.invoice = null;
+      cd.state.statement = {
+        bankId: null, bankName: "Emirates NBD", statementType: "bank_statement",
+        currency: "AED", accountRef: "****3456", periodStart: "2026-08-01",
+        periodEnd: "2026-08-31", partialImportWarning: null,
+        transactions: [{
+          date: "2026-08-20", description: "REST locked wire", rawDescription: `ref ${TAG}-RESTLOCK`,
+          amount10k: 42_000_000, direction: "credit", currency: null, balance10k: null,
+          normalizedMerchant: null, parsedMerchant: null, category: null,
+        }],
+      };
+      // SAME bytes on every call — the confirm signature binds jobId to the
+      // file sha, and pdfkit output embeds timestamps (bytes vary per call).
+      const lockedStmtBytes = await makePdf([`REST LOCKED STATEMENT ${TAG}`]);
+      const importFile = async (fields: Record<string, string>) => {
+        const fd = new FormData();
+        fd.append("file", new Blob([new Uint8Array(lockedStmtBytes)], { type: "application/pdf" }), `rest-locked-${TAG}.pdf`);
+        for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+        const res = await fetch(
+          `http://127.0.0.1:${port}/api/atelier/wallet/bank/import-file`,
+          { method: "POST", headers: { cookie: `atelier_persona=${IDS.fp}` }, body: fd },
+        );
+        return { status: res.status, body: await res.json().catch(() => null) };
+      };
+      const base = { bankAccountId: `bank_${TAG}_1`, statementDate: "2026-08-20" };
+      const r1 = await importFile(base);
+      check(
+        "rest import-file: locked PDF → 422 pdf_password_required with password prompt",
+        r1.status === 422 && r1.body?.error === "pdf_password_required" && /password/i.test(r1.body?.message ?? ""),
+        { status: r1.status, body: r1.body },
+      );
+      const r2 = await importFile({ ...base, password: "nope" });
+      check(
+        "rest import-file: wrong password → 422 pdf_password_incorrect with distinct message",
+        r2.status === 422 && r2.body?.error === "pdf_password_incorrect" && /incorrect password/i.test(r2.body?.message ?? ""),
+        { status: r2.status, body: r2.body },
+      );
+      const r3 = await importFile({ ...base, password: PW });
+      check(
+        "rest import-file: correct password → preview with jobId + signature",
+        r3.status === 200 && r3.body?.data?.preview?.source === "pdf" &&
+          r3.body?.data?.preview?.rowsExtracted === 1 &&
+          typeof r3.body?.data?.preview?.cognidocsJobId === "string" &&
+          typeof r3.body?.data?.preview?.signature === "string",
+        { status: r3.status, body: r3.body },
+      );
+      const submitsBefore = cd.state.submits;
+      const r4 = await importFile({
+        ...base, confirm: "true",
+        cognidocsJobId: r3.body?.data?.preview?.cognidocsJobId ?? "missing",
+        signature: r3.body?.data?.preview?.signature ?? "missing",
+      });
+      check(
+        "rest import-file: confirm re-fetches the unlocked job (no password, no re-submit) and imports",
+        r4.status === 200 && r4.body?.data?.rowsImported === 1 && cd.state.submits === submitsBefore,
+        { status: r4.status, body: r4.body, submitsBefore, submitsAfter: cd.state.submits },
+      );
+      cd.state.requiredPassword = null;
+      cd.state.statement = null;
+    }
 
     await new Promise<void>((r) => server.close(() => r()));
   }

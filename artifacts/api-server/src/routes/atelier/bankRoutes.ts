@@ -440,6 +440,10 @@ router.post("/import-file", (req, res) => {
     const b = req.body as {
       bankAccountId?: string; statementDate?: string; source?: string; notes?: string;
       confirm?: string; cognidocsJobId?: string; signature?: string;
+      // Task #1318 — unlock password for a protected PDF. Used transiently
+      // for the parse submit only; never stored or logged. The confirm
+      // phase re-fetches the already-unlocked job, so it never needs it.
+      password?: string;
     };
     const file = req.file;
     if (!file || !b.bankAccountId || !b.statementDate)
@@ -479,6 +483,7 @@ router.post("/import-file", (req, res) => {
             fileName: file.originalname ?? "statement.pdf",
             mimeType: "application/pdf",
             declaredType: "auto",
+            ...(typeof b.password === "string" && b.password ? { password: b.password } : {}),
           });
         }
       } catch (err) {
@@ -486,6 +491,20 @@ router.post("/import-file", (req, res) => {
           return res.status(503).json({
             error: "parsing_unavailable",
             message: "Document parsing isn't available right now (the parsing service isn't configured). You can still import a CSV export from your bank.",
+          });
+        }
+        // Task #1318 — locked PDFs prompt for a password instead of failing
+        // generically; a wrong password gets a distinct retry message.
+        if (err instanceof CognidocsError && err.code === "pdf_password_required") {
+          return res.status(422).json({
+            error: "pdf_password_required",
+            message: "This PDF is password-protected — enter its password to unlock and preview it. The password is used once and never stored.",
+          });
+        }
+        if (err instanceof CognidocsError && err.code === "pdf_password_incorrect") {
+          return res.status(422).json({
+            error: "pdf_password_incorrect",
+            message: "Incorrect password — that password didn't unlock the PDF. Check it and try again.",
           });
         }
         return res.status(422).json({

@@ -156,3 +156,4 @@
 - [Merge-loss lessons](finance-doc-merge-loss.md) — merges can silently delete capability blocks (diff vs pre-merge); jsonb data moves must ride boot chores, never SQL migration files.
 - [LLM reply-truncation defense](llm-reply-truncation-defense.md) — JSON-parsing LLM calls must detect stop_reason max_tokens (else "non-json" lies); header-only retry shares ONE deadline; never log model output.
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
+- [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.

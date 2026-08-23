@@ -182,7 +182,15 @@ export type SupplierInvoiceParseResult =
     }
   | {
       ok: false;
-      errorCode: "parse-not-configured" | "parse-timeout" | "parse-failed";
+      /** The pdf_password_* codes pass through from CogniDocs verbatim
+       *  (Task #1318) so callers can ask the user for the password and
+       *  retry instead of dead-ending on a generic parse failure. */
+      errorCode:
+        | "parse-not-configured"
+        | "parse-timeout"
+        | "parse-failed"
+        | "pdf_password_required"
+        | "pdf_password_incorrect";
       errorMessage: string;
     };
 
@@ -201,6 +209,9 @@ export async function parseSupplierInvoiceDoc(args: {
    *  request never outlives the proxy; a timeout is a normal parse-failed
    *  outcome there, not a crash. */
   timeoutMs?: number;
+  /** Task #1318 — password for a protected PDF. Used transiently for this
+   *  single parse call and NEVER stored or logged. */
+  password?: string | null;
 }): Promise<SupplierInvoiceParseResult> {
   // Safe diagnostics only: never log document-derived content — bounded
   // metadata like codes and byte counts only.
@@ -221,6 +232,7 @@ export async function parseSupplierInvoiceDoc(args: {
       // of forcing invoice fields out of, say, a bank statement.
       declaredType: "invoice",
       timeoutMs: args.timeoutMs,
+      ...(args.password ? { password: args.password } : {}),
     });
     const mapped = supplierFieldsFromJob(job);
     if (!mapped) {
@@ -245,7 +257,9 @@ export async function parseSupplierInvoiceDoc(args: {
         ? "parse-timeout"
         : code === "not-configured" || code === "auth"
           ? "parse-not-configured"
-          : "parse-failed";
+          : code === "pdf_password_required" || code === "pdf_password_incorrect"
+            ? code
+            : "parse-failed";
     logFail(errorCode, { cognidocsCode: code, error: err instanceof Error ? err.message : String(err) });
     return {
       ok: false,

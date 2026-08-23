@@ -40,13 +40,17 @@ export interface CognidocsStubState {
   confidence: number;
   /** When set, the next submit creates a FAILED job with this error. */
   failNext: string | null;
+  /** Task #1318 — when set, submits must carry this exact password:
+   *  missing → 422 pdf_password_required; wrong → 422 pdf_password_incorrect
+   *  (same wire shape as the live service). */
+  requiredPassword: string | null;
   /** Serve this many "processing" GETs before the job completes. */
   pendingPolls: number;
   /** Counters. */
   submits: number;
   jobGets: number;
   /** Last submitted body (decoded). */
-  lastSubmit: { fileName: string; mimeType: string; declaredType: string; bytes: Buffer } | null;
+  lastSubmit: { fileName: string; mimeType: string; declaredType: string; bytes: Buffer; password: string | null } | null;
 }
 
 export function defaultInvoicePayload(over: Partial<CognidocsInvoiceResult> = {}): CognidocsInvoiceResult {
@@ -81,6 +85,7 @@ export async function startCognidocsStub(): Promise<CognidocsStub> {
     resolve: null,
     confidence: 95,
     failNext: null,
+    requiredPassword: null,
     pendingPolls: 0,
     submits: 0,
     jobGets: 0,
@@ -109,9 +114,19 @@ export async function startCognidocsStub(): Promise<CognidocsStub> {
           mimeType: String(body.mimeType ?? ""),
           declaredType: String(body.declaredType ?? ""),
           bytes: Buffer.from(String(body.fileBase64 ?? ""), "base64"),
+          password: typeof body.password === "string" && body.password ? body.password : null,
         };
         state.submits++;
         state.lastSubmit = submitted;
+        // Task #1318 — password-protected document emulation.
+        if (state.requiredPassword != null) {
+          if (!submitted.password) {
+            return send(422, { code: "pdf_password_required", error: "document is password protected" });
+          }
+          if (submitted.password !== state.requiredPassword) {
+            return send(422, { code: "pdf_password_incorrect", error: "wrong password" });
+          }
+        }
         const id = `cdj_stub_${++seq}`;
         const resolved = state.resolve ? state.resolve(submitted) : null;
         const fail = resolved?.fail ?? state.failNext;

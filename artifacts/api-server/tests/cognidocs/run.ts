@@ -215,6 +215,32 @@ async function main() {
       refetched.result?.invoice,
     );
     cd.state.invoice = defaultInvoicePayload();
+
+    // Task #1318 — password-protected documents: no password → typed
+    // pdf_password_required, wrong → pdf_password_incorrect, correct →
+    // normal parse with the password on the submit wire (never a job field).
+    cd.state.requiredPassword = "s3cret";
+    const noPw = await expectError(() =>
+      parseCognidocsDocument({ bytes: PDF, fileName: "locked.pdf", mimeType: "application/pdf", declaredType: "auto" }),
+    );
+    check("client: locked doc without password → pdf_password_required", noPw?.code === "pdf_password_required", noPw);
+    const badPw = await expectError(() =>
+      parseCognidocsDocument({ bytes: PDF, fileName: "locked.pdf", mimeType: "application/pdf", declaredType: "auto", password: "nope" }),
+    );
+    check("client: wrong password → pdf_password_incorrect", badPw?.code === "pdf_password_incorrect", badPw);
+    const unlocked = await parseCognidocsDocument({
+      bytes: PDF, fileName: "locked.pdf", mimeType: "application/pdf", declaredType: "auto", password: "s3cret",
+    });
+    check(
+      "client: correct password → completed job, password sent on the submit",
+      unlocked.status === "completed" && cd.state.lastSubmit?.password === "s3cret",
+      { status: unlocked.status, password: cd.state.lastSubmit?.password },
+    );
+    // A pinned job re-fetch never needs the password again (preview→confirm).
+    cd.state.requiredPassword = "rotated-away";
+    const refetchLocked = await getCognidocsJob(unlocked.id);
+    check("client: unlocked job re-fetch needs no password", refetchLocked.status === "completed", refetchLocked.status);
+    cd.state.requiredPassword = null;
   }
 
   // =============== 5) converters (pure) ===============

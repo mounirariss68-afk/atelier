@@ -2744,6 +2744,139 @@ export function mergeClarificationAnswer(
 }
 
 /**
+ * Task #1318 — sensitive clarification inputs (PDF unlock passwords).
+ * A password answered through chat must reach the TOOL byte-for-byte,
+ * but never any durable surface: turn prompt, frames (streamed AND
+ * persisted, and rehydrated as clarification partials), toolCalls,
+ * pendingWrite pins, session rolling summary, session titles, facts.
+ * These helpers deep-REMOVE sensitive keys (removal, not masking, so a
+ * rehydrated partial simply re-asks instead of replaying a "[redacted]"
+ * literal as the password).
+ */
+export const SENSITIVE_INPUT_KEYS: ReadonlySet<string> = new Set(["password"]);
+export const SENSITIVE_PROMPT_PLACEHOLDER = "[password redacted — used once, never stored]";
+
+export function containsSensitiveKey(v: unknown): boolean {
+  if (Array.isArray(v)) return v.some((x) => containsSensitiveKey(x));
+  if (v && typeof v === "object") {
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (SENSITIVE_INPUT_KEYS.has(k)) return true;
+      if (containsSensitiveKey(val)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Deep-copy `v` with every SENSITIVE_INPUT_KEYS property removed.
+ * Returns the ORIGINAL reference when nothing sensitive is present
+ * (no copy cost on the hot path), and never mutates its argument —
+ * the live tool input object stays intact for `tool.run`.
+ */
+export function stripSensitiveValues<T>(v: T): T {
+  if (!containsSensitiveKey(v)) return v;
+  if (Array.isArray(v)) return v.map((x) => stripSensitiveValues(x)) as unknown as T;
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (SENSITIVE_INPUT_KEYS.has(k)) continue;
+      out[k] = stripSensitiveValues(val);
+    }
+    return out as unknown as T;
+  }
+  return v;
+}
+
+/** Does a pending clarification ask for a sensitive (password) field? */
+function asksSensitiveField(
+  pc:
+    | {
+        field?: string | null;
+        fields?: Array<{ field?: string }> | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!pc) return false;
+  if (typeof pc.field === "string" && SENSITIVE_INPUT_KEYS.has(pc.field)) return true;
+  return (pc.fields ?? []).some(
+    (f) => typeof f?.field === "string" && SENSITIVE_INPUT_KEYS.has(f.field),
+  );
+}
+
+/** Latest needs_clarification frame in a persisted frames array, if any. */
+function latestClarificationFrame(
+  frames: unknown,
+): { field?: string | null; fields?: Array<{ field?: string }> | null } | null {
+  if (!Array.isArray(frames)) return null;
+  const nc = [...frames]
+    .reverse()
+    .find(
+      (f) => (f as { type?: string } | null)?.type === "needs_clarification",
+    ) as { data?: unknown } | undefined;
+  return (nc?.data as ReturnType<typeof latestClarificationFrame>) ?? null;
+}
+
+/**
+ * Does this request answer a pending clarification that asks for a
+ * SENSITIVE field (e.g. a PDF unlock password)? HTTP ingress must know
+ * BEFORE applying its ordinary prompt trim / length caps / value
+ * truncation, or the secret is silently corrupted on the way in (a
+ * trimmed leading space or a truncated tail makes a *valid* password
+ * fail as "incorrect"). Checks, in order: the explicit continuesTurnId
+ * row, the in-memory session draft, then the session's latest persisted
+ * turn (covers answers after a process restart). Fail-closed: any
+ * error or miss returns false so the normal limits stay in force.
+ */
+export async function awaitsSensitiveClarification(args: {
+  orgId: string;
+  sessionId?: string | null;
+  continuesTurnId?: string | null;
+}): Promise<boolean> {
+  try {
+    if (args.continuesTurnId) {
+      const [t] = await db
+        .select({
+          status: atelierCliTurns.status,
+          frames: atelierCliTurns.frames,
+        })
+        .from(atelierCliTurns)
+        .where(
+          and(
+            eq(atelierCliTurns.id, args.continuesTurnId),
+            eq(atelierCliTurns.orgId, args.orgId),
+          ),
+        );
+      if (!t || !isClarificationResumable(t.status, t.frames)) return false;
+      return asksSensitiveField(latestClarificationFrame(t.frames));
+    }
+    if (!args.sessionId) return false;
+    const draftPc = getSessionDraft(args.sessionId).pendingClarification;
+    if (draftPc) return asksSensitiveField(draftPc);
+    const [last] = await db
+      .select({
+        status: atelierCliTurns.status,
+        frames: atelierCliTurns.frames,
+      })
+      .from(atelierCliTurns)
+      .where(
+        and(
+          eq(atelierCliTurns.sessionId, args.sessionId),
+          eq(atelierCliTurns.orgId, args.orgId),
+        ),
+      )
+      .orderBy(desc(atelierCliTurns.createdAt))
+      .limit(1);
+    if (!last || !isClarificationResumable(last.status, last.frames)) {
+      return false;
+    }
+    return asksSensitiveField(latestClarificationFrame(last.frames));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Task #1117 — continuation companion to the Task #1093 model-loop
  * guard. Clarification/disambiguation continuations call `tool.run`
  * DIRECTLY (they bypass the model dispatch loop and its
@@ -3148,6 +3281,20 @@ export async function runTurn(
       ((input.pageContext as { surface?: string } | null | undefined)?.surface) ??
       "global";
 
+    // Sensitive-clarification detection FIRST — before any prompt-derived
+    // routing. When the turn answers a pending SENSITIVE clarification
+    // (e.g. a PDF unlock password), the prompt IS the secret: it must not
+    // feed entity lookups, the intent classifier, or reset detection. A
+    // password that happens to read "reset" or contain "start over" would
+    // otherwise force a NEW session, orphan the pending ask, and persist
+    // the raw secret as an ordinary fresh prompt. Fail-closed: detection
+    // errors return false and normal routing applies.
+    const sensitivePendingEarly = await awaitsSensitiveClarification({
+      orgId: persona.orgId,
+      sessionId: input.sessionId ?? null,
+      continuesTurnId: input.continuesTurnId ?? null,
+    });
+
     // Task #411 round-3 — DETERMINISTIC pre-LLM entity resolution.
     // Before any LLM call (including the typed-intent classifier on
     // Haiku), scan the prompt for explicit id-prefix tokens and run
@@ -3168,6 +3315,8 @@ export async function runTurn(
     // BEFORE classifyIntentTyped (Task #411: resolver before any LLM).
     const idLookupWork = (async () => {
       const out: Array<{ kind: string; id: string; label: string }> = [];
+      // Sensitive answers never feed entity lookups (see above).
+      if (sensitivePendingEarly) return out;
       const tokens = Array.from(new Set((input.prompt ?? "").match(ID_TOKEN_RE) ?? []));
       const PREFIX_TO_KIND: Record<string, string> = {
         // Reads + standard entities (matches `rid("<prefix>")` tags
@@ -3225,6 +3374,8 @@ export async function runTurn(
     // for both id-token and name-based hints.
     const nameHintWork = (async () => {
       const out: Array<{ kind: string; id: string; label: string }> = [];
+      // Sensitive answers never feed name-hint resolution (see above).
+      if (sensitivePendingEarly) return out;
       const { deterministicClassify } = await import("./intent-router.js");
       const { hybridResolveEntity, pickConfident } = await import("./entity-resolver.js");
       const det = deterministicClassify(input.prompt ?? "");
@@ -3267,10 +3418,13 @@ export async function runTurn(
     // resumes a paused tool; the typed intent is pure bookkeeping there.
     // Skip the live classifier call so a slow model can never abort the
     // turn that carries the user's answer to an expensive research run.
+    // Sensitive answers classify a NEUTRAL constant instead of the real
+    // prompt: no LLM sees the secret, and no prompt-derived label (in
+    // particular "reset") can reroute the turn away from the pending ask.
     const earlyTypedIntent = await (await import("./intent-router.js")).classifyIntentTyped(
-      input.prompt,
+      sensitivePendingEarly ? "continue" : input.prompt,
       earlySurface,
-      { deterministicOnly: Boolean(input.continuesTurnId) },
+      { deterministicOnly: Boolean(input.continuesTurnId) || sensitivePendingEarly },
     );
     const earlyLabel: IntentLabel = (() => {
       const v = earlyTypedIntent.verb;
@@ -3288,7 +3442,10 @@ export async function runTurn(
       tokensOut: 0,
       costUsd: 0,
     };
-    const forceNew = earlyLabel === "reset";
+    // A sensitive answer can never force a new session — the pending ask
+    // must survive so the secret merges into the paused tool (belt-and-
+    // braces: the neutral classify above already can't yield "reset").
+    const forceNew = !sensitivePendingEarly && earlyLabel === "reset";
 
     // --- Session + idempotency -----------------------------------------
     await ensureUserDailyQuota(persona.id);
@@ -3438,6 +3595,14 @@ export async function runTurn(
       if (data && typeof data === "object" && !("model" in data)) {
         (data as Record<string, unknown>).model = lastModel ?? null;
       }
+      // Task #1318 — sensitive values (PDF unlock passwords) must never
+      // ride a frame: frames stream to clients AND persist into
+      // atelierCliTurns (replay/audit + clarification rehydration).
+      // stripSensitiveValues copies — the live tool input object shared
+      // with tool.run keeps the real value.
+      if (containsSensitiveKey(frame.data)) {
+        (frame as { data?: unknown }).data = stripSensitiveValues(frame.data);
+      }
       frames.push(frame);
       if (frame.type === "final") finalEmitted = true;
       emit(frame);
@@ -3447,7 +3612,18 @@ export async function runTurn(
     // prompt + page context BEFORE they hit the audit perimeter.
     // The model still sees the raw prompt in `history` (live in
     // memory only); only the durable copy is scrubbed.
-    const promptRedacted = redactText(input.prompt).text;
+    // Task #1318 — while a sensitive clarification (PDF unlock password)
+    // is pending for this session, the incoming prompt is very likely
+    // the password itself: persist a fixed placeholder instead of the
+    // text. Best-effort pre-insert detection via the in-memory draft;
+    // the rehydrated continuation path below re-checks and repairs the
+    // row for the restart/reload case.
+    let sensitivePromptTurn =
+      sensitivePendingEarly ||
+      asksSensitiveField(getSessionDraft(session.id).pendingClarification);
+    const promptRedacted = sensitivePromptTurn
+      ? SENSITIVE_PROMPT_PLACEHOLDER
+      : redactText(input.prompt).text;
     const pageContextRedacted = input.pageContext
       ? (redactJson(input.pageContext).value as Record<string, unknown>)
       : null;
@@ -3696,8 +3872,14 @@ export async function runTurn(
         Object.keys(input.clarificationValues).length > 0;
       if (_drGate.pendingClarification && !explicitContinuation && !hasMultiFieldAnswers) {
         const pcGate = _drGate.pendingClarification;
-        const isFresh =
-          clarificationResolverMode() === "on"
+        // Task #1318 — never supersede a pending PASSWORD question on a
+        // bare prompt: passwords look like anything (dates, command-ish
+        // words, random tokens), so freshness classifiers misroute them
+        // and the raw secret would run as a fresh model prompt. The
+        // user can still type "cancel" (handled in the continuation).
+        const isFresh = asksSensitiveField(pcGate)
+          ? false
+          : clarificationResolverMode() === "on"
             ? resolveClarificationReply({
                 reply: input.prompt ?? "",
                 pending: {
@@ -4437,7 +4619,7 @@ export async function runTurn(
           toolCalls.push({
             step: 0,
             tool: pd.tool,
-            input: mergedInput,
+            input: stripSensitiveValues(mergedInput),
             ok: cont.ok,
             errorCode: cont.errorCode,
             continuation: true,
@@ -4470,7 +4652,7 @@ export async function runTurn(
               sessionId: session.id,
               turnId,
               tool: pd.tool,
-              input: mergedInput,
+              input: stripSensitiveValues(mergedInput),
               data: cont.data,
               source: "clarification",
             });
@@ -4598,6 +4780,22 @@ export async function runTurn(
     // disambiguation continuation above already consumed this prompt.)
     if (_draft.pendingClarification && !clarificationHandled) {
       const pc = _draft.pendingClarification;
+      // Task #1318 — sensitive (password) clarifications: the answer is
+      // the secret. If the pending question was rehydrated from the DB
+      // (draft was empty when the turn row was inserted above), repair
+      // the already-persisted prompt immediately.
+      const pcSensitive = asksSensitiveField(pc);
+      if (pcSensitive && !sensitivePromptTurn) {
+        sensitivePromptTurn = true;
+        try {
+          await db
+            .update(atelierCliTurns)
+            .set({ prompt: SENSITIVE_PROMPT_PLACEHOLDER })
+            .where(eq(atelierCliTurns.id, turnId));
+        } catch {
+          // Terminal persist below rewrites the prompt placeholder too.
+        }
+      }
       // Task #741 — normalized control intent bound to the pending
       // clarification. "cancel" deterministically clears the pending
       // question instead of raw-text-merging "never mind" into a typed
@@ -4606,7 +4804,10 @@ export async function runTurn(
       const controlIntent = normalizeControlIntent(input.prompt ?? "");
       // Task #740 — shared resolver: classify + type the reply against
       // the pending question and session facts BEFORE any merge.
-      const resolverOn = clarificationResolverMode() === "on";
+      // Task #1318 — resolver (and the model-assisted fallback it
+      // gates) is BYPASSED for sensitive fields: passwords must merge
+      // byte-for-byte and never transit an LLM.
+      const resolverOn = clarificationResolverMode() === "on" && !pcSensitive;
       const resolverOutcome: ResolverOutcome | null = resolverOn
         ? resolveClarificationReply({
             reply: stripLocalePreamble(input.prompt ?? ""),
@@ -4697,7 +4898,11 @@ export async function runTurn(
         if (input.clarificationValues && typeof input.clarificationValues === "object") {
           for (const [k, v] of Object.entries(input.clarificationValues)) {
             if (!allowedFields.has(k)) continue;
-            const val = typeof v === "string" ? stripLocalePreamble(v).trim() : "";
+            // Task #1318 — sensitive values merge byte-for-byte: no
+            // preamble strip, no trim (a PDF password may legitimately
+            // start/end with whitespace). Reject only the empty string.
+            const raw = typeof v === "string" ? v : "";
+            const val = SENSITIVE_INPUT_KEYS.has(k) ? raw : stripLocalePreamble(raw).trim();
             if (!val) continue;
             mergedInput = mergeClarificationAnswer(mergedInput, k, val);
             usedMultiValues = true;
@@ -4815,7 +5020,7 @@ export async function runTurn(
         toolCalls.push({
           step: 0,
           tool: pc.tool,
-          input: mergedInput,
+          input: stripSensitiveValues(mergedInput),
           ok: cont.ok,
           errorCode: cont.errorCode,
           continuation: true,
@@ -4849,7 +5054,7 @@ export async function runTurn(
             sessionId: session.id,
             turnId,
             tool: pc.tool,
-            input: mergedInput,
+            input: stripSensitiveValues(mergedInput),
             data: cont.data,
             source: "clarification",
           });
@@ -5824,7 +6029,7 @@ export async function runTurn(
       toolCalls.push({
         step,
         tool: tc.name,
-        input: tc.input,
+        input: stripSensitiveValues(tc.input),
         ok: toolResult.ok,
         errorCode: toolResult.errorCode,
         ms: Date.now() - t0,
@@ -5900,7 +6105,7 @@ export async function runTurn(
           sessionId: session.id,
           turnId,
           tool: tc.name,
-          input: tc.input,
+          input: stripSensitiveValues(tc.input),
           data: toolResult.data,
           source: "tool_result",
         });
@@ -6249,9 +6454,15 @@ export async function runTurn(
           .set({
             status,
             statusMessage: pendingWrite ? "awaiting confirmation" : runtimeError ?? status,
+            // Task #1318 — belt-and-braces: terminal persist re-asserts
+            // the placeholder prompt for sensitive (password) answer
+            // turns and strips sensitive keys from the pendingWrite pin
+            // (confirm replays re-fetch the unlocked CogniDocs job by
+            // id, never the password).
+            ...(sensitivePromptTurn ? { prompt: SENSITIVE_PROMPT_PLACEHOLDER } : {}),
             frames,
             toolCalls,
-            pendingWrite,
+            pendingWrite: stripSensitiveValues(pendingWrite),
             planJson,
             stepResults,
             costCents,
@@ -6274,7 +6485,9 @@ export async function runTurn(
       // appending a one-line trace per turn (capped at ~2KB).
       // Task #332 — strip PII out of the prompt before it lands in
       // the durable rolling session summary.
-      const promptForSummary = redactText(input.prompt).text.slice(0, 120);
+      const promptForSummary = sensitivePromptTurn
+        ? SENSITIVE_PROMPT_PLACEHOLDER
+        : redactText(input.prompt).text.slice(0, 120);
       // Task #978 — persist a plain-language outcome phrase alongside the
       // line so the proactive recap can say what was ACCOMPLISHED, not
       // replay the prompt. Built from structural signals only (tool names,
@@ -6330,7 +6543,11 @@ export async function runTurn(
       // and can never fail or delay the turn itself.
       if (!session.title) {
         const titleSessionId = session.id;
-        const titlePrompt = input.prompt;
+        // Task #1318 — a password answer must not seed the Haiku title
+        // call (LLM input) nor a derived title.
+        const titlePrompt = sensitivePromptTurn
+          ? SENSITIVE_PROMPT_PLACEHOLDER
+          : input.prompt;
         setImmediate(() => {
           void generateAndSaveSessionTitle(titleSessionId, titlePrompt);
         });
@@ -6620,7 +6837,7 @@ export async function confirmPendingWrite(
       sessionId: turn.sessionId,
       turnId,
       tool: pending.tool,
-      input: pending.input,
+      input: stripSensitiveValues(pending.input),
       data: result.data,
       source: "confirm",
     });

@@ -103,6 +103,41 @@ function isVerifiedCommit(tool: string, input: Record<string, unknown>): boolean
   }
 }
 
+// Task #1318 — phase-1 clarification job pin. When a PDF statement parse
+// succeeds but phase 1 still needs an answer (e.g. which bank account), the
+// clarification partial carries the CogniDocs jobId plus this HMAC so the
+// continuation re-fetches the SAME job instead of re-submitting the bytes.
+// Without it, a password-unlocked PDF would re-fail pdf_password_required on
+// the continuation (the password is deliberately never persisted). The HMAC
+// binds jobId↔attachmentId so a model-forged jobId can never swap in a
+// different document's rows.
+function statementJobClarifyToken(jobId: string, attachmentId: string): string {
+  return createHmac("sha256", COMMIT_SECRET)
+    .update(`stmt-clarify\n${jobId}\n${attachmentId}`)
+    .digest("hex");
+}
+function verifyStatementJobClarifyToken(jobId: string, attachmentId: string, got: unknown): boolean {
+  if (typeof got !== "string" || !got) return false;
+  const want = statementJobClarifyToken(jobId, attachmentId);
+  if (got.length !== want.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(got, "utf8"), Buffer.from(want, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+/** Task #1318 — transient PDF password from the tool input (top-level, the
+ * clarification answer merge point). Used for the CogniDocs call only —
+ * never pinned, never persisted in partials, never logged. The value is
+ * forwarded BYTE-FOR-BYTE: no trim, no cap, no normalization (real PDF
+ * passwords may start/end with whitespace); only the empty string is
+ * treated as "no password provided". */
+function pdfPasswordFrom(input: Record<string, unknown>): string | null {
+  const v = input.password;
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
 /** Org finance documents are a finance-leadership surface (Task #1090
  * scope: role clamps unchanged — self-only roles keep receipt-only). */
 const FINANCE_DOC_ROLES = ["founding_partner", "partner", "finance"] as const;
@@ -384,6 +419,7 @@ defineCapability({
       notes: { type: "string" },
       lineItems: { type: "array" },
       cognidocsInvoiceId: { type: "string", description: "Internal: parser-issued dedupe pin from phase 1 — never set manually" },
+      password: { type: "string", description: "Password for a password-protected PDF (asked via clarification when the parser reports the document is locked) — used once to unlock the document, never stored" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -446,6 +482,10 @@ defineCapability({
         const parsed = await parseSupplierInvoiceDoc({
           bytes,
           fileName: loaded.attachment.fileName,
+          // Task #1318 — transient unlock password from the clarification
+          // answer (or a direct model pass-through when the user typed it
+          // with the request). Never pinned, never persisted, never logged.
+          password: pdfPasswordFrom(input),
         });
         if (parsed.ok) {
           parseConfidence = parsed.confidence;
@@ -476,6 +516,29 @@ defineCapability({
       if (invoiceDate) partial.invoiceDate = invoiceDate;
       if (periodLabel) partial.periodLabel = periodLabel;
       if (notes) partial.notes = notes;
+      if (receiptAttachmentId) partial.receiptAttachmentId = receiptAttachmentId;
+      // Task #1318 — locked PDF: ask for the password and retry. The
+      // clarification partial (persisted in turn frames) deliberately
+      // NEVER includes the password — it lives only in the answer merge
+      // of the continuation turn.
+      if (parseErrorCode === "pdf_password_required" || parseErrorCode === "pdf_password_incorrect") {
+        return {
+          ok: true,
+          data: { partial },
+          clarification: {
+            field: "password",
+            question:
+              parseErrorCode === "pdf_password_incorrect"
+                ? "That password didn't unlock the PDF — please double-check it and send the exact password again."
+                : "This invoice PDF is password-protected. What's the password? I'll use it once to read the document — it is never stored.",
+            tool: "ingest_supplier_invoice",
+            partial,
+            fields: [
+              { field: "password", label: "PDF password", hint: "used once to unlock the document; never stored" },
+            ],
+          },
+        };
+      }
       if (missing.length > 0) {
         return {
           ok: true,
@@ -952,6 +1015,8 @@ defineCapability({
       statementDate: { type: "string", description: "YYYY-MM-DD statement date; defaults to today" },
       notes: { type: "string" },
       cognidocsJobId: { type: "string", description: "Internal: parse-job pin issued by phase 1 — never set manually" },
+      cognidocsJobToken: { type: "string", description: "Internal: clarification-continuation token binding the parse-job pin — never set manually" },
+      password: { type: "string", description: "Password for a password-protected statement PDF (asked via clarification when the parser reports the document is locked) — used once to unlock the document, never stored" },
       confirm: { type: "boolean" },
     },
     required: ["attachmentId"],
@@ -992,11 +1057,17 @@ defineCapability({
     let raw = "";
     let statementJob: Awaited<ReturnType<typeof getCognidocsJob>> | null = null;
     if (isPdf) {
+      const jobIdInput =
+        typeof input.cognidocsJobId === "string" && input.cognidocsJobId ? input.cognidocsJobId : null;
+      // A pinned job is honored on the token-verified commit (phase 2) OR on
+      // a clarification continuation carrying the phase-1 clarify token
+      // (Task #1318 — so a password-unlocked parse is never re-run, and the
+      // never-persisted password is never needed again).
       const pinnedJobId =
-        isVerifiedCommit("import_bank_statement", input) &&
-        typeof input.cognidocsJobId === "string" &&
-        input.cognidocsJobId
-          ? input.cognidocsJobId
+        jobIdInput &&
+        (isVerifiedCommit("import_bank_statement", input) ||
+          verifyStatementJobClarifyToken(jobIdInput, attachmentId, input.cognidocsJobToken))
+          ? jobIdInput
           : null;
       try {
         statementJob = pinnedJobId
@@ -1006,9 +1077,41 @@ defineCapability({
               fileName: loaded.attachment.fileName || "statement.pdf",
               mimeType: "application/pdf",
               declaredType: "auto",
+              // Task #1318 — transient unlock password from the
+              // clarification answer. Never pinned, never persisted.
+              password: pdfPasswordFrom(input) ?? undefined,
             });
       } catch (err) {
         const code = err instanceof CognidocsError ? err.code : null;
+        // Task #1318 — locked PDF: ask for the password and retry instead
+        // of failing generically. The partial keeps the user's other
+        // inputs but NEVER the password.
+        if (code === "pdf_password_required" || code === "pdf_password_incorrect") {
+          const partial: Record<string, unknown> = {
+            attachmentId,
+            ...(typeof input.bankAccountId === "string" && input.bankAccountId
+              ? { bankAccountId: input.bankAccountId }
+              : {}),
+            ...(typeof input.statementDate === "string" ? { statementDate: input.statementDate } : {}),
+            ...(typeof input.notes === "string" && input.notes.trim() ? { notes: input.notes.trim() } : {}),
+          };
+          return {
+            ok: true,
+            data: { partial },
+            clarification: {
+              field: "password",
+              question:
+                code === "pdf_password_incorrect"
+                  ? "That password didn't unlock the statement PDF — please double-check it and send the exact password again."
+                  : "This statement PDF is password-protected. What's the password? I'll use it once to read the document — it is never stored.",
+              tool: "import_bank_statement",
+              partial,
+              fields: [
+                { field: "password", label: "PDF password", hint: "used once to unlock the document; never stored" },
+              ],
+            },
+          };
+        }
         if (code === "not-configured" || code === "auth") {
           return {
             ok: false,
@@ -1081,7 +1184,20 @@ defineCapability({
             field: "bankAccountId",
             question: "Which bank account is this statement for?",
             tool: "import_bank_statement",
-            partial: { attachmentId, ...(typeof input.statementDate === "string" ? { statementDate: input.statementDate } : {}) },
+            partial: {
+              attachmentId,
+              ...(typeof input.statementDate === "string" ? { statementDate: input.statementDate } : {}),
+              // Task #1318 — pin the already-parsed job through the
+              // clarification so the continuation re-fetches it instead of
+              // re-parsing (a password-unlocked PDF would otherwise re-ask
+              // for the never-persisted password).
+              ...(statementJob
+                ? {
+                    cognidocsJobId: statementJob.id,
+                    cognidocsJobToken: statementJobClarifyToken(statementJob.id, attachmentId),
+                  }
+                : {}),
+            },
             suggestions: accounts.map((a) => ({
               id: a.id,
               label: `${a.accountLabel} (${a.bankName}, ${a.currency})`,

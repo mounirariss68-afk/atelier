@@ -39,6 +39,8 @@ import {
   CliBudgetExceededError,
   CliConcurrencyError,
   sanitizeClarificationFields,
+  awaitsSensitiveClarification,
+  SENSITIVE_INPUT_KEYS,
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
 import { stripLocalePreamble } from "../../lib/atelier-cli/locale.js";
@@ -122,8 +124,26 @@ router.post("/cli/turn", async (req, res) => {
     typeof body.timezone === "string" && body.timezone.length > 0 && body.timezone.length <= 64
       ? body.timezone
       : null;
+  // Sensitive-clarification ingress: when this request answers a pending
+  // clarification for a SENSITIVE field (e.g. a PDF unlock password), the
+  // ordinary prompt trim, 4000-char cap, and 2000-char clarification-value
+  // truncation below would silently corrupt the secret (a trimmed leading
+  // space or a cut tail makes a VALID password fail as "incorrect"). Detect
+  // that state BEFORE any normalization; on any doubt this is false and the
+  // normal limits stay in force.
+  const sensitiveAnswer = await awaitsSensitiveClarification({
+    orgId: me.orgId,
+    sessionId: body.sessionId ?? null,
+    continuesTurnId:
+      typeof body.continuesTurnId === "string" && body.continuesTurnId.length > 0
+        ? body.continuesTurnId
+        : null,
+  });
   // Multi-field clarification answers — sanitize to a bounded map of
-  // string → string before it reaches the orchestrator.
+  // string → string before it reaches the orchestrator. Sensitive keys
+  // answering a sensitive clarification pass through BYTE-FOR-BYTE (the
+  // JSON body-size limit still bounds them); everything else keeps the
+  // ordinary truncation.
   let clarificationValues: Record<string, string> | null = null;
   if (
     body.clarificationValues &&
@@ -133,15 +153,28 @@ router.post("/cli/turn", async (req, res) => {
     const entries = Object.entries(body.clarificationValues)
       .filter(([k, v]) => typeof k === "string" && k.length > 0 && k.length <= 200 && typeof v === "string")
       .slice(0, 40)
-      .map(([k, v]) => [k, (v as string).slice(0, 2000)] as const);
+      .map(([k, v]) =>
+        [
+          k,
+          sensitiveAnswer && SENSITIVE_INPUT_KEYS.has(k)
+            ? (v as string)
+            : (v as string).slice(0, 2000),
+        ] as const,
+      );
     if (entries.length > 0) clarificationValues = Object.fromEntries(entries);
   }
-  const promptRawWithPreamble = (body.prompt ?? "").trim();
-  if (!promptRawWithPreamble) {
+  // Sensitive answers keep their exact bytes (no trim); ordinary prompts
+  // are trimmed as before. Both still require some non-whitespace content.
+  const promptRawWithPreamble = sensitiveAnswer
+    ? (body.prompt ?? "")
+    : (body.prompt ?? "").trim();
+  if (!promptRawWithPreamble.trim()) {
     res.status(400).json({ error: "prompt-required" });
     return;
   }
-  if (promptRawWithPreamble.length > 4000) {
+  // Sensitive answers get a far larger sanity cap (DoS guard only — the
+  // JSON body limit is the real bound); ordinary prompts keep 4000.
+  if (promptRawWithPreamble.length > (sensitiveAnswer ? 16384 : 4000)) {
     res.status(400).json({ error: "prompt-too-long" });
     return;
   }
@@ -162,7 +195,9 @@ router.post("/cli/turn", async (req, res) => {
   }
   // `/new` (or explicit reset:true) starts a fresh session before the
   // turn runs. Strip the slash command from the prompt sent to the model.
-  const isNewCmd = /^\/new\b/i.test(promptRaw);
+  // A sensitive answer is never a command — a password may legitimately
+  // start with "/new", and resetting here would discard the pending ask.
+  const isNewCmd = !sensitiveAnswer && /^\/new\b/i.test(promptRaw);
   const prompt = isNewCmd ? promptRaw.replace(/^\/new\b\s*/i, "").trim() || "(new session)" : promptRaw;
   const reset = body.reset === true || isNewCmd;
   const sessionId = reset ? null : (body.sessionId ?? null);

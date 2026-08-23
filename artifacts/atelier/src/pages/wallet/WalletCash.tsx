@@ -100,6 +100,11 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = React.useState<PdfPreview | null>(null);
+  // Task #1318 — password prompt for protected PDFs. The password is sent
+  // only with the parse (preview) request and never stored anywhere; the
+  // confirm phase re-uses the already-unlocked parse job.
+  const [passwordNeeded, setPasswordNeeded] = React.useState(false);
+  const [pdfPassword, setPdfPassword] = React.useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
   const isPdfFile = Boolean(file && (/\.pdf$/i.test(file.name) || file.type === "application/pdf"));
 
@@ -123,6 +128,9 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
       form.append("bankAccountId", accountId);
       form.append("statementDate", statementDate);
       if (source !== "auto") form.append("source", source);
+      // Task #1318 — unlock password rides only on the parse (preview)
+      // request; the confirm phase re-fetches the unlocked job.
+      if (!confirm && pdfPassword) form.append("password", pdfPassword);
       if (confirm) {
         form.append("confirm", "true");
         // Task #1316 — PDF confirms re-use the previewed parse job.
@@ -137,9 +145,18 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
         setErr("This statement file was already imported — no rows were duplicated.");
         setPdfPreview(null);
       } else if (!r.ok) {
-        setErr(j?.error === "pdf_low_confidence"
-          ? (j?.message ?? "We couldn't confidently read this PDF — export a CSV from your bank instead.")
-          : `Import failed: ${j?.message ?? j?.error ?? r.status}`);
+        // Task #1318 — locked PDF: show the password field and let the
+        // user retry; a wrong password gets a distinct message.
+        if (j?.error === "pdf_password_required" || j?.error === "pdf_password_incorrect") {
+          setPasswordNeeded(true);
+          setErr(j?.error === "pdf_password_incorrect"
+            ? (j?.message ?? "Incorrect password — that password didn't unlock the PDF. Check it and try again.")
+            : (j?.message ?? "This PDF is password-protected — enter its password to unlock and preview it."));
+        } else {
+          setErr(j?.error === "pdf_low_confidence"
+            ? (j?.message ?? "We couldn't confidently read this PDF — export a CSV from your bank instead.")
+            : `Import failed: ${j?.message ?? j?.error ?? r.status}`);
+        }
         setPdfPreview(null);
       } else if (j?.data?.preview) {
         // PDF phase 1 — nothing imported yet; show extracted rows for review.
@@ -152,6 +169,8 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
         onImported(`Statement imported — ${d?.rowsImported ?? 0} rows${parseErrs}.${skipped} Auto-matcher ${d?.matcher?.status === "ok" ? "ran" : "reported issues"}.`);
         setFile(null);
         setPdfPreview(null);
+        setPasswordNeeded(false);
+        setPdfPassword("");
         if (fileRef.current) fileRef.current.value = "";
       }
     } finally { setBusy(false); }
@@ -177,15 +196,24 @@ function StatementUploadCard({ onImported }: { onImported: (msg: string) => void
           <option value="xero">Xero export</option>
         </select>
         <input ref={fileRef} type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" className="text-text-mute"
-          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPdfPreview(null); setErr(null); }}
+          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPdfPreview(null); setErr(null); setPasswordNeeded(false); setPdfPassword(""); }}
           data-testid="input-statement-file" />
         {!pdfPreview && (
-          <PillButton variant="primary" disabled={busy || !file || !accountId || !statementDate}
+          <PillButton variant="primary" disabled={busy || !file || !accountId || !statementDate || (passwordNeeded && !pdfPassword)}
             data-testid="btn-statement-upload" onClick={() => void upload(!isPdfFile)}>
             {busy ? (isPdfFile ? "Extracting…" : "Importing…") : (isPdfFile ? "Extract & preview" : "Upload & reconcile")}
           </PillButton>
         )}
       </div>
+      {passwordNeeded && (
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono" data-testid="statement-pdf-password-row">
+          <input type="password" autoComplete="off" placeholder="PDF password"
+            className="bg-bg border border-border-soft rounded px-2 py-1 text-text"
+            value={pdfPassword} onChange={(e) => setPdfPassword(e.target.value)}
+            data-testid="input-statement-pdf-password" />
+          <span className="text-[11px] text-text-faint">Used once to unlock the PDF — never stored.</span>
+        </div>
+      )}
       <div className="text-[11px] text-text-faint">
         CSV columns: date, amount, counterparty, reference. Xero bank-statement exports are detected automatically. PDF statements are extracted with guarded parsing — you review the rows before anything imports. Re-uploading the same file never duplicates rows.
       </div>
