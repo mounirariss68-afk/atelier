@@ -1,0 +1,5973 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: CogniDocs — API-first document parsing service
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: documents
+    description: Document ingestion and parse jobs
+  - name: merchants
+    description: Merchant directory and corrections
+  - name: banks
+    description: Bank directory
+  - name: statement-templates
+    description: Bank statement templates
+  - name: invoice-templates
+    description: Invoice vendor templates
+  - name: invoice-categories
+    description: Invoice categories
+  - name: api-keys
+    description: API key management
+  - name: billing
+    description: Plans, quotas and billing
+  - name: docs
+    description: API documentation downloads
+  - name: chat
+    description: Console chat natural-language routing
+  - name: auth
+    description: User accounts, sessions, email OTP, 2FA, and legal-policy acceptance
+  - name: admin
+    description: Admin console — user management, usage monitoring and audit log
+security:
+  - apiKeyAuth: []
+  - bearerAuth: []
+  - sessionCookieAuth: []
+
+x-operation-access:
+  public:
+    - GET /healthz
+    - GET /auth/legal-requirements
+    - POST /auth/register
+    - POST /auth/verify-email
+    - POST /auth/resend-verification
+    - POST /auth/login
+    - POST /auth/login/2fa
+    - POST /auth/logout
+    - POST /auth/password/forgot
+    - POST /auth/password/reset
+  session-only:
+    - GET /auth/me
+    - POST /auth/legal-acceptance
+    - PATCH /auth/profile
+    - GET /auth/profile/photo
+    - POST /auth/profile/photo
+    - DELETE /auth/profile/photo
+    - POST /auth/password/change
+    - POST /auth/2fa/setup
+    - POST /auth/2fa/enable
+    - POST /auth/2fa/disable
+    - POST /auth/2fa/recovery-codes
+    - POST /billing/checkout
+    - POST /billing/portal
+    - POST /billing/cancel
+  session-only-super-admin:
+    - PATCH /auth/users/{id}/role
+    - GET /admin/maintenance/production-test-data-purge/manifest
+    - POST /admin/maintenance/production-test-data-purge
+    - GET /admin/maintenance/production-admin-test-cleanup/manifest
+    - POST /admin/maintenance/production-admin-test-cleanup
+  session-or-api-key:
+    - POST /documents
+    - GET /jobs
+    - POST /jobs/export.zip
+    - GET /document-archive
+    - GET /jobs/{jobId}
+    - DELETE /jobs/{jobId}
+    - GET /jobs/{jobId}/export.csv
+    - GET /merchants/taxonomy
+    - GET /merchants/regions
+    - GET /my/merchants
+    - POST /my/merchants
+    - PATCH /my/merchants/{id}
+    - DELETE /my/merchants/{id}
+    - GET /banks
+    - GET /banks/{id}
+    - GET /invoice-categories
+    - POST /chat/route
+    - GET /api-keys
+    - POST /api-keys
+    - DELETE /api-keys/{id}
+    - GET /plans
+    - GET /billing
+    - GET /billing/history
+    - POST /billing/plan
+  session-or-api-key-api-access-plan:
+    - GET /docs/openapi.yaml
+    - GET /docs/api-guide
+  session-or-api-key-admin:
+    - GET /merchants
+    - POST /merchants
+    - POST /merchants/{id}/merge
+    - GET /merchants/{id}
+    - PATCH /merchants/{id}
+    - DELETE /merchants/{id}
+    - POST /banks
+    - PATCH /banks/{id}
+    - POST /banks/{id}/aliases
+    - GET /statement-templates
+    - GET /statement-templates/recoverable-lineages
+    - GET /statement-templates/{id}
+    - DELETE /statement-templates/{id}
+    - GET /statement-templates/{id}/versions
+    - POST /statement-templates/{id}/versions
+    - POST /statement-templates/{id}/activate
+    - POST /statement-templates/{id}/rollback
+    - GET /statement-templates/{id}/health
+    - GET /invoice-templates
+    - POST /invoice-templates
+    - GET /invoice-templates/{id}
+    - PATCH /invoice-templates/{id}
+    - POST /invoice-templates/{id}/activate
+    - POST /invoice-templates/{id}/rollback
+    - POST /invoice-categories
+    - PATCH /invoice-categories/{key}
+    - GET /invoice-categories/{key}/profiles
+    - POST /invoice-categories/{key}/profiles/{version}/activate
+    - GET /admin/users
+    - POST /admin/users/{id}/password-reset
+    - POST /admin/users/{id}/suspend
+    - POST /admin/users/{id}/reactivate
+    - POST /admin/users/{id}/2fa/reset
+    - POST /admin/users/{id}/sessions/revoke
+    - POST /admin/users/{id}/api-keys/revoke
+    - GET /admin/usage
+    - GET /admin/users/{id}/usage
+    - GET /admin/email-log
+    - POST /admin/email-log/{id}/resend
+    - GET /admin/audit-log
+  session-or-api-key-super-admin:
+    - PATCH /plans/{key}
+    - GET /billing/users
+    - PATCH /billing/users/{id}/plan
+    - DELETE /invoice-templates/{id}
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /documents:
+    post:
+      operationId: submitDocument
+      tags: [documents]
+      summary: Submit a document for parsing
+      description: >
+        Submit a document either as multipart/form-data (file upload) or as a
+        JSON payload with a base64-encoded file. Responds with a queued ParseJob.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DocumentUpload"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentSubmission"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseJob"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/AuthenticatedForbiddenResponse"
+        "413":
+          description: The decoded file exceeds the 20 MB document limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: Content-Type is not multipart/form-data or application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: The submitted PDF requires a password, or the supplied password was incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentPasswordError"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [documents]
+      summary: List parse jobs
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [queued, processing, completed, failed]
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [invoice, receipt, bank_statement, credit_card_statement, auto]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        "200":
+          description: A list of parse jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ParseJob"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/export.zip:
+    post:
+      operationId: exportJobsZip
+      tags: [documents]
+      summary: Export several completed parse jobs as CSV files in a ZIP archive
+      description: >
+        Creates one canonical CSV per selected parse job and streams them in a
+        ZIP archive. Every selected job must belong to the authenticated user,
+        be completed, and contain a valid exportable structured result. The
+        request is atomic: if any selected job is unavailable or unexportable,
+        no partial archive is returned. Batch count and total uncompressed CSV
+        bytes are bounded by the service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobExportSelection"
+      responses:
+        "200":
+          description: ZIP archive containing one canonical CSV per selected parse job
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /document-archive:
+    get:
+      operationId: listDocumentArchive
+      tags: [documents]
+      summary: List metadata-only permanent-deletion receipts
+      description: >
+        Returns only the closed, allowlisted receipt projection for documents
+        permanently deleted by the authenticated owner. It never reuses the
+        parse-job serializer and never contains source or parsed content.
+      responses:
+        "200":
+          description: Permanent-deletion receipts newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentDeletionReceipt"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [documents]
+      summary: Get a parse job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The parse job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseJob"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: permanentlyDeleteDocument
+      tags: [documents]
+      summary: Permanently delete an owned document and all derived content
+      description: >
+        Idempotent and existence-hiding. Owned, already-deleted, foreign, and
+        nonexistent identifiers all receive the same empty response.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deletion request safely completed
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/export.csv:
+    get:
+      operationId: exportJobCsv
+      tags: [documents]
+      summary: Export a completed parse job as CSV
+      description: >
+        Returns the structured result of a completed parse job as a UTF-8
+        RFC4180 CSV file. Statement jobs produce one row per transaction;
+        invoice/receipt jobs produce one row per line item (or one summary
+        row when no line items are present). Job and document header metadata
+        are repeated on every row. Arrays are JSON-encoded; null cells are
+        empty. Integer amount10k values are preserved as integers.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV export of the parse job
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+                description: >
+                  UTF-8 RFC4180 CSV. Content-Disposition header sets an
+                  attachment filename derived from the original document name.
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /merchants:
+    get:
+      operationId: listMerchants
+      tags: [merchants]
+      summary: List merchants
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A list of merchants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Merchant"
+    post:
+      operationId: createMerchant
+      tags: [merchants]
+      summary: Create a merchant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /merchants/taxonomy:
+    get:
+      operationId: listMerchantTaxonomy
+      tags: [merchants]
+      summary: List the controlled merchant category taxonomy
+      responses:
+        "200":
+          description: Category taxonomy entries (group → category → subcategory)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MerchantTaxonomyEntry"
+
+  /merchants/regions:
+    get:
+      operationId: listMerchantRegions
+      tags: [merchants]
+      summary: List merchant region codes
+      responses:
+        "200":
+          description: Region codes and names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MerchantRegion"
+
+  /merchants/{id}/merge:
+    post:
+      operationId: mergeMerchants
+      tags: [merchants]
+      summary: Merge active merchants into one canonical merchant
+      description: >
+        Atomically moves aliases and canonical pointers from one or more active
+        source merchants into the active target merchant identified by id, then
+        tombstones each source. Admin-only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantMergeInput"
+      responses:
+        "200":
+          description: Merchants merged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantMergeResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /merchants/{id}:
+    get:
+      operationId: getMerchant
+      tags: [merchants]
+      summary: Get a merchant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The merchant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      operationId: updateMerchant
+      tags: [merchants]
+      summary: Update a merchant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: deleteMerchant
+      tags: [merchants]
+      summary: Delete a merchant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /my/merchants:
+    get:
+      operationId: listMyMerchants
+      tags: [my-merchants]
+      summary: List my merchant overrides
+      description: >
+        The authenticated user's own merchant overrides. Overrides take
+        precedence over the global directory during classification.
+      responses:
+        "200":
+          description: The user's overrides
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MyMerchant"
+    post:
+      operationId: createMyMerchant
+      tags: [my-merchants]
+      summary: Create (or upsert) a merchant override
+      description: Re-adding an existing alias updates it and re-activates it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MyMerchantInput"
+      responses:
+        "201":
+          description: Created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyMerchant"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /my/merchants/{id}:
+    patch:
+      operationId: updateMyMerchant
+      tags: [my-merchants]
+      summary: Update a merchant override
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MyMerchantUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyMerchant"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: deleteMyMerchant
+      tags: [my-merchants]
+      summary: Delete a merchant override
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /banks:
+    get:
+      operationId: listBanks
+      tags: [banks]
+      summary: List banks
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of banks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bank"
+    post:
+      operationId: createBank
+      tags: [banks]
+      summary: Create a bank
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /banks/{id}:
+    get:
+      operationId: getBank
+      tags: [banks]
+      summary: Get a bank
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The bank with aliases and products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      operationId: updateBank
+      tags: [banks]
+      summary: Update a bank
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /banks/{id}/aliases:
+    post:
+      operationId: addBankAlias
+      tags: [banks]
+      summary: Add a bank alias
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankAliasInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /statement-templates:
+    get:
+      operationId: listStatementTemplates
+      tags: [statement-templates]
+      summary: List statement templates
+      description: >
+        Without a status filter, returns one active representative per template lineage.
+        Explicit status filters return every matching version.
+      parameters:
+        - name: bankId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of statement template summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatementTemplateSummary"
+
+  /statement-templates/recoverable-lineages:
+    get:
+      operationId: listRecoverableStatementTemplateLineages
+      tags: [statement-templates]
+      summary: List statement template lineages needing activation
+      description: >
+        Returns the newest activation-ready version for each lineage that has no
+        active version. Structurally incompatible history is excluded.
+      responses:
+        "200":
+          description: Recoverable statement template lineages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecoverableStatementTemplateLineage"
+
+  /statement-templates/{id}:
+    get:
+      operationId: getStatementTemplate
+      tags: [statement-templates]
+      summary: Get a statement template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The full statement template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: deleteStatementTemplate
+      tags: [statement-templates]
+      summary: Delete a statement template lineage
+      description: Permanently deletes the selected template and every version in its lineage.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /statement-templates/{id}/versions:
+    get:
+      operationId: listStatementTemplateVersions
+      tags: [statement-templates]
+      summary: List statement template versions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of statement template versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatementTemplate"
+    post:
+      operationId: createStatementTemplateRevision
+      tags: [statement-templates]
+      summary: Create a reviewable statement template revision
+      description: Creates a new needs_review child version without changing the active parser configuration or any prior version. Name, region, and statement type must match the source lineage.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementTemplateUpdate"
+      responses:
+        "201":
+          description: Created statement template revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementTemplate"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /statement-templates/{id}/activate:
+    post:
+      operationId: activateStatementTemplate
+      tags: [statement-templates]
+      summary: Activate a statement template version
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateActivation"
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /statement-templates/{id}/rollback:
+    post:
+      operationId: rollbackStatementTemplate
+      tags: [statement-templates]
+      summary: Roll back a statement template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rolled back
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /statement-templates/{id}/health:
+    get:
+      operationId: getStatementTemplateHealth
+      tags: [statement-templates]
+      summary: Get statement template health
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateHealth"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-templates:
+    get:
+      operationId: listInvoiceTemplates
+      tags: [invoice-templates]
+      summary: List invoice templates
+      parameters:
+        - name: vendorKey
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of invoice templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InvoiceTemplate"
+    post:
+      operationId: createInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Create an invoice template
+      description: Creates the next version as a draft.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceTemplateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceTemplate"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-templates/{id}:
+    get:
+      operationId: getInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Get an invoice template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The invoice template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      operationId: updateInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Update an invoice template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceTemplateUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: deleteInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Delete an invoice template lineage
+      description: >
+        Permanently removes every template version for the selected vendor
+        lineage. Parsed invoices, line items, merchants, categories, and audit
+        history are preserved. Super-admin access is required.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/AuthenticatedForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-templates/{id}/activate:
+    post:
+      operationId: activateInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Activate an invoice template version
+      description: Activates this version and retires other active versions of the same vendorKey.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-templates/{id}/rollback:
+    post:
+      operationId: rollbackInvoiceTemplate
+      tags: [invoice-templates]
+      summary: Roll back an invoice template
+      description: Reactivates the previous version.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rolled back
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-categories:
+    get:
+      operationId: listInvoiceCategories
+      tags: [invoice-categories]
+      summary: List invoice categories
+      responses:
+        "200":
+          description: A list of invoice categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InvoiceCategory"
+    post:
+      operationId: createInvoiceCategory
+      tags: [invoice-categories]
+      summary: Create an invoice category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceCategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceCategory"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-categories/{key}:
+    patch:
+      operationId: updateInvoiceCategory
+      tags: [invoice-categories]
+      summary: Update an invoice category
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceCategoryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceCategory"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-categories/{key}/profiles:
+    get:
+      operationId: listInvoiceCategoryProfiles
+      tags: [invoice-categories]
+      summary: List immutable extraction-profile versions for a category
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Profile history, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InvoiceCategoryProfileVersion"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /invoice-categories/{key}/profiles/{version}/activate:
+    post:
+      operationId: activateInvoiceCategoryProfile
+      tags: [invoice-categories]
+      summary: Explicitly activate one validated category profile version
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Activated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceCategoryProfileVersion"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /chat/route:
+    post:
+      operationId: routeChatMessage
+      tags: [chat]
+      summary: Route a natural-language chat message
+      description: >
+        Uses AI to classify a console chat message into a structured intent
+        (merchant query, template query, bank query, job query, upload help,
+        or general answer) with extracted parameters and a short reply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRouteInput"
+      responses:
+        "200":
+          description: Routed intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRouteResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      tags: [api-keys]
+      summary: List API keys
+      responses:
+        "200":
+          description: A list of API keys (tokens are never returned)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      operationId: createApiKey
+      tags: [api-keys]
+      summary: Create an API key
+      description: The token is returned once on creation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyInput"
+      responses:
+        "201":
+          description: Created (token returned once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/AuthenticatedForbiddenResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /api-keys/{id}:
+    delete:
+      operationId: revokeApiKey
+      tags: [api-keys]
+      summary: Revoke an API key
+      description: >
+        Soft-revoke: the key stops authenticating immediately; the row is kept
+        for job provenance. Only the owner can revoke a key.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Revoked
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [billing]
+      summary: List pricing plans
+      description: The three B2B tiers — Free (business trial), Pro, Enterprise.
+      responses:
+        "200":
+          description: All plans ordered by sortOrder
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+
+  /plans/{key}:
+    patch:
+      operationId: updatePlan
+      tags: [billing]
+      summary: Update a plan's pricing/limits (super admin, audit-logged)
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanUpdate"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing:
+    get:
+      operationId: getBillingOverview
+      tags: [billing]
+      summary: Current user's plan and usage
+      responses:
+        "200":
+          description: Plan, monthly usage and API-key counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingOverview"
+
+  /billing/history:
+    get:
+      operationId: listBillingHistory
+      tags: [billing]
+      summary: List the current user's Stripe invoice history
+      description: >
+        Tenant-scoped, newest-first invoice projections created from verified
+        Stripe webhooks. Provider events are idempotently audit-tracked.
+      responses:
+        "200":
+          description: Stripe invoice history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingHistoryItem"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing/plan:
+    post:
+      operationId: changePlan
+      tags: [billing]
+      summary: Switch the current user's plan (self-service)
+      description: >
+        Direct plan changes are limited to unpaid plans. Paid upgrades use
+        Stripe Checkout, Stripe-managed subscriptions use the billing controls,
+        and Enterprise remains sales-led.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePlanInput"
+      responses:
+        "200":
+          description: New plan key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePlanResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "402":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing/checkout:
+    post:
+      operationId: createBillingCheckout
+      tags: [billing]
+      summary: Start hosted Stripe Checkout for Pro
+      description: >
+        Session-only. The server selects the current versioned Pro prices and
+        returns a hosted Stripe Checkout URL. This endpoint never activates an
+        entitlement; a verified provider payment event does that.
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: Hosted Stripe Checkout session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostedBillingSession"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing/portal:
+    post:
+      operationId: createBillingPortal
+      tags: [billing]
+      summary: Open the hosted Stripe customer portal
+      description: Session-only. Lets a Stripe-managed subscriber manage payment details and invoices.
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: Hosted Stripe customer portal session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostedBillingSession"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing/cancel:
+    post:
+      operationId: updateBillingCancellation
+      tags: [billing]
+      summary: Schedule or resume Stripe-managed cancellation
+      description: >
+        Session-only. A cancellation remains active through the paid-through
+        period and changes local access only after an authoritative provider event.
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingCancellationInput"
+      responses:
+        "200":
+          description: Provider update accepted; await webhook confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCancellationResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /billing/users:
+    get:
+      operationId: listBillingUsers
+      tags: [billing]
+      summary: List users with plan and monthly usage (super admin)
+      responses:
+        "200":
+          description: Users with plan and current-month document usage
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingUser"
+
+  /billing/users/{id}/plan:
+    patch:
+      operationId: assignUserPlan
+      tags: [billing]
+      summary: Assign a user's plan (super admin, audit-logged)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignUserPlanInput"
+      responses:
+        "200":
+          description: Assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignUserPlanResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /docs/openapi.yaml:
+    get:
+      operationId: downloadOpenApiSpec
+      tags: [docs]
+      summary: Download the OpenAPI 3.1 contract (plans with API access)
+      responses:
+        "200":
+          description: The OpenAPI YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/AuthenticatedForbiddenResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /docs/api-guide:
+    get:
+      operationId: downloadApiGuide
+      tags: [docs]
+      summary: Download the human API integration guide (plans with API access)
+      responses:
+        "200":
+          description: The API guide (Markdown)
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/AuthenticatedForbiddenResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new account (sends a 6-digit email code)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "202":
+          description: Verification code sent (uniform, no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/legal-requirements:
+    get:
+      operationId: getLegalPolicyRequirements
+      tags: [auth]
+      summary: Current Terms and Privacy Policy versions required by the service
+      description: >
+        Public, server-owned policy versions used for registration and future
+        re-consent. Clients must use these values rather than embedding version
+        constants.
+      security: []
+      responses:
+        "200":
+          description: Current required policy versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalPolicyRequirements"
+
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: Confirm the emailed code; activates the account and signs in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailInput"
+      responses:
+        "200":
+          description: Verified and signed in (session cookie set)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/resend-verification:
+    post:
+      operationId: resendVerification
+      tags: [auth]
+      summary: Re-send the email verification code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnlyInput"
+      responses:
+        "202":
+          description: Uniform acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Password login (may require a 2FA step)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Signed in, or a pending-2FA state was created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/login/2fa:
+    post:
+      operationId: loginTwoFactor
+      tags: [auth]
+      summary: Complete login with a TOTP or recovery code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TwoFactorInput"
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session
+      security: []
+      responses:
+        "204":
+          description: Signed out
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Current signed-in user (session cookie only)
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: The current user and their latest legal-policy acceptance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUserEnvelope"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/legal-acceptance:
+    post:
+      operationId: acceptLegalPolicies
+      tags: [auth]
+      summary: Accept the current Terms and acknowledge the current Privacy Policy
+      description: >
+        Appends server-timestamped evidence for the signed-in user. Existing
+        acceptance rows are never updated. Repeating an already-recorded current
+        acceptance is idempotent.
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LegalAcceptanceInput"
+      responses:
+        "200":
+          description: Current legal-policy acceptance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalAcceptanceStatus"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update the signed-in user's profile
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: The updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/profile/photo:
+    get:
+      operationId: getProfilePhoto
+      tags: [auth]
+      summary: Read the signed-in user's private profile photo
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "302":
+          description: Redirect to a short-lived signed object URL
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      operationId: uploadProfilePhoto
+      tags: [auth]
+      summary: Upload and select a private profile photo
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProfilePhotoUpload"
+      responses:
+        "200":
+          description: The updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      operationId: removeProfilePhoto
+      tags: [auth]
+      summary: Remove the signed-in user's profile photo
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: The updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/users/{id}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [auth]
+      summary: Change a user's role (super admin only)
+      security:
+        - sessionCookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRoleUpdate"
+      responses:
+        "200":
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/password/forgot:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request a password reset code by email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnlyInput"
+      responses:
+        "202":
+          description: Uniform acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/password/reset:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Confirm the reset code and set a new password (revokes all sessions)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitResponse"
+
+  /auth/password/change:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change password while signed in
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/2fa/setup:
+    post:
+      operationId: setupTwoFactor
+      tags: [auth]
+      summary: Begin TOTP enrollment (returns otpauth URL + QR)
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: Provisioning material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TwoFactorSetup"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/2fa/enable:
+    post:
+      operationId: enableTwoFactor
+      tags: [auth]
+      summary: Confirm the first TOTP code; returns 10 recovery codes (shown once)
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TwoFactorInput"
+      responses:
+        "200":
+          description: Enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/2fa/disable:
+    post:
+      operationId: disableTwoFactor
+      tags: [auth]
+      summary: Disable 2FA (password + TOTP required; forbidden for admins)
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisableTwoFactorInput"
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/2fa/recovery-codes:
+    post:
+      operationId: regenerateRecoveryCodes
+      tags: [auth]
+      summary: Regenerate the 10 recovery codes (TOTP required)
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TwoFactorInput"
+      responses:
+        "200":
+          description: Fresh recovery codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesEnvelope"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List/search users (admin only)
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserList"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/password-reset:
+    post:
+      operationId: adminSendPasswordReset
+      tags: [admin]
+      summary: Email the user a password reset code (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/suspend:
+    post:
+      operationId: adminSuspendUser
+      tags: [admin]
+      summary: Suspend a user (sessions and API keys stop working immediately)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/reactivate:
+    post:
+      operationId: adminReactivateUser
+      tags: [admin]
+      summary: Reactivate a suspended user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/2fa/reset:
+    post:
+      operationId: adminResetTwoFactor
+      tags: [admin]
+      summary: Reset a locked-out user's 2FA (clears secret and recovery codes)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 2FA reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/sessions/revoke:
+    post:
+      operationId: adminRevokeSessions
+      tags: [admin]
+      summary: Revoke all of a user's sessions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/api-keys/revoke:
+    post:
+      operationId: adminRevokeApiKeys
+      tags: [admin]
+      summary: Deactivate all of a user's API keys
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: API keys revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/usage:
+    get:
+      operationId: getAdminUsage
+      tags: [admin]
+      summary: Platform-wide usage totals, daily trends and top users
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPlatformUsage"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/users/{id}/usage:
+    get:
+      operationId: getAdminUserUsage
+      tags: [admin]
+      summary: Per-user usage drill-down (read-only job metadata)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Per-user usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserUsage"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/email-log:
+    get:
+      operationId: listEmailLog
+      tags: [admin]
+      summary: Paginated log of every auth email sent (verification + password reset)
+      parameters:
+        - name: recipient
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Partial email match filter
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Filter by delivery status: sent | failed"
+        - name: resetInitiationChannel
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [self_service, admin, admin_retry, unavailable]
+          description: "Filter password-reset emails by request source; unavailable matches legacy reset rows without recorded provenance"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email log entries, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailLogList"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/email-log/{id}/resend:
+    post:
+      operationId: adminResendFailedAuthEmail
+      tags: [admin]
+      summary: Retry a failed auth email with a fresh one-time code
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Retry attempted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessage"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/audit-log:
+    get:
+      operationId: listAuditLog
+      tags: [admin]
+      summary: Filterable, append-only audit log of privileged actions
+      parameters:
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Action prefix filter, e.g. "user." or "user.suspend"
+        - name: actorId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit entries, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogList"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/maintenance/production-test-data-purge/manifest:
+    get:
+      operationId: getProductionTestDataPurgeManifest
+      tags: [admin]
+      summary: Review the current guarded production test-data purge manifest (protected super admin only)
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: Current server-owned deletion and preservation manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionTestDataPurgeManifest"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/maintenance/production-test-data-purge:
+    post:
+      operationId: purgeProductionTestData
+      tags: [admin]
+      summary: Remove the exact server-manifested production test data (protected super admin only)
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionTestDataPurgeInput"
+      responses:
+        "200":
+          description: The exact current manifest selection was removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionTestDataPurgeResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/maintenance/production-admin-test-cleanup/manifest:
+    get:
+      operationId: getProductionAdminTestCleanupManifest
+      tags: [admin]
+      summary: Review the guarded admin test-scan and global unmatched-queue cleanup (protected super admin only)
+      security:
+        - sessionCookieAuth: []
+      responses:
+        "200":
+          description: Current server-owned deletion and preservation manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionAdminTestCleanupManifest"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/maintenance/production-admin-test-cleanup:
+    post:
+      operationId: runProductionAdminTestCleanup
+      tags: [admin]
+      summary: Remove the exact target-admin documents and global unmatched queue (protected super admin only)
+      security:
+        - sessionCookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionAdminTestCleanupInput"
+      responses:
+        "200":
+          description: The exact current manifest selection was removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionAdminTestCleanupResult"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Recommended for external integrations. Keys are user-owned and inherit the owner's current role and plan entitlements.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: CogniDocs API key
+      description: Compatibility alternative used by generated browser clients; the bearer value is the same user-owned API key accepted by X-API-Key.
+    sessionCookieAuth:
+      type: apiKey
+      in: cookie
+      name: cognidocs_session
+      description: Signed-in browser session. Account, profile, password, and 2FA operations require this mode and do not accept API keys.
+  responses:
+    ErrorResponse:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AuthenticatedForbiddenResponse:
+      description: >
+        Access denied because current legal acceptance is required, the
+        authenticated role or plan is insufficient, an API key entitlement is
+        unavailable, or a document quota is exhausted. LEGAL_ACCEPTANCE_REQUIRED
+        includes the exact current policy versions the owning user must accept
+        through a browser session.
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - $ref: "#/components/schemas/Error"
+              - $ref: "#/components/schemas/LegalAcceptanceRequiredError"
+    RateLimitResponse:
+      description: Too many attempts from this caller; wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    DocumentPasswordError:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          enum: [pdf_password_required, pdf_password_incorrect]
+        error:
+          type: string
+
+    DocumentUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: PDF, PNG, JPEG, WEBP, or statement CSV; maximum 20 MB.
+        declaredType:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, auto]
+          default: auto
+        password:
+          type: string
+          maxLength: 4096
+
+    DocumentSubmission:
+      type: object
+      required: [fileBase64, fileName, mimeType]
+      properties:
+        fileBase64:
+          type: string
+          maxLength: 27962028
+          contentEncoding: base64
+          contentMediaType: application/octet-stream
+          description: >
+            Canonical RFC 4648 base64 with required padding. Data URLs and
+            whitespace are not accepted. Decoded content must not exceed 20 MB.
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType:
+          type: string
+          minLength: 1
+          maxLength: 255
+        declaredType:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, auto]
+          default: auto
+        password:
+          type: string
+          maxLength: 4096
+
+    JobExportSelection:
+      type: object
+      additionalProperties: false
+      required: [jobIds]
+      properties:
+        jobIds:
+          type: array
+          minItems: 2
+          maxItems: 25
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+
+    DocumentDeletionReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        - receiptId
+        - submittedAt
+        - deletedAt
+        - declaredType
+        - deletionState
+        - deletionPolicyVersion
+        - aiPromptTokens
+        - aiCompletionTokens
+        - aiCostAmount10k
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        submittedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+        declaredType:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, auto]
+        deletionState:
+          type: string
+          const: deleted
+        deletionPolicyVersion:
+          type: integer
+          minimum: 1
+        aiPromptTokens:
+          type: ["integer", "null"]
+          minimum: 0
+        aiCompletionTokens:
+          type: ["integer", "null"]
+          minimum: 0
+        aiCostAmount10k:
+          type: ["integer", "null"]
+          minimum: 0
+
+    ParseJob:
+      type: object
+      required:
+        - id
+        - declaredType
+        - detectedType
+        - status
+        - fileName
+        - mimeType
+        - fileSizeBytes
+        - startedAt
+        - parserPath
+        - confidence
+        - error
+        - result
+        - createdAt
+        - completedAt
+        - aiPromptTokens
+        - aiCompletionTokens
+        - aiCostAmount10k
+        - sandbox
+        - timingTrace
+      properties:
+        id:
+          type: string
+        declaredType:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, auto]
+        detectedType:
+          type: ["string", "null"]
+          enum: [invoice, receipt, bank_statement, credit_card_statement, null]
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        fileName:
+          type: string
+        mimeType:
+          type: ["string", "null"]
+          description: MIME type of the submitted document as reported by the upload.
+        fileSizeBytes:
+          type: ["integer", "null"]
+          description: >
+            Size of the submitted document in bytes. Null for jobs created
+            before this field was tracked.
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: >
+            Timestamp when the job transitioned from queued to processing.
+            Null while the job is still queued or for jobs created before
+            this field was tracked.
+        parserPath:
+          type: ["string", "null"]
+          description: >
+            Parser implementation path selected for the job. Invoice and receipt
+            values include vendor_template, ai_text, and ai_vision. Statement
+            values include template_match:<parser>, template_generated:<parser>,
+            ai:<parser>, and unknown. Treat this as diagnostic metadata rather
+            than a stable workflow state.
+        confidence:
+          type: ["integer", "null"]
+        error:
+          type: ["string", "null"]
+        aiPromptTokens:
+          # AI prompt tokens consumed while parsing; null for pre-tracking jobs
+          type: ["integer", "null"]
+        aiCompletionTokens:
+          type: ["integer", "null"]
+        aiCostAmount10k:
+          # Total AI cost in USD ×10000 ($0.0142 → 142); null when unknown
+          type: ["integer", "null"]
+        sandbox:
+          # True when submitted via a sandbox-environment API key. Sandbox
+          # jobs are excluded from monthly quota and platform analytics.
+          type: boolean
+        timingTrace:
+          oneOf:
+            - $ref: "#/components/schemas/StatementTimingTrace"
+            - type: "null"
+          description: Privacy-safe statement lifecycle timings. Contains stage names and milliseconds only; never document text or transactions.
+        result:
+          oneOf:
+            - $ref: "#/components/schemas/ParseResultEnvelope"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    StatementTimingStageDurations:
+      type: object
+      properties:
+        document_detection: { type: ["integer", "null"] }
+        pdf_text_ocr: { type: ["integer", "null"] }
+        region_classification: { type: ["integer", "null"] }
+        template_lookup: { type: ["integer", "null"] }
+        v3_extraction: { type: ["integer", "null"] }
+        v2_ai_fallback: { type: ["integer", "null"] }
+        template_lifecycle: { type: ["integer", "null"] }
+        canonical_mapping: { type: ["integer", "null"] }
+        merchant_resolution: { type: ["integer", "null"] }
+        database_commit: { type: ["integer", "null"] }
+
+    StatementTimingDetailDurations:
+      type: object
+      properties:
+        document_text_analysis: { type: ["integer", "null"] }
+        family_scoring: { type: ["integer", "null"] }
+        image_family_classification: { type: ["integer", "null"] }
+        pdf_page_count: { type: ["integer", "null"] }
+        template_matching_text: { type: ["integer", "null"] }
+        v3_pdf_load: { type: ["integer", "null"] }
+        v3_coordinate_extraction: { type: ["integer", "null"] }
+        v3_thumbnail_wait: { type: ["integer", "null"] }
+        v3_template_lookup: { type: ["integer", "null"] }
+        v3_row_extraction: { type: ["integer", "null"] }
+        v3_transaction_processing: { type: ["integer", "null"] }
+        merchant_directory_load: { type: ["integer", "null"] }
+        merchant_overrides_load: { type: ["integer", "null"] }
+        merchant_matching: { type: ["integer", "null"] }
+
+    StatementRoutingEvidenceGroups:
+      type: object
+      required:
+        - statementIdentity
+        - accountIdentity
+        - ledgerStructure
+        - signedAmountLedger
+        - runningBalance
+      properties:
+        statementIdentity: { type: boolean }
+        accountIdentity: { type: boolean }
+        ledgerStructure: { type: boolean }
+        signedAmountLedger: { type: boolean }
+        runningBalance: { type: boolean }
+
+    StatementRoutingScores:
+      type: object
+      required: [bank, creditCard, margin]
+      properties:
+        bank: { type: number }
+        creditCard: { type: number }
+        margin: { type: number }
+
+    DocumentRoutingAlternative:
+      type: object
+      required: [family, confidence, evidenceGroups, eligible]
+      properties:
+        family:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, other]
+        confidence: { type: number }
+        evidenceGroups:
+          type: array
+          items: { type: string }
+        eligible: { type: boolean }
+
+    PdfWorkStats:
+      type: object
+      required:
+        - documentLoads
+        - pageExtractions
+        - peakCachedPageArtifacts
+        - tempPdfWrites
+        - ocrRuns
+        - thumbnailRenders
+      properties:
+        documentLoads: { type: integer }
+        pageExtractions: { type: integer }
+        peakCachedPageArtifacts: { type: integer }
+        tempPdfWrites: { type: integer }
+        ocrRuns: { type: integer }
+        thumbnailRenders: { type: integer }
+
+    StatementRoutingDecision:
+      type: object
+      description: Privacy-safe document routing diagnostics. Contains no extracted text, account details, balances, or transaction descriptions.
+      required:
+        - selectedFamily
+        - legacyFamily
+        - classifierFamily
+        - classifierConfidence
+        - archetype
+        - detectedCanonicalColumns
+        - evidenceGroups
+        - scores
+        - veto
+      properties:
+        selectedFamily:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, other, unknown]
+        legacyFamily:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement, other, unknown]
+        confidence: { type: number }
+        margin: { type: number }
+        evidenceCoverage: { type: integer }
+        alternatives:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentRoutingAlternative"
+        contradictions:
+          type: array
+          items: { type: string }
+        abstentionReason:
+          type: ["string", "null"]
+          enum:
+            - empty_or_unreadable
+            - insufficient_evidence
+            - conflicting_evidence
+            - low_confidence
+            - low_margin
+            - unsupported_document_family
+            - unsupported_input_format
+            - classifier_error
+            - null
+        classifierFamily:
+          type: ["string", "null"]
+          enum:
+            - bank_account_statement
+            - credit_card_statement
+            - hybrid_or_ambiguous
+            - null
+        classifierConfidence: { type: ["number", "null"] }
+        archetype: { type: ["string", "null"] }
+        detectedCanonicalColumns:
+          type: array
+          items:
+            type: string
+            enum: [date, description, debit, credit, amount, balance, reference]
+        evidenceGroups:
+          $ref: "#/components/schemas/StatementRoutingEvidenceGroups"
+        scores:
+          oneOf:
+            - $ref: "#/components/schemas/StatementRoutingScores"
+            - type: "null"
+        veto:
+          type: ["string", "null"]
+          enum:
+            - classifier_unavailable
+            - ambiguous_statement
+            - low_confidence
+            - invoice_identity
+            - receipt_identity
+            - missing_statement_identity
+            - missing_account_identity
+            - missing_ledger_structure
+            - null
+
+    StatementTimingTrace:
+      type: object
+      required:
+        - version
+        - queueWaitMs
+        - processingMs
+        - totalMs
+        - orchestratorMs
+        - currentStage
+        - lastProgressAt
+        - stages
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        queueWaitMs: { type: ["integer", "null"] }
+        processingMs: { type: ["integer", "null"] }
+        totalMs: { type: ["integer", "null"] }
+        orchestratorMs: { type: ["integer", "null"] }
+        currentStage:
+          type: ["string", "null"]
+          enum:
+            - document_detection
+            - pdf_text_ocr
+            - region_classification
+            - template_lookup
+            - v3_extraction
+            - v2_ai_fallback
+            - template_lifecycle
+            - canonical_mapping
+            - merchant_resolution
+            - database_commit
+            - null
+        lastProgressAt: { type: ["string", "null"], format: date-time }
+        stages:
+          $ref: "#/components/schemas/StatementTimingStageDurations"
+        details:
+          $ref: "#/components/schemas/StatementTimingDetailDurations"
+        pageCount: { type: ["integer", "null"] }
+        transactionCount: { type: ["integer", "null"] }
+        bankName: { type: ["string", "null"] }
+        templateId: { type: ["string", "null"] }
+        parserPath: { type: ["string", "null"] }
+        fallbackReason: { type: ["string", "null"] }
+        routingDecision:
+          $ref: "#/components/schemas/StatementRoutingDecision"
+        pdfWorkStats:
+          $ref: "#/components/schemas/PdfWorkStats"
+        outcome:
+          type: ["string", "null"]
+          enum: [completed, failed, restart_failed, null]
+        failureKind:
+          type: ["string", "null"]
+          enum: [parser_failure, timeout, restart_failure, null]
+        restartDetectedAt: { type: ["string", "null"], format: date-time }
+        dominantStage:
+          type: ["string", "null"]
+          enum:
+            - document_detection
+            - pdf_text_ocr
+            - region_classification
+            - template_lookup
+            - v3_extraction
+            - v2_ai_fallback
+            - template_lifecycle
+            - canonical_mapping
+            - merchant_resolution
+            - database_commit
+            - null
+        dominantStageMs: { type: ["integer", "null"] }
+        dominantDetail:
+          type: ["string", "null"]
+          enum:
+            - document_text_analysis
+            - family_scoring
+            - image_family_classification
+            - pdf_page_count
+            - template_matching_text
+            - v3_pdf_load
+            - v3_coordinate_extraction
+            - v3_thumbnail_wait
+            - v3_template_lookup
+            - v3_row_extraction
+            - v3_transaction_processing
+            - merchant_directory_load
+            - merchant_overrides_load
+            - merchant_matching
+            - null
+        dominantDetailMs: { type: ["integer", "null"] }
+
+    ParseResultEnvelope:
+      type: object
+      required:
+        - documentType
+        - parserPath
+        - confidence
+        - statement
+        - invoice
+      properties:
+        documentType:
+          type: string
+          enum: [invoice, receipt, bank_statement, credit_card_statement]
+        parserPath:
+          type: string
+        confidence:
+          # null = unknown (e.g. legacy jobs whose original score was unrecoverable)
+          type: ["integer", "null"]
+        statement:
+          oneOf:
+            - $ref: "#/components/schemas/StatementResult"
+            - type: "null"
+        invoice:
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceResult"
+            - type: "null"
+
+    StatementResult:
+      type: object
+      required:
+        - bankId
+        - bankName
+        - statementType
+        - currency
+        - accountRef
+        - periodStart
+        - periodEnd
+        - templateId
+        - templateGenerated
+        - partialImportWarning
+        - transactions
+      properties:
+        bankId:
+          type: ["integer", "null"]
+        bankName:
+          type: ["string", "null"]
+        statementType:
+          type: string
+          enum:
+            - bank_statement
+            - credit_card_statement
+            - unknown
+            - bank
+            - credit_card
+          description: >
+            Current parsers emit bank_statement, credit_card_statement, or
+            unknown. Persisted jobs created by older parsers can still contain
+            the legacy values bank or credit_card.
+        currency:
+          type: string
+        accountRef:
+          type: ["string", "null"]
+        periodStart:
+          type: ["string", "null"]
+          format: date
+        periodEnd:
+          type: ["string", "null"]
+          format: date
+        templateId:
+          type: ["string", "null"]
+        templateGenerated:
+          type: boolean
+        partialImportWarning:
+          description: >
+            Privacy-safe partial CSV import warning. Null for complete imports,
+            non-CSV statements, and legacy jobs without this diagnostic. This
+            object never contains rejected row values or transaction text.
+          oneOf:
+            - $ref: "#/components/schemas/CsvPartialImportWarning"
+            - type: "null"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementTransaction"
+
+    CsvPartialImportWarning:
+      type: object
+      additionalProperties: false
+      required: [code, skippedRowCount, message]
+      properties:
+        code:
+          type: string
+          enum: [csv_rows_skipped]
+        skippedRowCount:
+          type: integer
+          minimum: 1
+        message:
+          type: string
+          enum:
+            - Some CSV rows could not be imported because their required date or amount values were invalid.
+
+    StatementTransaction:
+      type: object
+      required:
+        - id
+        - date
+        - description
+        - rawDescription
+        - amount10k
+        - currency
+        - direction
+        - type
+        - category
+        - subcategory
+        - merchantId
+        - balance10k
+        - page
+        - operationType
+        - operationLabel
+        - sourceMerchant
+        - sourceText
+        - sourceAmount
+        - currencySource
+        - directionSource
+        - normalizedMerchant
+        - parsedMerchant
+        - categoryGroup
+        - parserCategory
+        - directoryCategory
+        - effectiveCategory
+        - categoryProvenance
+        - parserConfidence
+        - parserVersion
+        - matchConfidence
+        - matchProvenance
+        - matchMethod
+        - matchEvidence
+        - matchAlternatives
+        - matchBlockedReason
+        - tenantOverride
+        - stableMerchantId
+        - entityType
+        - flow
+        - directionClassified
+        - instrument
+        - rail
+        - tag
+        - notes
+        - sourcePage
+        - documentIndex
+        - sourceLineIndex
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        rawDescription:
+          type: ["string", "null"]
+        amount10k:
+          type: integer
+        currency:
+          type: string
+        direction:
+          type: ["string", "null"]
+          enum: [debit, credit, null]
+          description: >
+            Account-level direction. Always use this field to distinguish money
+            out from money in. Bank debits normally have negative amount10k;
+            credit-card purchases are debit direction with positive amount10k,
+            while card payments and refunds are credit direction with negative
+            amount10k.
+        type:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+          description: >
+            Taxonomy subcategory compatible with category, or null when no
+            trustworthy compatible classification is available.
+        merchantId:
+          type: ["string", "null"]
+        balance10k:
+          type: ["integer", "null"]
+        page:
+          type: ["integer", "null"]
+        operationType:
+          type: ["string", "null"]
+          description: >
+            Machine-readable banking operation type retained independently from
+            the user-facing transaction description.
+        operationLabel:
+          type: ["string", "null"]
+          description: >
+            Generic banking operation label retained as metadata when a cleaned
+            merchant or counterparty is used as the transaction description.
+        sourceMerchant:
+          type: ["string", "null"]
+          description: >
+            Raw merchant text extracted from the statement row before any
+            cleaning or normalization. Preserved verbatim from the source
+            document for audit and CSV export.
+        sourceText:
+          type: ["string", "null"]
+          description: >
+            Full raw text of the statement row, when available from the parser.
+            Equivalent to rawDescription for most parsers.
+        sourceAmount:
+          type: ["string", "null"]
+          description: Amount text as it appeared in the source row, before numeric parsing.
+        currencySource:
+          type: ["string", "null"]
+          description: Currency evidence retained by the parser from the source row.
+        directionSource:
+          type: ["string", "null"]
+          description: Direction evidence retained by the parser from the source row.
+        normalizedMerchant:
+          type: ["string", "null"]
+          description: >
+            Normalized (lowercased, punctuation-stripped) merchant name used
+            for directory matching. Derived from sourceMerchant.
+        parsedMerchant:
+          type: ["string", "null"]
+          description: >
+            Cleaned merchant name output by the parser, before directory
+            lookup. Null when the parser did not produce a distinct cleaned name.
+        categoryGroup:
+          type: ["string", "null"]
+          description: >
+            High-level taxonomy group for the transaction category, e.g.
+            "Food & Dining". Null when no category is assigned.
+        parserCategory:
+          type: ["string", "null"]
+          description: >
+            Category assigned by the parser or AI model before merchant
+            directory lookup. Null when the parser did not assign a category.
+        directoryCategory:
+          type: ["string", "null"]
+          description: >
+            Category from the merchant directory match. Null when no merchant
+            was matched or the directory entry carries no category.
+        effectiveCategory:
+          type: ["string", "null"]
+          description: >
+            Final authoritative category after parser, directory, and tenant
+            override resolution. This is the same effective value as category.
+        categoryProvenance:
+          type: ["string", "null"]
+          enum: [user_override, directory, parser, default, null]
+          description: Source that supplied effectiveCategory.
+        parserConfidence:
+          type: ["number", "null"]
+          description: Parser confidence for the canonical source row.
+        parserVersion:
+          type: ["string", "null"]
+          enum: [v1, v2, v3, null]
+        matchConfidence:
+          type: ["number", "null"]
+          description: >
+            Confidence score (0–1) for merchant matching. Null when no matcher
+            evidence was persisted.
+        matchProvenance:
+          type: ["string", "null"]
+          description: >
+            Safe matcher provenance label, such as v3_classifier. Internal
+            directory revision identifiers are never exposed.
+        matchMethod:
+          type: ["string", "null"]
+          description: Matcher method label, when persisted.
+        matchEvidence:
+          type: array
+          items: { type: string }
+          default: []
+          description: Safe evidence labels retained from merchant matching.
+        matchAlternatives:
+          type: array
+          default: []
+          items:
+            $ref: "#/components/schemas/StatementMatchAlternative"
+          description: Ranked alternative merchant candidates retained by the matcher.
+        matchBlockedReason:
+          type: ["string", "null"]
+        tenantOverride:
+          type: ["boolean", "null"]
+          description: True when the tenant's merchant override supplied the result.
+        stableMerchantId:
+          type: ["string", "null"]
+          description: Cross-system merchant identity supplied by the matcher, when available.
+        entityType:
+          type: ["string", "null"]
+          enum: [merchant, counterparty, operation, null]
+          description: >
+            Semantic entity type of the transaction description. "merchant" for
+            retail/service vendors, "counterparty" for P2P or bank transfers,
+            "operation" for internal banking operations (fees, interest, etc.).
+        flow:
+          type: ["string", "null"]
+          enum: [expense, income, unknown, null]
+        directionClassified:
+          type: ["string", "null"]
+          enum: [incoming, outgoing, null]
+        instrument:
+          type: ["string", "null"]
+          enum: [debit_card, credit_card, bank_account, cash, null]
+        rail:
+          type: ["string", "null"]
+          enum: [card, internal_transfer, swift, eft, direct_debit, billpay, unknown, null]
+        tag:
+          type: ["string", "null"]
+        notes:
+          type: array
+          items:
+            type: string
+          description: >
+            Parser or enrichment notes attached to this transaction. Empty
+            array when none.
+          default: []
+        sourcePage:
+          type: ["integer", "null"]
+          description: >
+            Page number within the source document where this transaction
+            row appeared, when available. Equivalent to page.
+        documentIndex:
+          type: ["integer", "null"]
+          description: Parser-provided document/page index for the source row.
+        sourceLineIndex:
+          type: ["integer", "null"]
+          description: Parser-provided line index for the source row.
+
+    StatementMatchAlternative:
+      type: object
+      required: [name, confidence]
+      properties:
+        name:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    InvoiceResult:
+      type: object
+      required:
+        - id
+        - vendorKey
+        - vendorName
+        - invoiceRef
+        - normalizedInvoiceRef
+        - issueDate
+        - dueDate
+        - currency
+        - subtotalAmount10k
+        - taxAmount10k
+        - totalAmount10k
+        - categoryKey
+        - categoryProfileVersion
+        - categoryFacts
+        - detailTier
+        - fieldConfidence
+        - fieldsMissing
+        - reconciliation
+        - sourceParser
+        - arithmeticModel
+        - paymentMethod
+        - paymentReference
+        - associatedInvoiceRefs
+        - bankingDetails
+        - templateRouting
+        - merchantId
+        - lineItems
+      properties:
+        id:
+          type: string
+        vendorKey:
+          type: string
+        vendorName:
+          type: ["string", "null"]
+        invoiceRef:
+          type: ["string", "null"]
+        normalizedInvoiceRef:
+          type: ["string", "null"]
+          description: >
+            Normalized form of invoiceRef used for deduplication (lowercased,
+            whitespace-collapsed). Null when invoiceRef is null.
+        issueDate:
+          type: ["string", "null"]
+          format: date
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        currency:
+          type: string
+        subtotalAmount10k:
+          type: ["integer", "null"]
+        taxAmount10k:
+          type: ["integer", "null"]
+        totalAmount10k:
+          type: integer
+        categoryKey:
+          type: ["string", "null"]
+        categoryProfileVersion:
+          type: ["integer", "null"]
+          minimum: 1
+          description: Exact active extraction-profile version applied to this result.
+        categoryFacts:
+          type: array
+          description: >
+            Source-grounded category-specific facts permitted by the applied
+            profile. Missing facts remain absent and values never replace line
+            descriptions or financial fields.
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryFactResult"
+        detailTier:
+          type: string
+          enum: [itemized, summary, hybrid]
+        fieldConfidence:
+          type: ["object", "null"]
+          additionalProperties:
+            type: number
+        fieldsMissing:
+          type: ["array", "null"]
+          items:
+            type: string
+        reconciliation:
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceReconciliation"
+            - type: "null"
+        sourceParser:
+          type: string
+        arithmeticModel:
+          type: ["string", "null"]
+          description: >
+            Arithmetic convention the validator matched, e.g. "tax-inclusive(5%)".
+            Null when no arithmetic model was identified.
+        paymentMethod:
+          type: ["string", "null"]
+        paymentReference:
+          type: ["string", "null"]
+          description: >
+            Receipt transaction, authorization, or approval reference copied
+            from the document. Null when the receipt prints none. Always null
+            for invoices.
+        associatedInvoiceRefs:
+          type: array
+          description: >
+            Every invoice reference explicitly printed as paid by a receipt.
+            Empty when none are shown and for invoice documents. These values
+            are evidence only and are not database links.
+          items:
+            type: string
+        bankingDetails:
+          description: >
+            Supplier banking/payment details captured verbatim from the
+            document, or null when the invoice prints none. Fields are never
+            fabricated.
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceBankingDetails"
+            - type: "null"
+        templateRouting:
+          description: >
+            Non-sensitive deterministic-template routing evidence. Null for
+            receipts and legacy result envelopes.
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceTemplateRouting"
+            - type: "null"
+        merchantId:
+          type: ["string", "null"]
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+
+    InvoiceBankingDetails:
+      type: object
+      description: >
+        Supplier banking details as printed on the invoice. Every field is
+        nullable; only fields actually shown on the document are populated.
+      required:
+        - bankName
+        - accountName
+        - accountNumber
+        - iban
+        - swiftBic
+        - branch
+        - routingInfo
+      properties:
+        bankName:
+          type: ["string", "null"]
+        accountName:
+          type: ["string", "null"]
+        accountNumber:
+          type: ["string", "null"]
+        iban:
+          type: ["string", "null"]
+        swiftBic:
+          type: ["string", "null"]
+        branch:
+          type: ["string", "null"]
+        routingInfo:
+          type: ["string", "null"]
+          description: Routing / sort-code / ABA / IFSC-style code when shown.
+
+    InvoiceTemplateRouting:
+      type: object
+      required:
+        - detection
+        - deterministicParse
+        - layout
+        - validation
+        - fallbackReason
+      properties:
+        detection:
+          type: string
+          enum: [not_attempted, no_active_template, no_detection_match, matched]
+        deterministicParse:
+          type: string
+          enum: [not_attempted, accepted, rejected]
+        layout:
+          type: string
+          enum: [not_attempted, not_available, applied]
+        validation:
+          type: string
+          enum: [not_attempted, accepted, rejected]
+        fallbackReason:
+          type: ["string", "null"]
+
+    InvoiceReconciliation:
+      type: object
+      required:
+        - lineItemSum10k
+        - matchesTotal
+        - delta10k
+      properties:
+        lineItemSum10k:
+          type: integer
+        matchesTotal:
+          type: boolean
+        delta10k:
+          type: integer
+
+    InvoiceLineItem:
+      type: object
+      required:
+        - id
+        - lineNumber
+        - section
+        - description
+        - quantity10k
+        - unitPriceAmount10k
+        - amount10k
+        - taxAmount10k
+        - periodStart
+        - periodEnd
+      properties:
+        id:
+          type: string
+        lineNumber:
+          type: ["integer", "null"]
+        section:
+          type: ["string", "null"]
+          description: Section/group header this line belongs to (e.g. "Agent Usage"), or null for ungrouped documents.
+        description:
+          type: string
+        quantity10k:
+          type: ["integer", "null"]
+        unitPriceAmount10k:
+          type: ["integer", "null"]
+        amount10k:
+          type: integer
+        taxAmount10k:
+          type: ["integer", "null"]
+        periodStart:
+          type: ["string", "null"]
+          format: date
+        periodEnd:
+          type: ["string", "null"]
+          format: date
+
+    Merchant:
+      type: object
+      required:
+        - id
+        - name
+        - normalizedName
+        - categoryGroup
+        - taxonomyId
+        - category
+        - subcategory
+        - country
+        - confidence
+        - source
+        - createdAt
+        - aliases
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        normalizedName:
+          type: string
+        categoryGroup:
+          type: string
+          description: Taxonomy group persisted for this merchant.
+        taxonomyId:
+          type: ["integer", "null"]
+          description: Exact active taxonomy row matching the stored group, category, and subcategory.
+        category:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        confidence:
+          type: ["number", "null"]
+        source:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        aliases:
+          type: array
+          description: >
+            Public display aliases known for this merchant, including imported
+            variants and merge-derived names.
+          items:
+            type: string
+
+    MerchantInput:
+      type: object
+      required: [name, taxonomyId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        taxonomyId:
+          type: ["integer", "null"]
+          description: Exact active taxonomy row to apply, or null to leave the merchant uncategorized.
+        category:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+
+    MerchantUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        taxonomyId:
+          type: ["integer", "null"]
+          description: Exact active taxonomy row to apply, or null to clear classification.
+        category:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+
+    MerchantMergeInput:
+      type: object
+      required: [sourceIds]
+      properties:
+        sourceIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: string
+
+    MerchantMergeResult:
+      type: object
+      required:
+        - target
+        - mergedSourceIds
+        - aliasesAdded
+        - canonicalPointersMoved
+      properties:
+        target:
+          $ref: "#/components/schemas/Merchant"
+        mergedSourceIds:
+          type: array
+          items:
+            type: string
+        aliasesAdded:
+          type: integer
+        canonicalPointersMoved:
+          type: integer
+
+    MyMerchant:
+      type: object
+      required:
+        - id
+        - alias
+        - merchantName
+        - category
+        - region
+        - active
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        alias:
+          type: string
+        merchantName:
+          type: string
+        category:
+          type: string
+        region:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MyMerchantInput:
+      type: object
+      required: [alias, merchantName, category]
+      properties:
+        alias:
+          type: string
+          minLength: 1
+          maxLength: 200
+        merchantName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        region:
+          type: ["string", "null"]
+
+    MyMerchantUpdate:
+      type: object
+      properties:
+        alias:
+          type: string
+          minLength: 1
+          maxLength: 200
+        merchantName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        region:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+    UserRoleUpdate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [user, admin, super_admin]
+
+    MerchantTaxonomyEntry:
+      type: object
+      required: [id, categoryGroup, category, subcategory, isActive]
+      properties:
+        id:
+          type: integer
+        categoryGroup:
+          type: string
+        category:
+          type: string
+        subcategory:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    MerchantRegion:
+      type: object
+      required: [code, name, isActive]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        isActive:
+          type: boolean
+
+    Bank:
+      type: object
+      required:
+        - id
+        - name
+        - country
+        - aliases
+        - products
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        country:
+          type: ["string", "null"]
+        aliases:
+          type: array
+          items:
+            type: string
+        products:
+          type: array
+          items:
+            type: string
+
+    BankInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+
+    BankUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+
+    BankAliasInput:
+      type: object
+      required: [alias]
+      properties:
+        alias:
+          type: string
+
+    StatementTemplateSummary:
+      type: object
+      required:
+        - id
+        - bankId
+        - name
+        - version
+        - status
+      properties:
+        id:
+          type: string
+        bankId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        region:
+          type: ["string", "null"]
+        statementType:
+          type: ["string", "null"]
+
+    RecoverableStatementTemplateLineage:
+      type: object
+      description: >
+        The newest version that can be activated in a lineage with no active
+        member. The identity fields identify the lineage; id identifies this
+        reviewable version.
+      required:
+        - id
+        - bankId
+        - name
+        - version
+        - status
+      properties:
+        id:
+          type: string
+        bankId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        region:
+          type: ["string", "null"]
+        statementType:
+          type: ["string", "null"]
+
+    StatementTemplate:
+      type: object
+      required:
+        - id
+        - bankId
+        - name
+        - version
+        - status
+        - config
+      properties:
+        id:
+          type: string
+        bankId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        config:
+          $ref: "#/components/schemas/StatementTemplateConfig"
+        region:
+          type: ["string", "null"]
+        layoutVersion:
+          type: string
+        parentTemplateId:
+          type: ["integer", "null"]
+        primaryLanguage:
+          type: ["string", "null"]
+        isRtl:
+          type: boolean
+        supportedLanguages:
+          type: ["array", "null"]
+          items:
+            type: string
+        statementType:
+          type: ["string", "null"]
+        numberFormat:
+          type: ["string", "null"]
+        postBuildV3Disagreement:
+          type: boolean
+        lastKnownHealth:
+          type: ["string", "null"]
+        successCount:
+          type: integer
+        failCount:
+          type: integer
+        lastUsedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StatementTemplateUpdate:
+      type: object
+      required: [config]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        bankId:
+          type: ["integer", "null"]
+        region:
+          type: ["string", "null"]
+          maxLength: 255
+        layoutVersion:
+          type: string
+          minLength: 1
+          maxLength: 50
+        primaryLanguage:
+          type: ["string", "null"]
+          maxLength: 10
+        isRtl:
+          type: boolean
+        supportedLanguages:
+          type: ["array", "null"]
+          items:
+            type: string
+        statementType:
+          type: ["string", "null"]
+          enum: [bank_statement, credit_card, unknown, null]
+        numberFormat:
+          type: ["string", "null"]
+        postBuildV3Disagreement:
+          type: boolean
+        lastKnownHealth:
+          type: ["string", "null"]
+        config:
+          $ref: "#/components/schemas/StatementTemplateConfig"
+
+    StatementTemplateConfig:
+      type: object
+      additionalProperties: false
+      description: >
+        Safe statement extraction config. Only parser-consumed fields are
+        permitted; raw source samples, AI cache payloads, and evidence blobs
+        are never stored or returned.
+      properties:
+        parsing_config:
+          $ref: "#/components/schemas/StatementParsingConfig"
+
+    StatementParsingConfig:
+      type: object
+      additionalProperties: false
+      description: >
+        Deterministic parser_v3 configuration. Every field is optional; unknown
+        keys are rejected.
+      properties:
+        debit_credit_mode:
+          type: string
+          enum:
+            - single
+            - separate
+            - cr_marker
+            - sign_based
+            - separate_columns
+            - separate_sections
+        multiline_mode:
+          oneOf:
+            - type: string
+              enum: [single_line, continuation_until_next_date]
+            - type: boolean
+        multi_line_headers:
+          type: boolean
+        header_line_count:
+          type: integer
+          minimum: 1
+          maximum: 4
+        max_lines_per_transaction:
+          type: integer
+          minimum: 1
+          maximum: 10
+        date_anchor_regex:
+          type: ["string", "null"]
+        start_table_headers_required:
+          type: array
+          items:
+            type: string
+        stop_anchors_any:
+          type: array
+          items:
+            type: string
+        ignore_rows_matching:
+          type: array
+          items:
+            type: string
+        credit_section_patterns:
+          type: array
+          items:
+            type: string
+        table_start_marker:
+          type: ["string", "null"]
+        table_end_marker:
+          type: ["string", "null"]
+        column_mappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementColumnMapping"
+        column_boundaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementColumnBoundary"
+
+    StatementColumnMapping:
+      type: object
+      additionalProperties: false
+      required: [header, field]
+      properties:
+        header:
+          type: string
+        field:
+          type: string
+
+    StatementColumnBoundary:
+      type: object
+      additionalProperties: false
+      required: [header, field, x_start, x_end]
+      properties:
+        header:
+          type: string
+        field:
+          type: string
+        x_start:
+          type: number
+        x_end:
+          type: number
+
+    TemplateActivation:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+
+    TemplateHealth:
+      type: object
+      required:
+        - matchCount
+        - failCount
+        - avgConfidence
+      properties:
+        matchCount:
+          type: integer
+        failCount:
+          type: integer
+        avgConfidence:
+          type: ["number", "null"]
+
+    InvoiceTemplate:
+      type: object
+      required:
+        - id
+        - vendorKey
+        - name
+        - version
+        - status
+        - config
+        - matchCount
+        - failCount
+        - lastMatchedAt
+        - createdAt
+      properties:
+        id:
+          type: string
+        vendorKey:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [draft, active, retired]
+        config:
+          $ref: "#/components/schemas/InvoiceTemplateConfig"
+        matchCount:
+          type: integer
+        failCount:
+          type: integer
+        lastMatchedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    InvoiceTemplateInput:
+      type: object
+      required: [vendorKey, name, config]
+      properties:
+        vendorKey:
+          type: string
+        name:
+          type: string
+        config:
+          $ref: "#/components/schemas/InvoiceTemplateConfig"
+
+    InvoiceTemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        config:
+          $ref: "#/components/schemas/InvoiceTemplateConfig"
+
+    InvoiceTemplateFactMapping:
+      type: object
+      required: [pattern]
+      additionalProperties: false
+      properties:
+        pattern:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        flags:
+          type: string
+          pattern: "^[dgimsuvy]*$"
+          default: i
+        group:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 1
+        multiple:
+          type: boolean
+          default: false
+        repeatingGroup:
+          type: string
+          pattern: "^[a-z][a-zA-Z0-9]+$"
+
+    InvoiceTemplateConfig:
+      type: object
+      required: [vendor, defaultCategory, categoryKey]
+      description: >
+        Validated deterministic vendor configuration. Only known safe fields
+        are permitted; unknown legacy keys are rejected.
+      additionalProperties: false
+      properties:
+        vendor:
+          type: string
+          minLength: 1
+        defaultCategory:
+          type: string
+          minLength: 1
+        defaultCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        categoryKey:
+          type: string
+          minLength: 1
+        categoryProfileVersion:
+          type: integer
+          minimum: 1
+        detectionMarkers:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+        categoryFactMappings:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/InvoiceTemplateFactMapping"
+        bankDetailsConfig:
+          $ref: "#/components/schemas/InvoiceTemplateBankDetailsConfig"
+
+    InvoiceTemplateBankDetailsFieldConfig:
+      type: object
+      additionalProperties: false
+      required: [pattern]
+      properties:
+        pattern:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        flags:
+          type: string
+          pattern: "^[dgimsuvy]*$"
+        group:
+          type: integer
+          minimum: 1
+
+    InvoiceTemplateBankDetailsConfig:
+      type: object
+      additionalProperties: false
+      properties:
+        sectionStart:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        sectionEnd:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        fields:
+          type: object
+          additionalProperties: false
+          properties:
+            bankName:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            accountName:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            accountNumber:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            iban:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            swiftBic:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            branch:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+            routingInfo:
+              $ref: "#/components/schemas/InvoiceTemplateBankDetailsFieldConfig"
+
+    InvoiceCategoryFactConstraints:
+      type: object
+      additionalProperties: true
+      properties:
+        pattern:
+          type: string
+        min:
+          type: number
+        max:
+          type: number
+        enum:
+          type: array
+          items:
+            type: string
+        maxLength:
+          type: integer
+          minimum: 1
+
+    InvoiceCategoryFactDefinition:
+      type: object
+      required:
+        - key
+        - label
+        - scope
+        - dataType
+        - aliases
+        - requiredness
+        - constraints
+        - sensitivity
+        - displayGuidance
+      additionalProperties: true
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-zA-Z0-9]+$"
+        label:
+          type: string
+          minLength: 1
+        scope:
+          type: string
+          enum: [invoice, line_item, repeating_group]
+        dataType:
+          type: string
+          enum: [string, date, number, boolean, "string[]", object]
+        aliases:
+          type: array
+          items:
+            type: string
+        requiredness:
+          type: string
+          enum: [required, recommended, optional, sensitive]
+        constraints:
+          $ref: "#/components/schemas/InvoiceCategoryFactConstraints"
+        sensitivity:
+          type: string
+          enum: [none, low, medium, high]
+        displayGuidance:
+          type: string
+          minLength: 1
+
+    InvoiceCategoryRepeatingGroup:
+      type: object
+      required: [key, label, description, fields]
+      additionalProperties: true
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-zA-Z0-9]+$"
+        label:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryFactDefinition"
+
+    InvoiceCategoryCompletenessPolicy:
+      type: object
+      required: [requiredFields, neverInfer, promptNote]
+      additionalProperties: true
+      properties:
+        requiredFields:
+          type: array
+          items:
+            type: string
+        neverInfer:
+          type: boolean
+        promptNote:
+          type: string
+
+    InvoiceCategoryExtractionProfile:
+      type: object
+      required:
+        - categoryKey
+        - label
+        - description
+        - legacyFields
+        - fields
+        - repeatingGroups
+        - completenessPolicy
+        - categoryAliases
+        - sources
+      additionalProperties: true
+      properties:
+        categoryKey:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        legacyFields:
+          type: array
+          items:
+            type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryFactDefinition"
+        repeatingGroups:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryRepeatingGroup"
+        completenessPolicy:
+          $ref: "#/components/schemas/InvoiceCategoryCompletenessPolicy"
+        categoryAliases:
+          type: array
+          items:
+            type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryResearchSource"
+
+    InvoiceCategoryResearchSource:
+      type: object
+      required: [title, url, rationale]
+      additionalProperties: true
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        rationale:
+          type: string
+
+    InvoiceCategoryResearchMetadata:
+      type: object
+      required: [lastReviewed, methodology, sources]
+      additionalProperties: true
+      properties:
+        lastReviewed:
+          type: string
+          format: date
+        methodology:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceCategoryResearchSource"
+
+    InvoiceCategoryProfileVersion:
+      type: object
+      required:
+        - id
+        - categoryKey
+        - version
+        - status
+        - profile
+        - researchMetadata
+        - source
+        - createdAt
+        - activatedAt
+      properties:
+        id:
+          type: string
+        categoryKey:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, active, retired]
+        profile:
+          $ref: "#/components/schemas/InvoiceCategoryExtractionProfile"
+        researchMetadata:
+          $ref: "#/components/schemas/InvoiceCategoryResearchMetadata"
+        source:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        activatedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    InvoiceCategoryFactEvidence:
+      type: object
+      required: [page, text, source]
+      additionalProperties: false
+      properties:
+        page:
+          type: ["integer", "null"]
+          minimum: 1
+        text:
+          type: ["string", "null"]
+          maxLength: 500
+        source:
+          type: ["string", "null"]
+          enum: [text_layer, ocr, vision, inferred, template, null]
+
+    InvoiceCategoryFactResult:
+      type: object
+      required:
+        [key, label, scope, group, groupIndex, value, confidence, evidence]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        scope:
+          type: string
+          enum: [invoice, line_item, repeating_group]
+        group:
+          type: ["string", "null"]
+        groupIndex:
+          type: ["integer", "null"]
+          minimum: 0
+        value:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        evidence:
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceCategoryFactEvidence"
+            - type: "null"
+
+    InvoiceCategory:
+      type: object
+      required:
+        - key
+        - label
+        - description
+        - extractionProfile
+        - activeProfileVersion
+        - active
+        - sortOrder
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        description:
+          type: ["string", "null"]
+        extractionProfile:
+          $ref: "#/components/schemas/InvoiceCategoryExtractionProfile"
+        activeProfileVersion:
+          type: integer
+          minimum: 1
+        active:
+          type: boolean
+        sortOrder:
+          type: integer
+
+    InvoiceCategoryInput:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        extractionProfile:
+          $ref: "#/components/schemas/InvoiceCategoryExtractionProfile"
+        researchMetadata:
+          $ref: "#/components/schemas/InvoiceCategoryResearchMetadata"
+        active:
+          type: boolean
+        sortOrder:
+          type: integer
+
+    InvoiceCategoryUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+        extractionProfile:
+          $ref: "#/components/schemas/InvoiceCategoryExtractionProfile"
+          description: Saving a profile creates a new draft version and does not activate it.
+        researchMetadata:
+          $ref: "#/components/schemas/InvoiceCategoryResearchMetadata"
+        active:
+          type: boolean
+        sortOrder:
+          type: integer
+
+    ApiKey:
+      type: object
+      required:
+        - id
+        - name
+        - active
+        - environment
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        active:
+          type: boolean
+        environment:
+          type: string
+          enum: [live, sandbox]
+        createdAt:
+          type: string
+          format: date-time
+
+    ApiKeyCreated:
+      type: object
+      required:
+        - id
+        - name
+        - token
+        - active
+        - environment
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token:
+          type: string
+        active:
+          type: boolean
+        environment:
+          type: string
+          enum: [live, sandbox]
+        createdAt:
+          type: string
+          format: date-time
+
+    ChatRouteInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+        history:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/ChatHistoryMessage"
+        jobId:
+          type: string
+          description: >
+            Optional parse-job ID of the document the user currently has open.
+            When present, data answers are scoped to that document only.
+
+    ChatHistoryMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          maxLength: 2000
+
+    ChatChart:
+      type: object
+      required:
+        - type
+        - label
+        - currency
+        - data
+      properties:
+        type:
+          type: string
+          enum: [bar, line]
+        label:
+          type: string
+        currency:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatChartPoint"
+
+    ChatChartPoint:
+      type: object
+      required:
+        - label
+        - value
+      properties:
+        label:
+          type: string
+        value:
+          type: number
+
+    ChatRouteResult:
+      type: object
+      required:
+        - intent
+        - reply
+        - query
+        - category
+        - entityId
+      properties:
+        intent:
+          type: string
+          enum:
+            - search_merchants
+            - list_unmatched_merchants
+            - search_templates
+            - search_banks
+            - list_jobs
+            - upload_help
+            - data_answer
+            - general
+        reply:
+          type: string
+        query:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        entityId:
+          type: ["string", "null"]
+        chart:
+          oneOf:
+            - $ref: "#/components/schemas/ChatChart"
+            - type: "null"
+
+    ApiKeyInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        environment:
+          # live (default) | sandbox. Sandbox keys require a plan with
+          # sandbox access (Pro+).
+          type: string
+          enum: [live, sandbox]
+
+    Plan:
+      type: object
+      required:
+        - key
+        - name
+        - tagline
+        - priceMonthlyAmount10k
+        - docsPerMonth
+        - apiKeyLimit
+        - sandboxAccess
+        - sandboxDocsPerMonth
+        - riserHistoryDays
+        - prioritySupport
+        - selfServe
+        - sortOrder
+        - overagePerDocAmount10k
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        tagline:
+          type: string
+        priceMonthlyAmount10k:
+          # Monthly price in USD ×10000 ($59 → 590000); null = custom pricing
+          type: ["integer", "null"]
+        docsPerMonth:
+          # Live documents per calendar month; null = unlimited/custom
+          type: ["integer", "null"]
+        apiKeyLimit:
+          # Max active API keys; 0 = no API access; null = unlimited/custom
+          type: ["integer", "null"]
+        sandboxAccess:
+          type: boolean
+        sandboxDocsPerMonth:
+          type: ["integer", "null"]
+        riserHistoryDays:
+          type: integer
+        prioritySupport:
+          type: boolean
+        selfServe:
+          type: boolean
+        sortOrder:
+          type: integer
+        overagePerDocAmount10k:
+          # Per-document overage price in USD ×10000 ($0.10 → 1000) charged
+          # past docsPerMonth. null = no overage: the allowance is a hard cap.
+          type: ["integer", "null"]
+
+    PlanUpdate:
+      # All fields optional; super admins adjust pricing/limits without a deploy.
+      type: object
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        priceMonthlyAmount10k:
+          type: ["integer", "null"]
+        docsPerMonth:
+          type: ["integer", "null"]
+        apiKeyLimit:
+          type: ["integer", "null"]
+        sandboxAccess:
+          type: boolean
+        sandboxDocsPerMonth:
+          type: ["integer", "null"]
+        riserHistoryDays:
+          type: integer
+        prioritySupport:
+          type: boolean
+        selfServe:
+          type: boolean
+        sortOrder:
+          type: integer
+        overagePerDocAmount10k:
+          type: ["integer", "null"]
+
+    BillingOverview:
+      type: object
+      required:
+        - plan
+        - docsUsed
+        - sandboxDocsUsed
+        - apiKeysActive
+        - apiAccess
+        - overageDocs
+        - overageAmount10k
+        - overageDocsIncluded
+        - overagePerDocAmount10k
+        - billing
+      properties:
+        plan:
+          $ref: "#/components/schemas/Plan"
+        docsUsed:
+          # Non-sandbox documents parsed this calendar month
+          type: integer
+        sandboxDocsUsed:
+          type: integer
+        apiKeysActive:
+          type: integer
+        apiAccess:
+          type: boolean
+        overageDocs:
+          # Documents parsed past the plan allowance this month. Always 0 for
+          # plans without an overage rate (they hard-block at the allowance).
+          type: integer
+        overageAmount10k:
+          # Current-month overage estimate in USD ×10000.
+          type: integer
+        overageDocsIncluded:
+          # Immutable Stripe price-mapping allowance for a provider-managed
+          # subscription; current plan allowance otherwise.
+          type: ["integer", "null"]
+        overagePerDocAmount10k:
+          # Immutable Stripe price-mapping rate for a provider-managed
+          # subscription; current plan rate otherwise.
+          type: ["integer", "null"]
+        billing:
+          $ref: "#/components/schemas/BillingStatus"
+
+    BillingHistoryItem:
+      type: object
+      required:
+        - id
+        - providerInvoiceId
+        - planKey
+        - status
+        - amountDue10k
+        - amountPaid10k
+        - currency
+        - invoiceUrl
+        - periodStart
+        - periodEnd
+        - dueAt
+        - paidAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        providerInvoiceId:
+          type: string
+        planKey:
+          type: string
+        status:
+          type: string
+        amountDue10k:
+          description: Provider invoice amount due in USD ×10000.
+          type: ["integer", "null"]
+        amountPaid10k:
+          description: Provider invoice amount paid in USD ×10000.
+          type: ["integer", "null"]
+        currency:
+          type: ["string", "null"]
+        invoiceUrl:
+          type: ["string", "null"]
+          format: uri
+        periodStart:
+          type: ["string", "null"]
+          format: date-time
+        periodEnd:
+          type: ["string", "null"]
+          format: date-time
+        dueAt:
+          type: ["string", "null"]
+          format: date-time
+        paidAt:
+          type: ["string", "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BillingStatus:
+      type: object
+      required:
+        - kind
+        - provider
+        - status
+        - currentPeriodEnd
+        - cancelAtPeriodEnd
+        - checkoutAvailable
+        - portalAvailable
+        - paymentRecoveryNeeded
+      properties:
+        kind:
+          type: string
+          enum:
+            - free
+            - manually_provisioned
+            - pending
+            - active
+            - scheduled_to_cancel
+            - payment_attention
+            - ended
+        provider:
+          type: ["string", "null"]
+          enum: [stripe, null]
+        status:
+          type: ["string", "null"]
+        currentPeriodEnd:
+          type: ["string", "null"]
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+        checkoutAvailable:
+          type: boolean
+        portalAvailable:
+          type: boolean
+        paymentRecoveryNeeded:
+          type: boolean
+
+    HostedBillingSession:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+
+    BillingCancellationInput:
+      type: object
+      required: [cancelAtPeriodEnd]
+      properties:
+        cancelAtPeriodEnd:
+          type: boolean
+
+    BillingCancellationResult:
+      type: object
+      required: [pending]
+      properties:
+        pending:
+          type: boolean
+
+    ChangePlanInput:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+
+    ChangePlanResult:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+
+    BillingUser:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - plan
+        - status
+        - docsUsed
+        - overageDocs
+        - createdAt
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        plan:
+          type: string
+        status:
+          type: string
+        docsUsed:
+          type: integer
+        overageDocs:
+          # Documents past the plan allowance this month (0 unless the plan
+          # has a per-document overage rate).
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    AssignUserPlanInput:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+
+    AssignUserPlanResult:
+      type: object
+      required: [id, plan]
+      properties:
+        id:
+          type: string
+        plan:
+          type: string
+
+    AuthMessage:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    AuthUser:
+      type: object
+      required:
+        [
+          id,
+          email,
+          displayName,
+          profilePhotoUrl,
+          role,
+          status,
+          emailVerifiedAt,
+          totpEnabled,
+          totpRequired,
+          isProtected,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        profilePhotoUrl:
+          type: ["string", "null"]
+          description: Session-protected URL for the current profile photo
+        role:
+          type: string
+          enum: [super_admin, admin, user]
+        status:
+          type: string
+          enum: [pending_verification, active, suspended]
+        emailVerifiedAt:
+          type: ["string", "null"]
+        totpEnabled:
+          type: boolean
+        totpRequired:
+          type: boolean
+          description: True for admin/super_admin accounts that have not yet enrolled in mandatory 2FA
+        isProtected:
+          type: boolean
+          description: True only for a seeded protected super-admin account
+        createdAt:
+          type: string
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    CurrentUserEnvelope:
+      type: object
+      required: [user, legalAcceptance]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        legalAcceptance:
+          $ref: "#/components/schemas/LegalAcceptanceStatus"
+
+    UserProfileUpdate:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: ["string", "null"]
+          maxLength: 100
+
+    ProfilePhotoUpload:
+      type: object
+      required: [photo]
+      properties:
+        photo:
+          type: string
+          format: binary
+
+    RegisterInput:
+      type: object
+      additionalProperties: false
+      required: [email, password, legalAcceptance]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+        legalAcceptance:
+          $ref: "#/components/schemas/LegalAcceptanceInput"
+
+    LegalAcceptanceInput:
+      type: object
+      additionalProperties: false
+      required:
+        - agreedToTerms
+        - acknowledgedPrivacyPolicy
+        - termsVersion
+        - privacyPolicyVersion
+      properties:
+        agreedToTerms:
+          type: boolean
+          const: true
+        acknowledgedPrivacyPolicy:
+          type: boolean
+          const: true
+        termsVersion:
+          type: string
+          const: "2026-09-17"
+        privacyPolicyVersion:
+          type: string
+          const: "2026-09-17"
+
+    LegalPolicyRequirements:
+      type: object
+      required: [termsVersion, privacyPolicyVersion]
+      properties:
+        termsVersion:
+          type: string
+          const: "2026-09-17"
+        privacyPolicyVersion:
+          type: string
+          const: "2026-09-17"
+
+    LegalAcceptanceEvidence:
+      type: object
+      required: [termsVersion, privacyPolicyVersion, acceptedAt]
+      properties:
+        termsVersion:
+          type: string
+        privacyPolicyVersion:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+    LegalAcceptanceStatus:
+      type: object
+      required: [isCurrent, requirements, latestAcceptance]
+      properties:
+        isCurrent:
+          type: boolean
+        requirements:
+          $ref: "#/components/schemas/LegalPolicyRequirements"
+        latestAcceptance:
+          oneOf:
+            - $ref: "#/components/schemas/LegalAcceptanceEvidence"
+            - type: "null"
+
+    LegalAcceptanceRequiredError:
+      type: object
+      required: [error, code, requirements]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          const: LEGAL_ACCEPTANCE_REQUIRED
+        requirements:
+          $ref: "#/components/schemas/LegalPolicyRequirements"
+
+    VerifyEmailInput:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+        code:
+          type: string
+
+    EmailOnlyInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    LoginResult:
+      type: object
+      properties:
+        twoFactorRequired:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    TwoFactorInput:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: 6-digit TOTP code, or a recovery code for login
+
+    ResetPasswordInput:
+      type: object
+      required: [email, code, password]
+      properties:
+        email:
+          type: string
+        code:
+          type: string
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 200
+
+    TwoFactorSetup:
+      type: object
+      required: [otpauthUrl, qrDataUrl]
+      properties:
+        otpauthUrl:
+          type: string
+        qrDataUrl:
+          type: string
+          description: PNG data URL of the provisioning QR code
+
+    DisableTwoFactorInput:
+      type: object
+      required: [password, code]
+      properties:
+        password:
+          type: string
+        code:
+          type: string
+
+    RecoveryCodesEnvelope:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+
+    AdminUser:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - status
+        - totpEnabled
+        - lastLoginAt
+        - createdAt
+        - docsThisMonth
+        - isProtected
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, user]
+        status:
+          type: string
+          enum: [pending_verification, active, suspended]
+        totpEnabled:
+          type: boolean
+        lastLoginAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        docsThisMonth:
+          type: integer
+        isProtected:
+          type: boolean
+          description: Seeded super admin — can never be demoted, suspended, or deleted
+
+    AdminUserList:
+      type: object
+      required: [total, users]
+      properties:
+        total:
+          type: integer
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+
+    ProductionTestDataPurgeInput:
+      type: object
+      additionalProperties: false
+      required: [selectionFingerprint, confirmation]
+      properties:
+        selectionFingerprint:
+          type: string
+          pattern: "^[a-f0-9]{32}$"
+        confirmation:
+          type: string
+          minLength: 1
+          maxLength: 160
+
+    ProductionTestDataPurgeSelectionCounts:
+      type: object
+      additionalProperties: false
+      required:
+        - apiKeys
+        - parseJobs
+        - statementTransactions
+        - invoices
+        - invoiceLineItems
+        - templateMatchLogs
+        - billingUsageDeliveries
+      properties:
+        apiKeys:
+          type: integer
+        parseJobs:
+          type: integer
+        statementTransactions:
+          type: integer
+        invoices:
+          type: integer
+        invoiceLineItems:
+          type: integer
+        templateMatchLogs:
+          type: integer
+        billingUsageDeliveries:
+          type: integer
+
+    ProductionTestDataPurgeBreakdown:
+      type: object
+      additionalProperties: false
+      required:
+        - activeDefaultKeys
+        - e2eJobs
+        - additionalTestNamedJobs
+        - completedJobs
+        - failedJobs
+        - otherStatusJobs
+        - invoiceJobs
+        - statementJobs
+        - otherDocumentJobs
+      properties:
+        activeDefaultKeys:
+          type: integer
+        e2eJobs:
+          type: integer
+        additionalTestNamedJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        failedJobs:
+          type: integer
+        otherStatusJobs:
+          type: integer
+        invoiceJobs:
+          type: integer
+        statementJobs:
+          type: integer
+        otherDocumentJobs:
+          type: integer
+
+    ProductionTestDataPurgePreservation:
+      type: object
+      additionalProperties: false
+      required:
+        - users
+        - parseJobs
+        - invoices
+        - keyLinkedParseJobs
+        - keyLinkedInvoices
+        - unlinkedTemplateMatchLogs
+      properties:
+        users:
+          type: integer
+        parseJobs:
+          type: integer
+        invoices:
+          type: integer
+        keyLinkedParseJobs:
+          type: integer
+          description: Preserved non-selected jobs whose deleted default-key reference will be cleared
+        keyLinkedInvoices:
+          type: integer
+          description: Preserved non-selected invoices whose deleted default-key reference will be cleared
+        unlinkedTemplateMatchLogs:
+          type: integer
+          description: Matching template logs held back because they cannot be safely linked to an approved job
+
+    ProductionTestDataPurgeReviewGroup:
+      type: object
+      additionalProperties: false
+      required: [marker, documentType, status, count]
+      properties:
+        marker:
+          type: string
+          enum: [e2e, test]
+          description: Exact standalone filename marker that qualified the protected-account job
+        documentType:
+          type: string
+        status:
+          type: string
+        count:
+          type: integer
+
+    ProductionTestDataPurgeReviewRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate
+        - marker
+        - documentType
+        - status
+        - createdAt
+        - statementTransactions
+        - invoices
+      properties:
+        candidate:
+          type: integer
+          minimum: 1
+          description: Manifest-local ordinal; it is not a database identifier
+        marker:
+          type: string
+          enum: [e2e, test]
+        documentType:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        statementTransactions:
+          type: integer
+        invoices:
+          type: integer
+
+    ProductionTestDataPurgeManifest:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - status
+        - selectionFingerprint
+        - approvalPhrase
+        - generatedAt
+        - selected
+        - breakdown
+        - preserved
+        - reviewGroups
+        - reviewRecords
+        - alreadyExecuted
+        - blockers
+      properties:
+        version:
+          type: string
+        status:
+          type: string
+          enum: [ready, blocked, completed]
+        selectionFingerprint:
+          type: string
+          pattern: "^[a-f0-9]{32}$"
+        approvalPhrase:
+          type: ["string", "null"]
+        generatedAt:
+          type: string
+          format: date-time
+        selected:
+          $ref: "#/components/schemas/ProductionTestDataPurgeSelectionCounts"
+        breakdown:
+          $ref: "#/components/schemas/ProductionTestDataPurgeBreakdown"
+        preserved:
+          $ref: "#/components/schemas/ProductionTestDataPurgePreservation"
+        reviewGroups:
+          type: array
+          description: Non-sensitive candidate review breakdown; IDs and filenames are intentionally withheld
+          items:
+            $ref: "#/components/schemas/ProductionTestDataPurgeReviewGroup"
+        reviewRecords:
+          type: array
+          description: One non-sensitive review entry for every selected job; candidate ordinals are manifest-local
+          items:
+            $ref: "#/components/schemas/ProductionTestDataPurgeReviewRecord"
+        alreadyExecuted:
+          type: boolean
+        blockers:
+          type: array
+          items:
+            type: string
+
+    ProductionTestDataPurgeResult:
+      type: object
+      required:
+        - message
+        - selectionFingerprint
+        - deleted
+        - remainingUsers
+        - remainingParseJobs
+        - remainingInvoices
+        - executedAt
+      properties:
+        message:
+          type: string
+        selectionFingerprint:
+          type: string
+        deleted:
+          $ref: "#/components/schemas/ProductionTestDataPurgeSelectionCounts"
+        remainingUsers:
+          type: integer
+        remainingParseJobs:
+          type: integer
+        remainingInvoices:
+          type: integer
+        executedAt:
+          type: string
+
+    ProductionAdminTestCleanupInput:
+      type: object
+      additionalProperties: false
+      required: [selectionFingerprint, confirmation]
+      properties:
+        selectionFingerprint:
+          type: string
+          pattern: "^[a-f0-9]{32}$"
+        confirmation:
+          type: string
+          minLength: 1
+          maxLength: 180
+
+    ProductionAdminTestCleanupSelectionCounts:
+      type: object
+      additionalProperties: false
+      required:
+        - parseJobs
+        - statementTransactions
+        - invoices
+        - invoiceLineItems
+        - billingUsageDeliveries
+        - unmatchedMerchants
+      properties:
+        parseJobs:
+          type: integer
+        statementTransactions:
+          type: integer
+        invoices:
+          type: integer
+        invoiceLineItems:
+          type: integer
+        billingUsageDeliveries:
+          type: integer
+        unmatchedMerchants:
+          type: integer
+          description: The complete global queue, affecting every user
+
+    ProductionAdminTestCleanupBreakdown:
+      type: object
+      additionalProperties: false
+      required: [completedJobs, failedJobs, otherStatusJobs]
+      properties:
+        completedJobs:
+          type: integer
+        failedJobs:
+          type: integer
+        otherStatusJobs:
+          type: integer
+
+    ProductionAdminTestCleanupPreservation:
+      type: object
+      additionalProperties: false
+      required:
+        - users
+        - parseJobs
+        - invoices
+        - merchantCorrections
+        - merchantOverrides
+      properties:
+        users:
+          type: integer
+        parseJobs:
+          type: integer
+        invoices:
+          type: integer
+        merchantCorrections:
+          type: integer
+          description: Target-account correction mappings preserved unchanged
+        merchantOverrides:
+          type: integer
+          description: Target-account merchant overrides preserved unchanged
+
+    ProductionAdminTestCleanupReviewGroup:
+      type: object
+      additionalProperties: false
+      required: [documentType, status, count]
+      properties:
+        documentType:
+          type: string
+        status:
+          type: string
+        count:
+          type: integer
+
+    ProductionAdminTestCleanupManifest:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - status
+        - selectionFingerprint
+        - approvalPhrase
+        - generatedAt
+        - globalQueueImpact
+        - selected
+        - breakdown
+        - preserved
+        - reviewGroups
+        - alreadyExecuted
+        - blockers
+      properties:
+        version:
+          type: string
+        status:
+          type: string
+          enum: [ready, blocked, completed]
+        selectionFingerprint:
+          type: string
+          pattern: "^[a-f0-9]{32}$"
+        approvalPhrase:
+          type: ["string", "null"]
+        generatedAt:
+          type: string
+          format: date-time
+        globalQueueImpact:
+          type: boolean
+          const: true
+          description: Confirms that unmatched merchants are shared and the whole queue is selected
+        selected:
+          $ref: "#/components/schemas/ProductionAdminTestCleanupSelectionCounts"
+        breakdown:
+          $ref: "#/components/schemas/ProductionAdminTestCleanupBreakdown"
+        preserved:
+          $ref: "#/components/schemas/ProductionAdminTestCleanupPreservation"
+        reviewGroups:
+          type: array
+          description: Privacy-safe document type and status groups
+          items:
+            $ref: "#/components/schemas/ProductionAdminTestCleanupReviewGroup"
+        alreadyExecuted:
+          type: boolean
+        blockers:
+          type: array
+          items:
+            type: string
+
+    ProductionAdminTestCleanupResult:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - selectionFingerprint
+        - deleted
+        - remainingUsers
+        - remainingParseJobs
+        - remainingInvoices
+        - remainingUnmatchedMerchants
+        - executedAt
+      properties:
+        message:
+          type: string
+        selectionFingerprint:
+          type: string
+          pattern: "^[a-f0-9]{32}$"
+        deleted:
+          $ref: "#/components/schemas/ProductionAdminTestCleanupSelectionCounts"
+        remainingUsers:
+          type: integer
+        remainingParseJobs:
+          type: integer
+        remainingInvoices:
+          type: integer
+        remainingUnmatchedMerchants:
+          type: integer
+          const: 0
+        executedAt:
+          type: string
+          format: date-time
+
+    AdminUsageTotals:
+      type: object
+      required:
+        - docs
+        - aiCostAmount10k
+        - failures
+        - failureRate
+        - templateMatchRate
+        - activeUsers
+      properties:
+        docs:
+          type: integer
+        aiCostAmount10k:
+          type: integer
+          description: Total AI cost in USD ×10000
+        failures:
+          type: integer
+        failureRate:
+          type: number
+        templateMatchRate:
+          type: number
+        activeUsers:
+          type: integer
+
+    AdminUsageDay:
+      type: object
+      required: [date, docs, aiCostAmount10k, failures]
+      properties:
+        date:
+          type: string
+        docs:
+          type: integer
+        aiCostAmount10k:
+          type: integer
+        failures:
+          type: integer
+
+    AdminTopUser:
+      type: object
+      required: [userId, email, docs, aiCostAmount10k]
+      properties:
+        userId:
+          type: ["integer", "null"]
+        email:
+          type: string
+        docs:
+          type: integer
+        aiCostAmount10k:
+          type: integer
+
+    AdminPlatformUsage:
+      type: object
+      required: [totals, daily, topUsers, since, days]
+      properties:
+        totals:
+          $ref: "#/components/schemas/AdminUsageTotals"
+        daily:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUsageDay"
+        topUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminTopUser"
+        since:
+          type: string
+        days:
+          type: integer
+
+    AdminUserUsage:
+      type: object
+      required: [totals, daily, since, days, userId, email]
+      properties:
+        totals:
+          $ref: "#/components/schemas/AdminUsageTotals"
+        daily:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUsageDay"
+        since:
+          type: string
+        days:
+          type: integer
+        userId:
+          type: integer
+        email:
+          type: string
+
+    EmailLogEntry:
+      type: object
+      required:
+        - id
+        - recipient
+        - emailType
+        - status
+        - resendMessageId
+        - errorDetail
+        - resetInitiationChannel
+        - clientIp
+        - clientUserAgent
+        - sentAt
+      properties:
+        id:
+          type: integer
+        recipient:
+          type: string
+        emailType:
+          type: string
+          description: "verify_email | password_reset"
+        status:
+          type: string
+          description: "sent | failed"
+        resendMessageId:
+          type: ["string", "null"]
+        errorDetail:
+          type: ["string", "null"]
+        resetInitiationChannel:
+          type: ["string", "null"]
+          description: "Password reset only: self_service | admin | admin_retry; null for legacy and verification emails"
+        clientIp:
+          type: ["string", "null"]
+          description: "Password reset request address, resolved through the trusted platform proxy"
+        clientUserAgent:
+          type: ["string", "null"]
+          description: "Password reset request User-Agent, sanitized and capped at 512 characters"
+        sentAt:
+          type: string
+
+    EmailLogList:
+      type: object
+      required: [total, entries]
+      properties:
+        total:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmailLogEntry"
+
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - actorId
+        - actorEmail
+        - action
+        - targetType
+        - targetId
+        - targetLabel
+        - metadata
+        - createdAt
+      properties:
+        id:
+          type: integer
+        actorId:
+          type: ["integer", "null"]
+        actorEmail:
+          type: string
+        action:
+          type: string
+        targetType:
+          type: ["string", "null"]
+        targetId:
+          type: ["string", "null"]
+        targetLabel:
+          type: ["string", "null"]
+        metadata:
+          type: ["object", "null"]
+          additionalProperties: true
+        createdAt:
+          type: string
+
+    AuditLogList:
+      type: object
+      required: [total, entries]
+      properties:
+        total:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+
+x-non-contract-handlers:
+  "GET /design-system/export": Console-only binary export of the internal Cognirise Atelier design system; it is not an external CogniDocs integration operation.
+  "PATCH /statement-templates/{id}": Compatibility-only handler that always returns 409 and directs callers to POST /statement-templates/{id}/versions.
+  "GET /merchants/unmatched": Privacy tombstone that always returns 404; the raw observation queue is no longer an API surface.
+  "POST /merchants/unmatched/dismiss": Privacy tombstone that always returns 404; unmatched observation mutation is no longer supported.
+  "POST /merchants/backfill": Privacy tombstone that always returns 404; document-derived directory backfill is no longer supported.
+  "POST /merchants/corrections": Privacy tombstone that always returns 404; document observations are never submitted to the global directory.
+  "GET /merchants/absorptions/recent": Privacy tombstone that always returns 404; raw absorption history is no longer an API surface.
+  "GET /merchants/{id}/absorptions": Privacy tombstone that always returns 404; raw absorbed aliases are no longer returned.
+  "DELETE /merchants/{id}/absorptions": Privacy tombstone that always returns 404; raw absorption records are no longer user-manageable.
+
+x-legal-acceptance-enforcement:
+  description: >
+    Every authenticated product operation mounted after the shared session-or-API-key
+    guard requires the owning user to have accepted the current Terms and acknowledged
+    the current Privacy Policy. This applies to both session cookies and API keys.
+    A stale or missing acceptance returns HTTP 403 with code
+    LEGAL_ACCEPTANCE_REQUIRED and the current required versions. Login, logout,
+    current-user discovery, policy review/acceptance, password recovery/change, and
+    2FA operations remain available so users can regain access or secure the account.
+  response:
+    status: 403
+    schema:
+      $ref: "#/components/schemas/LegalAcceptanceRequiredError"
