@@ -50,6 +50,7 @@ import {
   describeTurnOutcome,
   RECAP_OUTCOME_SEP,
   PROACTIVE_RECAP_DORMANT_MS,
+  clarificationDeadReason,
 } from "./recap-relevance.js";
 import {
   extractFactsFromToolEvent,
@@ -2557,6 +2558,12 @@ export async function collectRecapOpenThreads(args: {
   excludeTurnId?: string | null;
 }): Promise<string[]> {
   try {
+    const [sessionOwner] = await db
+      .select({ userId: atelierCliSessions.userId, orgId: atelierCliSessions.orgId })
+      .from(atelierCliSessions)
+      .where(eq(atelierCliSessions.id, args.sessionId))
+      .limit(1);
+    if (!sessionOwner) return [];
     const statusFilter = inArray(atelierCliTurns.status, [
       "awaiting_confirmation",
       "awaiting_clarification",
@@ -2564,6 +2571,7 @@ export async function collectRecapOpenThreads(args: {
     const openRows = await db
       .select({
         id: atelierCliTurns.id,
+        createdAt: atelierCliTurns.createdAt,
         status: atelierCliTurns.status,
         pendingWrite: atelierCliTurns.pendingWrite,
         frames: atelierCliTurns.frames,
@@ -2579,9 +2587,49 @@ export async function collectRecapOpenThreads(args: {
           : and(eq(atelierCliTurns.sessionId, args.sessionId), statusFilter),
       )
       .orderBy(desc(atelierCliTurns.createdAt))
-      .limit(3);
+      .limit(50);
     const threads: string[] = [];
     for (const row of openRows) {
+      if (row.status === "awaiting_clarification") {
+        const [newer] = await db
+          .select({ createdAt: atelierCliTurns.createdAt })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.userId, sessionOwner.userId),
+              eq(atelierCliTurns.orgId, sessionOwner.orgId),
+              gte(atelierCliTurns.createdAt, row.createdAt),
+              ne(atelierCliTurns.id, row.id),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(1);
+        const dead = clarificationDeadReason({
+          createdAt: row.createdAt,
+          newerActivityAt: newer?.createdAt,
+        });
+        if (dead) {
+          const now = new Date();
+          await db
+            .update(atelierCliTurns)
+            .set({
+              status: "cancelled",
+              statusMessage:
+                dead === "expired"
+                  ? "clarification expired (older than 7 days)"
+                  : "superseded by newer activity",
+              finishedAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(atelierCliTurns.id, row.id),
+                eq(atelierCliTurns.status, "awaiting_clarification"),
+              ),
+            );
+          continue;
+        }
+      }
       if (row.status === "awaiting_confirmation") {
         const pw = row.pendingWrite as { tool?: string } | null;
         const what =
@@ -5307,6 +5355,22 @@ export async function runTurn(
     // is NOT subject to this counter.
     const MAX_NARRATION_FLUSHES_PER_TURN = 1;
     let narrationFlushedCount = 0;
+    // A model can repeat a phase-1 write after receiving its own preview.
+    // Keep the first pin/card authoritative for the rest of this turn.
+    const canonicalPreviewValue = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(canonicalPreviewValue);
+      if (value && typeof value === "object") {
+        return Object.fromEntries(
+          Object.entries(value as Record<string, unknown>)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, item]) => [key, canonicalPreviewValue(item)]),
+        );
+      }
+      return value;
+    };
+    const previewKey = (tool: string, input: unknown) =>
+      JSON.stringify([tool, canonicalPreviewValue(input)]);
+    let pendingPreviewKey: string | null = null;
     for (let step = 0; step < MAX_TOOL_STEPS && !clarificationHandled; step++) {
       const elapsed = Date.now() - t0;
       if (aborted) {
@@ -6233,6 +6297,13 @@ export async function runTurn(
         break;
       }
       if (toolResult.confirmation) {
+        const candidatePreviewKey = previewKey(tc.name, tc.input);
+        if (pendingPreviewKey === candidatePreviewKey && pendingWrite) {
+          // Do not emit a second needs_confirmation card or replace the pin
+          // that the first card references.
+          status = "awaiting_confirmation";
+          break;
+        }
         // Task #332 — annotate the diff with irreversibility +
         // typed-name requirement so the client renders the right
         // confirm widget (free button vs "type the name to commit").
@@ -6311,6 +6382,7 @@ export async function runTurn(
           },
         });
         pendingWrite = toolResult.confirmation.pending;
+        pendingPreviewKey = candidatePreviewKey;
         // Stash the typed-name requirement on the pending write itself
         // so the confirm phase has it without re-running the tool.
         if (catEntry?.irreversible || forceTypedName) {

@@ -75,6 +75,7 @@ import {
 import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
 import { FlightPlannerCard } from "./FlightPlannerCard";
 import { Markdown } from "./Markdown";
+import { toolResultKey } from "@workspace/chat-core";
 
 const MAX_INPUT_CHARS = 4000;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -2875,13 +2876,16 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
       if (fr?.type === "final" && fr.data?.result) {
         result = fr.data.result;
       } else if (fr?.type === "tool_result" && fr.data) {
-        toolResults.push({
+        const nextResult = {
           tool: fr.data.tool ?? "tool",
           ok: fr.data.ok !== false,
           data: fr.data.data,
           errorCode: fr.data.errorCode,
           errorMessage: fr.data.errorMessage,
-        });
+        };
+        if (!toolResults.some((previous) => toolResultKey(previous) === toolResultKey(nextResult))) {
+          toolResults.push(nextResult);
+        }
       }
     }
   }

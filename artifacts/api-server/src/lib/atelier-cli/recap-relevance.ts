@@ -14,6 +14,28 @@
 
 /** Genuine-dormancy threshold: 6 hours. */
 export const PROACTIVE_RECAP_DORMANT_MS = 6 * 60 * 60 * 1000;
+export const CLARIFICATION_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Shared lifecycle rule for persisted unanswered questions. The endpoint and
+ * recap collector must agree, otherwise an old question can disappear from
+ * rehydration but still be advertised by a recap.
+ */
+export function clarificationDeadReason(args: {
+  createdAt: Date | string;
+  now?: Date;
+  newerActivityAt?: Date | string | null;
+}): "expired" | "superseded" | null {
+  const createdMs = new Date(args.createdAt).getTime();
+  const nowMs = (args.now ?? new Date()).getTime();
+  if (!Number.isFinite(createdMs)) return "expired";
+  if (createdMs <= nowMs - CLARIFICATION_PENDING_TTL_MS) return "expired";
+  if (args.newerActivityAt) {
+    const newerMs = new Date(args.newerActivityAt).getTime();
+    if (Number.isFinite(newerMs) && newerMs >= createdMs) return "superseded";
+  }
+  return null;
+}
 
 /**
  * Prompts that never deserve a recap headline: identity/help/greeting

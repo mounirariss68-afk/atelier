@@ -1,6 +1,11 @@
 export * from "./types";
 export { parseFrame, isSafeHttpUrl } from "./parse";
-export { applyFrame, resolveClarificationFields, resetForRestream } from "./reducer";
+export {
+  applyFrame,
+  resolveClarificationFields,
+  resetForRestream,
+  toolResultKey,
+} from "./reducer";
 export { confirmGate, abortOutcome, tryFireNavigation, deviceTimeZone } from "./gates";
 export {
   isTransientStatus,

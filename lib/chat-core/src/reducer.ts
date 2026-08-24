@@ -36,6 +36,27 @@ function liftNavigateTo(v: unknown): ChatNavigateTo | null {
   return null;
 }
 
+/** Content identity used to prevent replayed tool results from stacking cards. */
+export function toolResultKey(result: {
+  tool?: string;
+  ok?: boolean;
+  data?: unknown;
+  errorCode?: string;
+}): string {
+  let payload = "";
+  try {
+    payload = JSON.stringify(result.data ?? null);
+  } catch {
+    payload = "[unserializable]";
+  }
+  return JSON.stringify([
+    result.tool ?? "tool",
+    result.ok !== false,
+    result.errorCode ?? null,
+    payload,
+  ]);
+}
+
 export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T {
   // Capture the server turn id from ANY frame that carries one
   // (needs_clarification, final, replay-final, in-flight error…), not
@@ -188,15 +209,11 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
       // a tool_result whose tool + outcome + payload already exist on this
       // turn (confirm replays / server re-emits). The trace tick is still
       // appended so the activity breadcrumb stays honest.
-      const isDuplicate = (turn.toolResults ?? []).some((prev) => {
-        if (prev.tool !== tool || prev.ok !== ok) return false;
-        if ((prev.errorCode ?? null) !== (d.errorCode ?? null)) return false;
-        try {
-          return JSON.stringify(prev.data ?? null) === JSON.stringify(d.data ?? null);
-        } catch {
-          return false;
-        }
-      });
+      const isDuplicate = (turn.toolResults ?? []).some(
+        (prev) =>
+          toolResultKey(prev) ===
+          toolResultKey({ tool, ok, data: d.data, errorCode: d.errorCode }),
+      );
       if (isDuplicate) {
         return {
           ...turn,

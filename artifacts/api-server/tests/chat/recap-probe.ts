@@ -13,7 +13,9 @@ import {
   isTrivialRecapLine,
   RECAP_OUTCOME_SEP,
   PROACTIVE_RECAP_DORMANT_MS,
+  clarificationDeadReason,
 } from "../../src/lib/atelier-cli/recap-relevance.js";
+import { toolResultKey } from "../../../../lib/chat-core/src/index.js";
 
 let pass = 0;
 let fail = 0;
@@ -278,6 +280,46 @@ console.log("[7] /recap payload — outcome-first with legacy-only fallback (Tas
   check(
     "legacy fallback caps at last 10 lines",
     buildRecapPayload({ rollingSummary: manyLegacy, openThreads: [] }).recap.length === 10,
+  );
+}
+
+console.log("[8] lifecycle + card identity — stale questions and replayed cards");
+{
+  check(
+    "recent unanswered question remains open",
+    clarificationDeadReason({
+      createdAt: new Date(NOW - 60_000),
+      now: new Date(NOW),
+    }) === null,
+  );
+  check(
+    "newer activity supersedes unanswered question",
+    clarificationDeadReason({
+      createdAt: new Date(NOW - 60_000),
+      newerActivityAt: new Date(NOW),
+      now: new Date(NOW),
+    }) === "superseded",
+  );
+  check(
+    "old unanswered question expires",
+    clarificationDeadReason({
+      createdAt: new Date(NOW - 8 * 24 * 60 * 60 * 1000),
+      now: new Date(NOW),
+    }) === "expired",
+  );
+  const invoiceCard = {
+    tool: "ingest_supplier_invoice",
+    ok: true,
+    data: { shape: "supplier_invoice_card", stage: "preview", reference: "INV-1" },
+  };
+  check(
+    "identical tool results share one replay identity",
+    toolResultKey(invoiceCard) === toolResultKey({ ...invoiceCard, data: { ...invoiceCard.data } }),
+  );
+  check(
+    "different tool-result payloads do not collide",
+    toolResultKey(invoiceCard) !==
+      toolResultKey({ ...invoiceCard, data: { ...invoiceCard.data, reference: "INV-2" } }),
   );
 }
 

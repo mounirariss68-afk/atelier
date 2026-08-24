@@ -31,6 +31,7 @@ import {
   atelierCliAttachments,
 } from "@workspace/db";
 import { assertAuditAction, V3_AUDIT_ACTIONS } from "./auditContract.js";
+import { CLARIFICATION_PENDING_TTL_MS } from "../../lib/atelier-cli/recap-relevance.js";
 import {
   runTurn,
   confirmPendingWrite,
@@ -586,7 +587,6 @@ router.get("/cli/turns/recent", async (req, res) => {
 router.get("/cli/turns/pending-clarification", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   // Task #197 — on-read sweep: rows the endpoint would hide anyway
   // (expired past the 7-day TTL, or superseded by any newer turn from
   // the same user) are flipped to `cancelled` so status-based queries
@@ -607,7 +607,7 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
         eq(atelierCliTurns.userId, me.id),
         eq(atelierCliTurns.orgId, me.orgId),
         eq(atelierCliTurns.status, "awaiting_clarification"),
-        lte(atelierCliTurns.createdAt, new Date(now.getTime() - PENDING_TTL_MS)),
+        lte(atelierCliTurns.createdAt, new Date(now.getTime() - CLARIFICATION_PENDING_TTL_MS)),
       ),
     );
   await db
@@ -651,7 +651,7 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
         eq(atelierCliSessions.userId, me.id),
         eq(atelierCliSessions.orgId, me.orgId),
         eq(atelierCliTurns.status, "awaiting_clarification"),
-        gt(atelierCliTurns.createdAt, new Date(Date.now() - PENDING_TTL_MS)),
+        gt(atelierCliTurns.createdAt, new Date(Date.now() - CLARIFICATION_PENDING_TTL_MS)),
       ),
     )
     .orderBy(desc(atelierCliTurns.createdAt))
