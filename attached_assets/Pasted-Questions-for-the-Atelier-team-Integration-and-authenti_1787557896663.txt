@@ -1,0 +1,79 @@
+Questions for the Atelier team
+Integration and authentication
+What is Atelier’s finance/accounting API format: REST, GraphQL, event-based, or another protocol?
+Is there an existing API repository, OpenAPI specification, or internal service contract?
+How should Atelier authenticate to CogniDocs: API key, OAuth client credentials, mTLS, or another mechanism?
+Does Atelier have separate sandbox and production environments?
+Which system initiates communication: Atelier pushes to CogniDocs, CogniDocs pulls from Atelier, or both?
+Identity and scope
+What represents the reconciliation scope in Atelier?
+Organization/company
+Legal entity
+Bank account or card account
+Accounting period
+Currency
+Which stable IDs exist for:
+Entity
+Bank/card account
+Invoice or bill
+Receipt or expense
+Bank transaction
+Ledger entry
+Payment
+Accounting period
+Does Atelier provide a revision number or updatedAt value for each object so CogniDocs can safely detect changes?
+Documents
+Does Atelier store the original document files, or only links to documents in another storage system?
+Can Atelier send the binary file to CogniDocs, or should CogniDocs retrieve a signed temporary URL?
+What events exist when documents are:
+Created
+Replaced
+Deleted
+Reclassified
+Should a document be uploaded when received, when approved, or only when it enters an accounting period?
+Ledger and FX data
+Does Atelier store all of the following separately?
+Original/document amount and currency
+Settlement amount and currency
+Base/functional-currency amount
+Applied exchange rate
+FX rate date
+FX rate source
+Bank/card/processor fee
+Does Atelier retain the actual bank/card settlement FX rate, or only a daily/reference rate?
+How are FX differences classified in Atelier:
+Realized FX gain/loss
+Bank fee
+Card fee
+Rounding difference
+Other variance
+Does a ledger entry distinguish posting date, transaction/value date, and settlement date?
+How are partial payments, overpayments, credits, refunds, reversals, and one payment covering multiple invoices represented?
+Workflow and write-back
+Should Atelier use:
+Continuous matching as documents arrive
+Manual/batch matching after a period is loaded
+A hybrid model
+Who is allowed to confirm, reject, or override a match?
+What may CogniDocs write back?
+Match status
+Exception status
+Evidence links
+Review tasks
+Suggested vendor/category
+Reconciliation notes
+Should CogniDocs ever create or modify:
+Bills
+Expenses
+Payments
+Journal entries
+FX gain/loss postings
+Bank-fee postings
+My recommendation remains that CogniDocs should not directly create journals or change accounting truth in the first integration. It should return evidence, matches, exceptions, and proposed treatments for Atelier to approve under its own accounting rules.
+
+Reliability and deletion
+What are Atelier’s retry, pagination, rate-limit, and event-delivery rules?
+How should duplicate requests be handled on the Atelier side?
+What happens when an invoice, receipt, transaction, or ledger entry is deleted or corrected after matching?
+What audit and retention requirements apply to reconciliation decisions and evidence links?
+Can Atelier provide sanitized representative fixtures covering AED/USD FX, fees, partial payments, refunds, duplicate documents, and amended ledger entries?
