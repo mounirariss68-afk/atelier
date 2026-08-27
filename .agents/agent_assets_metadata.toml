@@ -242,3 +242,10 @@ uri = "file://attached_assets/cognirise-atelier-design-system.zip"
 type = "unspecified"
 title = "Cognirise Atelier design system (zip)"
 description = "The complete design system: design tokens, theme CSS, React components, brand assets (logos, backdrops), and usage docs — Comfortaa + Inter typography included."
+
+[[outputs]]
+id = "Kv0204ApJaTHjEfCLTfCD"
+uri = "file://artifacts/api-server/generated/Atelier-Adding-New-Employee-or-Contractor.docx"
+type = "word_document"
+title = "Atelier — Adding a New Employee or Contractor"
+description = "Print-ready Word guide covering Quick add and formal hiring, employee/contractor inputs and outputs, onboarding checklists, access activation, permissions, and common validation stops."
