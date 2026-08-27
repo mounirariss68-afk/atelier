@@ -249,3 +249,10 @@ uri = "file://artifacts/api-server/generated/Atelier-Adding-New-Employee-or-Cont
 type = "word_document"
 title = "Atelier — Adding a New Employee or Contractor"
 description = "Print-ready Word guide covering Quick add and formal hiring, employee/contractor inputs and outputs, onboarding checklists, access activation, permissions, and common validation stops."
+
+[[outputs]]
+id = "bm0Uw6ayQKcHsKWf2YBUx"
+uri = "file://generated/Atelier-Design-System.zip"
+type = "unspecified"
+title = "Atelier Design System"
+description = "Reusable Cognirise Atelier design system package with DTCG tokens, light/dark theme styles, 60+ themed UI components, signature glass/brand patterns, preview demos, logos, documentation, and package configuration. Build caches and dependencies excluded."
