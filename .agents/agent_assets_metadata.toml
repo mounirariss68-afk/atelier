@@ -179,48 +179,56 @@ id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"
 type = "text"
 title = "Arçelik Demo Video Script (Situation → Complication → Resolution)"
+logical_id = "89677811-691e-4f1c-8946-9932e0da4604"
 
 [[outputs]]
 id = "ayNC0QlBKRSI64-N04oTL"
 uri = "file://dist/report-covers.zip"
 type = "unspecified"
 title = "All 16 report cover images (Cognirise)"
+logical_id = "dba57111-054e-4842-9c68-6e614ef06295"
 
 [[outputs]]
 id = "pGE8GACFV0co8tlne0emS"
 uri = "file://docs/microsoft365-admin-brief.md"
 type = "text"
 title = "Microsoft 365 Connection — IT Admin Brief"
+logical_id = "f59895d6-2fea-4c72-952f-1f8af2c42afd"
 
 [[outputs]]
 id = "tPbce0BR8GhiN-DoxvdRX"
 uri = "file://docs/app-store-submission-answers.md"
 type = "text"
 title = "App Store Submission Answers"
+logical_id = "f23592be-3de3-4503-bd69-8a7614268f66"
 
 [[outputs]]
 id = "QCruTSO4WzLmub7yj_QYq"
 uri = "file://exports/app-store-submission-answers.pdf"
 type = "pdf"
 title = "App Store Submission Answers (PDF)"
+logical_id = "72504251-b1d9-4fda-9e22-0cd15993098d"
 
 [[outputs]]
 id = "R6BaBkoD5GsrRO3vGon8h"
 uri = "file://exports/app-store-submission-guide.pdf"
 type = "pdf"
 title = "App Store Submission Step-by-Step Guide (PDF)"
+logical_id = "37cd93f2-8bce-4a55-bbcc-3f763ab56fdf"
 
 [[outputs]]
 id = "M5-DmIic37oi8gXRs79ZW"
 uri = "file://exports/appstore-screenshots-6.5.zip"
 type = "unspecified"
 title = "App Store screenshots (6.5-inch, 1284×2778)"
+logical_id = "689a6ca2-5fdf-4f9d-a9a1-9bd250cb7506"
 
 [[outputs]]
 id = "Yl0aci6L0CYyG8hEAqNv5"
 uri = "file://exports/DUNS_Questionnaire_Cognirise_UAE.docx"
 type = "word_document"
 title = "DUNS Questionnaire — Cognirise UAE (filled)"
+logical_id = "214f1349-b210-46c5-ad77-6a7c8fa5c013"
 
 [[outputs]]
 id = "DQbQfUgjSTgJv38PI8HQL"
@@ -228,6 +236,7 @@ uri = "file://exports/atelier-travel-search-kit.zip"
 type = "unspecified"
 title = "Atelier Travel Search Kit (zip)"
 description = "Portable extract of the flights & hotels chat capabilities — Ignav + StayingAPI clients, travel tools, preference registry, offline test suite (26/26 passing), UI references, and a README covering setup and integration points."
+logical_id = "b6e5ece9-088b-4495-b793-6eebe0b0e21e"
 
 [[outputs]]
 id = "2HVscZUvu9wNAlxq_T7Uw"
@@ -235,6 +244,7 @@ uri = "file://attached_assets/pov-live-check-task1054.pdf"
 type = "pdf"
 title = "Live POV PDF (regenerated) — Scaling AI from pilots to P&L impact"
 description = "Client-ready 8-page branded PDF: numbered citations mapped to the Sources appendix, no raw markup; 11 typed sections, 100% citation coverage, firm-profile-grounded positioning."
+logical_id = "abafefa1-e04f-487b-bab4-3e4d547f3076"
 
 [[outputs]]
 id = "b5q8dUEFLLCvxEanZHGpK"
@@ -242,6 +252,7 @@ uri = "file://attached_assets/cognirise-atelier-design-system.zip"
 type = "unspecified"
 title = "Cognirise Atelier design system (zip)"
 description = "The complete design system: design tokens, theme CSS, React components, brand assets (logos, backdrops), and usage docs — Comfortaa + Inter typography included."
+logical_id = "5c142567-57a0-4759-b3c7-b1cae37e9f49"
 
 [[outputs]]
 id = "Kv0204ApJaTHjEfCLTfCD"
@@ -249,6 +260,7 @@ uri = "file://artifacts/api-server/generated/Atelier-Adding-New-Employee-or-Cont
 type = "word_document"
 title = "Atelier — Adding a New Employee or Contractor"
 description = "Print-ready Word guide covering Quick add and formal hiring, employee/contractor inputs and outputs, onboarding checklists, access activation, permissions, and common validation stops."
+logical_id = "4bdc982a-9b1c-459b-83fd-cd8cf75e1951"
 
 [[outputs]]
 id = "bm0Uw6ayQKcHsKWf2YBUx"
@@ -256,3 +268,4 @@ uri = "file://generated/Atelier-Design-System.zip"
 type = "unspecified"
 title = "Atelier Design System"
 description = "Reusable Cognirise Atelier design system package with DTCG tokens, light/dark theme styles, 60+ themed UI components, signature glass/brand patterns, preview demos, logos, documentation, and package configuration. Build caches and dependencies excluded."
+logical_id = "81c2a7d1-a1ad-4528-af08-f2973182e6d2"
