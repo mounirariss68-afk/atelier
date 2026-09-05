@@ -269,3 +269,59 @@ type = "unspecified"
 title = "Atelier Design System"
 description = "Reusable Cognirise Atelier design system package with DTCG tokens, light/dark theme styles, 60+ themed UI components, signature glass/brand patterns, preview demos, logos, documentation, and package configuration. Build caches and dependencies excluded."
 logical_id = "81c2a7d1-a1ad-4528-af08-f2973182e6d2"
+
+[[outputs]]
+id = "Vd-kGtgThb-Y--Qts-egQ"
+uri = "file://artifacts/api-server/generated/Cognirise-Atelier-Agentic-Operating-System-Case-Study.docx"
+type = "word_document"
+title = "Word Case Study — Direct Download"
+description = "Direct .docx download of the Atelier case study."
+logical_id = "3d6f6080-d906-4a77-89b5-eedde1fedd96"
+content_hash = "sha256:41d8a842ccceaf8e1befc49e70889546e587ef5eb2b22264170a5b173cd8cd1c"
+size = 779864
+mtime_ms = 1788634016245
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/3d6f6080-d906-4a77-89b5-eedde1fedd96/4ed53b7d-8aeb-42c2-a1f5-d9c59c0690a7"
+storage_version_token = "1788635830281033"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "O4W0DMGtXXShcuRsildiz"
+uri = "file://artifacts/api-server/generated/Cognirise-Atelier-Agentic-Operating-System-Case-Study-5-Slide-Summary.pptx"
+type = "slides"
+title = "Download the 5-Slide Summary"
+description = "Detailed five-slide PowerPoint summary (.pptx)"
+logical_id = "d2727507-b009-470f-959a-3b23b50f88a4"
+content_hash = "sha256:6e8df54a987dedd6008bd1f40ef66b85295dfcd30812abe69de356c0a2af5d45"
+size = 3754639
+mtime_ms = 1788634016263
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/d2727507-b009-470f-959a-3b23b50f88a4/3506bf5d-96e8-4cc0-a546-d353eae6a9e1"
+storage_version_token = "1788635767361928"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[[outputs]]
+id = "EuU0rWqw3ZfdtsTR-0yLG"
+uri = "file://artifacts/api-server/generated/Cognirise-Atelier-Agentic-Operating-System-Executive-One-Slide.pptx"
+type = "slides"
+title = "Download the Executive One-Slide"
+description = "Standalone executive PowerPoint slide (.pptx)"
+logical_id = "ee23affd-22a4-4b6a-af34-bff746baa7c4"
+content_hash = "sha256:c91e35af30d683bbb783e10dd6a7ea981106b39973a013d0c9698775c2573b78"
+size = 721065
+mtime_ms = 1788634016236
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/ee23affd-22a4-4b6a-af34-bff746baa7c4/77e4b1a7-c0f0-4ba3-b46f-58e26b605268"
+storage_version_token = "1788635768789863"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[[outputs]]
+id = "PzgaLo7V3cWC7B2BoZYGg"
+uri = "file://artifacts/api-server/generated/Cognirise-Atelier-Agentic-Operating-System-Case-Study.zip"
+type = "unspecified"
+title = "Word Case Study — ZIP Download"
+description = "ZIP-wrapped copy of the same Word document. Use this if the direct .docx card does not download."
+logical_id = "714cf663-9802-496e-9cff-79446fdde100"
+content_hash = "sha256:6513593c4d7c5a640a7f2ece9f95fda44d2687bab78af0afc620b6b7e9d6bcc8"
+size = 777971
+mtime_ms = 1788635829077
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/714cf663-9802-496e-9cff-79446fdde100/deb512b4-db0c-4667-a8f4-40050b68687e"
+storage_version_token = "1788635831539081"
+content_type = "application/octet-stream"
