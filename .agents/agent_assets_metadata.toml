@@ -325,3 +325,17 @@ mtime_ms = 1788635829077
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/714cf663-9802-496e-9cff-79446fdde100/deb512b4-db0c-4667-a8f4-40050b68687e"
 storage_version_token = "1788635831539081"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "vHv2QJl4rkFZgb24SEEWQ"
+uri = "file://generated/antur-signing-test/Antur-NDA-TEST-NOT-FOR-EXECUTION.pdf"
+type = "pdf"
+title = "Antur NDA — Test signing copy"
+description = "Watermarked test-only PDF with an additional signature page: Mounir first under Antur, Gokhan second under Cognitive Rise."
+logical_id = "224c4b91-a3f3-413b-a9ac-a11d4fdc465f"
+content_hash = "sha256:0ea6387d0b7d7ef1269e766ff94f6a52d464c3fd07792a6d19f3c6129f9c01c0"
+size = 283396
+mtime_ms = 1789457391462
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/224c4b91-a3f3-413b-a9ac-a11d4fdc465f/00d0e7d5-9676-4e44-9e7f-f081b7ae51a8"
+storage_version_token = "1789457500586160"
+content_type = "application/pdf"
