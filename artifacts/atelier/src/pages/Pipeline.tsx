@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   useAtelierListOpportunities,
-  useAtelierGetPipelineForecast,
+  useAtelierGetMe,
+  useAtelierListPartnerFirms,
+  getAtelierListPartnerFirmsQueryKey,
   useAtelierRunPipelineForecaster,
   getAtelierListOpportunitiesQueryKey,
   getAtelierGetPipelineForecastQueryKey,
@@ -22,12 +24,16 @@ import {
   ArrowUp,
   ArrowDown,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { useToast } from "@/hooks/use-toast";
 import { fmtMoney } from "@/lib/utils";
+import { canSeePartnersLens } from "@/lib/lens";
+import { OpportunityPartnerTags } from "@/components/OpportunityPartnerPicker";
+import { filterPartnerOpportunities, summarizePartnerOpportunities, partnerReportQuery, partnerReportFilename } from "@/lib/partner-opportunity-filters";
 import {
   SALES_STAGES,
   WORKING_STAGES,
@@ -139,8 +145,9 @@ function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
           ) : undefined
         }
         chips={
-          (subStatus || runnerAge !== null) ? (
+          (subStatus || runnerAge !== null || opp.partnerFirms?.length) ? (
             <>
+              <OpportunityPartnerTags firms={opp.partnerFirms} />
               {subStatus && (
                 <span
                   className="inline-flex items-center rounded-full border border-border-soft bg-bg-deep text-text-mute text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
@@ -334,8 +341,16 @@ function ForecastPanel({ initialBy }: { initialBy: string }) {
 }
 
 export default function Pipeline() {
-  const { data: opps, isLoading } = useAtelierListOpportunities();
-  const { data: forecast } = useAtelierGetPipelineForecast();
+  const { data: opps, isLoading, isFetching, isError, refetch } = useAtelierListOpportunities();
+  const { data: me } = useAtelierGetMe();
+  const canFilterPartners = canSeePartnersLens(me?.role);
+  const firms = useAtelierListPartnerFirms({
+    query: {
+      queryKey: getAtelierListPartnerFirmsQueryKey(),
+      enabled: canFilterPartners,
+      staleTime: 30_000,
+    },
+  });
   const runForecaster = useAtelierRunPipelineForecaster();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -368,21 +383,60 @@ export default function Pipeline() {
   const [moveTarget, setMoveTarget] = useState<OppItem | null>(null);
   const [stageFilter, setStageFilter] = useState<SalesStage | "all">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [partnerFilter, setPartnerFilter] = useState("all");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const effectivePartnerFilter = canFilterPartners ? partnerFilter : "all";
+  const partnerChoices = useMemo(() => [...(firms.data?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [firms.data]);
+  const selectedPartner = partnerChoices.find((firm) => firm.id === effectivePartnerFilter);
+
+  useEffect(() => { setDownloadError(null); }, [stageFilter, ownerFilter, partnerFilter]);
 
   const owners = useMemo(() => {
-    const set = new Set<string>();
-    for (const o of opps ?? []) set.add(o.partnerOwnerName);
-    return Array.from(set).sort();
+    const map = new Map<string, string>();
+    for (const o of opps ?? []) if (o.partnerOwnerId) map.set(o.partnerOwnerId, o.partnerOwnerName);
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [opps]);
 
   const filteredOpps = useMemo(() => {
-    return (opps ?? []).filter((o) => {
-      const s = (o as { salesStage?: SalesStage }).salesStage ?? "suspect";
-      if (stageFilter !== "all" && s !== stageFilter) return false;
-      if (ownerFilter !== "all" && o.partnerOwnerName !== ownerFilter) return false;
-      return true;
-    });
-  }, [opps, stageFilter, ownerFilter]);
+    return filterPartnerOpportunities(opps ?? [], { stage: stageFilter, owner: ownerFilter, partnerFirmId: effectivePartnerFilter });
+  }, [opps, stageFilter, ownerFilter, effectivePartnerFilter]);
+  const summary = useMemo(() => summarizePartnerOpportunities(filteredOpps), [filteredOpps]);
+  const reportReady = canFilterPartners && !!selectedPartner && !isFetching && !isError &&
+    !!opps && firms.isSuccess && !firms.isFetching && filteredOpps.length > 0;
+
+  async function downloadPartnerReport() {
+    if (!reportReady || downloading || !selectedPartner) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const query = partnerReportQuery({ stage: stageFilter, owner: ownerFilter, partnerFirmId: selectedPartner.id });
+      const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+      const response = await fetch(`${base}api/atelier/opportunities/partner-report.pdf?${query}`, { credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || body?.error || `Report download failed (${response.status}).`);
+      }
+      if (!response.headers.get("content-type")?.includes("application/pdf")) {
+        throw new Error("The server did not return a PDF. Please try again.");
+      }
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("The report was empty. Please try again.");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = partnerReportFilename(selectedPartner.name, new Date().toISOString().slice(0, 10));
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast({ title: "Partner PDF downloaded", description: "For manual sharing only. No email was sent or portal access granted." });
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "Could not download the partner report.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const sortedOpps = useMemo(() => {
     const arr = [...filteredOpps];
@@ -428,11 +482,11 @@ export default function Pipeline() {
     }
   }
 
-  // Build per-stage roll-up locally (also use forecast.buckets for consistency).
+  // Cards, stage summaries and headline KPIs share the same filtered population.
   const bucketByStage = useMemo(() => {
     const m = new Map<SalesStage, { count: number; weighted: Record<string, number> }>();
     for (const s of SALES_STAGES) m.set(s, { count: 0, weighted: {} });
-    for (const o of opps ?? []) {
+    for (const o of filteredOpps) {
       const s = (o as { salesStage?: SalesStage }).salesStage ?? ("suspect" as SalesStage);
       const cur = m.get(s) ?? { count: 0, weighted: {} };
       cur.count += 1;
@@ -443,10 +497,17 @@ export default function Pipeline() {
       m.set(s, cur);
     }
     return m;
-  }, [opps]);
+  }, [filteredOpps]);
 
   if (isLoading) {
     return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
+  }
+
+  if (isError) {
+    return <div className="container-atelier py-12 space-y-3" role="alert" data-testid="error-pipeline">
+      <p className="text-danger">Could not load opportunities. Please retry before filtering or exporting.</p>
+      <PillButton onClick={() => void refetch()} data-testid="button-retry-pipeline">Retry</PillButton>
+    </div>;
   }
 
   return (
@@ -517,7 +578,10 @@ export default function Pipeline() {
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
             <span>Filter</span>
             <select
+              aria-label="Stage"
+              data-testid="select-stage-filter"
               value={stageFilter}
+              disabled={downloading}
               onChange={(e) => setStageFilter(e.target.value as SalesStage | "all")}
               className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
             >
@@ -527,59 +591,102 @@ export default function Pipeline() {
               ))}
             </select>
             <select
+              aria-label="Owner"
+              data-testid="select-owner-filter"
               value={ownerFilter}
+              disabled={downloading}
               onChange={(e) => setOwnerFilter(e.target.value)}
               className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
             >
               <option value="all">All owners</option>
+              {ownerFilter !== "all" && !owners.some((o) => o.id === ownerFilter) && <option value={ownerFilter}>Unavailable owner</option>}
               {owners.map((o) => (
-                <option key={o} value={o}>{o}</option>
+                <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
-            {(stageFilter !== "all" || ownerFilter !== "all") && (
+            {canFilterPartners && (
+              <>
+                <select
+                  aria-label="External partner firm"
+                  value={partnerFilter}
+                  onChange={(e) => setPartnerFilter(e.target.value)}
+                  disabled={firms.isLoading || firms.isError || downloading}
+                  className="max-w-full bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+                  data-testid="select-partner-filter"
+                >
+                  <option value="all">{firms.isLoading ? "Loading partners…" : "All partners"}</option>
+                  {partnerFilter !== "all" && !selectedPartner && <option value={partnerFilter}>Unavailable partner — choose another</option>}
+                  {partnerChoices.map((firm) => <option key={firm.id} value={firm.id}>{firm.name}</option>)}
+                </select>
+                <PillButton
+                  variant="ghost"
+                  disabled={!reportReady || downloading}
+                  onClick={downloadPartnerReport}
+                  data-testid="button-download-partner-pdf"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Download className="h-3.5 w-3.5" /> {downloading ? "Preparing PDF…" : "Download partner PDF"}
+                  </span>
+                </PillButton>
+              </>
+            )}
+            {(stageFilter !== "all" || ownerFilter !== "all" || effectivePartnerFilter !== "all") && (
               <button
                 type="button"
-                onClick={() => { setStageFilter("all"); setOwnerFilter("all"); }}
+                disabled={downloading}
+                data-testid="button-clear-pipeline-filters"
+                onClick={() => { setStageFilter("all"); setOwnerFilter("all"); setPartnerFilter("all"); }}
                 className="text-text-mute hover:text-gold underline"
               >
                 Clear
               </button>
             )}
-            <span className="ml-auto text-text-mute">{filteredOpps.length} of {opps?.length ?? 0}</span>
+            <span className="ml-auto text-text-mute" data-testid="text-filtered-opportunity-count">{filteredOpps.length} of {opps?.length ?? 0}</span>
           </div>
         )}
 
-        {/* Forecast summary strip — pipeline mode only. These cards come from
-            the server /pipeline/forecast roll-up and always reflect the full
-            org pipeline; they are NOT affected by the stage/owner filters
-            above (those only re-scope the Kanban board / list below). */}
-        {mode === "pipeline" && forecast && (
+        {mode === "pipeline" && canFilterPartners && (
+          <div className="space-y-2 text-xs text-text-faint" aria-live="polite">
+            {firms.isError ? (
+              <div role="alert" className="text-danger" data-testid="error-pipeline-partners">
+                Could not load partner firms. Export is unavailable.
+                <PillButton variant="ghost" onClick={() => void firms.refetch()} data-testid="button-retry-pipeline-partners">Retry</PillButton>
+              </div>
+            ) : partnerFilter === "all" ? (
+              <p data-testid="status-partner-report">Choose a partner firm to download a PDF for manual sharing.</p>
+            ) : firms.isSuccess && !selectedPartner ? (
+              <p data-testid="status-partner-report">This partner is no longer available. Choose another firm or clear the filter.</p>
+            ) : isFetching || firms.isFetching ? (
+              <p data-testid="status-partner-report">Refreshing data before export…</p>
+            ) : <p data-testid="status-partner-report">PDF includes all authorized matches for the selected partner, stage and owner. No email or portal access is granted.</p>}
+            {downloadError && <p role="alert" className="text-danger" data-testid="error-partner-report">{downloadError} Try downloading again.</p>}
+          </div>
+        )}
+        {mode === "pipeline" && filteredOpps.length === 0 && (
+          <p className="text-sm text-text-mute" data-testid="empty-filtered-opportunities">No opportunities match these filters. Adjust or clear them to continue; there is nothing to export.</p>
+        )}
+        {mode === "pipeline" && (
           <>
           <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
-            <span className="text-gold">Forecast · whole pipeline</span>
-            {(stageFilter !== "all" || ownerFilter !== "all") && (
-              <span className="text-text-faint normal-case tracking-normal">
-                (filters below don't change these totals)
-              </span>
-            )}
+            <span className="text-gold">Pipeline · current filters</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="p-4">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">In-flight deals</div>
-              <div className="text-2xl font-light text-text mt-1">{forecast.totalCount}</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Matching deals</div>
+              <div className="text-2xl font-light text-text mt-1" data-testid="kpi-pipeline-count">{summary.count}</div>
             </Card>
             <Card className="p-4">
               <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Pipeline value</div>
-              <div className="text-2xl font-light text-text mt-1">{fmtUsd(forecast.totalDealSumUsd)}</div>
+              <div className="text-2xl font-light text-text mt-1" data-testid="kpi-pipeline-value">{fmtByCurrency(summary.raw)}</div>
             </Card>
             <Card className="p-4 border-gold/40">
               <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Weighted pipeline</div>
-              <div className="text-2xl font-light text-gold mt-1">{fmtUsd(forecast.weightedPipelineUsd)}</div>
+              <div className="text-2xl font-light text-gold mt-1" data-testid="kpi-pipeline-weighted">{fmtByCurrency(summary.weighted)}</div>
             </Card>
-            <Card className={`p-4 ${forecast.stalledCount > 0 ? "border-danger/40" : ""}`}>
+            <Card className={`p-4 ${summary.stalled > 0 ? "border-danger/40" : ""}`}>
               <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Stalled (&gt;{STALLED_THRESHOLD_DAYS}d)</div>
-              <div className={`text-2xl font-light mt-1 ${forecast.stalledCount > 0 ? "text-danger" : "text-text"}`}>
-                {forecast.stalledCount}
+              <div className={`text-2xl font-light mt-1 ${summary.stalled > 0 ? "text-danger" : "text-text"}`} data-testid="kpi-pipeline-stalled">
+                {summary.stalled}
               </div>
             </Card>
           </div>
@@ -667,6 +774,7 @@ export default function Pipeline() {
                           <Link href={`/opportunities/${opp.id}`} className="font-medium text-text hover:text-gold transition-colors">
                             {opp.name}
                           </Link>
+                          <OpportunityPartnerTags firms={opp.partnerFirms} />
                           {isStalled && (
                             <span className="ml-2 text-[10px] text-danger font-mono border border-danger/30 rounded px-1">
                               {opp.daysInStage}d stalled

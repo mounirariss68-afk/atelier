@@ -17,7 +17,11 @@ import {
   atelierContractors,
   atelierEngagementAccess,
   atelierInvoice,
+  atelierPartnerFirms,
 } from "@workspace/db";
+import { opportunityPartnerFirms } from "../../lib/atelier-opportunity-partners.js";
+import { partnerOpportunityPdf } from "../../lib/atelier-partner-opportunity-pdf.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
   AtelierGetMeResponse,
   AtelierListPersonasResponse,
@@ -1078,19 +1082,20 @@ router.get("/activity", rejectNonEmployeePersona, async (req, res) => {
 // =============================================================
 async function buildOpportunityWire(
   o: typeof atelierOpportunities.$inferSelect,
+  showPartners = true,
 ) {
   const [acct] = await db
     .select()
     .from(atelierAccounts)
-    .where(eq(atelierAccounts.id, o.accountId));
+    .where(and(eq(atelierAccounts.id, o.accountId), eq(atelierAccounts.orgId, o.orgId)));
   const [partner] = await db
     .select()
     .from(atelierUsers)
-    .where(eq(atelierUsers.id, o.partnerOwnerId));
+    .where(and(eq(atelierUsers.id, o.partnerOwnerId), eq(atelierUsers.orgId, o.orgId)));
   const [lead] = await db
     .select()
     .from(atelierUsers)
-    .where(eq(atelierUsers.id, o.engagementLeadId));
+    .where(and(eq(atelierUsers.id, o.engagementLeadId), eq(atelierUsers.orgId, o.orgId)));
   const salesStage = resolveSalesStage(o.salesStage) as string;
   return {
     id: o.id,
@@ -1102,6 +1107,8 @@ async function buildOpportunityWire(
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
+    partnerOwnerId: o.partnerOwnerId,
+    partnerFirms: showPartners ? await opportunityPartnerFirms(o.orgId, o.id) : [],
     engagementLeadName: lead?.name ?? o.engagementLeadId,
     dealSizeUsd: o.dealSizeHypothesis,
     // Task #8 — deal values are denominated in the account's primaryCurrency;
@@ -1112,6 +1119,8 @@ async function buildOpportunityWire(
     daysInStage: o.daysInStage,
     nextMilestone: o.nextMilestone,
     nextMilestoneDate: o.nextMilestoneDate ?? null,
+    closeDate: o.closeDate ?? null,
+    forecastCategory: o.forecastCategory,
     sourceLead: o.sourceLead,
     stalled:
       o.daysInStage > STALLED_THRESHOLD_DAYS &&
@@ -1125,7 +1134,36 @@ async function buildOpportunityWire(
   };
 }
 
-router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
+/** One visibility/filter loader for both the pipeline and the full (unpaginated) export. */
+async function loadFilteredOpportunities(req: Request, res: Response, requirePartner = false) {
+  const me = req.atelierPersona;
+  if (!me) {
+    res.status(401).json({ error: "no-active-persona" });
+    return null;
+  }
+  const partnerRequested = req.query.partnerFirmId !== undefined || requirePartner;
+  if (partnerRequested && !canAccessPartnersLens(me.role)) {
+    res.status(403).json({ error: "partners-lens-forbidden", message: "Partner filtering and export are not available to your role." });
+    return null;
+  }
+  for (const key of ["stage", "owner", "sector", "account", "partnerFirmId"]) {
+    if (req.query[key] !== undefined && typeof req.query[key] !== "string") {
+      res.status(400).json({ error: "invalid-filter", message: `Invalid ${key} filter.` });
+      return null;
+    }
+  }
+  const partnerFirmId = typeof req.query.partnerFirmId === "string" ? req.query.partnerFirmId.trim() : "";
+  if (partnerRequested && !partnerFirmId) {
+    res.status(400).json({ error: "partner-required", message: "Select a partner firm before downloading a report." });
+    return null;
+  }
+  const [firm] = partnerFirmId ? await db.select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
+    .from(atelierPartnerFirms).where(and(eq(atelierPartnerFirms.id, partnerFirmId),
+      eq(atelierPartnerFirms.orgId, me.orgId), isNull(atelierPartnerFirms.deletedAt))) : [];
+  if (partnerFirmId && !firm) {
+    res.status(404).json({ error: "partner-firm-not-found" });
+    return null;
+  }
   // Optional query filters: ?stage=&owner=&sector=&account= (CSV allowed).
   // Filtering happens after buildOpportunityWire because salesStage may be
   // derived at read time for legacy rows that pre-date the v2 column.
@@ -1139,7 +1177,7 @@ router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
   let rows = await db
     .select()
     .from(atelierOpportunities)
-    .where(isNull(atelierOpportunities.deletedAt));
+    .where(and(eq(atelierOpportunities.orgId, me.orgId), isNull(atelierOpportunities.deletedAt)));
   // Task #1297 — non_equity_partner: the pipeline list is clamped to
   // opportunities they own, were invited into, or that sit on an account
   // they hold full access on. No firm-wide pipeline ever.
@@ -1148,20 +1186,60 @@ router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
     const nep = await nepAccessFor(nepMe.id);
     rows = rows.filter((o) => nepCanSeeOpportunity(nep, o, nepMe.id));
   }
-  let wire = await Promise.all(rows.map(buildOpportunityWire));
+  let wire = await Promise.all(rows.map((row) => buildOpportunityWire(row, canAccessPartnersLens(me.role))));
+  if (partnerFirmId) wire = wire.filter((o) => o.partnerFirms.some((p) => p.id === partnerFirmId));
   if (stages.length) wire = wire.filter((o) => stages.includes(o.salesStage));
-  if (owners.length)
-    wire = wire.filter((o) => owners.includes(o.partnerOwnerName));
+  if (owners.length) {
+    // Prefer actual user IDs; retain name matching only for legacy tokens.
+    const matchedUsers = await db.select({ id: atelierUsers.id }).from(atelierUsers)
+      .where(and(eq(atelierUsers.orgId, me.orgId), inArray(atelierUsers.id, owners)));
+    const ownerIds = new Set(matchedUsers.map((u) => u.id));
+    wire = wire.filter((o) => owners.some((token) => ownerIds.has(token)
+      ? token === o.partnerOwnerId : token === o.partnerOwnerName));
+  }
   if (accounts.length)
     wire = wire.filter(
       (o) => accounts.includes(o.accountId) || accounts.includes(o.accountName),
     );
   if (sectors.length) {
-    const acctRows = await db.select().from(atelierAccounts);
+    const acctRows = await db.select().from(atelierAccounts).where(eq(atelierAccounts.orgId, me.orgId));
     const sectorByAcct = new Map(acctRows.map((a) => [a.id, a.sector]));
     wire = wire.filter((o) => sectors.includes(sectorByAcct.get(o.accountId) ?? ""));
   }
-  res.json(AtelierListOpportunitiesResponse.parse(wire));
+  return { wire, firm, stages, owners, sectors, accounts };
+}
+
+router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
+  const result = await loadFilteredOpportunities(req, res);
+  if (result) res.json(AtelierListOpportunitiesResponse.parse(result.wire));
+});
+
+// @cli-skip: manual external-sharing download, no delivery or portal grants.
+router.get("/opportunities/partner-report.pdf", rejectNonEmployeePersona, async (req, res) => {
+  const result = await loadFilteredOpportunities(req, res, true);
+  if (!result || !result.firm) return;
+  if (!result.wire.length) {
+    res.status(404).json({ error: "no-matching-opportunities", message: "No opportunities match this partner and the selected filters." });
+    return;
+  }
+  try {
+    const { wire, firm, stages, owners, sectors, accounts } = result;
+    const ownerLabel = owners.length ? [...new Set(wire.map((o) => o.partnerOwnerName))].join(", ") : "All owners";
+    const filters = `Stage: ${stages.join(", ") || "All stages"} · Owner: ${ownerLabel}`
+      + (sectors.length ? ` · Sector: ${sectors.join(", ")}` : "")
+      + (accounts.length ? ` · Client: ${[...new Set(wire.map((o) => o.accountName))].join(", ")}` : "");
+    const pdf = await partnerOpportunityPdf(firm.name, filters, wire.map((o) => ({
+      name: o.name, accountName: o.accountName, salesStage: o.salesStage,
+      partnerOwnerName: o.partnerOwnerName, dealSizeUsd: o.dealSizeUsd, currency: o.currency, closeDate: o.closeDate,
+    })));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `Cognirise-${firm.name}-opportunities.pdf`));
+    res.send(pdf);
+  } catch (err) {
+    req.log.error({ err }, "Partner opportunity PDF failed");
+    res.status(500).json({ error: "partner-report-failed", message: "The report could not be generated. Please try again." });
+  }
 });
 
 router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) => {
@@ -1171,6 +1249,7 @@ router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) =
     .where(
       and(
         eq(atelierOpportunities.id, req.params.oppId as string),
+        eq(atelierOpportunities.orgId, req.atelierPersona!.orgId),
         isNull(atelierOpportunities.deletedAt),
       ),
     );
@@ -1187,7 +1266,7 @@ router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) =
       return;
     }
   }
-  res.json(AtelierGetOpportunityResponse.parse(await buildOpportunityWire(row)));
+  res.json(AtelierGetOpportunityResponse.parse(await buildOpportunityWire(row, canAccessPartnersLens(oppMe?.role))));
 });
 
 // =============================================================

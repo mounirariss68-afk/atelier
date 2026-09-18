@@ -8915,7 +8915,33 @@ export const AtelierGetActivityResponse = zod.array(
 /**
  * @summary All opportunities across PLM stages
  */
+export const AtelierListOpportunitiesQueryParams = zod.object({
+  stage: zod.coerce
+    .string()
+    .optional()
+    .describe("Sales stages, comma separated"),
+  owner: zod.coerce
+    .string()
+    .optional()
+    .describe("Owner IDs or legacy display names, comma separated"),
+  sector: zod.coerce.string().optional(),
+  account: zod.coerce.string().optional(),
+  partnerFirmId: zod.coerce
+    .string()
+    .optional()
+    .describe("Active external partner firm ID"),
+});
+
 export const AtelierListOpportunitiesResponseItem = zod.object({
+  partnerOwnerId: zod.string().optional(),
+  partnerFirms: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
@@ -8995,6 +9021,8 @@ export const AtelierListOpportunitiesResponse = zod.array(
  * @summary Create a new opportunity (Pursuit Scout auto-runs)
  */
 
+export const atelierCreateOpportunityBodyPartnerFirmIdsMax = 100;
+
 export const atelierCreateOpportunityBodyDealSizeUsdDefault = 250000;
 export const atelierCreateOpportunityBodyProbabilityPctMin = 0;
 export const atelierCreateOpportunityBodyProbabilityPctMax = 100;
@@ -9005,6 +9033,13 @@ export const atelierCreateOpportunityBodyAllowDuplicateDefault = false;
 export const atelierCreateOpportunityBodyAllowDuplicateAccountDefault = false;
 
 export const AtelierCreateOpportunityBody = zod.object({
+  partnerFirmIds: zod
+    .array(zod.string().min(1))
+    .max(atelierCreateOpportunityBodyPartnerFirmIdsMax)
+    .optional()
+    .describe(
+      "Optional external firm tags; no economics or portal access is assigned.",
+    ),
   name: zod.string().min(1),
   description: zod
     .string()
@@ -9127,11 +9162,35 @@ export const AtelierCheckOpportunityDuplicatesResponse = zod.object({
     .describe("Likely duplicates, exact matches first then by score."),
 });
 
+/**
+ * @summary Download a partner-safe report of all authorized matching opportunities
+ */
+
+export const AtelierDownloadPartnerOpportunityReportQueryParams = zod.object({
+  partnerFirmId: zod.coerce.string().min(1),
+  stage: zod.coerce.string().optional(),
+  owner: zod.coerce
+    .string()
+    .optional()
+    .describe("Owner IDs or legacy display names, comma separated"),
+  sector: zod.coerce.string().optional(),
+  account: zod.coerce.string().optional(),
+});
+
 export const AtelierGetOpportunityParams = zod.object({
   oppId: zod.coerce.string(),
 });
 
 export const AtelierGetOpportunityResponse = zod.object({
+  partnerOwnerId: zod.string().optional(),
+  partnerFirms: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
@@ -9211,6 +9270,8 @@ export const AtelierUpdateOpportunityParams = zod.object({
   oppId: zod.coerce.string(),
 });
 
+export const atelierUpdateOpportunityBodyPartnerFirmIdsMax = 100;
+
 export const atelierUpdateOpportunityBodyDealSizeUsdMin = 0;
 
 export const atelierUpdateOpportunityBodyProbabilityPctMin = 0;
@@ -9218,6 +9279,13 @@ export const atelierUpdateOpportunityBodyProbabilityPctMax = 100;
 
 export const AtelierUpdateOpportunityBody = zod
   .object({
+    partnerFirmIds: zod
+      .array(zod.string().min(1))
+      .max(atelierUpdateOpportunityBodyPartnerFirmIdsMax)
+      .optional()
+      .describe(
+        "Replace active partner tags; omitted leaves unchanged, empty removes all. Retained metadata is preserved.",
+      ),
     name: zod.string().min(1).optional(),
     dealSizeUsd: zod
       .number()
@@ -9251,6 +9319,15 @@ export const AtelierUpdateOpportunityBody = zod
   );
 
 export const AtelierUpdateOpportunityResponse = zod.object({
+  partnerOwnerId: zod.string().optional(),
+  partnerFirms: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
@@ -9410,6 +9487,15 @@ export const AtelierUpdateOpportunityStageBody = zod.object({
 });
 
 export const AtelierUpdateOpportunityStageResponse = zod.object({
+  partnerOwnerId: zod.string().optional(),
+  partnerFirms: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
@@ -9527,6 +9613,15 @@ export const AtelierCreateStageTransitionBody = zod.object({
 
 export const AtelierCreateStageTransitionResponse = zod.object({
   opportunity: zod.object({
+    partnerOwnerId: zod.string().optional(),
+    partnerFirms: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+        }),
+      )
+      .optional(),
     id: zod.string(),
     slug: zod.string(),
     name: zod.string(),

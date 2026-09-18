@@ -408,6 +408,12 @@ export function canSeePartnersLens(role: string | null | undefined): boolean {
   );
 }
 
+/** Mirrors canEditPartnersLens on the server; tagging never grants portal access. */
+export function canEditPartnerAssociations(role: string | null | undefined): boolean {
+  return role === "founding_partner" || role === "partner" ||
+    role === "senior_manager" || role === "finance";
+}
+
 /** Lenses the picker should offer this persona. */
 export function visibleLensesForRole(
   role: string | null | undefined,

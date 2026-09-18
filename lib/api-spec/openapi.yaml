@@ -3828,6 +3828,12 @@ paths:
       operationId: atelierListOpportunities
       tags: [atelier]
       summary: All opportunities across PLM stages
+      parameters:
+        - { name: stage, in: query, schema: { type: string }, description: "Sales stages, comma separated" }
+        - { name: owner, in: query, schema: { type: string }, description: "Owner IDs or legacy display names, comma separated" }
+        - { name: sector, in: query, schema: { type: string } }
+        - { name: account, in: query, schema: { type: string } }
+        - { name: partnerFirmId, in: query, schema: { type: string }, description: Active external partner firm ID }
       responses:
         "200":
           description: Opportunities with stage + account
@@ -3905,6 +3911,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/partner-report.pdf:
+    get:
+      operationId: atelierDownloadPartnerOpportunityReport
+      tags: [atelier]
+      summary: Download a partner-safe report of all authorized matching opportunities
+      parameters:
+        - { name: partnerFirmId, in: query, required: true, schema: { type: string, minLength: 1 } }
+        - { name: stage, in: query, schema: { type: string } }
+        - { name: owner, in: query, schema: { type: string }, description: "Owner IDs or legacy display names, comma separated" }
+        - { name: sector, in: query, schema: { type: string } }
+        - { name: account, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Branded partner-safe PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { description: Partner selection required or invalid filters }
+        "403": { description: Partners lens access required }
+        "404": { description: Firm not found or no matching opportunities }
   /atelier/opportunities/{oppId}:
     get:
       operationId: atelierGetOpportunity
@@ -11741,6 +11767,12 @@ components:
         - sourceLead
         - createdAt
       properties:
+        partnerOwnerId:
+          type: string
+        partnerFirms:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpportunityPartnerFirm"
         id: { type: string }
         slug: { type: string }
         name: { type: string }
@@ -12057,10 +12089,21 @@ components:
         `commit` are graduated confidence; `closed` is booked.
       enum: [omitted, pipeline, best_case, commit, closed]
 
+    OpportunityPartnerFirm:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
     AtelierCreateOpportunityInput:
       type: object
       required: [name, description]
       properties:
+        partnerFirmIds:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1 }
+          description: Optional external firm tags; no economics or portal access is assigned.
         name: { type: string, minLength: 1 }
         description:
           type: string
@@ -12236,6 +12279,11 @@ components:
         Task #540 — partial edit of an opportunity's core details. All fields
         optional; only supplied fields are updated.
       properties:
+        partnerFirmIds:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1 }
+          description: Replace active partner tags; omitted leaves unchanged, empty removes all. Retained metadata is preserved.
         name: { type: string, minLength: 1 }
         dealSizeUsd: { type: number, minimum: 0 }
         probabilityPct: { type: number, minimum: 0, maximum: 100 }

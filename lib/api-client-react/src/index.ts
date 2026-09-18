@@ -1,4 +1,6 @@
 export {
+  atelierDownloadPartnerOpportunityReport,
+  getAtelierDownloadPartnerOpportunityReportUrl,
   getHealthCheckUrl,
   healthCheck,
   getHealthCheckQueryKey,

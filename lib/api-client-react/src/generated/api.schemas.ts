@@ -5770,6 +5770,11 @@ export interface Account {
   notes?: string | null;
 }
 
+export interface OpportunityPartnerFirm {
+  id: string;
+  name: string;
+}
+
 /**
  * Task #653 — standard sales forecast band. `omitted` deals are excluded
 from the roll-up; `pipeline` is the working default; `best_case` /
@@ -5825,6 +5830,8 @@ export interface QualificationRubric {
 }
 
 export interface Opportunity {
+  partnerOwnerId?: string;
+  partnerFirms?: OpportunityPartnerFirm[];
   id: string;
   slug: string;
   name: string;
@@ -6187,6 +6194,11 @@ export const Confidence = {
 } as const;
 
 export interface AtelierCreateOpportunityInput {
+  /**
+   * Optional external firm tags; no economics or portal access is assigned.
+   * @maxItems 100
+   */
+  partnerFirmIds?: string[];
   /** @minLength 1 */
   name: string;
   /**
@@ -6377,6 +6389,11 @@ optional; only supplied fields are updated.
 
  */
 export interface AtelierUpdateOpportunityInput {
+  /**
+   * Replace active partner tags; omitted leaves unchanged, empty removes all. Retained metadata is preserved.
+   * @maxItems 100
+   */
+  partnerFirmIds?: string[];
   /** @minLength 1 */
   name?: string;
   /** @minimum 0 */
@@ -10259,6 +10276,23 @@ export type AtelierGetActivityParams = {
   limit?: number;
 };
 
+export type AtelierListOpportunitiesParams = {
+  /**
+   * Sales stages, comma separated
+   */
+  stage?: string;
+  /**
+   * Owner IDs or legacy display names, comma separated
+   */
+  owner?: string;
+  sector?: string;
+  account?: string;
+  /**
+   * Active external partner firm ID
+   */
+  partnerFirmId?: string;
+};
+
 export type AtelierCheckOpportunityDuplicatesParams = {
   accountId: string;
   name: string;
@@ -10266,6 +10300,20 @@ export type AtelierCheckOpportunityDuplicatesParams = {
    * Skip this opportunity (when renaming an existing one).
    */
   excludeId?: string;
+};
+
+export type AtelierDownloadPartnerOpportunityReportParams = {
+  /**
+   * @minLength 1
+   */
+  partnerFirmId: string;
+  stage?: string;
+  /**
+   * Owner IDs or legacy display names, comma separated
+   */
+  owner?: string;
+  sector?: string;
+  account?: string;
 };
 
 export type AtelierCreateStageTransition200 = {

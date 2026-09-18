@@ -37,6 +37,7 @@ const ALLOWED_FILES = new Set([
   "tests/crm/pricing-structures-probe.ts",             // scratch-DB cleanup: children deleted explicitly first, belt + suspenders only
   "tests/cli-catalog/workload-scope.ts",               // scratch-DB cleanup of its own fixture rows
   "tests/crm/margin-reports-probe.ts",                 // scratch-DB cleanup of its own fixture rows
+  "tests/crm/partner-opportunity-filter-report-probe.ts", // isolated fixture cleanup; joint-pipeline children and audits removed first
   "src/scripts/atelier-lint-opportunity-deletes.ts",   // this lint (pattern appears in docs/regex)
 ]);
 

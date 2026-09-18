@@ -13,6 +13,11 @@ optional; only supplied fields are updated.
 
  */
 export interface AtelierUpdateOpportunityInput {
+  /**
+   * Replace active partner tags; omitted leaves unchanged, empty removes all. Retained metadata is preserved.
+   * @maxItems 100
+   */
+  partnerFirmIds?: string[];
   /** @minLength 1 */
   name?: string;
   /** @minimum 0 */

@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
 import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
+import { OpportunityPartnerPicker } from "@/components/OpportunityPartnerPicker";
+import { canEditPartnerAssociations } from "@/lib/lens";
 import {
   useAtelierCreateOpportunity,
   useAtelierListAccounts,
@@ -21,6 +23,9 @@ import {
   getAtelierListOpportunitiesQueryKey,
   getAtelierListAccountsQueryKey,
   getAtelierListUsersQueryKey,
+  getAtelierListJointPipelineQueryKey,
+  getAtelierGetPipelineForecastQueryKey,
+  getAtelierListAuditQueryKey,
   useAtelierCheckOpportunityDuplicates,
   getAtelierCheckOpportunityDuplicatesQueryKey,
   useAtelierRunPursuitScout,
@@ -71,6 +76,7 @@ type FormState = {
   newAccountTier: "" | "A" | "B" | "C" | "D";
   // Owners
   partnerOwnerId: string;
+  partnerFirmIds: string[];
   engagementLeadId: string;
   // Deal context
   sourceLead: "inbound" | "referral" | "outbound" | "existing_client" | "event" | "manual";
@@ -172,6 +178,7 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
       newAccountSector: "",
       newAccountTier: "",
       partnerOwnerId: me?.id ?? "",
+      partnerFirmIds: [],
       engagementLeadId: me?.id ?? "",
       sourceLead: "inbound",
       dealSizeUsd: "250000",
@@ -350,6 +357,7 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
           description: form.description.trim(),
           ...payload,
           partnerOwnerId: form.partnerOwnerId,
+          ...(canEditPartnerAssociations(me?.role) ? { partnerFirmIds: form.partnerFirmIds } : {}),
           engagementLeadId: form.engagementLeadId,
           sourceLead: form.sourceLead,
           dealSizeUsd: form.dealSizeUsd ? Number(form.dealSizeUsd) : undefined,
@@ -368,6 +376,9 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
       setDuplicateConflict(null);
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierListJointPipelineQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierGetPipelineForecastQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
       // Task #867 — the create response carries the definitive Scout outcome
       // (the run is synchronous server-side). Surface failed/empty runs with a
       // retry affordance instead of an unconditional "Scout is drafting" toast.
@@ -810,6 +821,19 @@ export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: P
               </div>
             </div>
           </Section>
+
+          {canEditPartnerAssociations(me?.role) && (
+            <Section title="External partners">
+              <OpportunityPartnerPicker
+                value={form.partnerFirmIds}
+                onChange={(ids) => set("partnerFirmIds", ids)}
+                dialogOpen={open}
+                role={me?.role}
+                disabled={create.isPending}
+              />
+              <FieldError msg={errors.partnerFirmIds} />
+            </Section>
+          )}
 
           {/* ───────────── Deal context ───────────── */}
           <Section

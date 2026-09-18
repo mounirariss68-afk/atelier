@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ForecastCategory } from "./forecastCategory";
+import type { OpportunityPartnerFirm } from "./opportunityPartnerFirm";
 import type { QualificationRubric } from "./qualificationRubric";
 import type { SalesStage } from "./salesStage";
 
 export interface Opportunity {
+  partnerOwnerId?: string;
+  partnerFirms?: OpportunityPartnerFirm[];
   id: string;
   slug: string;
   name: string;

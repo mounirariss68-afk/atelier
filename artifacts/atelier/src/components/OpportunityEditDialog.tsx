@@ -11,8 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
 import { useToast } from "@/hooks/use-toast";
+import { OpportunityPartnerPicker } from "@/components/OpportunityPartnerPicker";
+import { canEditPartnerAssociations } from "@/lib/lens";
 import {
   useAtelierUpdateOpportunity,
+  useAtelierGetMe,
+  getAtelierListJointPipelineQueryKey,
+  getAtelierListAccountsQueryKey,
   getAtelierGetOpportunityQueryKey,
   getAtelierListOpportunitiesQueryKey,
   getAtelierListAuditQueryKey,
@@ -31,6 +36,10 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const update = useAtelierUpdateOpportunity();
+  const { data: me } = useAtelierGetMe();
+  const [partnerFirmIds, setPartnerFirmIds] = React.useState<string[]>([]);
+  const [partnersChanged, setPartnersChanged] = React.useState(false);
+  const seededFor = React.useRef<string | null>(null);
 
   const [name, setName] = React.useState(opp.name);
   const [dealSizeUsd, setDealSizeUsd] = React.useState(String(opp.dealSizeUsd));
@@ -49,7 +58,11 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
   const [offeringAnchor, setOfferingAnchor] = React.useState(opp.offeringAnchor ?? "");
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) { seededFor.current = null; return; }
+    if (seededFor.current === opp.id) return;
+    seededFor.current = opp.id;
+    setPartnerFirmIds((opp.partnerFirms ?? []).map((firm) => firm.id));
+    setPartnersChanged(false);
     setName(opp.name);
     setDealSizeUsd(String(opp.dealSizeUsd));
     setProbabilityPct(String(opp.probabilityPct));
@@ -90,12 +103,15 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
           forecastCategory,
           buyerPersona: buyerPersona.trim() || null,
           offeringAnchor: offeringAnchor.trim() || null,
+          ...(partnersChanged && canEditPartnerAssociations(me?.role) ? { partnerFirmIds } : {}),
         },
       });
       qc.invalidateQueries({ queryKey: getAtelierGetOpportunityQueryKey(opp.id) });
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierGetPipelineForecastQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierListJointPipelineQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
       toast({ title: "Opportunity updated", description: "Changes recorded in the audit trail." });
       onOpenChange(false);
     } catch (err: unknown) {
@@ -242,6 +258,14 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
               className="bg-bg-deep border-border-soft"
             />
           </div>
+          <OpportunityPartnerPicker
+            value={partnerFirmIds}
+            onChange={(ids) => { setPartnerFirmIds(ids); setPartnersChanged(true); }}
+            retained={opp.partnerFirms ?? []}
+            dialogOpen={open}
+            role={me?.role}
+            disabled={update.isPending}
+          />
           <div className="flex justify-end gap-2 pt-1">
             <PillButton type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

@@ -129,6 +129,7 @@ import type {
   AtelierDisconnectMyMsConnection200,
   AtelierDownloadDocumentParams,
   AtelierDownloadMyDocumentParams,
+  AtelierDownloadPartnerOpportunityReportParams,
   AtelierEditProposalSectionInput,
   AtelierEmergencyContactInput,
   AtelierEmergencyContactList,
@@ -197,6 +198,7 @@ import type {
   AtelierListNepCompPlans200,
   AtelierListNepEntitlements200,
   AtelierListNepEntitlementsParams,
+  AtelierListOpportunitiesParams,
   AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
@@ -15609,42 +15611,63 @@ export function useAtelierGetActivity<
 /**
  * @summary All opportunities across PLM stages
  */
-export const getAtelierListOpportunitiesUrl = () => {
-  return `/api/atelier/opportunities`;
+export const getAtelierListOpportunitiesUrl = (
+  params?: AtelierListOpportunitiesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/opportunities?${stringifiedParams}`
+    : `/api/atelier/opportunities`;
 };
 
 export const atelierListOpportunities = async (
+  params?: AtelierListOpportunitiesParams,
   options?: RequestInit,
 ): Promise<Opportunity[]> => {
-  return customFetch<Opportunity[]>(getAtelierListOpportunitiesUrl(), {
+  return customFetch<Opportunity[]>(getAtelierListOpportunitiesUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getAtelierListOpportunitiesQueryKey = () => {
-  return [`/api/atelier/opportunities`] as const;
+export const getAtelierListOpportunitiesQueryKey = (
+  params?: AtelierListOpportunitiesParams,
+) => {
+  return [`/api/atelier/opportunities`, ...(params ? [params] : [])] as const;
 };
 
 export const getAtelierListOpportunitiesQueryOptions = <
   TData = Awaited<ReturnType<typeof atelierListOpportunities>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof atelierListOpportunities>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: AtelierListOpportunitiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListOpportunities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getAtelierListOpportunitiesQueryKey();
+    queryOptions?.queryKey ?? getAtelierListOpportunitiesQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof atelierListOpportunities>>
-  > = ({ signal }) => atelierListOpportunities({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    atelierListOpportunities(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof atelierListOpportunities>>,
@@ -15665,15 +15688,18 @@ export type AtelierListOpportunitiesQueryError = ErrorType<unknown>;
 export function useAtelierListOpportunities<
   TData = Awaited<ReturnType<typeof atelierListOpportunities>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof atelierListOpportunities>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getAtelierListOpportunitiesQueryOptions(options);
+>(
+  params?: AtelierListOpportunitiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListOpportunities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListOpportunitiesQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -15878,6 +15904,119 @@ export function useAtelierCheckOpportunityDuplicates<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierCheckOpportunityDuplicatesQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Download a partner-safe report of all authorized matching opportunities
+ */
+export const getAtelierDownloadPartnerOpportunityReportUrl = (
+  params: AtelierDownloadPartnerOpportunityReportParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/opportunities/partner-report.pdf?${stringifiedParams}`
+    : `/api/atelier/opportunities/partner-report.pdf`;
+};
+
+export const atelierDownloadPartnerOpportunityReport = async (
+  params: AtelierDownloadPartnerOpportunityReportParams,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(
+    getAtelierDownloadPartnerOpportunityReportUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierDownloadPartnerOpportunityReportQueryKey = (
+  params?: AtelierDownloadPartnerOpportunityReportParams,
+) => {
+  return [
+    `/api/atelier/opportunities/partner-report.pdf`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierDownloadPartnerOpportunityReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>,
+  TError = ErrorType<void>,
+>(
+  params: AtelierDownloadPartnerOpportunityReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierDownloadPartnerOpportunityReportQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>
+  > = ({ signal }) =>
+    atelierDownloadPartnerOpportunityReport(params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierDownloadPartnerOpportunityReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>
+>;
+export type AtelierDownloadPartnerOpportunityReportQueryError = ErrorType<void>;
+
+/**
+ * @summary Download a partner-safe report of all authorized matching opportunities
+ */
+
+export function useAtelierDownloadPartnerOpportunityReport<
+  TData = Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>,
+  TError = ErrorType<void>,
+>(
+  params: AtelierDownloadPartnerOpportunityReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadPartnerOpportunityReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierDownloadPartnerOpportunityReportQueryOptions(
     params,
     options,
   );

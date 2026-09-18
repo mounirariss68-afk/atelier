@@ -56,6 +56,7 @@ import { Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "luc
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { OpportunityAgreements } from "@/components/esign/OpportunityAgreements";
 import { NepAccessCard } from "@/components/NepAccessCard";
+import { OpportunityPartnerTags } from "@/components/OpportunityPartnerPicker";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -221,6 +222,12 @@ export default function Opportunity() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-6">
+        {!!opp.partnerFirms?.length && (
+          <div className="space-y-2" data-testid="opportunity-partner-tags">
+            <p className="text-[11px] font-mono uppercase tracking-widest text-text-faint">External partner firms</p>
+            <OpportunityPartnerTags firms={opp.partnerFirms} />
+          </div>
+        )}
         {/* Single action row — real actions only. All navigation (POV Studio,
             Proposal, Meetings, Research, …) lives exclusively in the tab bar
             below; each tab carries its own primary CTA. */}
@@ -591,7 +598,7 @@ function OpportunityPartnerInvolvement({ oppId, role }: { oppId: string; role?: 
             {e.leadParty && <MonoChip>{LEAD_PARTY_LABEL[e.leadParty] ?? e.leadParty}</MonoChip>}
             {(typeof e.cognirisePct === "number" || typeof e.partnerPct === "number") && (
               <span className="text-xs font-mono text-text-mute">
-                Split {e.cognirisePct ?? 0}% / {e.partnerPct ?? 0}%
+                Split {e.cognirisePct == null ? "Not set" : `${e.cognirisePct}%`} / {e.partnerPct == null ? "Not set" : `${e.partnerPct}%`}
               </span>
             )}
             {e.allianceLetterStatus && e.allianceLetterStatus !== "none" && (

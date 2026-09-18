@@ -9,6 +9,11 @@ import type { AtelierAccountTier } from "./atelierAccountTier";
 import type { ForecastCategory } from "./forecastCategory";
 
 export interface AtelierCreateOpportunityInput {
+  /**
+   * Optional external firm tags; no economics or portal access is assigned.
+   * @maxItems 100
+   */
+  partnerFirmIds?: string[];
   /** @minLength 1 */
   name: string;
   /**

@@ -11,7 +11,7 @@
 - [Pursuit Scout create contract](atelier-scout-create-contract.md) — opp create commits before scout; failed/empty scout via 201 `scout.status`, never rollback; reuse isScoutBriefEmpty.
 - [Opp plm_stage retired](atelier-opp-plm-stage-retired.md) — opp sales_stage is sole stage SoT (contract=won); engagement plmStage kept; push-based DB skips migration backfills.
 - [Atelier employee seed onConflict](atelier-employee-seed-onconflict.md) — employee insert is onConflictDoNothing; new columns need the idempotent update loop to backfill on re-seed.
-- [Atelier API types are codegen'd](atelier-api-types-codegen.md) — types are orval-generated from lib/api-spec/openapi.yaml; edit spec + codegen, never hand-edit.
+- [Atelier API generation](atelier-api-types-codegen.md) — edit OpenAPI, not generated types; links cover hook barrels and DB declaration rebuilds.
 - [Cartographer entity-scope](cartographer-entity-scope.md) — guardCartographerEntityScope() is the safety net; Exec Mapper reuses queue/guard/applier (atelier-executive-mapper.md).
 - [Research priority-refs & recency](atelier-research-priority-refs-shape.md) — strategicPriorityRefs is {text,sourceUrls}; recency layer in [atelier-research-recency.md](atelier-research-recency.md).
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; multi-field in [cli-multifield-clarification.md](cli-multifield-clarification.md); slash-menu UX quirks in [cli-slash-command-ux.md](cli-slash-command-ux.md).
@@ -82,6 +82,7 @@
 - [Partner capability profiles & RAG](atelier-partner-capability-rag.md) — 2-D stage model (agreed⇔agreementStage), profile via approval queue only, org-scoped chunks; PROD re-run of the 7-partner ingest at go-live.
 - [Atelier POV revision loop](atelier-pov-revision.md) — draft/revise async 202+poll; only "done"=success; quality gates in [atelier-pov-pipeline.md](atelier-pov-pipeline.md).
 - [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.
+- [Partner opportunity tags](atelier-partner-opportunity-tags.md) — involvement is not negotiated economics or portal access; never copy the co-sell form's 50/50 defaults into tags.
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
 - [Atelier structured person names](atelier-structured-names.md) — name updates go through writePersonAndSync (mirrors!); signer snapshots upgrade to legal name; parser keeps underscores; Me self-edit preferredName-only.
 - [Meeting-chat clarification hardening](atelier-meeting-chat-clarify.md) — never raw ILIKE for people names (foldRosterName handles Turkish ı/İ); fixed-choice answers normalize before enum check; mobile preserves needs_disambiguation.
@@ -122,7 +123,6 @@
 - [Doc-email cross-domain routing](atelier-doc-email-crossdomain.md) — both email tools share split/match helpers; handoff only on unambiguous full resolve; self-only roles never probe the library; Arabic و needs whitespace match, not \b.
 - [Universal entity.detail registry](atelier-entity-detail.md) — untyped id probes defer provider "forbidden" until all providers tried (visibility runs before existence); self-only widening = me.* + entity.detail only.
 - [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss handlers use global db on purpose (withRls pins a conn across long LLM runs); isolation via RLS defaults.
-- [api-client-react new-hook wiring](api-client-react-barrel.md) — orval doesn't touch the hand-maintained src/index.ts barrel; add hook names there + rebuild with tsc -b --force.
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
 - [NEP scoped access](atelier-nep-access.md) — visibility ONLY via atelier-nep-access helpers; agreement flow in [nep-agreement-flow.md](nep-agreement-flow.md); comp plans in [atelier-nep-comp.md](atelier-nep-comp.md) (strict effective dating, no retroactive fallback; day rate syncs only from currently effective plan).
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
@@ -148,7 +148,6 @@
 - [WPS SIF & Payroll Clerk](atelier-wps-sif.md) — pure SIF builder + DB export seam (future Wio API); exempt≠invalid; WPS ids via payroll PATCH only; clerk drafts never post.
 - [UAE FTA VAT 201 export](atelier-vat201.md) — VAT 201 boxes tie to the calculator via the ONE shared GL collector; data-gap boxes default to zero with notes; exports audit as vat.vat201_exported.
 - [Account-module chat capability gating](atelier-account-chat-caps.md) — account module NOT in restricted-deny; new account.* chat tools need requiredRoles + in-run guard + ACL-filter-before-cap resolution.
-- [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
 - [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
 - [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).

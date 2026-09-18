@@ -1194,38 +1194,45 @@ router.post("/partners/joint-pipeline", async (req, res, next) => {
       res.status(422).json({ error: "split-exceeds-100" });
       return;
     }
-    // One entry per (opportunity, firm) pair.
-    const [dup] = await db
-      .select({ id: atelierAllianceJointPipeline.id })
-      .from(atelierAllianceJointPipeline)
-      .where(
-        and(
-          jointScope(me),
-          eq(atelierAllianceJointPipeline.opportunityId, b.opportunityId),
-          eq(atelierAllianceJointPipeline.partnerFirmId, b.partnerFirmId),
-        ),
-      );
-    if (dup) {
-      res.status(409).json({ error: "joint-pipeline-entry-exists", id: dup.id });
-      return;
-    }
+    // Same opportunity-row lock as tag replacement: two write surfaces must
+    // not concurrently create duplicate active associations.
     const id = rid("jpl");
-    const [row] = await db
-      .insert(atelierAllianceJointPipeline)
-      .values({
-        id,
-        orgId: me.orgId,
-        opportunityId: b.opportunityId,
-        partnerFirmId: b.partnerFirmId,
-        leadParty: b.leadParty ?? "cognirise",
-        cognirisePct: b.cognirisePct ?? 0,
-        partnerPct: b.partnerPct ?? 0,
-        splitRationale: b.splitRationale ?? "",
-        allianceLetterStatus: b.allianceLetterStatus ?? "none",
-        partnerSourced: b.partnerSourced ?? false,
-        createdByUserId: me.id,
-      })
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      await tx.select({ id: atelierOpportunities.id }).from(atelierOpportunities)
+        .where(and(eq(atelierOpportunities.id, b.opportunityId), eq(atelierOpportunities.orgId, me.orgId))).for("update");
+      const [dup] = await tx
+        .select({ id: atelierAllianceJointPipeline.id })
+        .from(atelierAllianceJointPipeline)
+        .where(
+          and(
+            jointScope(me),
+            eq(atelierAllianceJointPipeline.opportunityId, b.opportunityId),
+            eq(atelierAllianceJointPipeline.partnerFirmId, b.partnerFirmId),
+          ),
+        );
+      if (dup) {
+        res.status(409).json({ error: "joint-pipeline-entry-exists", id: dup.id });
+        return null;
+      }
+      const [row] = await tx
+        .insert(atelierAllianceJointPipeline)
+        .values({
+          id,
+          orgId: me.orgId,
+          opportunityId: b.opportunityId,
+          partnerFirmId: b.partnerFirmId,
+          leadParty: b.leadParty ?? "cognirise",
+          cognirisePct: b.cognirisePct ?? 0,
+          partnerPct: b.partnerPct ?? 0,
+          splitRationale: b.splitRationale ?? "",
+          allianceLetterStatus: b.allianceLetterStatus ?? "none",
+          partnerSourced: b.partnerSourced ?? false,
+          createdByUserId: me.id,
+        })
+        .returning();
+      return row;
+    });
+    if (!row) return;
     await audit({
       entityType: "joint_pipeline",
       entityId: id,

@@ -105,6 +105,8 @@ import { buildPovBackgroundContext } from "../../lib/atelier-agents/pov-groundin
 import { perplexitySearch } from "../../lib/atelier-agents/perplexity.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 import { canSeeAccount } from "./accountRoutes.js";
+import { opportunityPartnerFirms, partnerFirmSelectionError, replaceOpportunityPartners } from "../../lib/atelier-opportunity-partners.js";
+import { canAccessPartnersLens } from "./personaRoles.js";
 import {
   startBackgroundJob,
   completeBackgroundJob,
@@ -171,10 +173,10 @@ function effectiveDaysInStage(
   return o.daysInStage;
 }
 
-async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
-  const [acct] = await db.select().from(atelierAccounts).where(eq(atelierAccounts.id, o.accountId));
-  const [partner] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.partnerOwnerId));
-  const [lead] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.engagementLeadId));
+async function buildOppWire(o: typeof atelierOpportunities.$inferSelect, showPartners = true) {
+  const [acct] = await db.select().from(atelierAccounts).where(and(eq(atelierAccounts.id, o.accountId), eq(atelierAccounts.orgId, o.orgId)));
+  const [partner] = await db.select().from(atelierUsers).where(and(eq(atelierUsers.id, o.partnerOwnerId), eq(atelierUsers.orgId, o.orgId)));
+  const [lead] = await db.select().from(atelierUsers).where(and(eq(atelierUsers.id, o.engagementLeadId), eq(atelierUsers.orgId, o.orgId)));
   const salesStage = resolveSalesStage(o.salesStage) as string;
   return {
     id: o.id,
@@ -186,6 +188,8 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
+    partnerOwnerId: o.partnerOwnerId,
+    partnerFirms: showPartners ? await opportunityPartnerFirms(o.orgId, o.id) : [],
     engagementLeadName: lead?.name ?? o.engagementLeadId,
     dealSizeUsd: o.dealSizeHypothesis,
     // Task #8 — deal values are denominated in the account's primaryCurrency;
@@ -296,6 +300,8 @@ router.post("/opportunities", async (req, res) => {
   }
   const input = parsed.data;
 
+  if (await partnerFirmSelectionError(me, input.partnerFirmIds, res)) return;
+
   // `description` is the canonical free-text brief the partner writes for what
   // we're pursuing. It is required by the request schema; the explicit guard
   // below catches whitespace-only input that survives `min(1)`.
@@ -312,7 +318,7 @@ router.post("/opportunities", async (req, res) => {
     [acct] = await db
       .select()
       .from(atelierAccounts)
-      .where(and(eq(atelierAccounts.id, input.accountId), isNull(atelierAccounts.deletedAt)));
+      .where(and(eq(atelierAccounts.id, input.accountId), eq(atelierAccounts.orgId, me.orgId), isNull(atelierAccounts.deletedAt)));
     if (!acct) {
       res.status(404).json({ error: "account-not-found" });
       return;
@@ -345,7 +351,7 @@ router.post("/opportunities", async (req, res) => {
     [acct] = await db
       .select()
       .from(atelierAccounts)
-      .where(and(ilike(atelierAccounts.name, newName), isNull(atelierAccounts.deletedAt)));
+      .where(and(ilike(atelierAccounts.name, newName), eq(atelierAccounts.orgId, me.orgId), isNull(atelierAccounts.deletedAt)));
     if (!acct) {
       // Task #38 — duplicate-account guard, mirroring the duplicate-opportunity
       // one below. A non-archived account in this org whose NORMALIZED name
@@ -387,6 +393,7 @@ router.post("/opportunities", async (req, res) => {
         .insert(atelierAccounts)
         .values({
           id: acctId,
+          orgId: me.orgId,
           name: newName,
           country: newCountry,
           sector: newSector,
@@ -414,7 +421,7 @@ router.post("/opportunities", async (req, res) => {
     const [u] = await db
       .select()
       .from(atelierUsers)
-      .where(and(eq(atelierUsers.id, userId), isNull(atelierUsers.deletedAt)));
+      .where(and(eq(atelierUsers.id, userId), eq(atelierUsers.orgId, me!.orgId), isNull(atelierUsers.deletedAt)));
     return u ? u.id : null;
   }
   // Task #1297 — non_equity_partner creators ALWAYS own their own
@@ -479,51 +486,62 @@ router.post("/opportunities", async (req, res) => {
   }
 
   const oppId = `opp_${slugify(input.name)}_${Math.random().toString(36).slice(2, 6)}`;
-  const [opp] = await db
-    .insert(atelierOpportunities)
-    .values({
-      id: oppId,
-      slug: slugify(input.name),
-      name: input.name,
-      accountId: acct.id,
-      // Persist the partner-authored description as the offering anchor so
-      // the opportunity carries it forward without a schema change.
-      offeringAnchor: description,
-      // Task #654 — salesStage is the single source of truth; the opportunity
-      // lands in the right kanban/forecast column from the moment it persists.
-      salesStage: deriveSalesStage("identify", probabilityPct),
-      partnerOwnerId,
-      engagementLeadId,
-      dealSizeHypothesis: input.dealSizeUsd ?? 250000,
-      probabilityPct,
-      nextMilestone,
-      nextMilestoneDate,
-      closeDate,
-      forecastCategory,
-      sourceLead,
-      createdByUserId: me.id,
-    })
-    .returning();
+  const opp = await db.transaction(async (tx) => {
+    const [opp] = await tx
+      .insert(atelierOpportunities)
+      .values({
+        id: oppId,
+        orgId: me.orgId,
+        slug: slugify(input.name),
+        name: input.name,
+        accountId: acct.id,
+        // Persist the partner-authored description as the offering anchor so
+        // the opportunity carries it forward without a schema change.
+        offeringAnchor: description,
+        // Task #654 — salesStage is the single source of truth; the opportunity
+        // lands in the right kanban/forecast column from the moment it persists.
+        salesStage: deriveSalesStage("identify", probabilityPct),
+        partnerOwnerId,
+        engagementLeadId,
+        dealSizeHypothesis: input.dealSizeUsd ?? 250000,
+        probabilityPct,
+        nextMilestone,
+        nextMilestoneDate,
+        closeDate,
+        forecastCategory,
+        sourceLead,
+        createdByUserId: me.id,
+      })
+      .returning();
 
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: opp.id,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "opportunity.create",
-    payload: {
-      name: opp.name,
-      account: acct.name,
-      partnerOwnerId,
-      engagementLeadId,
-      sourceLead,
-      dealSizeUsd: opp.dealSizeHypothesis,
-      probabilityPct: opp.probabilityPct,
-    },
-    payloadSummary: `${me.name} created opportunity "${opp.name}" on ${acct.name}.`,
+    await replaceOpportunityPartners(tx, me, opp.id, input.partnerFirmIds);
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: me.orgId,
+      entityType: "opportunity",
+      entityId: opp.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "opportunity.create",
+      payload: {
+        name: opp.name,
+        account: acct.name,
+        partnerOwnerId,
+        engagementLeadId,
+        sourceLead,
+        dealSizeUsd: opp.dealSizeHypothesis,
+        probabilityPct: opp.probabilityPct,
+      },
+      payloadSummary: `${me.name} created opportunity "${opp.name}" on ${acct.name}.`,
+    });
+    return opp;
+  }).catch((err) => {
+    req.log.error({ err }, "Opportunity and partner tags rolled back");
+    res.status(500).json({ error: "opportunity-save-failed", message: "The opportunity was not created. Please retry." });
+    return null;
   });
+  if (!opp) return;
 
   // Compose the brief Scout reads first: the partner's description, plus the
   // optional steering "focus areas" textarea.
@@ -576,7 +594,7 @@ router.post("/opportunities", async (req, res) => {
   }
 
   res.status(201).json({
-    opportunity: await buildOppWire(opp),
+    opportunity: await buildOppWire(opp, canAccessPartnersLens(me.role)),
     scoutRunId,
     scout,
   });
@@ -600,6 +618,7 @@ router.patch("/opportunities/:oppId", async (req, res) => {
     return;
   }
   const input = parsed.data;
+  if (await partnerFirmSelectionError(me, input.partnerFirmIds, res)) return;
 
   // Resolve any supplied owner references to existing, active users so we never
   // persist a dangling FK. Unsupplied owners are left untouched.
@@ -607,7 +626,7 @@ router.patch("/opportunities/:oppId", async (req, res) => {
     const [u] = await db
       .select()
       .from(atelierUsers)
-      .where(and(eq(atelierUsers.id, userId), isNull(atelierUsers.deletedAt)));
+      .where(and(eq(atelierUsers.id, userId), eq(atelierUsers.orgId, me!.orgId), isNull(atelierUsers.deletedAt)));
     return u ? u.id : null;
   }
 
@@ -679,29 +698,43 @@ router.patch("/opportunities/:oppId", async (req, res) => {
     changed.push("engagementLeadId");
   }
 
+  if (input.partnerFirmIds !== undefined) changed.push("partnerFirmIds");
   if (changed.length === 0) {
-    res.json(await buildOppWire(opp));
+    res.json(await buildOppWire(opp, canAccessPartnersLens(me.role)));
     return;
   }
 
   patch.updatedAt = new Date();
-  const [updated] = await db
-    .update(atelierOpportunities)
-    .set(patch)
-    .where(eq(atelierOpportunities.id, opp.id))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    // Serialize tag replacement with other opportunity edits and canonical co-sell creation.
+    await tx.select({ id: atelierOpportunities.id }).from(atelierOpportunities)
+      .where(and(eq(atelierOpportunities.id, opp.id), eq(atelierOpportunities.orgId, me.orgId))).for("update");
+    const [updated] = await tx
+      .update(atelierOpportunities)
+      .set(patch)
+      .where(eq(atelierOpportunities.id, opp.id))
+      .returning();
 
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: opp.id,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "opportunity.update",
-    payload: { changed, ...patch, updatedAt: undefined },
-    payloadSummary: `${me.name} edited ${changed.join(", ")} on "${updated.name}".`,
+    await replaceOpportunityPartners(tx, me, opp.id, input.partnerFirmIds);
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: me.orgId,
+      entityType: "opportunity",
+      entityId: opp.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "opportunity.update",
+      payload: { changed, ...patch, updatedAt: undefined },
+      payloadSummary: `${me.name} edited ${changed.join(", ")} on "${updated.name}".`,
+    });
+    return updated;
+  }).catch((err) => {
+    req.log.error({ err }, "Opportunity and partner tag edit rolled back");
+    res.status(500).json({ error: "opportunity-save-failed", message: "No changes were saved. Please retry." });
+    return null;
   });
+  if (!updated) return;
 
   // Task #509 — assignment auto-grants: when the opportunity already has a
   // delivery engagement, assigning a new owner/lead must also grant them
@@ -738,7 +771,7 @@ router.patch("/opportunities/:oppId", async (req, res) => {
     }
   }
 
-  res.json(await buildOppWire(updated));
+  res.json(await buildOppWire(updated, canAccessPartnersLens(me.role)));
 });
 
 // -------------------------------------------------------------------
@@ -910,7 +943,7 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
     res.status(result.status).json({ error: code, ...(result.gate ?? {}) });
     return;
   }
-  res.json(await buildOppWire(result.opportunity));
+  res.json(await buildOppWire(result.opportunity, canAccessPartnersLens(me.role)));
 });
 
 // -------------------------------------------------------------------
@@ -2885,7 +2918,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   }
 
   res.json({
-    opportunity: await buildOppWire(result.opportunity),
+    opportunity: await buildOppWire(result.opportunity, canAccessPartnersLens(me.role)),
     transition: result.transition,
     // Task #8 — a failed contract-entry engagement auto-create no longer
     // hides in the audit log only; the caller sees it too.
