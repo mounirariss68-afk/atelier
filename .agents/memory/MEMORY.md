@@ -149,3 +149,4 @@
 - [Riser semantic frame authority](riser-semantic-frame-authority.md) — current mode trusts validated envelopes only; replay preflights mode; recovery never resends writes.
 - [Riser reviewed manifest authority](riser-reviewed-manifest-authority.md) — runtime catalog must exactly match the checked-in 326-entry manifest; durable work pins its hash and stale pins fail closed.
 - [Riser route conformance](riser-route-conformance.md) — annotation inventories are baselines, not equivalence; C16 needs shared executors plus behavioral evidence for every claimed dimension.
+- [Riser protocol compatibility](riser-protocol-compatibility.md) — canonical APIs require explicit negotiation; semantic retries preserve one turn sequence domain and the stored terminal outcome.
