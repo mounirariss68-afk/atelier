@@ -21,7 +21,10 @@ router.use(rejectClientRealm);
 router.use(attachRls);
 
 function enabled(): boolean {
-  return process.env.RISER_WORKFLOW_WRITES_ENABLED === "1";
+  // Fail closed until plans, grants, policy pins, and result schemas are
+  // generated and authorized server-side. An environment toggle must not
+  // turn a client-authored plan into executable authority.
+  return false;
 }
 
 const createWorkflowSchema = z

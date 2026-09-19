@@ -12,6 +12,7 @@ type AssistantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export interface AppendAssistantEventArgs {
   orgId: string;
+  requesterId: string;
   conversationId: string;
   turnId: string;
   correlationId: string;
@@ -59,6 +60,7 @@ export async function appendAssistantEventTx(
       id: event.eventId,
       protocolVersion: event.protocolVersion,
       orgId: args.orgId,
+      requesterId: args.requesterId,
       conversationId: event.conversationId,
       turnId: event.turnId,
       sequence: event.sequence,

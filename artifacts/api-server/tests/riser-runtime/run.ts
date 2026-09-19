@@ -90,6 +90,30 @@ try {
     idempotencyKey: `action-key-${suffix}`,
   });
   assert.equal(actionReplay.actionId, action.actionId);
+  await assert.rejects(
+    () =>
+      createDurableActionPreview({
+        orgId,
+        requesterId,
+        conversationId,
+        sourceTurnId: `action_turn_${suffix}`,
+        capabilityId: "account.update",
+        catalogVersion: "test-v1",
+        inputSchemaVersion: 1,
+        canonicalInput: { accountId: "acc_1", name: "New name" },
+        targetRefsAndRevisions: [{ id: "acc_1", revision: "2" }],
+        policyDecision: policy,
+        riskClass: "write",
+        irreversible: false,
+        outboundChannels: [],
+        summary: "Update account name",
+        diff: { name: { before: "Old name", after: "New name" } },
+        typedEvidence: "CONFIRM",
+        expiresAt: new Date(Date.now() + 60_000),
+        idempotencyKey: `action-key-${suffix}`,
+      }),
+    /action-idempotency-conflict/,
+  );
   const racedActions = await Promise.all(
     Array.from({ length: 20 }, () =>
       createDurableActionPreview({
@@ -201,6 +225,47 @@ try {
     }),
     actionResult,
   );
+  const staleTargetAction = await createDurableActionPreview({
+    orgId,
+    requesterId,
+    conversationId,
+    sourceTurnId: `action_stale_target_${suffix}`,
+    capabilityId: "account.update",
+    catalogVersion: "test-v1",
+    inputSchemaVersion: 1,
+    canonicalInput: { accountId: "acc_stale", name: "Changed" },
+    targetRefsAndRevisions: [{ id: "acc_stale", revision: "1" }],
+    policyDecision: policy,
+    riskClass: "write",
+    irreversible: false,
+    outboundChannels: [],
+    summary: "Update stale account",
+    diff: {},
+    expiresAt: new Date(Date.now() + 60_000),
+    idempotencyKey: `action-stale-target-${suffix}`,
+  });
+  const staleTargetConfirmed = await confirmDurableAction({
+    actionId: staleTargetAction.actionId,
+    orgId,
+    requesterId,
+    expectedStateVersion: staleTargetAction.stateVersion,
+    recheckPolicy: async () => policy,
+  });
+  assert.equal(staleTargetConfirmed.state, "confirmed");
+  assert.equal(
+    await claimDurableAction({
+      actionId: staleTargetAction.actionId,
+      orgId,
+      recheckPolicy: async () => policy,
+      recheckTargets: async () => false,
+    }),
+    null,
+  );
+  const [invalidatedTargetAction] = await db
+    .select()
+    .from(atelierAssistantActions)
+    .where(eq(atelierAssistantActions.id, staleTargetAction.actionId));
+  assert.equal(invalidatedTargetAction.state, "invalidated");
 
   const parentLedgerId = `budget_parent_${suffix}`;
   const childLedgerId = `budget_child_${suffix}`;
@@ -281,6 +346,25 @@ try {
     policyVersion: "test-policy-v1",
   });
   assert.equal(allowedPolicy.effect, "allow");
+  const controlDriftAction = await createDurableActionPreview({
+    orgId,
+    requesterId,
+    conversationId,
+    sourceTurnId: `action_control_drift_${suffix}`,
+    capabilityId: "account.update",
+    catalogVersion: "test-v1",
+    inputSchemaVersion: 1,
+    canonicalInput: { accountId: "acc_control", name: "Blocked" },
+    targetRefsAndRevisions: [{ id: "acc_control", revision: "1" }],
+    policyDecision: allowedPolicy,
+    riskClass: "write",
+    irreversible: false,
+    outboundChannels: [],
+    summary: "Blocked by operator control",
+    diff: {},
+    expiresAt: new Date(Date.now() + 60_000),
+    idempotencyKey: `action-control-drift-${suffix}`,
+  });
   await db.insert(atelierAssistantControls).values({
     id: `control_${suffix}`,
     orgId,
@@ -300,6 +384,17 @@ try {
   });
   assert.equal(deniedPolicy.effect, "deny");
   assert.equal(deniedPolicy.code, "operator_control");
+  await assert.rejects(
+    () =>
+      confirmDurableAction({
+        actionId: controlDriftAction.actionId,
+        orgId,
+        requesterId,
+        expectedStateVersion: controlDriftAction.stateVersion,
+        recheckPolicy: async () => allowedPolicy,
+      }),
+    /action-policy-drift/,
+  );
 
   const created = await createDurableWork({
     orgId,
@@ -524,6 +619,7 @@ try {
     Array.from({ length: 20 }, (_, index) =>
       appendAssistantEvent({
         orgId,
+        requesterId,
         conversationId,
         turnId: `turn_${suffix}`,
         correlationId: `correlation_${suffix}`,
@@ -536,6 +632,7 @@ try {
     Array.from({ length: 5 }, (_, index) =>
       appendAssistantEvent({
         orgId,
+        requesterId,
         conversationId,
         turnId: `turn_two_${suffix}`,
         correlationId: `correlation_${suffix}`,

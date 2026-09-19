@@ -93,18 +93,22 @@ export async function claimWorkAttempt(args: {
       .for("update");
     const step = record?.step;
     if (!step) return null;
-    const [pendingCheckpoint] = await tx
-      .select({ id: atelierWorkCheckpoints.id })
+    const checkpoints = await tx
+      .select({
+        id: atelierWorkCheckpoints.id,
+        decision: atelierWorkCheckpoints.decision,
+        expiresAt: atelierWorkCheckpoints.expiresAt,
+      })
       .from(atelierWorkCheckpoints)
-      .where(
-        and(
-          eq(atelierWorkCheckpoints.stepId, step.id),
-          isNull(atelierWorkCheckpoints.decision),
-          gt(atelierWorkCheckpoints.expiresAt, new Date()),
-        ),
+      .where(eq(atelierWorkCheckpoints.stepId, step.id));
+    if (
+      checkpoints.some(
+        (checkpoint) =>
+          checkpoint.decision !== "approve" || checkpoint.expiresAt.getTime() <= Date.now(),
       )
-      .limit(1);
-    if (pendingCheckpoint) return null;
+    ) {
+      return null;
+    }
     const [{ count }] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(atelierWorkAttempts)
@@ -291,6 +295,8 @@ export async function decideWorkCheckpoint(args: {
       )
       .for("update");
     if (!record) return null;
+    const requiredDecider = record.checkpoint.requiredDecider as { requesterId?: unknown };
+    if (requiredDecider.requesterId !== args.requesterId) return null;
     const [updated] = await tx
       .update(atelierWorkCheckpoints)
       .set({

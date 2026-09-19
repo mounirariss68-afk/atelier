@@ -10,6 +10,7 @@ import {
   type PolicyDecisionV1,
 } from "@workspace/assistant-protocol";
 import { appendAssistantEventTx } from "./event-runtime.js";
+import { evaluateAssistantPolicy } from "./control-runtime.js";
 
 const TERMINAL = new Set<ActionStateV1>([
   "succeeded",
@@ -20,6 +21,21 @@ const TERMINAL = new Set<ActionStateV1>([
   "expired",
   "invalidated",
 ]);
+
+async function authoritativePolicy(
+  orgId: string,
+  capabilityId: string,
+  proposed: PolicyDecisionV1,
+): Promise<PolicyDecisionV1> {
+  const candidate = PolicyDecisionV1Schema.parse(proposed);
+  return evaluateAssistantPolicy({
+    orgId,
+    capabilityId,
+    baseAllowed: candidate.effect === "allow",
+    obligations: candidate.effect === "allow" ? candidate.obligations : [],
+    policyVersion: candidate.policyVersion,
+  });
+}
 
 export function digestAssistantValue(value: unknown): string {
   return createHash("sha256").update(stableAssistantJson(value)).digest("hex");
@@ -118,6 +134,7 @@ export async function cancelDurableAction(args: {
     if (row.conversationId && row.sourceTurnId) {
       await appendAssistantEventTx(tx, {
         orgId: row.orgId,
+        requesterId: row.requesterId,
         conversationId: row.conversationId,
         turnId: row.sourceTurnId,
         correlationId: row.id,
@@ -152,13 +169,29 @@ export async function createDurableActionPreview(args: {
   expiresAt: Date;
   idempotencyKey: string;
 }): Promise<{ actionId: string; preview: unknown; stateVersion: number }> {
-  const policy = PolicyDecisionV1Schema.parse(args.policyDecision);
+  const policy = await authoritativePolicy(args.orgId, args.capabilityId, args.policyDecision);
   if (policy.effect !== "allow") throw new Error("action-policy-not-allowed");
   if (args.expiresAt.getTime() <= Date.now()) throw new Error("action-expiry-invalid");
   const inputDigest = digestAssistantValue(args.canonicalInput);
   const typedEvidenceDigest = args.typedEvidence
     ? digestAssistantValue(args.typedEvidence)
     : null;
+  const requestDigest = digestAssistantValue({
+    capabilityId: args.capabilityId,
+    catalogVersion: args.catalogVersion,
+    inputSchemaVersion: args.inputSchemaVersion,
+    inputDigest,
+    targetRefsAndRevisions: args.targetRefsAndRevisions,
+    policyVersion: policy.policyVersion,
+    policyDecisionDigest: policy.decisionDigest,
+    obligations: [...policy.obligations].sort(),
+    riskClass: args.riskClass,
+    irreversible: args.irreversible,
+    outboundChannels: [...args.outboundChannels].sort(),
+    summary: args.summary,
+    diff: args.diff,
+    typedEvidenceDigest,
+  });
   const actionId = `action_${randomUUID()}`;
   const preview = ActionPreviewV1Schema.parse({
     actionId,
@@ -184,9 +217,7 @@ export async function createDurableActionPreview(args: {
     .limit(1);
   if (existing[0]) {
     if (
-      existing[0].inputDigest !== inputDigest ||
-      existing[0].capabilityId !== args.capabilityId ||
-      existing[0].catalogVersion !== args.catalogVersion
+      existing[0].requestDigest !== requestDigest
     ) {
       throw new Error("action-idempotency-conflict");
     }
@@ -209,6 +240,7 @@ export async function createDurableActionPreview(args: {
       catalogVersion: args.catalogVersion,
       inputSchemaVersion: args.inputSchemaVersion,
       inputDigest,
+      requestDigest,
       canonicalInputEncrypted: encryptAssistantValue(args.canonicalInput),
       targetRefsAndRevisions: args.targetRefsAndRevisions,
       policyVersion: policy.policyVersion,
@@ -226,6 +258,7 @@ export async function createDurableActionPreview(args: {
       });
       await appendAssistantEventTx(tx, {
       orgId: args.orgId,
+      requesterId: args.requesterId,
       conversationId: args.conversationId,
       turnId: args.sourceTurnId,
       correlationId: actionId,
@@ -247,9 +280,7 @@ export async function createDurableActionPreview(args: {
       .limit(1);
     if (
       raced &&
-      raced.inputDigest === inputDigest &&
-      raced.capabilityId === args.capabilityId &&
-      raced.catalogVersion === args.catalogVersion
+      raced.requestDigest === requestDigest
     ) {
       return {
         actionId: raced.id,
@@ -292,7 +323,11 @@ export async function confirmDurableAction(args: {
     ) {
       throw new Error("action-typed-evidence-mismatch");
     }
-    const policy = PolicyDecisionV1Schema.parse(await args.recheckPolicy(row));
+    const policy = await authoritativePolicy(
+      row.orgId,
+      row.capabilityId,
+      await args.recheckPolicy(row),
+    );
     if (
       policy.effect !== "allow" ||
       policy.policyVersion !== row.policyVersion ||
@@ -310,6 +345,7 @@ export async function confirmDurableAction(args: {
         .returning({ stateVersion: atelierAssistantActions.stateVersion });
       await appendAssistantEventTx(tx, {
         orgId: row.orgId,
+        requesterId: row.requesterId,
         conversationId: row.conversationId!,
         turnId: row.sourceTurnId!,
         correlationId: row.id,
@@ -337,6 +373,7 @@ export async function confirmDurableAction(args: {
     if (!updated) throw new Error("action-concurrency-conflict");
     await appendAssistantEventTx(tx, {
       orgId: row.orgId,
+      requesterId: row.requesterId,
       conversationId: row.conversationId!,
       turnId: row.sourceTurnId!,
       correlationId: row.id,
@@ -369,7 +406,11 @@ export async function claimDurableAction(args: {
       )
       .for("update");
     if (!row) return null;
-    const policy = PolicyDecisionV1Schema.parse(await args.recheckPolicy(row));
+    const policy = await authoritativePolicy(
+      row.orgId,
+      row.capabilityId,
+      await args.recheckPolicy(row),
+    );
     const targetsCurrent = await args.recheckTargets(row.targetRefsAndRevisions);
     if (
       policy.effect !== "allow" ||
@@ -393,6 +434,7 @@ export async function claimDurableAction(args: {
         );
       await appendAssistantEventTx(tx, {
         orgId: row.orgId,
+        requesterId: row.requesterId,
         conversationId: row.conversationId!,
         turnId: row.sourceTurnId!,
         correlationId: row.id,
@@ -469,6 +511,7 @@ export async function completeDurableAction(args: {
     if (!updated) throw new Error("action-concurrency-conflict");
     await appendAssistantEventTx(tx, {
       orgId: row.orgId,
+      requesterId: row.requesterId,
       conversationId: row.conversationId!,
       turnId: row.sourceTurnId!,
       correlationId: row.id,

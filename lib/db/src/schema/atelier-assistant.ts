@@ -24,6 +24,7 @@ export const atelierAssistantActions = pgTable(
     catalogVersion: text("catalog_version").notNull(),
     inputSchemaVersion: integer("input_schema_version").notNull(),
     inputDigest: text("input_digest").notNull(),
+    requestDigest: text("request_digest").notNull(),
     canonicalInputEncrypted: text("canonical_input_encrypted").notNull(),
     targetRefsAndRevisions: jsonb("target_refs_and_revisions").$type<unknown[]>().notNull().default([]),
     policyVersion: text("policy_version").notNull(),
@@ -65,6 +66,7 @@ export const atelierAssistantEvents = pgTable(
     id: text("id").primaryKey(),
     protocolVersion: integer("protocol_version").notNull(),
     orgId: text("org_id").notNull(),
+    requesterId: text("requester_id").notNull(),
     conversationId: text("conversation_id").notNull(),
     turnId: text("turn_id").notNull(),
     sequence: integer("sequence").notNull(),
@@ -89,6 +91,7 @@ export const atelierAssistantEvents = pgTable(
       t.conversationSequence,
     ),
     index("idx_assistant_events_conversation").on(t.orgId, t.conversationId, t.createdAt),
+    index("idx_assistant_events_requester").on(t.orgId, t.requesterId, t.createdAt),
   ],
 );
 

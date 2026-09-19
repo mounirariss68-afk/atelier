@@ -72,6 +72,7 @@ router.get("/conversations/:id/events", async (req, res) => {
     .where(
       and(
         eq(atelierAssistantEvents.orgId, me.orgId),
+        eq(atelierAssistantEvents.requesterId, me.id),
         eq(atelierAssistantEvents.conversationId, req.params.id),
         gt(atelierAssistantEvents.conversationSequence, Number.isSafeInteger(after) ? after : -1),
       ),
