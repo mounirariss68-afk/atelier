@@ -2151,7 +2151,8 @@ export function ToolResultCards({
     <View style={{ gap: 10 }}>
       {toolResults.map((tr, i) => {
         const dataObj = asObj(tr.data);
-        const shape = asStr(dataObj.shape) || shapes[tr.tool] || null;
+        const shape =
+          tr.presentation?.cardType || asStr(dataObj.shape) || shapes[tr.tool] || null;
 
         // Clean entity resolutions are implied by the answer — hide.
         if (shape === "entity_resolution" && tr.ok) {

@@ -595,7 +595,7 @@ export function ToolResultCardList({
             ? (tr.data as Record<string, unknown>)
             : {};
         const dataShape = (dataObj.shape ?? null) as string | null;
-        const shape = dataShape ?? cap?.resultCard ?? null;
+        const shape = tr.presentation?.cardType ?? dataShape ?? cap?.resultCard ?? null;
 
         // Task #573 — a clean, unambiguous entity resolution is already
         // implied by the confirm summary / result card. Only show the

@@ -154,6 +154,54 @@ const run = (frames: ChatFrame[], start = freshTurn()) =>
   ok("final frame backfills empty text");
 }
 
+// Explicit presentations are validated, dual-emitted legacy results dedupe,
+// and malformed/unknown presentations never create a card.
+{
+  const presentation = {
+    id: "presentation:turn:0",
+    answersIntentIds: ["intent:turn:0"],
+    capabilityId: "roster.list",
+    resultSourceId: "roster_list",
+    relationship: "primary",
+    cardType: "ranked_list",
+    data: { items: [], total: 0 },
+    minimumDataVersion: 1,
+    relevanceReason: "The user explicitly requested this list.",
+  };
+  const t = run([
+    frame("presentation", presentation),
+    frame("tool_result", {
+      tool: "roster_list",
+      ok: true,
+      data: presentation.data,
+    }),
+    frame("presentation", { ...presentation, id: "", cardType: "unknown_card" }),
+    frame("presentation", {
+      ...presentation,
+      id: "presentation:malformed",
+      data: { items: [{}] },
+    }),
+    frame("presentation", {
+      ...presentation,
+      id: "presentation:extra",
+      unexpected: true,
+    }),
+    frame("presentation", {
+      ...presentation,
+      id: "presentation:forged-pair",
+      capabilityId: "roster.person_detail",
+    }),
+    frame("presentation", {
+      ...presentation,
+      id: "presentation:nested-empty",
+      data: { items: [{ meta: {} }] },
+    }),
+  ]);
+  assert.equal(t.toolResults.length, 1);
+  assert.equal(t.toolResults[0].presentation?.cardType, "ranked_list");
+  ok("validated presentation dual-emission dedupes and unknown cards are omitted");
+}
+
 // 6. Identical duplicate tool_result frames (server dedupes, but a
 //    reconnect replay can still deliver twice) don't double results.
 {

@@ -963,6 +963,10 @@ importers:
         version: 3.25.76
 
   lib/chat-core:
+    dependencies:
+      '@workspace/assistant-protocol':
+        specifier: workspace:*
+        version: link:../assistant-protocol
     devDependencies:
       tsx:
         specifier: 'catalog:'

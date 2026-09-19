@@ -24,6 +24,7 @@ export type ChatFrameType =
   | "proactive_recap"
   | "tool_call"
   | "tool_result"
+  | "presentation"
   | "needs_disambiguation"
   | "needs_confirmation"
   | "needs_clarification"
@@ -198,6 +199,15 @@ export interface ChatToolResult {
   errorMessage?: string;
   /** True for pre-confirm preview cards streamed before the write commits. */
   prelude?: boolean;
+  presentation?: {
+    id: string;
+    answersIntentIds: string[];
+    capabilityId: string;
+    relationship: "primary" | "supplementary";
+    cardType: string;
+    minimumDataVersion: number;
+    relevanceReason: string;
+  };
 }
 
 export interface ChatTraceEntry {

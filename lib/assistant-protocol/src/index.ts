@@ -291,6 +291,76 @@ export const PresentationV1Schema = z
   })
   .strict();
 
+export type PresentationV1 = z.infer<typeof PresentationV1Schema>;
+
+function presentationObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function hasMeaningfulEntityIdentity(value: unknown): boolean {
+  const entity = presentationObject(value);
+  if (!entity || typeof entity.id !== "string" || entity.id.trim().length === 0) return false;
+  return ["name", "fullName", "title", "label"].some(
+    (key) => typeof entity[key] === "string" && (entity[key] as string).trim().length > 0,
+  );
+}
+
+function hasMeaningfulPresentationValue(value: unknown, depth = 0): boolean {
+  if (depth > 4) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "boolean") return true;
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.some((item) => hasMeaningfulPresentationValue(item, depth + 1));
+  }
+  const object = presentationObject(value);
+  return Boolean(
+    object &&
+      Object.keys(object).length > 0 &&
+      Object.values(object).some((item) => hasMeaningfulPresentationValue(item, depth + 1)),
+  );
+}
+
+const PRESENTATION_V1_PAIRS = new Set([
+  "roster.list|roster_list|ranked_list",
+  "roster.person_detail|person_detail|contact_card",
+]);
+
+export function isAllowedPresentationV1Pair(args: {
+  capabilityId: string;
+  resultSourceId: string;
+  cardType: string;
+}): boolean {
+  return PRESENTATION_V1_PAIRS.has(
+    `${args.capabilityId}|${args.resultSourceId}|${args.cardType}`,
+  );
+}
+
+const ENTITY_DATA_KEYS: Readonly<Record<string, readonly string[]>> = {
+  account_card: ["account"],
+  contact_card: ["contact", "person"],
+  opportunity_card: ["opportunity"],
+};
+
+export function hasMinimumPresentationData(cardType: string, data: unknown): boolean {
+  const root = presentationObject(data);
+  if (!root) return false;
+  if (cardType === "ranked_list") {
+    if (!Array.isArray(root.items)) return false;
+    return root.items.every((item) => {
+      const row = presentationObject(item);
+      if (!row || Object.keys(row).length === 0) return false;
+      return Object.values(row).some((value) => hasMeaningfulPresentationValue(value));
+    });
+  }
+  const nestedKeys = ENTITY_DATA_KEYS[cardType];
+  if (!nestedKeys) return false;
+  if (hasMeaningfulEntityIdentity(root)) return true;
+  return nestedKeys.some((key) => hasMeaningfulEntityIdentity(root[key]));
+}
+
 export const WorkPlanV1Schema = z
   .object({
     workItemId: boundedId,

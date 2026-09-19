@@ -23,6 +23,11 @@ import type {
   ChatTurnCore,
   ChatTurnStatus,
 } from "./types";
+import {
+  hasMinimumPresentationData,
+  isAllowedPresentationV1Pair,
+  PresentationV1Schema,
+} from "@workspace/assistant-protocol";
 
 function liftNavigateTo(v: unknown): ChatNavigateTo | null {
   if (!v || typeof v !== "object") return null;
@@ -246,6 +251,45 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
             ...(d.prelude === true ? { prelude: true } : {}),
           },
         ],
+      };
+    }
+    case "presentation": {
+      const parsed = PresentationV1Schema.safeParse(frame.data);
+      if (!parsed.success) return turn;
+      const d = parsed.data;
+      const allowedCardTypes = new Set([
+        "ranked_list",
+        "account_card",
+        "contact_card",
+        "opportunity_card",
+      ]);
+      if (
+        !allowedCardTypes.has(d.cardType) ||
+        !isAllowedPresentationV1Pair(d) ||
+        !hasMinimumPresentationData(d.cardType, d.data)
+      ) {
+        return turn;
+      }
+      const result = {
+        tool: d.resultSourceId,
+        ok: true,
+        data: d.data,
+        presentation: {
+          id: d.id,
+          answersIntentIds: d.answersIntentIds,
+          capabilityId: d.capabilityId,
+          relationship: d.relationship,
+          cardType: d.cardType,
+          minimumDataVersion: d.minimumDataVersion,
+          relevanceReason: d.relevanceReason,
+        },
+      };
+      if ((turn.toolResults ?? []).some((prev) => toolResultKey(prev) === toolResultKey(result))) {
+        return turn;
+      }
+      return {
+        ...turn,
+        toolResults: [...(turn.toolResults ?? []), result],
       };
     }
     case "proposed_plan": {

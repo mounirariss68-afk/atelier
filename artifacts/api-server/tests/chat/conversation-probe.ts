@@ -1386,6 +1386,28 @@ try {
   // =====================================================================
   {
     const { sessionId: sid11 } = await seedFlightFacts("S11");
+    const [storedTurn11] = await db
+      .select({ id: atelierCliTurns.id, frames: atelierCliTurns.frames })
+      .from(atelierCliTurns)
+      .where(eq(atelierCliTurns.sessionId, sid11))
+      .limit(1);
+    const storedFrames11 = Array.isArray(storedTurn11?.frames) ? storedTurn11.frames : [];
+    await db
+      .update(atelierCliTurns)
+      .set({
+        frames: [
+          ...storedFrames11,
+          {
+            type: "tool_evidence",
+            data: {
+              tool: "roster_list",
+              ok: true,
+              data: { items: [{ id: "hidden", name: "Must not cross history API" }] },
+            },
+          },
+        ],
+      })
+      .where(eq(atelierCliTurns.id, storedTurn11.id));
     const sessRes = await fetch(`${BASE}/cli/sessions/${sid11}`, {
       headers: { cookie: `atelier_persona=${FP}` },
     });
@@ -1405,6 +1427,11 @@ try {
       "S11: frames contain tool_result entry — mobile loadSession can reconstruct cards",
       hasToolResultFrame,
       frames11.slice(0, 5).map((f: any) => f.type),
+    );
+    check(
+      "S11: persisted tool_evidence is excluded from public session history",
+      !frames11.some((f: any) => f.type === "tool_evidence"),
+      frames11.map((f: any) => f.type),
     );
   }
 

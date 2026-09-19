@@ -45,6 +45,7 @@ import {
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
 import { stripLocalePreamble } from "../../lib/atelier-cli/locale.js";
+import { isClientVisibleCliFrameType } from "../../lib/atelier-cli/presentation-registry.js";
 import { runDemoShowcaseTurn } from "../../lib/atelier-cli/demo-showcase.js";
 import { isDemoUser } from "../../lib/auth/demoReadOnly.js";
 import {
@@ -831,7 +832,13 @@ router.get("/cli/sessions/:id", async (req, res) => {
       status: t.status,
       prompt: t.prompt,
       intent: t.intent,
-      frames: t.frames,
+      frames: Array.isArray(t.frames)
+        ? (t.frames as Array<{ type?: unknown }>).filter(
+            (frame) =>
+              typeof frame?.type !== "string" ||
+              isClientVisibleCliFrameType(frame.type),
+          )
+        : [],
       pendingWrite: t.pendingWrite,
       planJson: t.planJson,
       attachmentRefs: t.attachmentRefs,

@@ -145,3 +145,4 @@
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
 - [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.
 - [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.
+- [Riser explicit presentation](riser-explicit-presentation.md) — server-owned, versioned presentation triples; raw tool evidence persists for audit but never crosses client boundaries.

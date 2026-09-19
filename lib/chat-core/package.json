@@ -9,6 +9,9 @@
   "scripts": {
     "test:chat-core": "tsx tests/chat-core-probe.ts"
   },
+  "dependencies": {
+    "@workspace/assistant-protocol": "workspace:*"
+  },
   "devDependencies": {
     "tsx": "catalog:"
   }

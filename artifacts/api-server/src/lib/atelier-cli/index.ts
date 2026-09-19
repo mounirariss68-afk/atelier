@@ -129,6 +129,11 @@ import {
   summarizeSessionDraft,
   pruneSessionDrafts,
 } from "./capability-catalog.js";
+import {
+  isClientVisibleCliFrameType,
+  isManagedPresentationCapability,
+  synthesizePresentation,
+} from "./presentation-registry.js";
 // Task #795 — registry-driven honest refusals for excluded /me actions.
 import { selfServiceExclusionGuidance } from "./me-chat-parity.js";
 // Task #339 — single bootstrap entry point. Imports cli-only entries,
@@ -196,6 +201,8 @@ export type CliFrameType =
   | "plan_step"
   | "tool_call"
   | "tool_result"
+  | "tool_evidence"
+  | "presentation"
   | "needs_disambiguation"
   | "needs_confirmation"
   | "needs_clarification"
@@ -3597,7 +3604,7 @@ export async function runTurn(
         // mask the replay marker). Then emit a fresh final tagged
         // replay:true so the client knows this was a dedupe.
         for (const f of (prev.frames as CliFrame[]) ?? []) {
-          if (f.type === "final") continue;
+          if (f.type === "final" || !isClientVisibleCliFrameType(f.type)) continue;
           emit(f);
         }
         emit({
@@ -3644,7 +3651,13 @@ export async function runTurn(
       // env-var labels). Frames emitted before the first modelStep
       // call carry `null` to make the absence explicit.
       const data = (frame as { data?: Record<string, unknown> }).data;
-      if (data && typeof data === "object" && !("model" in data)) {
+      if (
+        frame.type !== "presentation" &&
+        frame.type !== "tool_evidence" &&
+        data &&
+        typeof data === "object" &&
+        !("model" in data)
+      ) {
         (data as Record<string, unknown>).model = lastModel ?? null;
       }
       // Task #1318 — sensitive values (PDF unlock passwords) must never
@@ -3657,7 +3670,7 @@ export async function runTurn(
       }
       frames.push(frame);
       if (frame.type === "final") finalEmitted = true;
-      emit(frame);
+      if (isClientVisibleCliFrameType(frame.type)) emit(frame);
     }
 
     // Task #332 — redact emails/phones/PAN/IBAN from the persisted
@@ -6060,14 +6073,41 @@ export async function runTurn(
       }
       // Task #645 — remember the card shape/payload the client will render
       // for this result so the closing prose can be trimmed against it.
-      if (toolResult.ok) {
-        const shapeHint =
+      const presentationCapability = findByToolName(tc.name);
+      const shapeHint =
+        toolResult.ok
+          ? (
           ((toolResult.data as { shape?: unknown } | null)?.shape as
             | string
             | undefined) ??
-          findByToolName(tc.name)?.resultCard ??
-          null;
-        if (shapeHint) {
+            presentationCapability?.resultCard ??
+            null
+          )
+          : null;
+      const managedPresentation = isManagedPresentationCapability(presentationCapability);
+      const presentation =
+        toolResult.ok && presentationCapability
+          ? synthesizePresentation({
+              turnId,
+              step,
+              prompt: input.prompt,
+              intent: {
+                verb: earlyTypedIntent.verb,
+                kind: earlyTypedIntent.kind,
+              },
+              capability: presentationCapability,
+              data: toolResult.data,
+            })
+          : null;
+      const isReadFail = !tool.isWrite && toolResult.ok === false;
+      const isOverCap =
+        !tool.isWrite && toolResult.ok !== false && cardsEmitted >= MAX_CARDS_PER_TURN;
+      if (toolResult.ok) {
+        if (
+          shapeHint &&
+          !isOverCap &&
+          (!managedPresentation || presentation)
+        ) {
           lastCardShape = String(shapeHint);
           lastCardData = toolResult.data;
         }
@@ -6163,14 +6203,29 @@ export async function runTurn(
       const isProposePreview =
         tc.name === "propose_write" &&
         (toolResult.data as { stage?: unknown } | null)?.stage === "preview";
-      if (!isProposePreview) {
+      if (presentation && !isOverCap) {
+        record({
+          type: "presentation",
+          data: presentation as unknown as Record<string, unknown>,
+        });
+      } else if (managedPresentation && toolResult.ok) {
+        console.log(
+          `[cli-telemetry] ${JSON.stringify({
+            evt: "presentation_suppressed",
+            turnId,
+            tool: tc.name,
+            cardType: shapeHint,
+            intentKind: earlyTypedIntent.kind,
+            intentVerb: earlyTypedIntent.verb,
+            reason: isOverCap ? "card_budget" : "relevance_or_minimum_data",
+          })}`,
+        );
+      }
+      if (!isProposePreview && (!managedPresentation || presentation)) {
         // Task #771 Riser overhaul — card budget. Suppress tool_result frames
         // for failing read tools (probe noise; the model still sees the outcome
         // in its history). Also cap successful read-card frames per turn so the
         // transcript stays readable. Write results always get through.
-        const isReadFail = !tool.isWrite && toolResult.ok === false;
-        const isOverCap =
-          !tool.isWrite && toolResult.ok !== false && cardsEmitted >= MAX_CARDS_PER_TURN;
         if (!isReadFail && !isOverCap) {
           record({
             type: "tool_result",
@@ -6184,7 +6239,31 @@ export async function runTurn(
             },
           });
           if (!tool.isWrite && toolResult.ok !== false) cardsEmitted++;
+        } else {
+          record({
+            type: "tool_evidence",
+            data: {
+              step,
+              tool: tc.name,
+              ok: toolResult.ok,
+              data: toolResult.data,
+              errorCode: toolResult.errorCode,
+              errorMessage: toolResult.errorMessage,
+            },
+          });
         }
+      } else if (!isProposePreview) {
+        record({
+          type: "tool_evidence",
+          data: {
+            step,
+            tool: tc.name,
+            ok: toolResult.ok,
+            data: toolResult.data,
+            errorCode: toolResult.errorCode,
+            errorMessage: toolResult.errorMessage,
+          },
+        });
       }
 
       // Task #24 — deferred post-commit work (e.g. Pursuit Scout after
