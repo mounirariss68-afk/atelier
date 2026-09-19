@@ -2,10 +2,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, atelierAccounts } from "@workspace/db";
 import { createDurableActionPreview } from "./action-runtime.js";
 import { evaluateAssistantPolicy } from "./control-runtime.js";
-import {
-  capabilityManifestVersion,
-  generateCapabilityManifestV1,
-} from "../atelier-cli/capability-manifest.js";
 import { findByToolName } from "../atelier-cli/capability-catalog.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import { canSeeAccount } from "../../routes/atelier/accountRoutes.js";
@@ -110,7 +106,6 @@ export async function createDurableAccountUpdatePreview(args: {
     conversationId: args.conversationId,
     sourceTurnId: args.turnId,
     capabilityId: CAPABILITY_ID,
-    catalogVersion: capabilityManifestVersion(generateCapabilityManifestV1()),
     inputSchemaVersion: capability.schemaVersion,
     canonicalInput,
     targetRefsAndRevisions: [{

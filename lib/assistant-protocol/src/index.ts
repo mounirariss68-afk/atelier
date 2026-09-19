@@ -418,8 +418,20 @@ export const WorkPlanV1Schema = z
               .strict(),
           })
           .strict()
-          .refine((step) => Boolean(step.capabilityId) !== Boolean(step.delegateAgentId), {
-            message: "exactly-one-executor-required",
+          .superRefine((step, ctx) => {
+            if (step.delegateAgentId) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "delegated-executor-unsupported",
+                path: ["delegateAgentId"],
+              });
+            } else if (!step.capabilityId) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "capability-executor-required",
+                path: ["capabilityId"],
+              });
+            }
           }),
       )
       .min(1)

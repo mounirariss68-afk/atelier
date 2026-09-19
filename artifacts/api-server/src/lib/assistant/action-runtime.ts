@@ -11,6 +11,11 @@ import {
 } from "@workspace/assistant-protocol";
 import { appendAssistantEventTx } from "./event-runtime.js";
 import { evaluateAssistantPolicy } from "./control-runtime.js";
+import {
+  assertCurrentCapabilityManifestVersion,
+  currentCapabilityManifestVersion,
+  reviewedCapabilityManifestEntry,
+} from "../atelier-cli/capability-manifest.js";
 
 const TERMINAL = new Set<ActionStateV1>([
   "succeeded",
@@ -156,7 +161,6 @@ export async function createDurableActionPreview(args: {
   conversationId: string;
   sourceTurnId: string;
   capabilityId: string;
-  catalogVersion: string;
   inputSchemaVersion: number;
   canonicalInput: unknown;
   targetRefsAndRevisions: unknown[];
@@ -170,6 +174,19 @@ export async function createDurableActionPreview(args: {
   expiresAt: Date;
   idempotencyKey: string;
 }): Promise<{ actionId: string; preview: unknown; stateVersion: number }> {
+  const catalogVersion = currentCapabilityManifestVersion();
+  const manifestEntry = reviewedCapabilityManifestEntry(args.capabilityId);
+  if (
+    !manifestEntry ||
+    manifestEntry.executionStatus === "unsupported" ||
+    manifestEntry.effect !== "write" ||
+    manifestEntry.inputSchemaVersion !== args.inputSchemaVersion ||
+    manifestEntry.confirmation.irreversible !== args.irreversible ||
+    JSON.stringify([...manifestEntry.confirmation.outboundChannel ? [manifestEntry.confirmation.outboundChannel] : []].sort()) !==
+      JSON.stringify([...args.outboundChannels].sort())
+  ) {
+    throw new Error("action-capability-manifest-mismatch");
+  }
   const policy = await authoritativePolicy(args.orgId, args.capabilityId, args.policyDecision);
   if (policy.effect !== "allow") throw new Error("action-policy-not-allowed");
   if (args.expiresAt.getTime() <= Date.now()) throw new Error("action-expiry-invalid");
@@ -179,7 +196,7 @@ export async function createDurableActionPreview(args: {
     : null;
   const requestDigest = digestAssistantValue({
     capabilityId: args.capabilityId,
-    catalogVersion: args.catalogVersion,
+    catalogVersion,
     inputSchemaVersion: args.inputSchemaVersion,
     inputDigest,
     targetRefsAndRevisions: args.targetRefsAndRevisions,
@@ -238,7 +255,7 @@ export async function createDurableActionPreview(args: {
       conversationId: args.conversationId,
       sourceTurnId: args.sourceTurnId,
       capabilityId: args.capabilityId,
-      catalogVersion: args.catalogVersion,
+      catalogVersion,
       inputSchemaVersion: args.inputSchemaVersion,
       inputDigest,
       requestDigest,
@@ -318,6 +335,33 @@ export async function confirmDurableAction(args: {
       )
       .for("update");
     if (!row) throw new Error("action-not-confirmable");
+    try {
+      assertCurrentCapabilityManifestVersion(row.catalogVersion);
+    } catch {
+      const [invalidated] = await tx
+        .update(atelierAssistantActions)
+        .set({
+          state: "invalidated",
+          stateVersion: row.stateVersion + 1,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierAssistantActions.id, row.id))
+        .returning({ stateVersion: atelierAssistantActions.stateVersion });
+      await appendAssistantEventTx(tx, {
+        orgId: row.orgId,
+        requesterId: row.requesterId,
+        conversationId: row.conversationId!,
+        turnId: row.sourceTurnId!,
+        correlationId: row.id,
+        type: "action.invalidated",
+        data: { actionId: row.id, reason: "manifest_version_unsupported" },
+      });
+      return {
+        state: "manifest_unsupported" as const,
+        stateVersion: invalidated.stateVersion,
+      };
+    }
     if (
       row.typedEvidenceDigest &&
       digestAssistantValue(args.typedEvidence ?? "") !== row.typedEvidenceDigest
@@ -385,6 +429,9 @@ export async function confirmDurableAction(args: {
     return { state: "confirmed" as const, stateVersion: updated.stateVersion };
   });
   if (outcome.state === "invalidated") throw new Error("action-policy-drift");
+  if (outcome.state === "manifest_unsupported") {
+    throw new Error("action-manifest-version-unsupported");
+  }
   return outcome;
 }
 
@@ -408,6 +455,29 @@ export async function claimDurableAction(args: {
       )
       .for("update");
     if (!row) return null;
+    try {
+      assertCurrentCapabilityManifestVersion(row.catalogVersion);
+    } catch {
+      await tx
+        .update(atelierAssistantActions)
+        .set({
+          state: "invalidated",
+          stateVersion: row.stateVersion + 1,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierAssistantActions.id, row.id));
+      await appendAssistantEventTx(tx, {
+        orgId: row.orgId,
+        requesterId: row.requesterId,
+        conversationId: row.conversationId!,
+        turnId: row.sourceTurnId!,
+        correlationId: row.id,
+        type: "action.invalidated",
+        data: { actionId: row.id, reason: "manifest_version_unsupported" },
+      });
+      return null;
+    }
     const policy = await authoritativePolicy(
       row.orgId,
       row.capabilityId,

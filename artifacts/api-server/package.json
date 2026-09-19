@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
-    "build": "node ./build.mjs",
+    "build": "pnpm run check:riser-manifest && node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:roster-removal": "NODE_ENV=test tsx ./tests/crm/roster-removal-integration.ts",
@@ -144,7 +144,9 @@
     "test:tone-multilingual": "tsx ./tests/crm/tone-probe-multilingual.ts",
     "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts",
     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
-    ,"test:riser-foundation": "tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts && tsx ./tests/riser-foundation/presentation.ts"
+    ,"generate:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts"
+    ,"check:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts --check"
+    ,"test:riser-foundation": "pnpm run check:riser-manifest && tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts && tsx ./tests/riser-foundation/presentation.ts"
     ,"test:riser-runtime": "tsx ./tests/riser-runtime/run.ts"
     ,"test:riser-http": "CRM_TEST_DB_NAME=crm_test_riser_http tsx ./tests/riser-http/run.ts"
   },
@@ -163,6 +165,7 @@
     "@workspace/db": "workspace:*",
     "@workspace/integrations-anthropic-ai": "workspace:*",
     "@workspace/screen-catalog": "workspace:*",
+    "ajv": "^8.18.0",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2",

@@ -131,6 +131,8 @@ import "./finance-doc-capabilities.js";
 import "./finance-autopilot-capabilities.js";
 import "./preformation-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
+import { finalizeCapabilityCatalog } from "./capability-catalog.js";
+import { assertRuntimeCatalogMatchesReviewedManifest } from "./capability-manifest.js";
 
 let bootstrapped = false;
 
@@ -142,6 +144,10 @@ let bootstrapped = false;
 export function bootstrapCapabilities(): void {
   if (bootstrapped) return;
   registerAgentCapabilities();
+  finalizeCapabilityCatalog();
+  if (process.env.RISER_MANIFEST_GENERATING !== "1") {
+    assertRuntimeCatalogMatchesReviewedManifest();
+  }
   bootstrapped = true;
 }
 

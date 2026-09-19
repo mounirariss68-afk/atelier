@@ -13,16 +13,20 @@ import {
   validateAcyclicWorkPlan,
 } from "@workspace/assistant-protocol";
 import { encryptAssistantValue } from "./action-runtime.js";
+import {
+  currentCapabilityManifestVersion,
+  reviewedCapabilityManifestEntry,
+} from "../atelier-cli/capability-manifest.js";
 
 export async function createDurableWork(args: {
   orgId: string;
   requesterId: string;
   goal: string;
-  catalogVersion: string;
   policyContext: unknown;
   plan: unknown;
 }): Promise<{ workItemId: string; planId: string }> {
   const plan = WorkPlanV1Schema.parse(args.plan);
+  const catalogVersion = currentCapabilityManifestVersion();
   validateAcyclicWorkPlan(plan);
   if (plan.workItemId !== "new" && plan.workItemId.length > 0) {
     throw new Error("client-work-id-not-allowed");
@@ -30,6 +34,18 @@ export async function createDurableWork(args: {
   const workItemId = `work_${randomUUID()}`;
   const planId = `plan_${randomUUID()}`;
   const stepIds = new Map(plan.steps.map((step) => [step.id, `step_${randomUUID()}`]));
+  const manifestSteps = plan.steps.map((step) => {
+    if (!step.capabilityId) throw new Error("workflow-delegated-executor-unsupported");
+    const entry = reviewedCapabilityManifestEntry(step.capabilityId);
+    if (
+      !entry ||
+      entry.executionStatus !== "executable" ||
+      entry.resultSchemaHash !== step.resultSchemaHash
+    ) {
+      throw new Error(`workflow-capability-manifest-mismatch:${step.capabilityId}`);
+    }
+    return { step, entry };
+  });
   await db.transaction(async (tx) => {
     await tx.insert(atelierWorkItems).values({
       id: workItemId,
@@ -38,7 +54,7 @@ export async function createDurableWork(args: {
       goal: args.goal,
       status: "planned",
       policyContext: args.policyContext,
-      catalogVersion: args.catalogVersion,
+      catalogVersion,
     });
     await tx.insert(atelierWorkPlans).values({
       id: planId,
@@ -49,7 +65,7 @@ export async function createDurableWork(args: {
       rationale: plan.goal,
     });
     await tx.insert(atelierWorkSteps).values(
-      plan.steps.map((step) => ({
+      manifestSteps.map(({ step, entry }) => ({
         id: stepIds.get(step.id)!,
         workItemId,
         planId,
@@ -59,8 +75,8 @@ export async function createDurableWork(args: {
         inputEncrypted: encryptAssistantValue(step.input),
         authorityGrant: step.authorityGrant,
         policyDecisionDigest: step.policyDecisionDigest,
-        catalogVersion: args.catalogVersion,
-        inputSchemaVersion: 1,
+        catalogVersion,
+        inputSchemaVersion: entry.inputSchemaVersion,
         retryPolicy: step.retryPolicy,
         resultSchemaHash: step.resultSchemaHash,
         status: step.dependencies.length === 0 ? "ready" : "blocked",
@@ -76,7 +92,36 @@ export async function claimWorkAttempt(args: {
   workerId: string;
   leaseMs: number;
 }): Promise<{ attemptId: string; fencingToken: number } | null> {
+  const catalogVersion = currentCapabilityManifestVersion();
   return db.transaction(async (tx) => {
+    const [stale] = await tx
+      .select({ step: atelierWorkSteps, work: atelierWorkItems })
+      .from(atelierWorkSteps)
+      .innerJoin(atelierWorkItems, eq(atelierWorkSteps.workItemId, atelierWorkItems.id))
+      .where(
+        and(
+          eq(atelierWorkSteps.id, args.stepId),
+          eq(atelierWorkSteps.status, "ready"),
+          eq(atelierWorkItems.orgId, args.orgId),
+          eq(atelierWorkItems.status, "planned"),
+        ),
+      )
+      .for("update");
+    if (
+      stale &&
+      (stale.work.catalogVersion !== catalogVersion ||
+        stale.step.catalogVersion !== catalogVersion)
+    ) {
+      await tx
+        .update(atelierWorkSteps)
+        .set({ status: "failed", updatedAt: new Date() })
+        .where(eq(atelierWorkSteps.id, stale.step.id));
+      await tx
+        .update(atelierWorkItems)
+        .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
+        .where(eq(atelierWorkItems.id, stale.work.id));
+      return null;
+    }
     const [record] = await tx
       .select({ step: atelierWorkSteps, work: atelierWorkItems })
       .from(atelierWorkSteps)
@@ -87,6 +132,8 @@ export async function claimWorkAttempt(args: {
           eq(atelierWorkSteps.status, "ready"),
           eq(atelierWorkItems.orgId, args.orgId),
           eq(atelierWorkItems.status, "planned"),
+          eq(atelierWorkItems.catalogVersion, catalogVersion),
+          eq(atelierWorkSteps.catalogVersion, catalogVersion),
           isNull(atelierWorkItems.cancellationRequestedAt),
         ),
       )

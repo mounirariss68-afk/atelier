@@ -130,7 +130,7 @@ async function main() {
   await test("catalog has at least 5 entries and stable schemaVersion", () => {
     const all = listCapabilities();
     assert.ok(all.length >= 5, `expected ≥5 catalog entries, got ${all.length}`);
-    assert.equal(CATALOG_SCHEMA_VERSION, 2);
+    assert.equal(CATALOG_SCHEMA_VERSION, 3);
     for (const c of all) {
       assert.equal(c.schemaVersion, CATALOG_SCHEMA_VERSION, `entry ${c.id} drifted schemaVersion`);
       assert.ok(c.toolName.match(/^[a-z][a-z0-9_]*$/), `entry ${c.id} bad toolName`);

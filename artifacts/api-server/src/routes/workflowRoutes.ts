@@ -30,7 +30,6 @@ function enabled(): boolean {
 const createWorkflowSchema = z
   .object({
     goal: z.string().min(1).max(2_000),
-    catalogVersion: z.string().min(1).max(100),
     policyContext: z.record(z.string(), z.unknown()),
     plan: z.unknown(),
   })
@@ -48,7 +47,6 @@ router.post("/", async (req, res) => {
       orgId: me.orgId,
       requesterId: me.id,
       goal: body.goal,
-      catalogVersion: body.catalogVersion,
       policyContext: body.policyContext,
       plan: body.plan,
     });

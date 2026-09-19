@@ -39,6 +39,7 @@ import {
   createDurableWork,
   decideWorkCheckpoint,
 } from "../../src/lib/assistant/workflow-runtime.js";
+import { currentCapabilityManifestVersion } from "../../src/lib/atelier-cli/capability-manifest.js";
 
 process.env.SESSION_SECRET ??= "riser-runtime-test-session-secret-32-bytes";
 
@@ -60,9 +61,9 @@ try {
     requesterId,
     conversationId,
     sourceTurnId: `action_turn_${suffix}`,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { b: 2, a: 1 },
     targetRefsAndRevisions: [{ id: "acc_test", revision: "1" }],
     policyDecision: policy,
@@ -80,9 +81,9 @@ try {
     requesterId,
     conversationId,
     sourceTurnId: `action_turn_${suffix}`,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { a: 1, b: 2 },
     targetRefsAndRevisions: [{ id: "acc_test", revision: "1" }],
     policyDecision: policy,
@@ -96,6 +97,53 @@ try {
     idempotencyKey: `action-key-${suffix}`,
   });
   assert.equal(actionReplay.actionId, action.actionId);
+  const reviewedManifestVersion = currentCapabilityManifestVersion();
+  const [pinnedAction] = await db
+    .select()
+    .from(atelierAssistantActions)
+    .where(eq(atelierAssistantActions.id, action.actionId));
+  assert.equal(pinnedAction.catalogVersion, reviewedManifestVersion);
+  assert.notEqual(pinnedAction.catalogVersion, "test-v1");
+
+  const staleManifestAction = await createDurableActionPreview({
+    orgId,
+    requesterId,
+    conversationId,
+    sourceTurnId: `stale_manifest_turn_${suffix}`,
+    capabilityId: "coverage.account_update",
+    catalogVersion: "caller-must-not-control-this",
+    inputSchemaVersion: 3,
+    canonicalInput: { accountId: "stale_manifest" },
+    targetRefsAndRevisions: [],
+    policyDecision: policy,
+    riskClass: "write",
+    irreversible: false,
+    outboundChannels: [],
+    summary: "Stale manifest action",
+    diff: {},
+    expiresAt: new Date(Date.now() + 60_000),
+    idempotencyKey: `stale-manifest-${suffix}`,
+  });
+  await db
+    .update(atelierAssistantActions)
+    .set({ catalogVersion: "retired-manifest-version" })
+    .where(eq(atelierAssistantActions.id, staleManifestAction.actionId));
+  await assert.rejects(
+    () =>
+      confirmDurableAction({
+        actionId: staleManifestAction.actionId,
+        orgId,
+        requesterId,
+        expectedStateVersion: staleManifestAction.stateVersion,
+        recheckPolicy: async () => policy,
+      }),
+    /action-manifest-version-unsupported/,
+  );
+  const [invalidatedManifestAction] = await db
+    .select()
+    .from(atelierAssistantActions)
+    .where(eq(atelierAssistantActions.id, staleManifestAction.actionId));
+  assert.equal(invalidatedManifestAction.state, "invalidated");
   await assert.rejects(
     () =>
       createDurableActionPreview({
@@ -103,9 +151,9 @@ try {
         requesterId,
         conversationId,
         sourceTurnId: `action_turn_${suffix}`,
-        capabilityId: "account.update",
+        capabilityId: "coverage.account_update",
         catalogVersion: "test-v1",
-        inputSchemaVersion: 1,
+        inputSchemaVersion: 3,
         canonicalInput: { accountId: "acc_1", name: "New name" },
         targetRefsAndRevisions: [{ id: "acc_1", revision: "2" }],
         policyDecision: policy,
@@ -127,13 +175,13 @@ try {
         requesterId,
         conversationId,
         sourceTurnId: `action_race_turn_${suffix}`,
-        capabilityId: "account.read",
+        capabilityId: "coverage.account_update",
         catalogVersion: "test-v1",
-        inputSchemaVersion: 1,
+        inputSchemaVersion: 3,
         canonicalInput: { accountId: "acc_race" },
         targetRefsAndRevisions: [{ id: "acc_race", revision: "1" }],
         policyDecision: policy,
-        riskClass: "read",
+        riskClass: "write",
         irreversible: false,
         outboundChannels: [],
         summary: "Read account",
@@ -150,9 +198,9 @@ try {
       requesterId,
       conversationId,
       sourceTurnId: `action_turn_${suffix}`,
-      capabilityId: "account.update",
+      capabilityId: "coverage.account_update",
       catalogVersion: "test-v1",
-      inputSchemaVersion: 1,
+      inputSchemaVersion: 3,
       canonicalInput: { a: 99 },
       targetRefsAndRevisions: [],
       policyDecision: policy,
@@ -236,9 +284,9 @@ try {
     requesterId,
     conversationId,
     sourceTurnId: `action_stale_target_${suffix}`,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { accountId: "acc_stale", name: "Changed" },
     targetRefsAndRevisions: [{ id: "acc_stale", revision: "1" }],
     policyDecision: policy,
@@ -291,7 +339,7 @@ try {
     sourceTurnId: `account_update_${suffix}`,
     capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { id: accountId, name: "After durable update", status: "dormant" },
     targetRefsAndRevisions: [{
       type: "account",
@@ -384,7 +432,7 @@ try {
     sourceTurnId: `account_adapter_${suffix}`,
     capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { id: adapterAccountId, name: "After adapter" },
     targetRefsAndRevisions: [{
       type: "account",
@@ -547,7 +595,7 @@ try {
 
   const allowedPolicy = await evaluateAssistantPolicy({
     orgId,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     baseAllowed: true,
     obligations: ["fresh_confirmation"],
     policyVersion: "test-policy-v1",
@@ -558,9 +606,9 @@ try {
     requesterId,
     conversationId,
     sourceTurnId: `action_control_drift_${suffix}`,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     catalogVersion: "test-v1",
-    inputSchemaVersion: 1,
+    inputSchemaVersion: 3,
     canonicalInput: { accountId: "acc_control", name: "Blocked" },
     targetRefsAndRevisions: [{ id: "acc_control", revision: "1" }],
     policyDecision: allowedPolicy,
@@ -576,7 +624,7 @@ try {
     id: `control_${suffix}`,
     orgId,
     scope: "capability",
-    scopeKey: "account.update",
+    scopeKey: "coverage.account_update",
     mode: "deny",
     inflightBehavior: "cancel",
     reason: "runtime probe",
@@ -584,7 +632,7 @@ try {
   });
   const deniedPolicy = await evaluateAssistantPolicy({
     orgId,
-    capabilityId: "account.update",
+    capabilityId: "coverage.account_update",
     baseAllowed: true,
     obligations: ["fresh_confirmation"],
     policyVersion: "test-policy-v1",
@@ -603,6 +651,33 @@ try {
     /action-policy-drift/,
   );
 
+  await assert.rejects(
+    () =>
+      createDurableWork({
+        orgId,
+        requesterId,
+        goal: "Delegated execution is not yet reviewed",
+        catalogVersion: "caller-must-not-control-this",
+        policyContext: { test: true },
+        plan: {
+          workItemId: "new",
+          version: 1,
+          goal: "Delegated execution is not yet reviewed",
+          steps: [{
+            id: "delegate",
+            delegateAgentId: "agent.summarizer",
+            dependencies: [],
+            input: {},
+            authorityGrant: {},
+            policyDecisionDigest: "a".repeat(64),
+            resultSchemaHash: "94c64f190712",
+            retryPolicy: { maxAttempts: 1, maxWallMs: 10_000 },
+          }],
+        },
+      }),
+    /delegated-executor-unsupported/,
+  );
+
   const created = await createDurableWork({
     orgId,
     requesterId,
@@ -616,22 +691,22 @@ try {
       steps: [
         {
           id: "read",
-          capabilityId: "account.read",
+          capabilityId: "account.brief",
           dependencies: [],
           input: { accountId: "acc_test" },
           authorityGrant: { scope: "test" },
           policyDecisionDigest: "a".repeat(64),
-          resultSchemaHash: "b".repeat(12),
+          resultSchemaHash: "94c64f190712",
           retryPolicy: { maxAttempts: 2, maxWallMs: 10_000 },
         },
         {
           id: "summarize",
-          delegateAgentId: "agent.summarizer",
+          capabilityId: "account.dossier",
           dependencies: ["read"],
           input: { source: "read" },
           authorityGrant: { scope: "test" },
           policyDecisionDigest: "c".repeat(64),
-          resultSchemaHash: "d".repeat(12),
+          resultSchemaHash: "94c64f190712",
           retryPolicy: { maxAttempts: 1, maxWallMs: 10_000 },
         },
       ],
@@ -644,8 +719,14 @@ try {
     .where(eq(atelierWorkSteps.workItemId, workItemId))
     .orderBy(asc(atelierWorkSteps.createdAt));
   assert.equal(steps.length, 2);
-  const readStep = steps.find((step) => step.capabilityId === "account.read");
-  const summarizeStep = steps.find((step) => step.delegateAgentId === "agent.summarizer");
+  const [pinnedWork] = await db
+    .select()
+    .from(atelierWorkItems)
+    .where(eq(atelierWorkItems.id, workItemId));
+  assert.equal(pinnedWork.catalogVersion, reviewedManifestVersion);
+  assert.ok(steps.every((step) => step.catalogVersion === reviewedManifestVersion));
+  const readStep = steps.find((step) => step.capabilityId === "account.brief");
+  const summarizeStep = steps.find((step) => step.capabilityId === "account.dossier");
   assert.ok(readStep);
   assert.ok(summarizeStep);
   assert.notEqual(readStep.id, "read");
@@ -775,6 +856,56 @@ try {
     .where(eq(atelierWorkItems.id, workItemId));
   assert.equal(completedWork.status, "succeeded");
 
+  const staleWork = await createDurableWork({
+    orgId,
+    requesterId,
+    goal: "Reject a retired manifest pin",
+    catalogVersion: "caller-must-not-control-this",
+    policyContext: { test: true },
+    plan: {
+      workItemId: "new",
+      version: 1,
+      goal: "Reject a retired manifest pin",
+      steps: [{
+        id: "stale",
+        capabilityId: "account.brief",
+        dependencies: [],
+        input: {},
+        authorityGrant: {},
+        policyDecisionDigest: "e".repeat(64),
+        resultSchemaHash: "94c64f190712",
+        retryPolicy: { maxAttempts: 1, maxWallMs: 10_000 },
+      }],
+    },
+  });
+  const [staleWorkStep] = await db
+    .select()
+    .from(atelierWorkSteps)
+    .where(eq(atelierWorkSteps.workItemId, staleWork.workItemId));
+  await db
+    .update(atelierWorkItems)
+    .set({ catalogVersion: "retired-manifest-version" })
+    .where(eq(atelierWorkItems.id, staleWork.workItemId));
+  assert.equal(
+    await claimWorkAttempt({
+      orgId,
+      stepId: staleWorkStep.id,
+      workerId: "worker-stale",
+      leaseMs: 30_000,
+    }),
+    null,
+  );
+  const [invalidatedWork] = await db
+    .select()
+    .from(atelierWorkItems)
+    .where(eq(atelierWorkItems.id, staleWork.workItemId));
+  const [invalidatedWorkStep] = await db
+    .select()
+    .from(atelierWorkSteps)
+    .where(eq(atelierWorkSteps.id, staleWorkStep.id));
+  assert.equal(invalidatedWork.status, "failed");
+  assert.equal(invalidatedWorkStep.status, "failed");
+
   const cancellable = await createDurableWork({
     orgId,
     requesterId,
@@ -787,12 +918,12 @@ try {
       goal: "Cancel safely",
       steps: [{
         id: "wait",
-        capabilityId: "account.read",
+        capabilityId: "account.brief",
         dependencies: [],
         input: {},
         authorityGrant: {},
         policyDecisionDigest: "e".repeat(64),
-        resultSchemaHash: "f".repeat(12),
+        resultSchemaHash: "94c64f190712",
         retryPolicy: { maxAttempts: 1, maxWallMs: 10_000 },
       }],
     },

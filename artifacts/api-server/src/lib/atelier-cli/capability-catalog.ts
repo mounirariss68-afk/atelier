@@ -30,8 +30,10 @@
  */
 
 import { createHash } from "node:crypto";
+import Ajv from "ajv";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 import type { AtelierRole } from "../../routes/atelier/personaRoles.js";
+import { assertCapabilityDivergences } from "./capability-divergences.js";
 
 /**
  * Module families used for routing, role-filtering, and the surface
@@ -91,6 +93,21 @@ export type CapabilityModule =
  * so the user knows the write will leave the system.
  */
 export type OutboundChannel = "email";
+export type CapabilityPolicyClass =
+  | "authenticated_read"
+  | "role_restricted_read"
+  | "confirmed_write"
+  | "irreversible_write"
+  | "outbound_write"
+  | "legacy_write"
+  | "unsupported";
+export type CapabilityEffectClass = "read" | "internal_write" | "outbound_write";
+export interface CapabilityPresentationContract {
+  cardType: ResultCard | null;
+  contractVersion: 1;
+  renderer: "none" | "legacy-native-v1" | "semantic-v1";
+  minimumDataVersion: 1;
+}
 
 /**
  * Result-card hint the orchestrator emits alongside a successful
@@ -310,6 +327,16 @@ export interface CapabilityEntry {
    * but are never advertised to or dispatched by the orchestrator.
    */
   executionStatus?: "executable" | "unsupported" | "legacy_compat";
+  /** Release-gated policy category derived at registration. */
+  policyClass: CapabilityPolicyClass;
+  /** Stable side-effect category used by policy and manifest parity checks. */
+  effectClass: CapabilityEffectClass;
+  /** Versioned card/empty-state rendering contract. */
+  presentationContract: CapabilityPresentationContract;
+  /** Transpilation-stable fingerprint of the executor authority contract. */
+  implementationVersion: string;
+  /** Approved, reviewed exceptions to full parity/execution requirements. */
+  divergenceIds: string[];
   /**
    * Implementation. Receives the validated `input` and a `ToolContext`,
    * returns the standard `ToolResult` shape (with optional
@@ -319,17 +346,36 @@ export interface CapabilityEntry {
 }
 
 /** Catalog/manifest version. Bump when the entry SHAPE changes. */
-export const CATALOG_SCHEMA_VERSION = 2;
+export const CATALOG_SCHEMA_VERSION = 3;
 
 /**
  * Input shape for `defineCapability`. `schemaHash` and `source` are
  * computed/defaulted automatically when omitted.
  */
 export type CapabilityInput =
-  & Omit<CapabilityEntry, "schemaHash" | "source">
-  & { schemaHash?: string; source?: CapabilityEntry["source"] };
+  & Omit<
+    CapabilityEntry,
+    | "schemaHash"
+    | "source"
+    | "policyClass"
+    | "effectClass"
+    | "presentationContract"
+    | "implementationVersion"
+    | "divergenceIds"
+  >
+  & {
+    schemaHash?: string;
+    source?: CapabilityEntry["source"];
+    divergenceIds?: string[];
+  };
 
 const REGISTRY: CapabilityEntry[] = [];
+let REGISTRY_FINALIZED = false;
+const JSON_SCHEMA_META_VALIDATOR = new Ajv({
+  allErrors: true,
+  strictSchema: true,
+  validateSchema: true,
+});
 
 /**
  * Canonicalise a JSON-Schema-shaped object so two structurally
@@ -354,6 +400,92 @@ function canonicalJson(value: unknown): string {
  */
 export function hashSchema(schema: Record<string, unknown>): string {
   return createHash("sha256").update(canonicalJson(schema)).digest("hex").slice(0, 12);
+}
+
+export function assertValidCapabilityInputSchema(
+  schema: Record<string, unknown>,
+  id = "unknown",
+): void {
+  if (schema.type !== "object" || !JSON_SCHEMA_META_VALIDATOR.validateSchema(schema)) {
+    const detail = JSON_SCHEMA_META_VALIDATOR.errors
+      ?.map((error) => `${error.instancePath || "/"} ${error.message ?? "invalid"}`)
+      .join("; ");
+    throw new Error(`capability-invalid-json-schema:${id}${detail ? `:${detail}` : ""}`);
+  }
+}
+
+function deriveExecutionStatus(
+  entry: CapabilityInput,
+): NonNullable<CapabilityEntry["executionStatus"]> {
+  return entry.executionStatus ??
+    (entry.isWrite && !entry.twoPhaseConfirm ? "legacy_compat" : "executable");
+}
+
+function derivePolicyClass(
+  entry: CapabilityInput,
+  status: NonNullable<CapabilityEntry["executionStatus"]>,
+): CapabilityPolicyClass {
+  if (status === "unsupported") return "unsupported";
+  if (!entry.isWrite) {
+    return entry.requiredRoles?.length ? "role_restricted_read" : "authenticated_read";
+  }
+  if (!entry.twoPhaseConfirm) return "legacy_write";
+  if (entry.outboundChannel) return "outbound_write";
+  if (entry.irreversible) return "irreversible_write";
+  return "confirmed_write";
+}
+
+function derivePresentationContract(entry: CapabilityInput): CapabilityPresentationContract {
+  const semantic =
+    (entry.id === "roster.list" &&
+      entry.toolName === "roster_list" &&
+      entry.resultCard === "ranked_list") ||
+    (entry.id === "roster.person_detail" &&
+      entry.toolName === "person_detail" &&
+      entry.resultCard === "contact_card");
+  return {
+    cardType: entry.resultCard,
+    contractVersion: 1,
+    renderer: entry.resultCard ? (semantic ? "semantic-v1" : "legacy-native-v1") : "none",
+    minimumDataVersion: 1,
+  };
+}
+
+function deriveDivergenceIds(
+  entry: CapabilityInput,
+  status: NonNullable<CapabilityEntry["executionStatus"]>,
+): string[] {
+  const ids = new Set(entry.divergenceIds ?? []);
+  const source = entry.source ?? "cli-only";
+  if (source === "cli-only") ids.add("cli-only-route-parity-v1");
+  if (source === "agent" && status === "unsupported") {
+    ids.add("agent-executor-unsupported-v1");
+  }
+  if (status === "legacy_compat") ids.add("legacy-confirmation-compat-v1");
+  return [...ids].sort();
+}
+
+function assertRegistrationContract(entry: CapabilityEntry): void {
+  if (!/^[a-z0-9_.-]+$/.test(entry.id)) throw new Error(`capability-invalid-id:${entry.id}`);
+  if (!/^[a-z0-9_]+$/.test(entry.toolName)) {
+    throw new Error(`capability-invalid-tool:${entry.id}`);
+  }
+  if (entry.schemaVersion !== CATALOG_SCHEMA_VERSION) {
+    throw new Error(`capability-schema-version-mismatch:${entry.id}`);
+  }
+  assertValidCapabilityInputSchema(entry.inputSchema, entry.id);
+  if (!entry.description.trim()) throw new Error(`capability-missing-description:${entry.id}`);
+  if (typeof entry.run !== "function") throw new Error(`capability-missing-executor:${entry.id}`);
+  if (!entry.isWrite && (entry.twoPhaseConfirm || entry.irreversible || entry.outboundChannel)) {
+    throw new Error(`capability-read-effect-mismatch:${entry.id}`);
+  }
+  if (entry.presentationContract.cardType !== entry.resultCard) {
+    throw new Error(`capability-presentation-contract-mismatch:${entry.id}`);
+  }
+  if (entry.executionStatus === "unsupported" && entry.divergenceIds.length === 0) {
+    throw new Error(`capability-unsupported-without-divergence:${entry.id}`);
+  }
+  assertCapabilityDivergences(entry.divergenceIds);
 }
 
 /**
@@ -425,16 +557,56 @@ export function assertNavigateToContract(id: string, result: ToolResult): void {
  * regressions throw at call-time.
  */
 export function defineCapability(entry: CapabilityInput): CapabilityEntry {
+  if (REGISTRY_FINALIZED) throw new Error("capability-catalog-finalized");
+  const executionStatus = deriveExecutionStatus(entry);
+  const policyClass = derivePolicyClass(entry, executionStatus);
+  const effectClass: CapabilityEffectClass = !entry.isWrite
+    ? "read"
+    : entry.outboundChannel
+      ? "outbound_write"
+      : "internal_write";
+  const presentationContract = derivePresentationContract(entry);
+  const divergenceIds = deriveDivergenceIds(entry, executionStatus);
+  const implementationVersion = createHash("sha256")
+    .update(
+      canonicalJson({
+        executorContractVersion: 1,
+        id: entry.id,
+        toolName: entry.toolName,
+        module: entry.module,
+        source: entry.source ?? "cli-only",
+        inputSchemaHash: entry.schemaHash ?? hashSchema(entry.inputSchema),
+        policyClass,
+        effectClass,
+        presentationContract,
+        requiredRoles: [...(entry.requiredRoles ?? [])].sort(),
+        approverRoles: [...(entry.approverRoles ?? entry.requiredRoles ?? [])].sort(),
+        confirmation: {
+          required: entry.twoPhaseConfirm,
+          irreversible: entry.irreversible,
+          outboundChannel: entry.outboundChannel,
+        },
+      }),
+    )
+    .digest("hex")
+    .slice(0, 12);
   const finalised: CapabilityEntry = {
     ...entry,
     source: entry.source ?? "cli-only",
     schemaHash: entry.schemaHash ?? hashSchema(entry.inputSchema),
+    executionStatus,
+    policyClass,
+    effectClass,
+    presentationContract,
+    implementationVersion,
+    divergenceIds,
   };
   if (REGISTRY.some((e) => e.id === finalised.id || e.toolName === finalised.toolName)) {
     throw new Error(
       `[capability-catalog] duplicate id/toolName: ${finalised.id}/${finalised.toolName}`,
     );
   }
+  assertRegistrationContract(finalised);
   if (finalised.isWrite) {
     const inner = finalised.run;
     const wrapped = async (
@@ -456,12 +628,25 @@ export function listCapabilities(): readonly CapabilityEntry[] {
   return REGISTRY;
 }
 
+export function finalizeCapabilityCatalog(): void {
+  if (REGISTRY_FINALIZED) return;
+  for (const entry of REGISTRY) {
+    assertRegistrationContract(entry);
+    Object.freeze(entry.divergenceIds);
+    Object.freeze(entry.presentationContract);
+    Object.freeze(entry);
+  }
+  REGISTRY_FINALIZED = true;
+  Object.freeze(REGISTRY);
+}
+
 /**
  * Test-only reset hook. Catalog registration is normally one-shot at
  * process boot; tests that want to assert against a fresh registry use
  * this. Not exported from the public index.
  */
 export function __resetCatalogForTests(): void {
+  if (REGISTRY_FINALIZED) throw new Error("capability-catalog-finalized");
   REGISTRY.length = 0;
 }
 

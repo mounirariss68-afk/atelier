@@ -147,3 +147,4 @@
 - [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.
 - [Riser explicit presentation](riser-explicit-presentation.md) — server-owned, versioned presentation triples; raw tool evidence persists for audit but never crosses client boundaries.
 - [Riser semantic frame authority](riser-semantic-frame-authority.md) — current mode trusts validated envelopes only; replay preflights mode; recovery never resends writes.
+- [Riser reviewed manifest authority](riser-reviewed-manifest-authority.md) — runtime catalog must exactly match the checked-in 326-entry manifest; durable work pins its hash and stale pins fail closed.
