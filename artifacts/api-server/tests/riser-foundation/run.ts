@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import {
   AssistantRequestV1Schema,
+  ASSISTANT_PRIVACY_POLICY_VERSION,
   LegacyAssistantRequestSchema,
+  assistantValueContainsCanary,
+  assertAssistantProviderAllowed,
   redactAssistantValue,
+  sanitizeAssistantForSink,
   upcastLegacyAssistantRequest,
   upcastLegacyFrame,
   upcastLegacyPendingWrite,
@@ -80,6 +84,40 @@ const redacted = JSON.stringify(
 assert.equal(redacted.includes("plant-me"), false);
 assert.equal(redacted.includes(canary), false);
 assert.equal(redacted.includes("person@example.com"), false);
+
+const plantedPrivacyCanary = "RISER_CANARY_SECRET_NEVER_PERSIST";
+for (const sink of ["public_response", "durable_event", "log", "telemetry"] as const) {
+  const sanitized = sanitizeAssistantForSink({
+    sink,
+    value: {
+      password: plantedPrivacyCanary,
+      narration: `Contact private@example.com using ${plantedPrivacyCanary}`,
+    },
+  });
+  assert.equal(assistantValueContainsCanary(sanitized), false);
+  assert.equal(JSON.stringify(sanitized).includes("private@example.com"), false);
+}
+assert.deepEqual(
+  assertAssistantProviderAllowed({
+    provider: "anthropic",
+    dataClasses: ["internal", "confidential"],
+  }),
+  { policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION },
+);
+assert.throws(
+  () => assertAssistantProviderAllowed({
+    provider: "anthropic",
+    dataClasses: ["restricted"],
+  }),
+  /assistant-provider-data-class-denied/,
+);
+assert.throws(
+  () => assertAssistantProviderAllowed({
+    provider: "unknown-provider",
+    dataClasses: ["public"],
+  }),
+  /assistant-provider-not-allowlisted/,
+);
 
 const step = {
   id: "a",

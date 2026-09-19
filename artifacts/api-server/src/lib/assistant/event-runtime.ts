@@ -4,7 +4,7 @@ import { db, atelierAssistantEvents } from "@workspace/db";
 import {
   ASSISTANT_PROTOCOL_VERSION,
   AssistantEventV1Schema,
-  redactAssistantValue,
+  sanitizeAssistantForSink,
   type AssistantEventV1,
 } from "@workspace/assistant-protocol";
 
@@ -54,7 +54,10 @@ export async function appendAssistantEventTx(
       occurredAt: new Date().toISOString(),
       correlationId: args.correlationId,
       type: args.type,
-      data: redactAssistantValue(args.data),
+      data: sanitizeAssistantForSink({
+        sink: "durable_event",
+        value: args.data,
+      }),
     });
     await tx.insert(atelierAssistantEvents).values({
       id: event.eventId,
