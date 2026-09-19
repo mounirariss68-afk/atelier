@@ -414,8 +414,17 @@ try {
     } as never,
     expectedStateVersion: adapterAction.stateVersion,
   };
-  const adapterOutcome = await confirmAndExecuteDurableAccountUpdate(adapterArgs);
+  const adapterRace = await Promise.all(
+    Array.from({ length: 20 }, () =>
+      confirmAndExecuteDurableAccountUpdate(adapterArgs),
+    ),
+  );
+  const adapterOutcome = adapterRace[0];
   assert.equal(adapterOutcome.state, "succeeded");
+  assert.equal(
+    new Set(adapterRace.map((outcome) => JSON.stringify(outcome))).size,
+    1,
+  );
   assert.deepEqual(
     await confirmAndExecuteDurableAccountUpdate(adapterArgs),
     adapterOutcome,

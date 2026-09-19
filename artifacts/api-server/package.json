@@ -146,6 +146,7 @@
     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
     ,"test:riser-foundation": "tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts"
     ,"test:riser-runtime": "tsx ./tests/riser-runtime/run.ts"
+    ,"test:riser-http": "CRM_TEST_DB_NAME=crm_test_riser_http tsx ./tests/riser-http/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

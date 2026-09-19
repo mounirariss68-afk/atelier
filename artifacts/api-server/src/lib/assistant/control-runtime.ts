@@ -9,8 +9,8 @@ export async function evaluateAssistantPolicy(args: {
   baseAllowed: boolean;
   obligations: string[];
   policyVersion: string;
-}): Promise<PolicyDecisionV1> {
-  const controls = await db
+}, executor: Pick<typeof db, "select"> = db): Promise<PolicyDecisionV1> {
+  const controls = await executor
     .select()
     .from(atelierAssistantControls)
     .where(

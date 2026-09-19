@@ -26,6 +26,7 @@ async function authoritativePolicy(
   orgId: string,
   capabilityId: string,
   proposed: PolicyDecisionV1,
+  executor: Pick<typeof db, "select"> = db,
 ): Promise<PolicyDecisionV1> {
   const candidate = PolicyDecisionV1Schema.parse(proposed);
   return evaluateAssistantPolicy({
@@ -34,7 +35,7 @@ async function authoritativePolicy(
     baseAllowed: candidate.effect === "allow",
     obligations: candidate.effect === "allow" ? candidate.obligations : [],
     policyVersion: candidate.policyVersion,
-  });
+  }, executor);
 }
 
 export function digestAssistantValue(value: unknown): string {
@@ -327,6 +328,7 @@ export async function confirmDurableAction(args: {
       row.orgId,
       row.capabilityId,
       await args.recheckPolicy(row),
+      tx,
     );
     if (
       policy.effect !== "allow" ||
@@ -410,6 +412,7 @@ export async function claimDurableAction(args: {
       row.orgId,
       row.capabilityId,
       await args.recheckPolicy(row),
+      tx,
     );
     const targetsCurrent = await args.recheckTargets(row.targetRefsAndRevisions);
     if (

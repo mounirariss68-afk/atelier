@@ -110,33 +110,52 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
     if (args.expectedStateVersion !== action.stateVersion) {
       throw new Error("durable-account-state-version-mismatch");
     }
-    await confirmDurableAction({
-      actionId: action.id,
-      orgId: action.orgId,
-      requesterId: action.requesterId,
-      expectedStateVersion: action.stateVersion,
-      typedEvidence: args.typedEvidence,
-      recheckPolicy: (current) => currentPolicy(current, allowed),
-    });
+    const policyAtConfirmation = await currentPolicy(action, allowed);
+    try {
+      await confirmDurableAction({
+        actionId: action.id,
+        orgId: action.orgId,
+        requesterId: action.requesterId,
+        expectedStateVersion: action.stateVersion,
+        typedEvidence: args.typedEvidence,
+        recheckPolicy: async () => policyAtConfirmation,
+      });
+    } catch (error) {
+      const raced = await load();
+      if (!raced || raced.state === "awaiting_confirmation") {
+        throw error;
+      }
+    }
     action = (await load())!;
   }
+  if (["failed", "invalidated", "cancelled", "expired", "succeeded"].includes(action.state)) {
+    return { state: action.state, result: action.result };
+  }
   if (action.state === "confirmed") {
+    const policyAtClaim = await currentPolicy(action, allowed);
+    const targetsCurrentAtClaim = await targetsCurrent(
+      action.orgId,
+      action.targetRefsAndRevisions,
+    );
     const claim = await claimDurableAction({
       actionId: action.id,
       orgId: action.orgId,
-      recheckPolicy: (current) => currentPolicy(current, allowed),
-      recheckTargets: (targets) => targetsCurrent(action!.orgId, targets),
+      recheckPolicy: async () => policyAtClaim,
+      recheckTargets: async () => targetsCurrentAtClaim,
     });
     if (!claim) {
       action = (await load())!;
-      return { state: action.state, result: action.result };
+      if (action.state !== "executing") {
+        return { state: action.state, result: action.result };
+      }
+    } else {
+      const result = await executeDurableAccountUpdate({
+        orgId: action.orgId,
+        actionId: action.id,
+        fencingToken: claim.fencingToken,
+      });
+      return { state: "succeeded", result };
     }
-    const result = await executeDurableAccountUpdate({
-      orgId: action.orgId,
-      actionId: action.id,
-      fencingToken: claim.fencingToken,
-    });
-    return { state: "succeeded", result };
   }
   if (action.state === "executing") {
     const policy = await currentPolicy(action, allowed);
