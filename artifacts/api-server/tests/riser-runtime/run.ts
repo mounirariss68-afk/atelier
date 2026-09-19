@@ -550,6 +550,7 @@ try {
       maxProviderCalls: 4,
       maxToolCalls: 10,
       maxWallMs: 60_000,
+      maxConcurrentSlots: 100,
       expiresAt: new Date(Date.now() + 60_000),
     },
     {
@@ -563,6 +564,7 @@ try {
       maxProviderCalls: 4,
       maxToolCalls: 10,
       maxWallMs: 60_000,
+      maxConcurrentSlots: 100,
       expiresAt: new Date(Date.now() + 60_000),
     },
     {
@@ -575,6 +577,7 @@ try {
       maxProviderCalls: 100,
       maxToolCalls: 100,
       maxWallMs: 60_000,
+      maxConcurrentSlots: 100,
       expiresAt: new Date(Date.now() + 60_000),
     },
   ]);

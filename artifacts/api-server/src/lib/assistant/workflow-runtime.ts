@@ -23,7 +23,7 @@ import { evaluateAssistantPolicy } from "./control-runtime.js";
 import {
   commitAssistantBudget,
   refundAssistantBudget,
-  reserveAssistantBudget,
+  reserveRequiredAssistantBudget,
 } from "./budget-runtime.js";
 
 const checkpointEvidenceValidator = new Ajv({
@@ -384,6 +384,8 @@ export async function claimWorkAttempt(args: {
         maxCostMicros: number;
         maxToolCalls: number;
         maxProviderCalls: number;
+        maxWallMs: number;
+        maxConcurrentSlots: number;
       },
     };
   });
@@ -411,7 +413,7 @@ export async function claimWorkAttempt(args: {
     return null;
   }
   try {
-    const reservation = await reserveAssistantBudget({
+    const reservation = await reserveRequiredAssistantBudget({
       orgId: args.orgId,
       ledgerId: claimed.ledgerId,
       idempotencyKey: `workflow-attempt:${claimed.attemptId}:${claimed.fencingToken}`,
@@ -419,6 +421,8 @@ export async function claimWorkAttempt(args: {
         costMicros: claimed.budget.maxCostMicros,
         toolCalls: claimed.budget.maxToolCalls,
         providerCalls: claimed.budget.maxProviderCalls,
+        wallMs: claimed.budget.maxWallMs,
+        concurrentSlots: claimed.budget.maxConcurrentSlots,
       },
     });
     const [attached] = await db.update(atelierWorkAttempts)
@@ -506,7 +510,12 @@ export async function completeWorkAttempt(args: {
   fencingToken: number;
   result: unknown;
   evidence?: unknown[];
-  usage?: { costMicros: number; toolCalls: number; providerCalls: number };
+  usage?: {
+    costMicros: number;
+    toolCalls: number;
+    providerCalls: number;
+    wallMs?: number;
+  };
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [record] = await tx
@@ -543,13 +552,22 @@ export async function completeWorkAttempt(args: {
       maxCostMicros: number;
       maxToolCalls: number;
       maxProviderCalls: number;
+      maxWallMs: number;
+      maxConcurrentSlots: number;
     };
     if (
       usage.costMicros > budget.maxCostMicros ||
       usage.toolCalls > budget.maxToolCalls ||
-      usage.providerCalls > budget.maxProviderCalls
+      usage.providerCalls > budget.maxProviderCalls ||
+      (usage.wallMs ?? 0) > budget.maxWallMs
     ) return false;
-    await commitAssistantBudget(args.orgId, record.attempt.budgetReservationId);
+    await commitAssistantBudget(args.orgId, record.attempt.budgetReservationId, {
+      costMicros: usage.costMicros,
+      toolCalls: usage.toolCalls,
+      providerCalls: usage.providerCalls,
+      wallMs: usage.wallMs ?? 0,
+      concurrentSlots: 0,
+    }, tx);
     const [completed] = await tx
       .update(atelierWorkAttempts)
       .set({
@@ -951,7 +969,12 @@ export async function failWorkAttempt(args: {
       args.outcome === "retryable" &&
       record.work.cancellationRequestedAt === null &&
       record.attempt.attemptNumber < retryPolicy.maxAttempts;
-    await commitAssistantBudget(args.orgId, record.attempt.budgetReservationId);
+    await commitAssistantBudget(
+      args.orgId,
+      record.attempt.budgetReservationId,
+      undefined,
+      tx,
+    );
     if (
       record.work.cancellationRequestedAt &&
       record.attempt.status === "running"
@@ -1114,7 +1137,7 @@ export async function cancelDurableWork(args: {
         ));
       for (const row of runningReservations) {
         if (row.reservationId) {
-          await commitAssistantBudget(args.orgId, row.reservationId);
+          await commitAssistantBudget(args.orgId, row.reservationId, undefined, tx);
         }
       }
       const now = new Date();
@@ -1158,7 +1181,7 @@ export async function cancelDurableWork(args: {
       ));
     for (const row of runningReservations) {
       if (row.reservationId) {
-        await commitAssistantBudget(args.orgId, row.reservationId);
+        await commitAssistantBudget(args.orgId, row.reservationId, undefined, tx);
       }
     }
     const now = new Date();

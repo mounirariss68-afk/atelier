@@ -51,6 +51,7 @@ DECLARE
     -- only; per-engagement narrowing happens inside the tool layer.
     'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs',
     'atelier_assistant_budget_ledgers','atelier_assistant_budget_reservations',
+    'atelier_assistant_budget_events',
     -- Task #741 — typed per-session chat facts. Org-scoped; user_id
     -- narrowing is enforced in the read/write helpers (facts are only
     -- ever queried under the stating user's own id).

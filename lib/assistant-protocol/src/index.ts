@@ -440,6 +440,8 @@ export const WorkPlanV1Schema = z
                 maxCostMicros: z.number().int().nonnegative(),
                 maxToolCalls: z.number().int().nonnegative().max(10_000),
                 maxProviderCalls: z.number().int().nonnegative().max(10_000),
+                maxWallMs: z.number().int().nonnegative().max(86_400_000).default(0),
+                maxConcurrentSlots: z.number().int().positive().max(1_000).default(1),
               })
               .strict(),
             resultSchemaHash: z.string().min(12).max(200),

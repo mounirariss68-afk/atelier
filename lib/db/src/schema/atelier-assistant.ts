@@ -141,6 +141,10 @@ export const atelierAssistantBudgetLedgers = pgTable(
     reservedToolCalls: integer("reserved_tool_calls").notNull().default(0),
     committedToolCalls: integer("committed_tool_calls").notNull().default(0),
     maxWallMs: integer("max_wall_ms").notNull(),
+    reservedWallMs: integer("reserved_wall_ms").notNull().default(0),
+    committedWallMs: integer("committed_wall_ms").notNull().default(0),
+    maxConcurrentSlots: integer("max_concurrent_slots").notNull().default(1),
+    reservedConcurrentSlots: integer("reserved_concurrent_slots").notNull().default(0),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -163,6 +167,16 @@ export const atelierAssistantBudgetReservations = pgTable(
     costMicros: integer("cost_micros").notNull(),
     providerCalls: integer("provider_calls").notNull(),
     toolCalls: integer("tool_calls").notNull(),
+    wallMs: integer("wall_ms").notNull().default(0),
+    concurrentSlots: integer("concurrent_slots").notNull().default(0),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
+    settledAmount: jsonb("settled_amount").$type<{
+      costMicros: number;
+      providerCalls: number;
+      toolCalls: number;
+      wallMs: number;
+      concurrentSlots: number;
+    }>(),
     state: text("state").notNull().default("reserved"),
     committedAt: timestamp("committed_at", { withTimezone: true }),
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
@@ -172,6 +186,23 @@ export const atelierAssistantBudgetReservations = pgTable(
   (t) => [
     uniqueIndex("uq_assistant_budget_reservation_key").on(t.orgId, t.idempotencyKey),
     index("idx_assistant_budget_reservation_state").on(t.orgId, t.state),
+  ],
+);
+
+export const atelierAssistantBudgetEvents = pgTable(
+  "atelier_assistant_budget_events",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    ledgerId: text("ledger_id").notNull(),
+    reservationId: text("reservation_id"),
+    type: text("type").notNull(),
+    data: jsonb("data").$type<unknown>(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_assistant_budget_events_ledger").on(t.orgId, t.ledgerId, t.occurredAt),
+    index("idx_assistant_budget_events_type").on(t.orgId, t.type, t.occurredAt),
   ],
 );
 
