@@ -1,3 +1,4 @@
+import { authorizeAssistantProviderPayload } from "@workspace/assistant-protocol";
 /**
  * Task #327 — Microsoft Graph helper for per-user Microsoft 365 connections.
  *
@@ -354,7 +355,12 @@ export class MsGraphError extends Error {
 }
 
 async function graphGet<T>(accessToken: string, path: string): Promise<T> {
-  const resp = await fetch(`${graphBase()}${path}`, {
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "microsoft_graph",
+    declaredDataClasses: ["restricted"],
+    payload: { path },
+  });
+  const resp = await fetch(`${graphBase()}${authorized.payload.path}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Prefer: 'outlook.timezone="UTC"',
@@ -362,8 +368,8 @@ async function graphGet<T>(accessToken: string, path: string): Promise<T> {
   });
   const text = await resp.text();
   if (!resp.ok) {
-    console.error(`[msGraph] GET ${path} → ${resp.status} ${text.slice(0, 300)}`);
-    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+    console.error(`[msGraph] GET failed with ${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status);
   }
   return JSON.parse(text) as T;
 }
@@ -373,19 +379,24 @@ async function graphPost<T>(
   path: string,
   body: unknown,
 ): Promise<T> {
-  const resp = await fetch(`${graphBase()}${path}`, {
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "microsoft_graph",
+    declaredDataClasses: ["restricted"],
+    payload: { path, body },
+  });
+  const resp = await fetch(`${graphBase()}${authorized.payload.path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       Prefer: 'outlook.timezone="UTC"',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(authorized.payload.body),
   });
   const text = await resp.text();
   if (!resp.ok) {
-    console.error(`[msGraph] POST ${path} → ${resp.status} ${text.slice(0, 300)}`);
-    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+    console.error(`[msGraph] POST failed with ${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status);
   }
   return JSON.parse(text) as T;
 }
@@ -427,32 +438,41 @@ async function graphPatch<T>(
   path: string,
   body: unknown,
 ): Promise<T> {
-  const resp = await fetch(`${graphBase()}${path}`, {
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "microsoft_graph",
+    declaredDataClasses: ["restricted"],
+    payload: { path, body },
+  });
+  const resp = await fetch(`${graphBase()}${authorized.payload.path}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       Prefer: 'outlook.timezone="UTC"',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(authorized.payload.body),
   });
   const text = await resp.text();
   if (!resp.ok) {
-    console.error(`[msGraph] PATCH ${path} → ${resp.status} ${text.slice(0, 300)}`);
-    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+    console.error(`[msGraph] PATCH failed with ${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status);
   }
   return JSON.parse(text) as T;
 }
 
 async function graphDelete(accessToken: string, path: string): Promise<void> {
-  const resp = await fetch(`${graphBase()}${path}`, {
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "microsoft_graph",
+    declaredDataClasses: ["restricted"],
+    payload: { path },
+  });
+  const resp = await fetch(`${graphBase()}${authorized.payload.path}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok && resp.status !== 404) {
-    const text = await resp.text();
-    console.error(`[msGraph] DELETE ${path} → ${resp.status} ${text.slice(0, 300)}`);
-    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+    console.error(`[msGraph] DELETE failed with ${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status);
   }
 }
 
@@ -895,18 +915,25 @@ export async function sendMailMessage(
     attachments: MsMailAttachment[];
   },
 ): Promise<void> {
-  const resp = await fetch(`${graphBase()}/me/sendMail`, {
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "microsoft_graph",
+    declaredDataClasses: ["restricted"],
+    payload: {
+      path: "/me/sendMail",
+      body: { message: mailMessageBody(args), saveToSentItems: true },
+    },
+  });
+  const resp = await fetch(`${graphBase()}${authorized.payload.path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message: mailMessageBody(args), saveToSentItems: true }),
+    body: JSON.stringify(authorized.payload.body),
   });
   if (!resp.ok) {
-    const text = await resp.text();
-    console.error(`[msGraph] POST /me/sendMail → ${resp.status} ${text.slice(0, 300)}`);
-    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+    console.error(`[msGraph] sendMail failed with ${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status);
   }
 }
 

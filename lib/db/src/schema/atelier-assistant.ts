@@ -229,6 +229,123 @@ export const atelierAssistantControls = pgTable(
   ],
 );
 
+export const atelierAssistantRetentionHolds = pgTable(
+  "atelier_assistant_retention_holds",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    resourceType: text("resource_type").notNull(),
+    resourceId: text("resource_id").notNull(),
+    reason: text("reason").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("idx_assistant_retention_hold_resource").on(
+      t.orgId,
+      t.resourceType,
+      t.resourceId,
+    ),
+    index("idx_assistant_retention_hold_lookup").on(
+      t.orgId,
+      t.resourceType,
+      t.resourceId,
+      t.expiresAt,
+    ),
+  ],
+);
+
+export const atelierAssistantKeyAccessEvents = pgTable(
+  "atelier_assistant_key_access_events",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    requesterId: text("requester_id").notNull(),
+    actorId: text("actor_id").notNull(),
+    resourceType: text("resource_type").notNull(),
+    resourceId: text("resource_id").notNull(),
+    purpose: text("purpose").notNull(),
+    keyVersion: text("key_version").notNull(),
+    accessedAt: timestamp("accessed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_assistant_key_access_resource").on(
+      t.orgId,
+      t.resourceType,
+      t.resourceId,
+      t.accessedAt,
+    ),
+    index("idx_assistant_key_access_requester").on(
+      t.orgId,
+      t.requesterId,
+      t.accessedAt,
+    ),
+  ],
+);
+
+export const atelierAssistantPrivacyRuns = pgTable(
+  "atelier_assistant_privacy_runs",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    kind: text("kind").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    rowsAffected: integer("rows_affected").notNull(),
+    createdBy: text("created_by").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_assistant_privacy_runs_org").on(t.orgId, t.occurredAt),
+  ],
+);
+
+export const atelierAssistantPrivacyRunItems = pgTable(
+  "atelier_assistant_privacy_run_items",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull(),
+    orgId: text("org_id").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    disposition: text("disposition").notNull(),
+    sourceDigest: text("source_digest").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_assistant_privacy_run_item_source").on(
+      t.runId,
+      t.sourceType,
+      t.sourceId,
+    ),
+    index("idx_assistant_privacy_run_items_org").on(t.orgId, t.occurredAt),
+  ],
+);
+
+export const atelierAssistantBlobPurgeQueue = pgTable(
+  "atelier_assistant_blob_purge_queue",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    attachmentId: text("attachment_id").notNull(),
+    encryptedRef: text("encrypted_ref").notNull(),
+    state: text("state").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    queuedAt: timestamp("queued_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("uq_assistant_blob_purge_attachment").on(t.attachmentId),
+    index("idx_assistant_blob_purge_pending").on(t.state, t.queuedAt),
+    index("idx_assistant_blob_purge_org").on(t.orgId, t.queuedAt),
+  ],
+);
+
 export const atelierWorkItems = pgTable(
   "atelier_work_items",
   {
@@ -236,6 +353,7 @@ export const atelierWorkItems = pgTable(
     orgId: text("org_id").notNull(),
     requesterId: text("requester_id").notNull(),
     goal: text("goal").notNull(),
+    goalEncrypted: text("goal_encrypted"),
     status: text("status").notNull().default("draft"),
     conversationLinks: jsonb("conversation_links").$type<string[]>().notNull().default([]),
     budgetLedgerId: text("budget_ledger_id").references(() => atelierAssistantBudgetLedgers.id),
@@ -269,6 +387,7 @@ export const atelierWorkPlans = pgTable(
     status: text("status").notNull().default("draft"),
     createdBy: text("created_by").notNull(),
     rationale: text("rationale").notNull(),
+    rationaleEncrypted: text("rationale_encrypted"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("uq_work_plan_version").on(t.workItemId, t.version)],

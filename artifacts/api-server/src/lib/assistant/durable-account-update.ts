@@ -7,7 +7,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import {
-  decryptAssistantValue,
+  decryptAssistantValueAudited,
   withAssistantRlsTransaction,
 } from "./action-runtime.js";
 import { appendAssistantEventTx } from "./event-runtime.js";
@@ -72,7 +72,18 @@ export async function executeDurableAccountUpdate(args: {
       });
       return { ok: false, code };
     };
-    const decrypted = decryptAssistantValue(action.canonicalInputEncrypted);
+    const decrypted = await decryptAssistantValueAudited(
+      {
+        ciphertext: action.canonicalInputEncrypted,
+        orgId: action.orgId,
+        requesterId: action.requesterId,
+        actorId: args.requesterId,
+        resourceType: "assistant_action",
+        resourceId: action.id,
+        purpose: "execute_account_update",
+      },
+      tx,
+    );
     if (typeof decrypted !== "object" || decrypted === null || Array.isArray(decrypted)) {
       return terminalize("failed", "invalid_input");
     }

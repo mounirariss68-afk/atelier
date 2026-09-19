@@ -1,3 +1,4 @@
+import { authorizeAssistantProviderPayload } from "@workspace/assistant-protocol";
 /**
  * Perplexity web-research client (direct API only).
  *
@@ -136,7 +137,12 @@ export async function perplexitySearch(
       : {}),
   };
 
-  const payload = JSON.stringify(body);
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "perplexity",
+    declaredDataClasses: ["restricted"],
+    payload: body,
+  });
+  const payload = JSON.stringify(authorized.payload);
   const stubBase = process.env.ATELIER_PERPLEXITY_BASE_URL;
   let url: string;
   const headers: Record<string, string> = { "content-type": "application/json" };
@@ -195,15 +201,7 @@ export async function perplexitySearch(
     res = await attempt();
   }
   if (!res.ok) {
-    let snippet = "";
-    try {
-      snippet = (await res.text()).slice(0, 200);
-    } catch {
-      /* ignore */
-    }
-    throw new PerplexityConnectionError(
-      `API returned HTTP ${res.status}${snippet ? ` — ${snippet}` : ""}`,
-    );
+    throw new PerplexityConnectionError(`API returned HTTP ${res.status}`);
   }
   let json: ChatCompletionShape;
   try {

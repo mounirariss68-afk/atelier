@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import { runPriceScrape } from "./scraper";
 import { logger } from "./logger";
 import { db, atelierUsers } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
 import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
 import { runPaymentProposer } from "./atelier-payment-proposer";
@@ -18,10 +18,16 @@ import { runPayrollClerk } from "./atelier-agents/payrollClerk";
 import { runCollectionsAgent } from "./atelier-agents/collections";
 import { runRevenueRecognizerForOrg } from "./atelier-agents/revrec-scheduler";
 import { runAgentExclusive } from "./atelier-agents/exclusive-runs";
+import {
+  quarantineLegacyAssistantTelemetry,
+  runRetention as runAssistantRetention,
+} from "./atelier-cli/retention";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
 const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
+const ASSISTANT_PRIVACY_CRON =
+  process.env.ASSISTANT_PRIVACY_CRON ?? "15 4 * * *";
 // Mon 03:00 UTC = Mon 06:00 GST — the start of the working week.
 const WALLET_PAYMENT_PROPOSER_CRON = process.env.WALLET_PAYMENT_PROPOSER_CRON ?? "0 3 * * 1";
 // Daily 05:00 UTC — escalate any Win/Loss debrief past its 14-day SLA.
@@ -73,6 +79,7 @@ const SYSTEM_USER_ID = "system";
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
+let assistantPrivacyTask: ScheduledTask | null = null;
 let walletPaymentProposerTask: ScheduledTask | null = null;
 let winLossSlaTask: ScheduledTask | null = null;
 let sessionCleanupTask: ScheduledTask | null = null;
@@ -194,6 +201,59 @@ export function startScheduler(): void {
     logger.error(
       { cron: WALLET_RETENTION_CRON },
       "Invalid WALLET_RETENTION_CRON expression, wallet retention not scheduled",
+    );
+  }
+
+  if (cron.validate(ASSISTANT_PRIVACY_CRON)) {
+    assistantPrivacyTask = cron.schedule(
+      ASSISTANT_PRIVACY_CRON,
+      async () => {
+        try {
+          const tenants = await db.execute(sql`
+            SELECT org_id FROM atelier_assistant_privacy_org_ids()
+          `);
+          let rowsQuarantined = 0;
+          let orgsRecorded = 0;
+          let scannedRows = 0;
+          let attachmentBlobsPurged = 0;
+          for (const row of tenants.rows as Array<{ org_id: string }>) {
+            const quarantine = await quarantineLegacyAssistantTelemetry(
+              Date.now(),
+              row.org_id,
+            );
+            const retention = await runAssistantRetention(
+              Date.now(),
+              row.org_id,
+            );
+            rowsQuarantined += quarantine.rowsQuarantined;
+            orgsRecorded += quarantine.orgsRecorded;
+            scannedRows += retention.scannedRows;
+            attachmentBlobsPurged += retention.attachmentBlobsPurged;
+          }
+          logger.info(
+            {
+              tenantsProcessed: tenants.rows.length,
+              rowsQuarantined,
+              orgsRecorded,
+              scannedRows,
+              attachmentBlobsPurged,
+            },
+            "Assistant privacy lifecycle finished",
+          );
+        } catch {
+          logger.error("Assistant privacy lifecycle failed");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info(
+      { cron: ASSISTANT_PRIVACY_CRON },
+      "Assistant privacy lifecycle scheduler started",
+    );
+  } else {
+    logger.error(
+      { cron: ASSISTANT_PRIVACY_CRON },
+      "Invalid ASSISTANT_PRIVACY_CRON expression, privacy lifecycle not scheduled",
     );
   }
 
@@ -592,6 +652,11 @@ export function stopScheduler(): void {
     walletRetentionTask.stop();
     walletRetentionTask = null;
     logger.info("Wallet retention scheduler stopped");
+  }
+  if (assistantPrivacyTask) {
+    assistantPrivacyTask.stop();
+    assistantPrivacyTask = null;
+    logger.info("Assistant privacy lifecycle scheduler stopped");
   }
   if (walletPaymentProposerTask) {
     walletPaymentProposerTask.stop();

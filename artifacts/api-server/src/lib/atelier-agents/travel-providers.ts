@@ -1,3 +1,4 @@
+import { authorizeAssistantProviderPayload } from "@workspace/assistant-protocol";
 /**
  * Task #716 — travel-search provider clients (flights + hotels).
  *
@@ -76,31 +77,30 @@ async function ignavRequest<T>(
       "flight search is not configured — set the IGNAV_API_KEY secret (free instant key from ignav.com).",
     );
   }
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "ignav",
+    declaredDataClasses: ["confidential"],
+    payload: { path, body: init.body },
+  });
   let res: Response;
   try {
-    res = await fetch(`${ignavBase()}${path}`, {
+    res = await fetch(`${ignavBase()}${authorized.payload.path}`, {
       method: init.method ?? "GET",
       headers: {
         "content-type": "application/json",
         accept: "application/json",
         ...(apiKey ? { "X-Api-Key": apiKey } : {}),
       },
-      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+      ...(authorized.payload.body !== undefined
+        ? { body: JSON.stringify(authorized.payload.body) }
+        : {}),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new TravelConnectionError(`flight search connection failed (${msg}).`);
   }
   if (!res.ok) {
-    let snippet = "";
-    try {
-      snippet = (await res.text()).slice(0, 300);
-    } catch {
-      /* ignore */
-    }
-    throw new TravelConnectionError(
-      `Ignav API returned HTTP ${res.status}${snippet ? ` — ${snippet}` : ""}`,
-    );
+    throw new TravelConnectionError(`Ignav API returned HTTP ${res.status}`);
   }
   try {
     return (await res.json()) as T;
@@ -445,11 +445,16 @@ async function stayingRequest<T>(path: string, opts?: StayingRequestOpts): Promi
     accept: "application/json",
     ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
   };
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "stayingapi",
+    declaredDataClasses: ["confidential"],
+    payload: { path },
+  });
 
   // stayingFetch reads the full body under the deadline; no un-guarded
   // res.json()/res.text() calls follow this point.
   const { status, headers: resHeaders, bodyText } = await stayingFetch(
-    `${stayingBase()}${path}`,
+    `${stayingBase()}${authorized.payload.path}`,
     reqHeaders,
     deadline,
     timeoutMsg,
@@ -476,10 +481,7 @@ async function stayingRequest<T>(path: string, opts?: StayingRequestOpts): Promi
   }
   const ok = status >= 200 && status < 300;
   if (!ok) {
-    const snippet = bodyText.slice(0, 300);
-    throw new TravelConnectionError(
-      `StayingAPI returned HTTP ${status}${snippet ? ` — ${snippet}` : ""}`,
-    );
+    throw new TravelConnectionError(`StayingAPI returned HTTP ${status}`);
   }
   try {
     return JSON.parse(bodyText) as T;

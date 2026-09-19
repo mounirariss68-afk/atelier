@@ -5122,6 +5122,9 @@ export const atelierCliTurns = pgTable(
     // ATELIER_CLI_RECORDING_ENABLED=1; gated by founding_partner role
     // on read.
     recordingTrace: jsonb("recording_trace").$type<unknown>(),
+    redactionVersion: text("redaction_version")
+      .notNull()
+      .default("assistant-privacy/v1"),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

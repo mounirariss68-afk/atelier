@@ -4,6 +4,7 @@ import {
   ASSISTANT_PRIVACY_POLICY_VERSION,
   LegacyAssistantRequestSchema,
   assistantValueContainsCanary,
+  authorizeAssistantProviderPayload,
   assertAssistantProviderAllowed,
   redactAssistantValue,
   sanitizeAssistantForSink,
@@ -15,7 +16,7 @@ import {
   validateAcyclicWorkPlan,
 } from "@workspace/assistant-protocol";
 import {
-  decryptAssistantValue,
+  decryptAssistantValueForTest,
   encryptAssistantValue,
 } from "../../src/lib/assistant/action-runtime.js";
 
@@ -95,7 +96,10 @@ for (const sink of ["public_response", "durable_event", "log", "telemetry"] as c
     },
   });
   assert.equal(assistantValueContainsCanary(sanitized), false);
-  assert.equal(JSON.stringify(sanitized).includes("private@example.com"), false);
+  assert.equal(
+    JSON.stringify(sanitized).includes("private@example.com"),
+    sink === "public_response",
+  );
 }
 assert.deepEqual(
   assertAssistantProviderAllowed({
@@ -117,6 +121,35 @@ assert.throws(
     dataClasses: ["public"],
   }),
   /assistant-provider-not-allowlisted/,
+);
+assert.deepEqual(
+  authorizeAssistantProviderPayload({
+    provider: "anthropic",
+    declaredDataClasses: ["confidential"],
+    payload: {
+      messages: [{ role: "user", content: "Hello\u0000 person@example.com" }],
+      ignoredField: "must not cross the provider boundary",
+    },
+  }),
+  {
+    payload: {
+      messages: [{ role: "user", content: "Hello person@example.com" }],
+    },
+    inferredDataClasses: ["internal", "confidential"],
+    policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION,
+  },
+);
+assert.throws(
+  () => authorizeAssistantProviderPayload({
+    provider: "anthropic",
+    declaredDataClasses: ["confidential"],
+    payload: {
+      messages: [
+        { role: "user", content: "RISER_CANARY_SECRET_PROVIDER_BLOCK" },
+      ],
+    },
+  }),
+  /assistant-provider-canary-denied/,
 );
 
 const step = {
@@ -163,10 +196,30 @@ assert.throws(
   /workflow-cycle/,
 );
 
+const priorSessionSecret = process.env.SESSION_SECRET;
+process.env.NODE_ENV = "test";
+process.env.SESSION_SECRET = "riser-foundation-test-session-secret-32-bytes";
+assert.deepEqual(
+  decryptAssistantValueForTest(
+    "v1.AAECAwQFBgcICQoL.fbFwGAHh2vr0j2j2Z1Zbpg.NKsLSMy8nhv6hlG_NIESzS3rigTir-y_oW8",
+  ),
+  { legacy: "v1-compatible" },
+);
+if (priorSessionSecret === undefined) {
+  delete process.env.SESSION_SECRET;
+} else {
+  process.env.SESSION_SECRET = priorSessionSecret;
+}
 process.env.SESSION_SECRET ??= "riser-foundation-test-session-secret-32-bytes";
+process.env.ASSISTANT_ENCRYPTION_KEY_V2 ??=
+  "riser-foundation-assistant-encryption-key-v2";
 const encrypted = encryptAssistantValue({ secret: "value" });
-assert.deepEqual(decryptAssistantValue(encrypted), { secret: "value" });
-assert.throws(() => decryptAssistantValue(`${encrypted}tampered`));
-assert.throws(() => decryptAssistantValue(`v1.${"a".repeat(1_400_001)}`), /too-large/);
+assert.equal(encrypted.startsWith("v2."), true);
+assert.deepEqual(decryptAssistantValueForTest(encrypted), { secret: "value" });
+assert.throws(() => decryptAssistantValueForTest(`${encrypted}tampered`));
+assert.throws(
+  () => decryptAssistantValueForTest(`v1.${"a".repeat(1_400_001)}`),
+  /too-large/,
+);
 
 console.log("riser foundation probes passed");

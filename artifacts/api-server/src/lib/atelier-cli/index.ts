@@ -48,6 +48,12 @@ import {
 } from "@workspace/assistant-protocol";
 import { digestAssistantValue } from "../assistant/action-runtime.js";
 import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
+import {
+  emitCliTelemetry,
+  safeCliErrorMessage,
+  sanitizeCliPersistence,
+  sanitizeCliPublicResponse,
+} from "./privacy-sinks.js";
 import { currentCapabilityManifestVersion } from "./capability-manifest.js";
 import {
   composeReplayFromTurns,
@@ -107,14 +113,14 @@ function ingestSessionFacts(args: {
       console.error(
         "[atelier-cli] session facts write failed",
         args.turnId,
-        err instanceof Error ? err.message : String(err),
+        safeCliErrorMessage(err),
       ),
     );
   } catch (err) {
     console.error(
       "[atelier-cli] session facts extract failed",
       args.turnId,
-      err instanceof Error ? err.message : String(err),
+      safeCliErrorMessage(err),
     );
   }
 }
@@ -123,6 +129,7 @@ import { durableAccountUpdateEnabled } from "../assistant/durable-account-update
 import { createDurableAccountUpdatePreview } from "../assistant/durable-account-update-preview.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../assistant/durable-account-update-confirmation.js";
 import type { Response } from "express";
+
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
 // inside getToolsForPersona() so tests / sandbox tooling can stub
 // individual catalog entries without circular-import warnings.
@@ -1215,7 +1222,7 @@ async function runIdempotentJob(args: {
       .where(eq(atelierCliJobs.idempotencyKey, args.idemKey));
     return out;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = safeCliErrorMessage(err);
     await db
       .update(atelierCliJobs)
       .set({ status: "error", error: msg, finishedAt: new Date() })
@@ -1973,7 +1980,7 @@ export async function generateAndSaveSessionTitle(
     console.warn(
       "[atelier-cli] session title generation failed",
       sessionId,
-      err instanceof Error ? err.message : String(err),
+      safeCliErrorMessage(err),
     );
   }
 }
@@ -2784,7 +2791,7 @@ export async function collectRecapOpenThreads(args: {
     console.error(
       "[atelier-cli] recap open-thread lookup failed",
       args.sessionId,
-      err instanceof Error ? err.message : String(err),
+      safeCliErrorMessage(err),
     );
     return [];
   }
@@ -3081,13 +3088,11 @@ export function stripContinuationApproval(args: {
   const stripped: Record<string, unknown> = { ...merged };
   delete stripped.confirm;
   delete stripped.commitToken;
-  console.log(
-    `[cli-telemetry] ${JSON.stringify({
-      evt: "continuation_confirm_stripped",
-      turnId: args.turnId ?? null,
-      tool: toolName,
-    })}`,
-  );
+  emitCliTelemetry({
+    evt: "continuation_confirm_stripped",
+    turnId: args.turnId ?? null,
+    tool: toolName,
+  });
   return stripped;
 }
 export const CLARIFICATION_REROUTE_TOOLS = new Set([
@@ -3710,13 +3715,11 @@ export async function runTurn(
         // insert under a derived key, keeping the paused turn's row (and
         // future genuine retries of it) intact.
         input = { ...input, clientTurnKey: `${input.clientTurnKey}::ans-${rid("a")}` };
-        console.log(
-          `[cli-telemetry] ${JSON.stringify({
-            evt: "clarification_answer_key_reuse",
-            prevTurnId: prev.id,
-            prevStatus: prev.status,
-          })}`,
-        );
+        emitCliTelemetry({
+          evt: "clarification_answer_key_reuse",
+          prevTurnId: prev.id,
+          prevStatus: prev.status,
+        });
       } else if (prev) {
         // Replay all prev frames except its own `final` (which would
         // mask the replay marker). Then emit a fresh final tagged
@@ -3868,7 +3871,8 @@ export async function runTurn(
         outcome: inferredOutcome,
         terminal: frame.type === "final",
       });
-      frames.push(frame);
+      frame = sanitizeCliPublicResponse(frame);
+      frames.push(sanitizeCliPersistence(frame));
       if (frame.type === "final") finalEmitted = true;
       if (isClientVisibleCliFrameType(frame.type)) emit(frame);
     }
@@ -4031,13 +4035,11 @@ export async function runTurn(
               step: 0,
             },
           });
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "clarification_already_answered",
-              turnId,
-              sourceTurnId: contTurn.id,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "clarification_already_answered",
+            turnId,
+            sourceTurnId: contTurn.id,
+          });
         }
       }
       if (!getSessionDraft(session.id).pendingClarification && !_drRehydrate.pendingClarification) {
@@ -4170,15 +4172,13 @@ export async function runTurn(
           supersededPendingQuestion = { question: pcGate.question, tool: pcGate.tool };
           _drGate.pendingClarification = null;
           pendingSourceTurnId = null;
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "clarification_superseded",
-              turnId,
-              tool: pcGate.tool,
-              field: pcGate.field,
-              resolver: clarificationResolverMode(),
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "clarification_superseded",
+            turnId,
+            tool: pcGate.tool,
+            field: pcGate.field,
+            resolver: clarificationResolverMode(),
+          });
         }
       }
     }
@@ -4210,7 +4210,7 @@ export async function runTurn(
       console.error(
         "[atelier-cli] session facts load failed",
         turnId,
-        err instanceof Error ? err.message : String(err),
+        safeCliErrorMessage(err),
       );
     }
     // Task #978 — open-thread detection: unresolved items from prior turns
@@ -4320,18 +4320,16 @@ export async function runTurn(
           history.push({ role: "assistant", content: "(noted)" });
           for (const m of replayHistory) history.push(m);
         }
-        console.log(
-          `[cli-telemetry] ${JSON.stringify({
-            evt: "replay_window",
-            turnId,
-            sessionId: session.id,
-            turnsAvailable: telemetry.turnsAvailable,
-            turnsIncluded: telemetry.turnsIncluded,
-            chars: telemetry.chars,
-            truncated: telemetry.truncated,
-            crossSession,
-          })}`,
-        );
+        emitCliTelemetry({
+          evt: "replay_window",
+          turnId,
+          sessionId: session.id,
+          turnsAvailable: telemetry.turnsAvailable,
+          turnsIncluded: telemetry.turnsIncluded,
+          chars: telemetry.chars,
+          truncated: telemetry.truncated,
+          crossSession,
+        });
       }
     } catch (err) {
       // Replay is an enhancement — a fetch/compose failure must never
@@ -4339,7 +4337,7 @@ export async function runTurn(
       console.error(
         "[atelier-cli] replay window failed",
         turnId,
-        err instanceof Error ? err.message : String(err),
+        safeCliErrorMessage(err),
       );
     }
     // Rolling summary covers turns beyond the replay window. Skip it for
@@ -4382,17 +4380,15 @@ export async function runTurn(
         history.push({ role: "user", content: `[session facts]\n${block}` });
         history.push({ role: "assistant", content: "(noted)" });
       }
-      console.log(
-        `[cli-telemetry] ${JSON.stringify({
-          evt: "session_facts",
-          turnId,
-          sessionId: session.id,
-          mode: factsMode(),
-          contractVersion: FACTS_CONTRACT_VERSION,
-          count: sessionFactRows.length,
-          rendered: factsMode() === "on" && block.length > 0,
-        })}`,
-      );
+      emitCliTelemetry({
+        evt: "session_facts",
+        turnId,
+        sessionId: session.id,
+        mode: factsMode(),
+        contractVersion: FACTS_CONTRACT_VERSION,
+        count: sessionFactRows.length,
+        rendered: factsMode() === "on" && block.length > 0,
+      });
     }
     // Page-context priming + attachment hint, then the actual prompt.
     const pageCtx = input.pageContext ?? session.pageContextSnapshot ?? null;
@@ -4568,7 +4564,7 @@ export async function runTurn(
         // they could carry a destructive instruction.
         console.error(
           "[atelier-cli] attachment destructive-scan failed; failing safe",
-          err instanceof Error ? err.message : String(err),
+          safeCliErrorMessage(err),
         );
         attachmentsMentionDestructive = true;
       }
@@ -4620,15 +4616,13 @@ export async function runTurn(
     let unknownToolRetryUsed = false;
     // Task #644 — resolution telemetry: intent + surfaced tools, so
     // real-world "couldn't understand" cases are diagnosable from logs.
-    console.log(
-      `[cli-telemetry] ${JSON.stringify({
-        evt: "tool_menu",
-        turnId,
-        kind: typedIntent.kind,
-        verb: typedIntent.verb,
-        tools: retrieved.selected,
-      })}`,
-    );
+    emitCliTelemetry({
+      evt: "tool_menu",
+      turnId,
+      kind: typedIntent.kind,
+      verb: typedIntent.verb,
+      tools: retrieved.selected,
+    });
     // Tier routing — reads land on Haiku, writes / transitions on Sonnet.
     // Task #769 — `let`: may be escalated mid-turn by the flail guard.
     let turnTier: "haiku" | "sonnet" = typedIntent.tier;
@@ -4754,7 +4748,7 @@ export async function runTurn(
           prelude: true,
           ok: false,
           errorCode: "prelude_failed",
-          errorMessage: err instanceof Error ? err.message : String(err),
+          errorMessage: safeCliErrorMessage(err),
         },
       });
     }
@@ -4777,16 +4771,14 @@ export async function runTurn(
         explicitId: input.disambigOptionId ?? null,
         options: pd.options,
       });
-      console.log(
-        `[cli-telemetry] ${JSON.stringify({
-          evt: "disambiguation_resumed",
-          turnId,
-          tool: pd.tool,
-          field: pd.field,
-          outcome: pick.kind,
-          via: pick.kind === "pick" ? pick.via : undefined,
-        })}`,
-      );
+      emitCliTelemetry({
+        evt: "disambiguation_resumed",
+        turnId,
+        tool: pd.tool,
+        field: pd.field,
+        outcome: pick.kind,
+        via: pick.kind === "pick" ? pick.via : undefined,
+      });
       const retireSource = async (message: string) => {
         if (pendingDisambigSourceTurnId && pendingDisambigSourceTurnId !== turnId) {
           await db
@@ -4883,7 +4875,7 @@ export async function runTurn(
             cont = {
               ok: false,
               errorCode: "internal",
-              errorMessage: err instanceof Error ? err.message : String(err),
+              errorMessage: safeCliErrorMessage(err),
             };
           }
           toolCalls.push({
@@ -5092,18 +5084,16 @@ export async function runTurn(
             timezone: turnTz,
           })
         : null;
-      console.log(
-        `[cli-telemetry] ${JSON.stringify({
-          evt: "clarification_resumed",
-          turnId,
-          tool: pc.tool,
-          field: pc.field,
-          controlIntent,
-          resolver: resolverOn ? (resolverOutcome as ResolverOutcome).kind : "off",
-          via:
-            resolverOutcome && "via" in resolverOutcome ? resolverOutcome.via : undefined,
-        })}`,
-      );
+      emitCliTelemetry({
+        evt: "clarification_resumed",
+        turnId,
+        tool: pc.tool,
+        field: pc.field,
+        controlIntent,
+        resolver: resolverOn ? (resolverOutcome as ResolverOutcome).kind : "off",
+        via:
+          resolverOutcome && "via" in resolverOutcome ? resolverOutcome.via : undefined,
+      });
       if (controlIntent === "cancel" || resolverOutcome?.kind === "cancel") {
         const _drCancel = getSessionDraft(session.id);
         if (
@@ -5237,14 +5227,12 @@ export async function runTurn(
               if (!merged) {
                 mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
               }
-              console.log(
-                `[cli-telemetry] ${JSON.stringify({
-                  evt: "clarification_llm_assist",
-                  turnId,
-                  tool: pc.tool,
-                  merged,
-                })}`,
-              );
+              emitCliTelemetry({
+                evt: "clarification_llm_assist",
+                turnId,
+                tool: pc.tool,
+                merged,
+              });
             } else {
               mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
             }
@@ -5284,7 +5272,7 @@ export async function runTurn(
           cont = {
             ok: false,
             errorCode: "internal",
-            errorMessage: err instanceof Error ? err.message : String(err),
+            errorMessage: safeCliErrorMessage(err),
           };
         }
         toolCalls.push({
@@ -5344,17 +5332,15 @@ export async function runTurn(
           const cl = cont.clarification;
           // Task #740 — telemetry: same-field re-asks (answer didn't
           // land) and confirm dead-ends ("confirmed" still re-asked).
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "clarification_issued",
-              turnId,
-              tool: cl.tool,
-              field: cl.field,
-              continuation: true,
-              reaskSameField: cl.field === pc.field,
-              confirmDeadEnd: resolverOutcome?.kind === "confirm",
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "clarification_issued",
+            turnId,
+            tool: cl.tool,
+            field: cl.field,
+            continuation: true,
+            reaskSameField: cl.field === pc.field,
+            confirmDeadEnd: resolverOutcome?.kind === "confirm",
+          });
           recordSessionResult(session.id, {
             pendingClarification: {
               field: cl.field,
@@ -5469,13 +5455,11 @@ export async function runTurn(
               : null;
           if (chainDirective) {
             chainAfterClarification = true;
-            console.log(
-              `[cli-telemetry] ${JSON.stringify({
-                evt: "clarification_chain_to_model",
-                turnId,
-                tool: pc.tool,
-              })}`,
-            );
+            emitCliTelemetry({
+              evt: "clarification_chain_to_model",
+              turnId,
+              tool: pc.tool,
+            });
             history.push({
               role: "user",
               content:
@@ -5786,15 +5770,13 @@ export async function runTurn(
               widen: true,
             });
             tools = widened.tools;
-            console.log(
-              `[cli-telemetry] ${JSON.stringify({
-                evt: "tool_miss_widen",
-                turnId,
-                kind: typedIntent.kind,
-                verb: typedIntent.verb,
-                tools: widened.selected,
-              })}`,
-            );
+            emitCliTelemetry({
+              evt: "tool_miss_widen",
+              turnId,
+              kind: typedIntent.kind,
+              verb: typedIntent.verb,
+              tools: widened.selected,
+            });
             history.push({
               role: "assistant",
               content: [{ type: "text", text: claudeStep.text }],
@@ -5808,7 +5790,7 @@ export async function runTurn(
           } catch (err) {
             console.error(
               "[atelier-cli] widen-on-miss retry failed",
-              err instanceof Error ? err.message : String(err),
+              safeCliErrorMessage(err),
             );
           }
         }
@@ -5882,14 +5864,12 @@ export async function runTurn(
           tools.map((t) => String((t as { name?: unknown }).name ?? "")),
         );
         if (corrected && findToolByName(corrected, persona)) {
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "tool_name_corrected",
-              turnId,
-              from: claudeStep.toolCall.name,
-              to: corrected,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "tool_name_corrected",
+            turnId,
+            from: claudeStep.toolCall.name,
+            to: corrected,
+          });
           claudeStep.toolCall.name = corrected;
         }
       }
@@ -5938,16 +5918,14 @@ export async function runTurn(
                 widen: true,
               });
               tools = widened.tools;
-              console.log(
-                `[cli-telemetry] ${JSON.stringify({
-                  evt: "tool_miss_widen",
-                  turnId,
-                  kind: typedIntent.kind,
-                  verb: typedIntent.verb,
-                  silent: true,
-                  tools: widened.selected,
-                })}`,
-              );
+              emitCliTelemetry({
+                evt: "tool_miss_widen",
+                turnId,
+                kind: typedIntent.kind,
+                verb: typedIntent.verb,
+                silent: true,
+                tools: widened.selected,
+              });
               history.push({
                 role: "user",
                 content:
@@ -5957,19 +5935,17 @@ export async function runTurn(
             } catch (err) {
               console.error(
                 "[atelier-cli] widen-on-miss retry failed",
-                err instanceof Error ? err.message : String(err),
+                safeCliErrorMessage(err),
               );
             }
           }
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "capability_refusal",
-              turnId,
-              kind: typedIntent.kind,
-              verb: typedIntent.verb,
-              widened: widenRetryUsed,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "capability_refusal",
+            turnId,
+            kind: typedIntent.kind,
+            verb: typedIntent.verb,
+            widened: widenRetryUsed,
+          });
           // Task #340 — refusal pageHref fallback: prefer the page the
           // user is currently on (so "open the right page" returns them
           // to the most relevant surface), else null.
@@ -6006,14 +5982,12 @@ export async function runTurn(
           tools.map((t) => String((t as { name?: unknown }).name ?? "")),
         );
         if (corrected && findToolByName(corrected, persona)) {
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "tool_name_corrected",
-              turnId,
-              from: tc.name,
-              to: corrected,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "tool_name_corrected",
+            turnId,
+            from: tc.name,
+            to: corrected,
+          });
           tc.name = corrected;
         }
       }
@@ -6062,9 +6036,7 @@ export async function runTurn(
         // killing the whole turn with a red "not registered" error card.
         if (!unknownToolRetryUsed) {
           unknownToolRetryUsed = true;
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({ evt: "unknown_tool_retry", turnId, tool: tc.name })}`,
-          );
+          emitCliTelemetry({ evt: "unknown_tool_retry", turnId, tool: tc.name });
           history.push({
             role: "user",
             content: [
@@ -6120,9 +6092,12 @@ export async function runTurn(
           delete stripped.confirm;
           delete stripped.commitToken;
           tc.input = stripped;
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({ evt: "model_confirm_stripped", turnId, tool: tc.name, step })}`,
-          );
+          emitCliTelemetry({
+            evt: "model_confirm_stripped",
+            turnId,
+            tool: tc.name,
+            step,
+          });
         }
       }
 
@@ -6152,9 +6127,12 @@ export async function runTurn(
               `specialist agents are not the right flow for them. Run classify_finance_document on the ` +
               `attachment ids instead and follow its recommended tool (supplier-invoice ingest, receipt ` +
               `pairing, or expense drafting). Do not launch a specialist for these documents.`;
-            console.log(
-              `[cli-telemetry] ${JSON.stringify({ evt: "finance_doc_agent_guard", turnId, tool: tc.name, kinds })}`,
-            );
+            emitCliTelemetry({
+              evt: "finance_doc_agent_guard",
+              turnId,
+              tool: tc.name,
+              kinds,
+            });
           }
         } catch {
           // Guard is best-effort: never let it break a legitimate agent run.
@@ -6334,23 +6312,19 @@ export async function runTurn(
         readToolCallCount.set(tc.name, next);
         if (next === FLAIL_ESCALATION_THRESHOLD) {
           turnTier = "sonnet";
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "flail_escalation",
-              turnId,
-              tool: tc.name,
-              callCount: next,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "flail_escalation",
+            turnId,
+            tool: tc.name,
+            callCount: next,
+          });
         } else if (next >= FLAIL_STOP_THRESHOLD) {
-          console.log(
-            `[cli-telemetry] ${JSON.stringify({
-              evt: "flail_stop",
-              turnId,
-              tool: tc.name,
-              callCount: next,
-            })}`,
-          );
+          emitCliTelemetry({
+            evt: "flail_stop",
+            turnId,
+            tool: tc.name,
+            callCount: next,
+          });
           recordSessionResult(session.id, {
             pendingClarification: {
               field: "query",
@@ -6415,17 +6389,15 @@ export async function runTurn(
           outcome: { kind: "read", committed: false },
         });
       } else if (managedPresentation && toolResult.ok) {
-        console.log(
-          `[cli-telemetry] ${JSON.stringify({
-            evt: "presentation_suppressed",
-            turnId,
-            tool: tc.name,
-            cardType: shapeHint,
-            intentKind: earlyTypedIntent.kind,
-            intentVerb: earlyTypedIntent.verb,
-            reason: isOverCap ? "card_budget" : "relevance_or_minimum_data",
-          })}`,
-        );
+        emitCliTelemetry({
+          evt: "presentation_suppressed",
+          turnId,
+          tool: tc.name,
+          cardType: shapeHint,
+          intentKind: earlyTypedIntent.kind,
+          intentVerb: earlyTypedIntent.verb,
+          reason: isOverCap ? "card_budget" : "relevance_or_minimum_data",
+        });
       }
       if (!isProposePreview && (!managedPresentation || presentation)) {
         // Task #771 Riser overhaul — card budget. Suppress tool_result frames
@@ -6497,7 +6469,7 @@ export async function runTurn(
           record({
             type: "progress",
             data: {
-              message: `Post-commit follow-up failed: ${err instanceof Error ? err.message : String(err)}`,
+              message: `Post-commit follow-up failed: ${safeCliErrorMessage(err)}`,
             },
           });
         }
@@ -6819,7 +6791,7 @@ export async function runTurn(
       // error frame and mark the turn `error`. Do NOT rethrow — we still
       // need the finally block to persist + audit, and the route layer
       // should not emit a duplicate error frame.
-      runtimeError = err instanceof Error ? err.message : String(err);
+      runtimeError = safeCliErrorMessage(err);
       record({
         type: "error",
         data: { code: "internal", message: runtimeError },
@@ -6907,7 +6879,7 @@ export async function runTurn(
           })
           .where(eq(atelierCliTurns.id, turnId));
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = safeCliErrorMessage(err);
         console.error("[atelier-cli] turn persist failed", turnId, msg);
         persistErrors.push(`turn:${msg}`);
       }
@@ -6963,7 +6935,7 @@ export async function runTurn(
           })
           .where(eq(atelierCliSessions.id, session.id));
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = safeCliErrorMessage(err);
         console.error("[atelier-cli] session bookkeeping failed", session.id, msg);
         persistErrors.push(`session:${msg}`);
       }
@@ -6988,7 +6960,7 @@ export async function runTurn(
         try {
           await chargeSession(session.id, costCents);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = safeCliErrorMessage(err);
           console.error("[atelier-cli] chargeSession failed", session.id, msg);
           persistErrors.push(`charge:${msg}`);
         }
@@ -7046,7 +7018,7 @@ export async function runTurn(
             ).text,
           });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = safeCliErrorMessage(err);
           console.error("[atelier-cli] audit insert failed", turnId, msg);
           persistErrors.push(`audit:${msg}`);
         }
@@ -7108,8 +7080,8 @@ export async function confirmPendingWrite(
       outcome,
       terminal,
     });
-    emittedConfirmFrames.push(enveloped);
-    emit(enveloped);
+    emittedConfirmFrames.push(sanitizeCliPersistence(enveloped));
+    emit(sanitizeCliPublicResponse(enveloped));
   };
   // Helper: emit a single error frame + a single terminal final frame,
   // then return without throwing. Mirrors the runTurn contract so the
@@ -7424,7 +7396,7 @@ export async function confirmPendingWrite(
       console.error(
         "[atelier-cli] confirm rolling-summary append failed",
         turnId,
-        err instanceof Error ? err.message : String(err),
+        safeCliErrorMessage(err),
       );
     }
   }
@@ -7451,14 +7423,17 @@ export async function confirmPendingWrite(
       afterFrame = {
         type: "progress",
         data: {
-          message: `Post-commit follow-up failed: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Post-commit follow-up failed: ${safeCliErrorMessage(err)}`,
         },
       };
     }
     if (afterFrame) emitSemantic(afterFrame, confirmedOutcome);
   }
 
-  const newFrames = [...priorFrames, ...emittedConfirmFrames];
+  const newFrames = [
+    ...priorFrames.map((frame) => sanitizeCliPersistence(frame)),
+    ...emittedConfirmFrames,
+  ];
   const priorStepResults = Array.isArray(turn.stepResults)
     ? (turn.stepResults as Array<Record<string, unknown>>)
     : [];
@@ -7503,7 +7478,7 @@ export async function confirmPendingWrite(
       status: newStatus,
       statusMessage: newStatus,
       frames: newFrames,
-      toolCalls: mergedToolCalls,
+      toolCalls: sanitizeCliPersistence(mergedToolCalls),
       stepResults: mergedStepResults,
       pendingWrite: null,
       ...(canonicalTurnWritesEnabled() && turn.persistedSchemaVersion === 1

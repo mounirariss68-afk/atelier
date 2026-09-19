@@ -1,3 +1,4 @@
+import { emitCliTelemetry } from "./privacy-sinks.js";
 /**
  * Task #553 — chat scheduling assistant for standalone INTERNAL meetings.
  *
@@ -882,15 +883,13 @@ async function resolveTargetMeeting(
     }
     // Task #644 — resolution telemetry: log the miss so real-world
     // phrasing gaps show up in the server logs, never to the user.
-    console.log(
-      `[cli-telemetry] ${JSON.stringify({
-        evt: "meeting_resolve_miss",
-        query,
-        cleaned,
-        ymd: qYmd,
-        tz,
-      })}`,
-    );
+    emitCliTelemetry({
+      evt: "meeting_resolve_miss",
+      query,
+      cleaned,
+      ymd: qYmd,
+      tz,
+    });
     // Honest distinction when the user gave no topic words: "nothing
     // that day / at all" vs "meetings exist but you can't manage them".
     if (!query || cleaned.length === 0) {

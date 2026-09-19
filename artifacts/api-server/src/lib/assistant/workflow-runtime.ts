@@ -14,7 +14,10 @@ import {
   validateAcyclicWorkPlan,
 } from "@workspace/assistant-protocol";
 import Ajv from "ajv";
-import { decryptAssistantValue, encryptAssistantValue } from "./action-runtime.js";
+import {
+  decryptAssistantValueAudited,
+  encryptAssistantValue,
+} from "./action-runtime.js";
 import {
   currentCapabilityManifestVersion,
   reviewedCapabilityManifestEntry,
@@ -105,7 +108,8 @@ export async function createDurableWork(args: {
       id: workItemId,
       orgId: args.orgId,
       requesterId: args.requesterId,
-      goal: args.goal,
+      goal: "<encrypted>",
+      goalEncrypted: encryptAssistantValue(args.goal),
       status: "planned",
       budgetLedgerId: args.authorization.budgetLedgerId,
       policyContext: {
@@ -123,7 +127,8 @@ export async function createDurableWork(args: {
       version: plan.version,
       status: "active",
       createdBy: args.requesterId,
-      rationale: plan.goal,
+      rationale: "<encrypted>",
+      rationaleEncrypted: encryptAssistantValue(plan.goal),
     });
     await tx.insert(atelierWorkSteps).values(
       manifestSteps.map(({ step, entry, policy }) => ({
@@ -826,7 +831,15 @@ export async function executeClaimedWorkAttempt(args: {
   const output = await args.execute({
     capabilityId,
     mode,
-    input: decryptAssistantValue(inputEncrypted),
+    input: await decryptAssistantValueAudited({
+      ciphertext: inputEncrypted,
+      orgId: record.work.orgId,
+      requesterId: record.work.requesterId,
+      actorId: args.workerId,
+      resourceType: "work_step",
+      resourceId: record.step.id,
+      purpose: mode === "compensate" ? "execute_compensation" : "execute_work_step",
+    }),
     idempotencyKey: `workflow-effect:${args.attemptId}:${args.fencingToken}`,
   });
   return completeWorkAttempt({

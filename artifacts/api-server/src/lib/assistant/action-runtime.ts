@@ -1,6 +1,10 @@
 import { createHash, createCipheriv, createDecipheriv, hkdfSync, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
-import { db, atelierAssistantActions } from "@workspace/db";
+import {
+  db,
+  atelierAssistantActions,
+  atelierAssistantKeyAccessEvents,
+} from "@workspace/db";
 import {
   ActionPreviewV1Schema,
   ActionStateV1Schema,
@@ -56,28 +60,43 @@ function stableAssistantJson(value: unknown): string {
     .join(",")}}`;
 }
 
-function encryptionKey(): Buffer {
-  const root = process.env.SESSION_SECRET;
+function encryptionKey(version: "v1" | "v2"): Buffer {
+  const dedicated = process.env.ASSISTANT_ENCRYPTION_KEY_V2;
+  const root =
+    version === "v2"
+      ? dedicated ||
+        (!process.env.REPLIT_DEPLOYMENT ? process.env.SESSION_SECRET : undefined)
+      : process.env.SESSION_SECRET;
   if (!root || root.length < 32) throw new Error("assistant-encryption-key-unavailable");
+  const salt =
+    version === "v1" ? "atelier-riser-v1" : "atelier-riser-v2";
+  const info =
+    version === "v1" ? "action-input" : "assistant-sensitive-payload";
   return Buffer.from(
-    hkdfSync("sha256", Buffer.from(root), Buffer.from("atelier-riser-v1"), Buffer.from("action-input"), 32),
+    hkdfSync(
+      "sha256",
+      Buffer.from(root),
+      Buffer.from(salt),
+      Buffer.from(info),
+      32,
+    ),
   );
 }
 
 export function encryptAssistantValue(value: unknown): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey("v2"), iv);
   const ciphertext = Buffer.concat([
     cipher.update(JSON.stringify(value), "utf8"),
     cipher.final(),
   ]);
-  return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
+  return ["v2", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
 }
 
-export function decryptAssistantValue(value: string): unknown {
+function decryptAssistantValue(value: string): unknown {
   if (value.length > 1_400_000) throw new Error("assistant-ciphertext-too-large");
   const [version, ivRaw, tagRaw, ciphertextRaw] = value.split(".");
-  if (version !== "v1" || !ivRaw || !tagRaw || !ciphertextRaw) {
+  if ((version !== "v1" && version !== "v2") || !ivRaw || !tagRaw || !ciphertextRaw) {
     throw new Error("assistant-ciphertext-invalid");
   }
   const iv = Buffer.from(ivRaw, "base64url");
@@ -86,7 +105,11 @@ export function decryptAssistantValue(value: string): unknown {
   if (iv.length !== 12 || tag.length !== 16 || ciphertext.length > 1_048_576) {
     throw new Error("assistant-ciphertext-invalid");
   }
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), iv);
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    encryptionKey(version),
+    iv,
+  );
   decipher.setAuthTag(tag);
   const plaintext = Buffer.concat([
     decipher.update(ciphertext),
@@ -94,6 +117,40 @@ export function decryptAssistantValue(value: string): unknown {
   ]);
   if (plaintext.length > 1_048_576) throw new Error("assistant-plaintext-too-large");
   return JSON.parse(plaintext.toString("utf8")) as unknown;
+}
+
+export function decryptAssistantValueForTest(value: string): unknown {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("assistant-test-decrypt-disabled");
+  }
+  return decryptAssistantValue(value);
+}
+
+export async function decryptAssistantValueAudited(
+  args: {
+    ciphertext: string;
+    orgId: string;
+    requesterId: string;
+    actorId: string;
+    resourceType: "assistant_action" | "work_step";
+    resourceId: string;
+    purpose: string;
+  },
+  executor: Pick<typeof db, "insert"> = db,
+): Promise<unknown> {
+  const keyVersion = args.ciphertext.split(".", 1)[0] || "unknown";
+  const value = decryptAssistantValue(args.ciphertext);
+  await executor.insert(atelierAssistantKeyAccessEvents).values({
+    id: `aka_${randomUUID()}`,
+    orgId: args.orgId,
+    requesterId: args.requesterId,
+    actorId: args.actorId,
+    resourceType: args.resourceType,
+    resourceId: args.resourceId,
+    purpose: args.purpose,
+    keyVersion,
+  });
+  return value;
 }
 
 export async function cancelDurableAction(args: {
@@ -169,6 +226,20 @@ export async function withAssistantRlsTransaction<T>(
     await tx.execute(sql`SELECT
       set_config('app.org_id', ${args.orgId}, true),
       set_config('app.user_id', ${args.requesterId}, true)`);
+    return fn(tx);
+  });
+}
+
+export async function withAssistantLifecycleRlsTransaction<T>(
+  args: { orgId: string },
+  fn: (tx: AssistantActionTransaction) => Promise<T>,
+): Promise<T> {
+  if (!args.orgId) throw new Error("assistant-lifecycle-org-required");
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT
+      set_config('app.org_id', ${args.orgId}, true),
+      set_config('app.user_id', 'system:retention', true)`);
+    await tx.execute(sql.raw("SET LOCAL ROLE atelier_retention_executor"));
     return fn(tx);
   });
 }
@@ -557,7 +628,21 @@ export async function claimDurableAction(args: {
       )
       .returning({ id: atelierAssistantActions.id });
     if (!updated) return null;
-    return { fencingToken: fence, input: decryptAssistantValue(row.canonicalInputEncrypted) };
+    return {
+      fencingToken: fence,
+      input: await decryptAssistantValueAudited(
+        {
+          ciphertext: row.canonicalInputEncrypted,
+          orgId: row.orgId,
+          requesterId: row.requesterId,
+          actorId: args.requesterId,
+          resourceType: "assistant_action",
+          resourceId: row.id,
+          purpose: "claim_for_execution",
+        },
+        tx,
+      ),
+    };
   });
 }
 

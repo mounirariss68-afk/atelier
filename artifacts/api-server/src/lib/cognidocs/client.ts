@@ -1,3 +1,4 @@
+import { authorizeAssistantProviderPayload } from "@workspace/assistant-protocol";
 /**
  * Task #1316 — CogniDocs API client.
  *
@@ -145,17 +146,21 @@ export async function submitCognidocsDocument(args: SubmitDocumentArgs): Promise
       `Document parsing supports PDF, PNG, JPEG, WEBP and CSV — not ${mime || "this file type"}.`,
     );
   }
-  const resp = await cognidocsFetch("/documents", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      // Canonical RFC 4648 base64 (padded, no data-URL prefix).
+  const authorized = authorizeAssistantProviderPayload({
+    provider: "cognidocs",
+    declaredDataClasses: ["secret"],
+    payload: {
       fileBase64: args.bytes.toString("base64"),
       fileName: args.fileName,
       mimeType: mime,
       declaredType: args.declaredType,
       ...(args.password ? { password: args.password } : {}),
-    }),
+    },
+  });
+  const resp = await cognidocsFetch("/documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(authorized.payload),
   });
   return (await resp.json()) as CognidocsParseJob;
 }
