@@ -65,6 +65,7 @@ async function main(): Promise<void> {
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
+  const { generateBusinessCardPdf } = await import("../../src/lib/atelier-business-card.js");
 
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -90,6 +91,28 @@ async function main(): Promise<void> {
 
   const edgeIds: string[] = [];
   try {
+    group("canonical two-country QR payload");
+    const generated = await generateBusinessCardPdf({
+      fullName: "RC Two Country",
+      title: "Partner",
+      email: "two-country@cognirise.ai",
+      cellPhones: [
+        { country: "UAE", number: "050 111 2222" },
+        { country: "Saudi Arabia", number: "055 333 4444" },
+      ],
+    });
+    const telLines = generated.vcard
+      .split("\r\n")
+      .filter((line) => line.includes("TEL;TYPE=CELL,VOICE:"));
+    check(
+      "generated PDF QR payload retains complete UAE and Saudi numbers in order",
+      telLines.length === 2 &&
+        telLines[0]?.endsWith("+971 50 111 2222") === true &&
+        telLines[1]?.endsWith("+966 55 333 4444") === true &&
+        generated.pdf.subarray(0, 4).toString() === "%PDF",
+      `telLines=${JSON.stringify(telLines)}`,
+    );
+
     const personas = [
       { id: HR_ID, role: "hr", roleLabel: "HR", name: "RC HR" },
       { id: MGR_ID, role: "senior_manager", roleLabel: "Senior Manager", name: "RC Manager" },
@@ -129,7 +152,10 @@ async function main(): Promise<void> {
         email: `${p.id}@cognirise.ai`,
         role: p.role,
         title: p.title,
-        cellPhones: [{ country: "+971", number: "50 111 2222" }],
+        cellPhones: [
+          { country: "UAE", number: "050 111 2222" },
+          { country: "Saudi Arabia", number: "055 333 4444" },
+        ],
       });
     }
     // reports_to edge: MGR → REPORT (OUTSIDE_PERSON stays out of tree)

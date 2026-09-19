@@ -164,6 +164,7 @@
     "@workspace/api-zod": "workspace:*",
     "@workspace/assessments": "workspace:*",
     "@workspace/cognirise-content": "workspace:*",
+    "@workspace/contact-card": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-anthropic-ai": "workspace:*",
     "@workspace/screen-catalog": "workspace:*",

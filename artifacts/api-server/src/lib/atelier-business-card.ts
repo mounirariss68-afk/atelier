@@ -25,6 +25,12 @@ import { fileURLToPath } from "node:url";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import {
+  buildContactVCard,
+  canonicalPhoneValue,
+  type ContactCardInput,
+  type ContactCardPhone,
+} from "@workspace/contact-card";
 
 // ------------------------------------------------------------------
 // Asset loading (dist + src candidates)
@@ -104,88 +110,16 @@ export function loadBioTemplate(): Buffer {
 // vCard builder — server copy of artifacts/atelier/src/lib/vcard.ts.
 // Only PUBLIC card-safe fields are ever encoded.
 // ------------------------------------------------------------------
-export interface CardCell {
-  country: string;
-  number: string;
-}
+export type CardCell = ContactCardPhone;
 
-export interface CardPerson {
-  fullName: string;
-  title?: string | null;
-  email?: string | null;
-  cellPhones?: CardCell[] | null;
-  officeAddress?: string | null;
-}
+export interface CardPerson extends Omit<ContactCardInput, "org"> {}
 
 const FIRM = "Cognirise";
 const WEBSITE = "www.cognirise.ai";
 
-function esc(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
-    .replace(/,/g, "\\,")
-    .replace(/;/g, "\\;");
-}
-
-/**
- * Task #233 — build the full international TEL value from a stored cell.
- * `country` usually holds the dial code (e.g. "+971"); it must become part
- * of the phone NUMBER, never the label. Handles: number already starting
- * with "+" (kept as-is), number already containing the dial-code digits
- * (not doubled), blank/name-label country (number used as-is), whitespace.
- * Keep in sync with artifacts/atelier/src/lib/vcard.ts.
- */
-export function telValue(country: string, number: string): string {
-  const num = number.trim();
-  const dial = country.trim();
-  if (!num) return "";
-  if (!dial.startsWith("+") || num.startsWith("+")) return num;
-  const dialDigits = dial.replace(/\D/g, "");
-  if (!dialDigits) return num;
-  const local = num.replace(/^0+/, "");
-  const localDigits = local.replace(/\D/g, "");
-  if (localDigits.startsWith(dialDigits)) return `+${local}`;
-  return `${dial} ${local}`;
-}
-
-function structuredName(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) return `${esc(fullName.trim())};;;;`;
-  const family = parts[parts.length - 1]!;
-  const given = parts.slice(0, -1).join(" ");
-  return `${esc(family)};${esc(given)};;;`;
-}
-
+export const telValue = canonicalPhoneValue;
 export function buildVCard(p: CardPerson): string {
-  const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
-  lines.push(`N:${structuredName(p.fullName)}`);
-  lines.push(`FN:${esc(p.fullName)}`);
-  lines.push(`ORG:${esc(FIRM)}`);
-  lines.push(`URL;TYPE=WORK:https://${WEBSITE}`);
-  if (p.title) lines.push(`TITLE:${esc(p.title)}`);
-  if (p.email) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(p.email)}`);
-  const cells = (p.cellPhones ?? []).filter((c) => c.number.trim());
-  cells.forEach((c, i) => {
-    const tel = telValue(c.country, c.number);
-    const country = c.country.trim();
-    // Only a real non-dial-code label (e.g. "UAE") rides along as an
-    // Apple-style X-ABLabel; dial codes belong in the number itself.
-    const label = country.startsWith("+") ? "" : country;
-    if (label) {
-      const item = `item${i + 1}`;
-      lines.push(`${item}.TEL;TYPE=CELL,VOICE:${esc(tel)}`);
-      lines.push(`${item}.X-ABLabel:${esc(label)}`);
-    } else {
-      lines.push(`TEL;TYPE=CELL,VOICE:${esc(tel)}`);
-    }
-  });
-  if (p.officeAddress && p.officeAddress.trim()) {
-    lines.push(`ADR;TYPE=WORK:;;${esc(p.officeAddress.trim())};;;;`);
-    lines.push(`LABEL;TYPE=WORK:${esc(p.officeAddress.trim())}`);
-  }
-  lines.push("END:VCARD");
-  return lines.join("\r\n");
+  return buildContactVCard({ ...p, org: FIRM });
 }
 
 // ------------------------------------------------------------------

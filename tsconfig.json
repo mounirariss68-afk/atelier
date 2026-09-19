@@ -22,6 +22,9 @@
       "path": "./lib/cognirise-content"
     },
     {
+      "path": "./lib/contact-card"
+    },
+    {
       "path": "./lib/integrations-anthropic-ai"
     }
   ]

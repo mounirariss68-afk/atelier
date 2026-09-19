@@ -36,6 +36,9 @@
     },
     {
       "path": "../../lib/chat-core"
+    },
+    {
+      "path": "../../lib/contact-card"
     }
   ]
 }
