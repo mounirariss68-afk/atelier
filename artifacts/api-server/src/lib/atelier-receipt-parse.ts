@@ -707,7 +707,12 @@ export async function parseReceiptForExpense(args: {
   } else {
     let matched = false;
     if (merchantForMemory) {
-      const match = await matchMerchant(merchantForMemory, vision.country ?? "global");
+      const match = await matchMerchant(
+        merchantForMemory,
+        vision.country ?? "global",
+        undefined,
+        { orgId: me.orgId },
+      );
       if (match.categoryCode && match.subCategoryCode) {
         matched = true;
         merchantResolution =

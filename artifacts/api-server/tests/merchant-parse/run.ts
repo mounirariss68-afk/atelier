@@ -171,7 +171,12 @@ async function main() {
 
   // 5. NONE fallback logs to unmatched
   unmatchedLog.length = 0;
-  const none = await matchMerchant("XYZVENDOR QQ", "global", stubStorage);
+  const none = await matchMerchant(
+    "XYZVENDOR QQ",
+    "global",
+    stubStorage,
+    { orgId: "org_test" },
+  );
   check("no match → NONE", none.matchMethod === "NONE", none.matchMethod);
   check("unmatched logged", unmatchedLog.length === 1, String(unmatchedLog.length));
   check("NONE keeps raw name", none.merchantName === "XYZVENDOR QQ");

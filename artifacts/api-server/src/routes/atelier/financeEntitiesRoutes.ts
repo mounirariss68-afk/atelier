@@ -991,7 +991,12 @@ router.post("/finance/entities/extract", async (req, res) => {
   try {
     const { anthropic } = await (
       await import("../../lib/assistant/provider-runtime.js")
-    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
+    ).getPrivacyAuthorizedAnthropic({
+      dataClasses: ["restricted"],
+      orgId: me.orgId,
+      capabilityId: "finance.entity_registry_extraction",
+      model: "claude-sonnet-4-5",
+    });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 90_000);
     const resp = await anthropic.messages
@@ -1159,6 +1164,7 @@ router.post("/finance/entities/:id/bank-letter-extract", async (req, res) => {
   }
 
   const out = await extractBankLetterFields({
+    orgId: me.orgId,
     text,
     contextLabel: `Document file name: ${version.fileName}\nVault title: ${doc.title}\nLegal entity: ${row.legalNameEn ?? row.id}`,
   });

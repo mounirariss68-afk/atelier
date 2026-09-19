@@ -419,6 +419,7 @@ export interface AiAllocationResult {
 }
 
 export async function aiAllocateEntity(args: {
+  orgId: string;
   contextLabel: string;
   text: string;
   entities: AllocEntity[];
@@ -428,7 +429,12 @@ export async function aiAllocateEntity(args: {
   try {
     const { anthropic } = await (
       await import("./assistant/provider-runtime.js")
-    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
+    ).getPrivacyAuthorizedAnthropic({
+      dataClasses: ["confidential"],
+      orgId: args.orgId,
+      capabilityId: "finance.entity_allocation",
+      model: "claude-haiku-4-5",
+    });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 60_000);
     const entityList = args.entities
@@ -607,6 +613,7 @@ export async function proposeExpenseAllocation(
       row.tripDestinationCountry ? `destination: ${row.tripDestinationCountry}` : null,
     ].filter(Boolean).join("\n");
     const ai = await aiAllocateEntity({
+      orgId: row.orgId,
       contextLabel: `Expense by a roster member (${row.personType}). Amount ${row.currency} ${row.amount}.`,
       text,
       entities: ctx.entities,
@@ -732,6 +739,7 @@ export async function proposeSupplierInvoiceAllocation(
       row.notes,
     ].filter(Boolean).join("\n");
     const ai = await aiAllocateEntity({
+      orgId: row.orgId,
       contextLabel: `Supplier invoice from ${row.partnerFirmName}, ${row.costCurrency} ${row.costAmount}.`,
       text: aiText,
       entities: ctx.entities,
@@ -913,6 +921,7 @@ export async function proposeGlRecordAllocation(
 
   if (!decision && opts.allowAi !== false && aiText) {
     const ai = await aiAllocateEntity({
+      orgId: r.orgId,
       contextLabel: aiContext,
       text: aiText,
       entities: ctx.entities,

@@ -231,6 +231,72 @@ export async function assertAssistantProviderControl(args: {
   }
 }
 
+export async function assertAssistantCapabilityControl(args: {
+  orgId: string;
+  capabilityId: string;
+  catalogVersion?: string | null;
+  policyVersion?: string | null;
+}): Promise<void> {
+  let decision: AssistantControlDecision;
+  try {
+    decision = await resolveAssistantControl({
+      orgId: args.orgId,
+      capabilityId: args.capabilityId,
+      catalogVersion: args.catalogVersion ?? null,
+      policyVersion: args.policyVersion ?? null,
+    });
+  } catch {
+    throw new Error("assistant-operator-control-unavailable");
+  }
+  if (decision.blocked) {
+    throw new Error("assistant-capability-disabled");
+  }
+}
+
+export async function filterAssistantCapabilities(args: {
+  orgId: string;
+  capabilities: Array<{ id: string; toolName: string }>;
+  catalogVersion?: string | null;
+  policyVersion?: string | null;
+}): Promise<Set<string>> {
+  let controls: ControlRow[];
+  try {
+    controls = await db
+      .select()
+      .from(atelierAssistantControls)
+      .where(
+        and(
+          eq(atelierAssistantControls.enabled, true),
+          or(
+            isNull(atelierAssistantControls.orgId),
+            eq(atelierAssistantControls.orgId, args.orgId),
+          ),
+          or(
+            isNull(atelierAssistantControls.expiresAt),
+            gt(atelierAssistantControls.expiresAt, new Date()),
+          ),
+        ),
+      );
+  } catch {
+    return new Set();
+  }
+  const allowed = new Set<string>();
+  for (const capability of args.capabilities) {
+    const blocked = controls.some(
+      (control) =>
+        (control.mode === "deny" || control.mode === "quarantine") &&
+        controlMatches(control, {
+          orgId: args.orgId,
+          capabilityId: capability.id,
+          catalogVersion: args.catalogVersion ?? null,
+          policyVersion: args.policyVersion ?? null,
+        }),
+    );
+    if (!blocked) allowed.add(capability.toolName);
+  }
+  return allowed;
+}
+
 export async function createAssistantControl(args: {
   orgId: string;
   actorId: string;
@@ -244,6 +310,43 @@ export async function createAssistantControl(args: {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`${args.orgId}:${request.scope}:${request.scopeKey}`}))`,
     );
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`${args.orgId}:assistant-actions`}))`,
+    );
+    if (
+      request.inflightBehavior !== "finish" &&
+      request.scope !== "provider" &&
+      request.scope !== "model"
+    ) {
+      const executing = await tx
+        .select()
+        .from(atelierAssistantActions)
+        .where(
+          and(
+            eq(atelierAssistantActions.orgId, args.orgId),
+            eq(atelierAssistantActions.state, "executing"),
+          ),
+        )
+        .for("update");
+      const incompatible = executing.some((action) => {
+        if (request.scope === "org") {
+          return request.scopeKey === "*" || request.scopeKey === args.orgId;
+        }
+        if (request.scope === "capability") {
+          return request.scopeKey === "*" || request.scopeKey === action.capabilityId;
+        }
+        if (request.scope === "catalog_version") {
+          return request.scopeKey === "*" || request.scopeKey === action.catalogVersion;
+        }
+        if (request.scope === "policy_version") {
+          return request.scopeKey === "*" || request.scopeKey === action.policyVersion;
+        }
+        return false;
+      });
+      if (incompatible) {
+        throw new Error("assistant-control-executing-action-requires-finish");
+      }
+    }
     const [current] = await tx
       .select({ version: max(atelierAssistantControls.version) })
       .from(atelierAssistantControls)
@@ -303,23 +406,11 @@ export async function createAssistantControl(args: {
     });
     return created;
   });
-  try {
-    await reconcileAssistantControl({
-      control,
-      actorId: args.actorId,
-      actorLabel: args.actorLabel,
-    });
-  } catch (error) {
-    await db
-      .update(atelierAssistantControls)
-      .set({
-        reconciliationStatus: "failed",
-        reconciliationError:
-          error instanceof Error ? error.name.slice(0, 120) : "unknown",
-        updatedAt: new Date(),
-      })
-      .where(eq(atelierAssistantControls.id, control.id));
-  }
+  await runAssistantControlReconciliation({
+    control,
+    actorId: args.actorId,
+    actorLabel: args.actorLabel,
+  });
   const [current] = await db
     .select()
     .from(atelierAssistantControls)
@@ -428,7 +519,6 @@ export async function reconcileAssistantControl(args: {
         inArray(atelierAssistantControls.reconciliationStatus, [
           "pending",
           "failed",
-          "running",
         ]),
       ),
     )
@@ -459,6 +549,20 @@ export async function reconcileAssistantControl(args: {
         ]),
       ),
     );
+  const unsupportedExecutingAction = actions.find(
+    (action) =>
+      action.state === "executing" &&
+      control.inflightBehavior !== "finish" &&
+      controlAppliesToCapability(
+        control,
+        action.capabilityId,
+        action.catalogVersion,
+        action.policyVersion,
+      ),
+  );
+  if (unsupportedExecutingAction) {
+    throw new Error("assistant-control-executing-action-requires-finish");
+  }
   for (const action of actions) {
     if (
       !controlAppliesToCapability(
@@ -669,43 +773,6 @@ export async function reconcileAssistantControl(args: {
             updatedAt: now,
           })
           .where(eq(atelierWorkItems.id, work.id));
-        const [existing] = await tx
-          .select({ id: atelierWorkCheckpoints.id })
-          .from(atelierWorkCheckpoints)
-          .where(
-            and(
-              eq(atelierWorkCheckpoints.workItemId, work.id),
-              isNull(atelierWorkCheckpoints.decision),
-              sql`${atelierWorkCheckpoints.requiredDecider}->>'reason' = 'operator_control_commit_inflight'`,
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          await tx.insert(atelierWorkCheckpoints).values({
-            id: `checkpoint_${randomUUID()}`,
-            workItemId: work.id,
-            stepId: committingAttempts[0]?.stepId ?? null,
-            type: "operator_review",
-            requiredDecider: {
-              kind: "operator",
-              roles: ["founding_partner"],
-              reason: "operator_control_commit_inflight",
-              controlId: control.id,
-              approveAction: "accept_authoritative_commit",
-              rejectAction: "require_compensation",
-              evidenceSchema: {
-                type: "object",
-                additionalProperties: false,
-                required: ["reason"],
-                properties: {
-                  reason: { type: "string", minLength: 10, maxLength: 500 },
-                  evidence: {},
-                },
-              },
-            },
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000),
-          });
-        }
         summary.executingPreserved += committingAttempts.length;
         return;
       }
@@ -806,6 +873,30 @@ export async function reconcileAssistantControl(args: {
   return summary;
 }
 
+async function runAssistantControlReconciliation(
+  args: Parameters<typeof reconcileAssistantControl>[0],
+): ReturnType<typeof reconcileAssistantControl> {
+  try {
+    return await reconcileAssistantControl(args);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "unknown";
+    await db
+      .update(atelierAssistantControls)
+      .set({
+        reconciliationStatus: "failed",
+        reconciliationError: code.slice(0, 120),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierAssistantControls.id, args.control.id),
+          eq(atelierAssistantControls.reconciliationStatus, "running"),
+        ),
+      );
+    throw error;
+  }
+}
+
 export async function retryAssistantControlReconciliation(args: {
   orgId: string;
   controlId: string;
@@ -823,7 +914,7 @@ export async function retryAssistantControlReconciliation(args: {
       ),
     );
   if (!control) return null;
-  const summary = await reconcileAssistantControl({
+  const summary = await runAssistantControlReconciliation({
     control,
     actorId: args.actorId,
     actorLabel: args.actorLabel,

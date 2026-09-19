@@ -19,12 +19,15 @@
  */
 
 import { getAgent } from "@workspace/agents";
+import { db, atelierUsers } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   startRun,
   progressRun,
   completeRun,
   failRun,
 } from "./runner.js";
+import { runWithAssistantProviderContext } from "../assistant/provider-context.js";
 
 export interface RunAgentContext<TInput> {
   runId: string;
@@ -87,6 +90,18 @@ export async function runAgent<TInput, TOutput>(
     );
   }
   const actorLabel = args.actorLabel ?? agent.name;
+  let orgId = args.orgId ?? null;
+  if (!orgId && args.triggeredByUserId) {
+    const [actor] = await db
+      .select({ orgId: atelierUsers.orgId })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.id, args.triggeredByUserId))
+      .limit(1);
+    orgId = actor?.orgId ?? null;
+  }
+  if (!orgId) {
+    throw new Error("runAgent: authoritative orgId required");
+  }
 
   // 1. Validate input against the registry contract before doing any work.
   // The TS type of `input` is whatever the caller passes; the registry's
@@ -112,7 +127,7 @@ export async function runAgent<TInput, TOutput>(
   const inputForRow = (inputParse.success ? inputParse.data : args.input) as Record<string, unknown>;
   const runId = await startRun({
     agentId: agent.id,
-    orgId: args.orgId,
+    orgId,
     triggeredByUserId: args.triggeredByUserId,
     targetType: args.targetType,
     targetId: args.targetId,
@@ -131,7 +146,10 @@ export async function runAgent<TInput, TOutput>(
     };
 
     // 3. Run the agent body (LLM call + persistence happen here).
-    const result = await execute(ctx);
+    const result = await runWithAssistantProviderContext(
+      { orgId, capabilityId: `agent.${agent.id}` },
+      () => execute(ctx),
+    );
 
     // 4. Output validation happens inside completeRun() against the same
     // registry outputSchema. Keeping it there means the 15 historical

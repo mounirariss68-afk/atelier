@@ -2286,13 +2286,14 @@ async function loadOwnAttachmentBytes(
  * a live model call.
  */
 async function detectDocDatesBestEffort(
+  orgId: string,
   buf: Buffer,
   mime: string,
   hint: { kind: string; title: string },
 ): Promise<import("../atelier-doc-dates.js").DocDateExtraction | null> {
   try {
     const { extractDocumentDates } = await import("../atelier-doc-dates.js");
-    return await extractDocumentDates(buf, mime, hint);
+    return await extractDocumentDates(orgId, buf, mime, hint);
   } catch (err) {
     console.warn(
       "[atelier-cli] person-doc date auto-detect failed",
@@ -2402,7 +2403,12 @@ defineSelfWriteCapability({
     const wantsDetection =
       !isIsoDate(input.expiresAt) || !isIsoDate(input.issuedAt) || !input.docNumber;
     if (wantsDetection) {
-      detected = await detectDocDatesBestEffort(front.buf, front.mime, { kind, title });
+      detected = await detectDocDatesBestEffort(
+        ctx.persona.orgId,
+        front.buf,
+        front.mime,
+        { kind, title },
+      );
     }
     const effExpiresAt = isIsoDate(input.expiresAt)
       ? (input.expiresAt as string)

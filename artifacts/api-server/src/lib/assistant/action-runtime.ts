@@ -539,6 +539,9 @@ export async function claimDurableAction(args: {
   recheckTargets: (targets: unknown[]) => Promise<boolean>;
 }): Promise<{ fencingToken: number; input: unknown } | null> {
   return withAssistantRlsTransaction(args, async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`${args.orgId}:assistant-actions`}))`,
+    );
     const [row] = await tx
       .select()
       .from(atelierAssistantActions)

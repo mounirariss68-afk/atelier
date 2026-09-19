@@ -1471,6 +1471,7 @@ defineCapability({
       }
       const entity = entities.find((e) => e.id === legalEntityId) ?? null;
       const out = await extractBankLetterFields({
+        orgId: ctx.persona.orgId,
         text,
         contextLabel: `Attachment file name: ${loaded.attachment.fileName}${entity ? `\nLegal entity: ${entity.legalNameEn}` : ""}`,
       });

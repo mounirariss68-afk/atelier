@@ -69,7 +69,7 @@ export async function matchMerchant(
       console.log(`[MerchantMatcher] Alias lookup error: ${e}`);
     }
     if (alias) {
-      const inner = await matchMerchant(alias.aliasLabel, region, storage);
+      const inner = await matchMerchant(alias.aliasLabel, region, storage, opts);
       return {
         ...inner,
         merchantName: alias.aliasLabel,
@@ -205,8 +205,9 @@ export async function matchMerchant(
 
   // 6. Final fallback — log for AI enrichment
   try {
-    if (normalized.length >= 2) {
+    if (normalized.length >= 2 && opts?.orgId) {
       await storage.logUnmatchedMerchant({
+        orgId: opts.orgId,
         rawMerchantText: rawText,
         normalizedMerchantText: normalized,
         region,

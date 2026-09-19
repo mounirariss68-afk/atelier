@@ -25,6 +25,7 @@ const TIMEOUT_MS = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
 type ResearchBrief = NonNullable<typeof atelierAccounts.$inferSelect["researchBrief"]>;
 
 export interface TalkingPointsContext {
+  orgId: string;
   accountId: string;
   accountName: string;
   sector: string;
@@ -97,7 +98,12 @@ export async function getWatchOutTalkingPoints(
   try {
     const { anthropic } = await (
       await import("./assistant/provider-runtime.js")
-    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
+    ).getPrivacyAuthorizedAnthropic({
+      dataClasses: ["confidential"],
+      orgId: ctx.orgId,
+      capabilityId: "crm.account_prep_talking_points",
+      model: TALKING_POINTS_MODEL,
+    });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
     const system =

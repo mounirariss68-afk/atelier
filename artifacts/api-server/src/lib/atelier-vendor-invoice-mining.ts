@@ -360,6 +360,7 @@ export function parseReplitInvoice(text: string): MinedExtraction | null {
  * model/parse error so the caller can persist a "failed" status.
  */
 export async function mineInvoiceText(args: {
+  orgId: string;
   text: string;
   contextLabel: string;
   vendorKey?: VendorKey | null;
@@ -372,7 +373,12 @@ export async function mineInvoiceText(args: {
   }
   const { anthropic } = await (
     await import("./assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["restricted"],
+    orgId: args.orgId,
+    capabilityId: "finance.vendor_invoice_mining",
+    model: "claude-sonnet-4-5",
+  });
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 90_000);
   const resp = await anthropic.messages
@@ -661,6 +667,7 @@ export async function extractAndProposeForInvoice(
     const text = pdf.text ?? "";
     if (!text.trim()) throw new Error("no-text");
     mined = await mineInvoiceText({
+      orgId: inv.orgId,
       text,
       vendorKey,
       contextLabel: `Vendor: ${vendorLabel(vendorKey)} · file: ${inv.fileName ?? inv.reference ?? invoiceId}`,

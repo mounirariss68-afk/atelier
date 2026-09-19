@@ -72,6 +72,7 @@ export async function lookupMerchantMemory(
  * MUST catch and degrade to manual (fail-loud, never silent-guess).
  */
 export async function aiCategorize(input: {
+  orgId: string;
   merchant: string | null;
   description?: string | null;
   ocrText?: string | null;
@@ -93,6 +94,9 @@ export async function aiCategorize(input: {
 
   const { anthropic } = await getPrivacyAuthorizedAnthropic({
     dataClasses: ["confidential"],
+    orgId: input.orgId,
+    capabilityId: "finance.expense_categorization",
+    model: "claude-haiku-4-5",
   });
   const ac = new AbortController();
   const timer = setTimeout(

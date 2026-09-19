@@ -235,6 +235,7 @@ export async function classifyIntentTyped(
   prompt: string,
   surface: string = "global",
   opts?: {
+    orgId?: string;
     /**
      * Task #681 — explicit clarification-answer turns don't need the
      * live model (the turn resumes a paused tool; the classification is
@@ -258,7 +259,7 @@ export async function classifyIntentTyped(
     tokensOut,
     costUsd,
   });
-  if (opts?.deterministicOnly) {
+  if (opts?.deterministicOnly || !opts?.orgId) {
     return fallback(`${HAIKU_MODEL} (deterministic-only)`);
   }
   // Task #681 — the classifier is advisory bookkeeping; it must never
@@ -276,6 +277,9 @@ export async function classifyIntentTyped(
   try {
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
       dataClasses: ["confidential"],
+      orgId: opts.orgId,
+      capabilityId: "meta.intent_classifier",
+      model: HAIKU_MODEL,
     });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), CLASSIFIER_TIMEOUT_MS);

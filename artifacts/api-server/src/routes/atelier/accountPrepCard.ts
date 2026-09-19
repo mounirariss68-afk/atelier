@@ -106,6 +106,7 @@ export async function accountPrepCardHandler(
   const view = distillBriefView(account.researchBrief ?? {});
   const watchOutAnswers = await getWatchOutTalkingPoints(
     {
+      orgId: me.orgId,
       accountId: account.id,
       accountName: account.name,
       sector: account.sector,

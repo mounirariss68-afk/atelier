@@ -272,7 +272,7 @@ async function canSeeContract(me: Me, c: ContractRow): Promise<boolean> {
   return false;
 }
 
-async function detectForUpload(buf: Buffer): Promise<{
+async function detectForUpload(buf: Buffer, orgId: string): Promise<{
   fields: ContractTemplateField[];
   warnings: string[];
 }> {
@@ -280,7 +280,7 @@ async function detectForUpload(buf: Buffer): Promise<{
   if (text.trim().length === 0) {
     throw new ContractFieldDetectionError("The document contains no extractable text.");
   }
-  const detected = await detectTemplateFields(text);
+  const detected = await detectTemplateFields(text, orgId);
   const warnings = [...detected.warnings, ...verifyPlaceholders(detected.fields, text)];
   return { fields: detected.fields, warnings };
 }
@@ -340,7 +340,7 @@ router.post("/contract-templates", uploadSingle, async (req, res) => {
 
   let detection: { fields: ContractTemplateField[]; warnings: string[] };
   try {
-    detection = await detectForUpload(buf);
+    detection = await detectForUpload(buf, me.orgId);
   } catch (err) {
     if (err instanceof ContractFieldDetectionError) {
       res.status(422).json({ error: "field-detection-failed", message: err.message });
@@ -586,7 +586,7 @@ router.post("/contract-templates/:id/versions", uploadSingle, async (req, res) =
   const file = (req as Request & { file?: Express.Multer.File }).file!;
   let detection: { fields: ContractTemplateField[]; warnings: string[] };
   try {
-    detection = await detectForUpload(buf);
+    detection = await detectForUpload(buf, me.orgId);
   } catch (err) {
     if (err instanceof ContractFieldDetectionError) {
       res.status(422).json({ error: "field-detection-failed", message: err.message });

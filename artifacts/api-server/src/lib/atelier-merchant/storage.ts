@@ -29,6 +29,7 @@ export interface MerchantStorage {
     normalized: string,
   ): Promise<GlobalMerchantRow | null>;
   logUnmatchedMerchant(input: {
+    orgId: string;
     rawMerchantText: string;
     normalizedMerchantText: string;
     region?: string | null;
@@ -75,12 +76,16 @@ export const drizzleMerchantStorage: MerchantStorage = {
       .insert(atelierUnmatchedMerchants)
       .values({
         id: randomUUID(),
+        orgId: input.orgId,
         rawMerchantText: raw,
         normalizedMerchantText: input.normalizedMerchantText.slice(0, 500),
         region: input.region ?? null,
       })
       .onConflictDoUpdate({
-        target: atelierUnmatchedMerchants.rawMerchantText,
+        target: [
+          atelierUnmatchedMerchants.orgId,
+          atelierUnmatchedMerchants.rawMerchantText,
+        ],
         set: {
           count: sql`${atelierUnmatchedMerchants.count} + 1`,
           lastSeenAt: new Date(),

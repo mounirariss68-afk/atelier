@@ -62,6 +62,7 @@ function parseModelJson(text: string): DocDateExtraction {
 }
 
 async function askModel(
+  orgId: string,
   content:
     | string
     | Array<
@@ -74,6 +75,9 @@ async function askModel(
 ): Promise<DocDateExtraction> {
   const { anthropic } = await getPrivacyAuthorizedAnthropic({
     dataClasses: ["restricted"],
+    orgId,
+    capabilityId: "documents.date_extraction",
+    model: "claude-haiku-4-5",
   });
   const ac = new AbortController();
   const timer = setTimeout(
@@ -108,6 +112,7 @@ async function askModel(
  * Never intended to block an upload — callers wrap in try/catch anyway.
  */
 export async function extractDocumentDates(
+  orgId: string,
   bytes: Buffer,
   mime: string,
   hint: { kind: string; title: string },
@@ -115,7 +120,7 @@ export async function extractDocumentDates(
   if (bytes.byteLength < MIN_BYTES) return null;
   const hintText = `Document kind: ${hint.kind}. User-entered title: "${hint.title}". Extract the fields.`;
   if (VISION_MIMES.has(mime)) {
-    return askModel([
+    return askModel(orgId, [
       {
         type: "image",
         source: { type: "base64", media_type: mime, data: bytes.toString("base64") },
@@ -128,7 +133,7 @@ export async function extractDocumentDates(
     const { text } = await unpdfExtractText(proxy, { mergePages: true });
     const t = (text ?? "").trim();
     if (!t) return null; // scanned/image-only PDF — no text layer to read
-    return askModel(`${hintText}\n\nDocument text:\n\n${t.slice(0, 15000)}`);
+    return askModel(orgId, `${hintText}\n\nDocument text:\n\n${t.slice(0, 15000)}`);
   }
   return null;
 }

@@ -611,7 +611,7 @@ router.post(
       if (file && (!expiresAt || !issuedAt || !b.docNumber)) {
         try {
           const { extractDocumentDates } = await import("../../lib/atelier-doc-dates.js");
-          detected = await extractDocumentDates(file.buffer, file.mimetype, { kind, title });
+          detected = await extractDocumentDates(me.orgId, file.buffer, file.mimetype, { kind, title });
         } catch (err) {
           req.log.warn({ err }, "person-doc date auto-detect failed");
         }

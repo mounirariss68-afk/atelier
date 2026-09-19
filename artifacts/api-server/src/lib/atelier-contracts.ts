@@ -279,17 +279,27 @@ export interface DetectedFields {
  * LLM field detection. Uses the shared Anthropic integration (stubable
  * via ANTHROPIC_BASE_URL in tests). Throws loudly on non-JSON output.
  */
-export async function detectTemplateFields(templateText: string): Promise<DetectedFields> {
+export async function detectTemplateFields(
+  templateText: string,
+  orgId: string,
+): Promise<DetectedFields> {
+  const model =
+    process.env.ATELIER_CONTRACT_DETECT_MODEL ?? "claude-sonnet-4-5";
   const { anthropic } = await (
     await import("./assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["restricted"],
+    orgId,
+    capabilityId: "contracts.template_field_detection",
+    model,
+  });
   const ac = new AbortController();
   const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   const resp = await anthropic.messages
     .create(
       {
-        model: process.env.ATELIER_CONTRACT_DETECT_MODEL ?? "claude-sonnet-4-5",
+        model,
         max_tokens: 8192,
         system: `${DETECT_SYSTEM_PROMPT}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
         messages: [

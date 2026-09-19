@@ -1,29 +1,35 @@
 import {
+  ASSISTANT_PRIVACY_POLICY_VERSION,
   authorizeAssistantProviderPayload,
   assertAssistantProviderAllowed,
   type AssistantDataClass,
 } from "@workspace/assistant-protocol";
+import { currentCapabilityManifestVersion } from "../atelier-cli/capability-manifest.js";
 import { assertAssistantProviderControl } from "./control-runtime.js";
 
 export async function getPrivacyAuthorizedAnthropic(args: {
   dataClasses: AssistantDataClass[];
-  orgId?: string;
-  capabilityId?: string;
-  model?: string;
+  orgId: string;
+  capabilityId: string;
+  model: string;
   catalogVersion?: string;
   policyVersion?: string;
 }) {
+  const catalogVersion =
+    args.catalogVersion ?? currentCapabilityManifestVersion();
+  const policyVersion =
+    args.policyVersion ?? ASSISTANT_PRIVACY_POLICY_VERSION;
   assertAssistantProviderAllowed({
     provider: "anthropic",
     dataClasses: args.dataClasses,
   });
   await assertAssistantProviderControl({
-    orgId: args.orgId ?? "*",
-    capabilityId: args.capabilityId ?? null,
+    orgId: args.orgId,
+    capabilityId: args.capabilityId,
     provider: "anthropic",
-    model: args.model ?? null,
-    catalogVersion: args.catalogVersion ?? null,
-    policyVersion: args.policyVersion ?? null,
+    model: args.model,
+    catalogVersion,
+    policyVersion,
   });
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const messages = new Proxy(anthropic.messages, {
@@ -44,22 +50,24 @@ export async function getPrivacyAuthorizedAnthropic(args: {
           typeof (authorized.payload as { model?: unknown }).model === "string"
             ? (authorized.payload as { model: string }).model
             : null;
+        if (!payloadModel || payloadModel !== args.model) {
+          throw new Error("assistant-provider-model-context-mismatch");
+        }
         if (property === "stream") {
-          if (!args.model || (payloadModel && payloadModel !== args.model)) {
-            throw new Error("assistant-provider-stream-model-context-required");
-          }
           return invoke(authorized.payload as never, options as never);
         }
+        const invokeCreate = invoke as (
+          payload: unknown,
+          options?: unknown,
+        ) => Promise<unknown>;
         return assertAssistantProviderControl({
-          orgId: args.orgId ?? "*",
-          capabilityId: args.capabilityId ?? null,
+          orgId: args.orgId,
+          capabilityId: args.capabilityId,
           provider: "anthropic",
-          model: payloadModel ?? args.model ?? null,
-          catalogVersion: args.catalogVersion ?? null,
-          policyVersion: args.policyVersion ?? null,
-        }).then(() =>
-          invoke(authorized.payload as never, options as never),
-        );
+          model: payloadModel,
+          catalogVersion,
+          policyVersion,
+        }).then(() => invokeCreate(authorized.payload, options));
       };
     },
   });

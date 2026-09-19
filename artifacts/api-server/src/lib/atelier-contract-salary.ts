@@ -293,15 +293,23 @@ function squish(s: string): string {
 
 export async function extractFromDocumentText(
   docText: string,
+  orgId: string,
 ): Promise<SalaryExtractionResult> {
   if (!docText || !docText.trim()) {
     throw new ContractSalaryExtractionError(
       "No readable text in the signed contract document.",
     );
   }
+  const model =
+    process.env.ATELIER_CONTRACT_SALARY_MODEL ?? "claude-sonnet-4-5";
   const { anthropic } = await (
     await import("./assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["restricted"],
+    orgId,
+    capabilityId: "hr.contract_salary_extraction",
+    model,
+  });
   const ac = new AbortController();
   const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -310,8 +318,7 @@ export async function extractFromDocumentText(
     resp = await anthropic.messages
       .create(
         {
-          model:
-            process.env.ATELIER_CONTRACT_SALARY_MODEL ?? "claude-sonnet-4-5",
+          model,
           max_tokens: 2048,
           system: SALARY_SYSTEM_PROMPT,
           messages: [
@@ -440,5 +447,5 @@ export async function extractContractSalary(
 
   // Path 2 — signed-document text (fail-loud LLM).
   const docText = await loadSignedContractText(contract.id);
-  return extractFromDocumentText(docText);
+  return extractFromDocumentText(docText, contract.orgId);
 }

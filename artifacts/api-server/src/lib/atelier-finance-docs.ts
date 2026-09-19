@@ -68,6 +68,7 @@ export type BankLetterExtractResult =
  * field normalization.
  */
 export async function extractBankLetterFields(args: {
+  orgId: string;
   text: string;
   /** Human context line shown to the model, e.g. file name + entity. */
   contextLabel: string;
@@ -75,7 +76,12 @@ export async function extractBankLetterFields(args: {
   try {
     const { anthropic } = await (
       await import("./assistant/provider-runtime.js")
-    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
+    ).getPrivacyAuthorizedAnthropic({
+      dataClasses: ["restricted"],
+      orgId: args.orgId,
+      capabilityId: "finance.bank_letter_extraction",
+      model: "claude-sonnet-4-5",
+    });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 90_000);
     const resp = await anthropic.messages

@@ -41,6 +41,7 @@ import {
 import { and, desc, eq, gte, ilike, isNull, ne, or, inArray } from "drizzle-orm";
 import {
   ASSISTANT_FRAME_ENVELOPE_KEY,
+  ASSISTANT_PRIVACY_POLICY_VERSION,
   AssistantFrameOutcomeV1Schema,
   ASSISTANT_PROTOCOL_VERSION,
   PRESENTATION_MINIMUM_DATA_VERSION,
@@ -1697,6 +1698,7 @@ function textStreamEnabled(): boolean {
 
 /** Abstract model dispatch (live Sonnet/Haiku via Anthropic SDK). */
 async function modelStep(args: {
+  orgId: string;
   history: Array<{ role: "user" | "assistant"; content: unknown }>;
   tools: ToolDef[];
   intent: string | null;
@@ -1718,9 +1720,6 @@ async function modelStep(args: {
    * partially streamed text. */
   onStreamReset?: () => void;
 }): Promise<ClaudeStep> {
-  const { anthropic } = await getPrivacyAuthorizedAnthropic({
-    dataClasses: ["confidential"],
-  });
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 30_000));
   // Retry-with-jitter on transient upstream failures (5xx / network / 429).
@@ -1742,6 +1741,12 @@ async function modelStep(args: {
   const haikuModel = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
   const sonnetModel = process.env.ATELIER_CLI_MODEL ?? "claude-sonnet-4-5";
   const chosenModel = tier === "haiku" ? haikuModel : sonnetModel;
+  const { anthropic } = await getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+    orgId: args.orgId,
+    capabilityId: "meta.orchestrate_turn",
+    model: chosenModel,
+  });
   // Task #411 — prompt caching. The system prompt + tool block are
   // stable per turn (and across most turns within a session), so we
   // mark each as `cache_control: { type: "ephemeral" }` to amortise
@@ -1956,10 +1961,14 @@ export function sanitizeSessionTitle(raw: string): string | null {
 export async function generateAndSaveSessionTitle(
   sessionId: string,
   prompt: string,
+  orgId: string,
 ): Promise<void> {
   try {
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
       dataClasses: ["internal"],
+      orgId,
+      capabilityId: "meta.session_title",
+      model: HAIKU_CLASSIFIER_MODEL,
     });
     const ac = new AbortController();
     const timer = setTimeout(
@@ -3632,7 +3641,10 @@ export async function runTurn(
     const earlyTypedIntent = await (await import("./intent-router.js")).classifyIntentTyped(
       sensitivePendingEarly ? "continue" : input.prompt,
       earlySurface,
-      { deterministicOnly: Boolean(input.continuesTurnId) || sensitivePendingEarly },
+      {
+        orgId: persona.orgId,
+        deterministicOnly: Boolean(input.continuesTurnId) || sensitivePendingEarly,
+      },
     );
     const earlyLabel: IntentLabel = (() => {
       const v = earlyTypedIntent.verb;
@@ -4645,6 +4657,8 @@ export async function runTurn(
     const retrievalQuery = intentToQueryString(typedIntent, input.prompt);
     const retrieved = await retrieveCapabilities({
       persona,
+      catalogVersion: currentCapabilityManifestVersion(),
+      policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION,
       query: retrievalQuery,
       intentKind: typedIntent.kind,
       intentVerb: typedIntent.verb,
@@ -5261,6 +5275,7 @@ export async function runTurn(
             try {
               const wall = tzWallParts(new Date(), turnTz);
               llmValues = await resolveWithModel({
+                orgId: persona.orgId,
                 reply: answer,
                 pending: {
                   tool: pc.tool,
@@ -5736,6 +5751,7 @@ export async function runTurn(
       let claudeStep: ClaudeStep;
       try {
         claudeStep = await modelStep({
+          orgId: persona.orgId,
           history,
           tools,
           ...(streamOn
@@ -5827,6 +5843,8 @@ export async function runTurn(
           try {
             const widened = await retrieveCapabilities({
               persona,
+              catalogVersion: currentCapabilityManifestVersion(),
+              policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION,
               query: retrievalQuery,
               intentKind: typedIntent.kind,
               intentVerb: typedIntent.verb,
@@ -5975,6 +5993,8 @@ export async function runTurn(
             try {
               const widened = await retrieveCapabilities({
                 persona,
+                catalogVersion: currentCapabilityManifestVersion(),
+                policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION,
                 query: retrievalQuery,
                 intentKind: typedIntent.kind,
                 intentVerb: typedIntent.verb,
@@ -6124,6 +6144,43 @@ export async function runTurn(
           data: { code: "unknown_tool", message: `tool ${tc.name} not registered` },
         });
         status = "error";
+        break;
+      }
+      const capabilityEntry = capabilitiesForPersona(persona).find(
+        (entry) => entry.toolName === tc.name,
+      );
+      if (!capabilityEntry) {
+        record({
+          type: "refusal",
+          data: {
+            step,
+            reason: "That capability is not available for this account.",
+            closestCapabilityId: null,
+          },
+        });
+        status = status === "streaming" ? "success" : status;
+        break;
+      }
+      try {
+        const { assertAssistantCapabilityControl } = await import(
+          "../assistant/control-runtime.js"
+        );
+        await assertAssistantCapabilityControl({
+          orgId: persona.orgId,
+          capabilityId: capabilityEntry.id,
+          catalogVersion: currentCapabilityManifestVersion(),
+          policyVersion: ASSISTANT_PRIVACY_POLICY_VERSION,
+        });
+      } catch {
+        record({
+          type: "refusal",
+          data: {
+            step,
+            reason: "That capability is temporarily unavailable.",
+            closestCapabilityId: null,
+          },
+        });
+        status = status === "streaming" ? "success" : status;
         break;
       }
 
@@ -7045,7 +7102,7 @@ export async function runTurn(
           ? SENSITIVE_PROMPT_PLACEHOLDER
           : input.prompt;
         setImmediate(() => {
-          void generateAndSaveSessionTitle(titleSessionId, titlePrompt);
+          void generateAndSaveSessionTitle(titleSessionId, titlePrompt, persona.orgId);
         });
       }
 

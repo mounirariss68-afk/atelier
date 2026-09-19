@@ -2361,6 +2361,7 @@ router.get("/wallet/merchants/unmatched", async (req, res) => {
   const allRows = await db
     .select()
     .from(atelierUnmatchedMerchants)
+    .where(eq(atelierUnmatchedMerchants.orgId, me.orgId))
     .orderBy(desc(atelierUnmatchedMerchants.count))
     .limit(200);
   // Task #408 — entries a user has already corrected via an org alias are
@@ -2417,7 +2418,7 @@ router.post("/wallet/merchants/enrich", async (req, res) => {
   // 502s held requests — see the async-launch pattern).
   void (async () => {
     try {
-      const result = await runMerchantEnrichment();
+      const result = await runMerchantEnrichment(me.orgId);
       await completeBackgroundJob(runId, {
         result,
         notifyTitle: "Merchant enrichment finished",

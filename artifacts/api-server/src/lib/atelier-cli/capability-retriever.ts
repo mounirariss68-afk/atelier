@@ -331,6 +331,8 @@ export interface RetrievedTools {
  */
 export async function retrieveCapabilities(args: {
   persona: CliPersona;
+  catalogVersion: string;
+  policyVersion: string;
   query: string;
   intentKind?: string;
   /**
@@ -370,6 +372,15 @@ export async function retrieveCapabilities(args: {
   const isReadIntent = intentVerb === "read" || intentVerb === "trivial";
   const allTools = (await import("./index.js")).getToolsForPersona(persona);
   const personaCaps = capabilitiesForPersona(persona);
+  const { filterAssistantCapabilities } = await import(
+    "../assistant/control-runtime.js"
+  );
+  const controlAllowedTools = await filterAssistantCapabilities({
+    orgId: persona.orgId,
+    capabilities: personaCaps,
+    catalogVersion: args.catalogVersion,
+    policyVersion: args.policyVersion,
+  });
   const personaCapByTool = new Map(personaCaps.map((c) => [c.toolName, c]));
   await bootstrapOnce();
 
@@ -382,6 +393,7 @@ export async function retrieveCapabilities(args: {
   const dispatchTargets = await DISPATCH_TARGETS_LAZY();
   await ensureCoveredVerbsHydrated();
   const eligible = allTools.filter((t) => {
+    if (!controlAllowedTools.has(t.name)) return false;
     if (ALWAYS_INCLUDE.has(t.name)) return true;
     const cap = personaCapByTool.get(t.name);
     if (isReadIntent && cap?.isWrite && cap.module !== "meta") return false;
@@ -401,7 +413,7 @@ export async function retrieveCapabilities(args: {
   const selected = new Set<string>();
 
   // 1. Always-include the four orchestrator verbs (within budget).
-  for (const t of allTools) {
+  for (const t of eligible) {
     if (selected.size >= cap) break;
     if (ALWAYS_INCLUDE.has(t.name)) selected.add(t.name);
   }

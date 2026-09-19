@@ -575,9 +575,18 @@ async function callClaudeJson<T>(
      */
     timeoutMs?: number;
   }): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
+  const { requireAssistantProviderContext } = await import(
+    "../assistant/provider-context.js"
+  );
+  const providerContext = requireAssistantProviderContext();
   const { anthropic } = await (
     await import("../assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+    orgId: providerContext.orgId,
+    capabilityId: providerContext.capabilityId,
+    model,
+  });
   const ac = new AbortController();
   const timeoutMs = opts?.timeoutMs ?? Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -2703,6 +2712,10 @@ export async function callClaudeJsonWithWebSearch<T>(
   citationUrls: Array<{ url: string; title?: string }>;
 }> {
   const progressRunId = opts?.progressRunId ?? null;
+  const { requireAssistantProviderContext } = await import(
+    "../assistant/provider-context.js"
+  );
+  const providerContext = requireAssistantProviderContext();
   // Phase emitter — always streams to the ambient sink (chat transcript) and,
   // for a persisted run, also updates the agent_run row so the account page
   // can show the same phase. DB write is best-effort; a failure must never
@@ -2733,7 +2746,12 @@ export async function callClaudeJsonWithWebSearch<T>(
   };
   const { anthropic } = await (
     await import("../assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+    orgId: providerContext.orgId,
+    capabilityId: "agents.web_search_research",
+    model,
+  });
   const ac = new AbortController();
   // Web-search research legitimately spends minutes when a heavy account
   // (e.g. a large conglomerate) drives the full 6-search / dozens-of-sources
@@ -2832,6 +2850,15 @@ export async function callClaudeJsonWithWebSearch<T>(
   let answerText = "";
   let synthSectionIdx = -1;
   const resp = await (async () => {
+    const { assertAssistantProviderControl } = await import(
+      "../assistant/control-runtime.js"
+    );
+    await assertAssistantProviderControl({
+      orgId: providerContext.orgId,
+      capabilityId: "agents.web_search_research",
+      provider: "anthropic",
+      model,
+    });
     const stream = anthropic.messages.stream(
       {
         model,
@@ -3105,6 +3132,10 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   potentiallyStale: boolean;
 }> {
   const progressRunId = opts.progressRunId ?? null;
+  const { requireAssistantProviderContext } = await import(
+    "../assistant/provider-context.js"
+  );
+  const providerContext = requireAssistantProviderContext();
   let maxPersistedPct = 0;
   const emitPhase = (
     pct: number,
@@ -3157,7 +3188,12 @@ async function callClaudeJsonWithPerplexityResearch<T>(
 
   const { anthropic } = await (
     await import("../assistant/provider-runtime.js")
-  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
+  ).getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+    orgId: providerContext.orgId,
+    capabilityId: "agents.web_search_synthesis",
+    model,
+  });
   const ac = new AbortController();
   const idleMs = Number(
     process.env.ATELIER_WEBSEARCH_TIMEOUT_MS ??
@@ -3207,6 +3243,15 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   let answerText = "";
   let synthSectionIdx = -1;
   const resp = await (async () => {
+    const { assertAssistantProviderControl } = await import(
+      "../assistant/control-runtime.js"
+    );
+    await assertAssistantProviderControl({
+      orgId: providerContext.orgId,
+      capabilityId: "agents.web_search_synthesis",
+      provider: "anthropic",
+      model,
+    });
     const stream = anthropic.messages.stream(
       {
         model,

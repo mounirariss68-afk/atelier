@@ -511,6 +511,7 @@ export function resolverLlmEnabled(): boolean {
  * malformed output) — callers then fall back to the legacy raw merge.
  */
 export async function resolveWithModel(args: {
+  orgId: string;
   reply: string;
   pending: PendingClarificationSpec;
   timezone: string;
@@ -521,6 +522,9 @@ export async function resolveWithModel(args: {
   try {
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
       dataClasses: ["confidential"],
+      orgId: args.orgId,
+      capabilityId: "meta.resolve_clarification",
+      model: args.model,
     });
     const asked = askedFieldSpecs(args.pending);
     const ac = new AbortController();

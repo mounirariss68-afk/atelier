@@ -9,7 +9,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   atelierGlobalMerchants,
@@ -53,7 +53,7 @@ function validPairSets(): Map<string, Set<string>> {
  * Classify up to ENRICHMENT_BATCH_CAP pending unmatched merchants and insert
  * the validated results into the global merchant table. Returns a summary.
  */
-export async function runMerchantEnrichment(): Promise<{
+export async function runMerchantEnrichment(orgId: string): Promise<{
   processed: number;
   classified: number;
   inserted: number;
@@ -62,7 +62,12 @@ export async function runMerchantEnrichment(): Promise<{
   const pending = await db
     .select()
     .from(atelierUnmatchedMerchants)
-    .where(eq(atelierUnmatchedMerchants.status, "pending"))
+    .where(
+      and(
+        eq(atelierUnmatchedMerchants.orgId, orgId),
+        eq(atelierUnmatchedMerchants.status, "pending"),
+      ),
+    )
     .limit(ENRICHMENT_BATCH_CAP);
 
   if (pending.length === 0) {
@@ -71,6 +76,9 @@ export async function runMerchantEnrichment(): Promise<{
 
   const { anthropic } = await getPrivacyAuthorizedAnthropic({
     dataClasses: ["confidential"],
+    orgId,
+    capabilityId: "finance.merchant_enrichment",
+    model: MODEL,
   });
 
   const merchantList = pending
@@ -179,7 +187,12 @@ Respond with ONLY a JSON array, no other text:
   const stillPending = await db
     .select({ id: atelierUnmatchedMerchants.id })
     .from(atelierUnmatchedMerchants)
-    .where(eq(atelierUnmatchedMerchants.status, "pending"));
+    .where(
+      and(
+        eq(atelierUnmatchedMerchants.orgId, orgId),
+        eq(atelierUnmatchedMerchants.status, "pending"),
+      ),
+    );
 
   return {
     processed: pending.length,

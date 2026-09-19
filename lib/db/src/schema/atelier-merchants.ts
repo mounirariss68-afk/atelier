@@ -82,6 +82,7 @@ export const atelierUnmatchedMerchants = pgTable(
   "atelier_unmatched_merchants",
   {
     id: text("id").primaryKey(),
+    orgId: text("org_id"),
     rawMerchantText: text("raw_merchant_text").notNull(),
     normalizedMerchantText: text("normalized_merchant_text").notNull(),
     region: text("region"),
@@ -92,7 +93,8 @@ export const atelierUnmatchedMerchants = pgTable(
     lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("uq_atelier_unmatched_raw").on(t.rawMerchantText),
+    uniqueIndex("uq_atelier_unmatched_org_raw").on(t.orgId, t.rawMerchantText),
     index("idx_atelier_unmatched_status").on(t.status),
+    index("idx_atelier_unmatched_org_status").on(t.orgId, t.status),
   ],
 );
