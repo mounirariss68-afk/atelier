@@ -4,6 +4,8 @@ import { and, asc, eq } from "drizzle-orm";
 import {
   db,
   atelierAssistantActions,
+  atelierAccounts,
+  atelierAuditEvents,
   atelierAssistantBudgetLedgers,
   atelierAssistantBudgetReservations,
   atelierAssistantControls,
@@ -26,6 +28,7 @@ import {
   reserveAssistantBudget,
 } from "../../src/lib/assistant/budget-runtime.js";
 import { evaluateAssistantPolicy } from "../../src/lib/assistant/control-runtime.js";
+import { executeDurableAccountUpdate } from "../../src/lib/assistant/durable-account-update.js";
 import {
   cancelDurableWork,
   claimWorkAttempt,
@@ -266,6 +269,99 @@ try {
     .from(atelierAssistantActions)
     .where(eq(atelierAssistantActions.id, staleTargetAction.actionId));
   assert.equal(invalidatedTargetAction.state, "invalidated");
+
+  const accountId = `acct_riser_${suffix}`;
+  const [durableAccount] = await db
+    .insert(atelierAccounts)
+    .values({
+      id: accountId,
+      orgId,
+      name: "Before durable update",
+      country: "UAE",
+      sector: "Technology",
+    })
+    .returning();
+  const accountAction = await createDurableActionPreview({
+    orgId,
+    requesterId,
+    conversationId,
+    sourceTurnId: `account_update_${suffix}`,
+    capabilityId: "coverage.account_update",
+    catalogVersion: "test-v1",
+    inputSchemaVersion: 1,
+    canonicalInput: { id: accountId, name: "After durable update", status: "dormant" },
+    targetRefsAndRevisions: [{
+      type: "account",
+      id: accountId,
+      updatedAt: durableAccount.updatedAt.toISOString(),
+    }],
+    policyDecision: policy,
+    riskClass: "write",
+    irreversible: false,
+    outboundChannels: [],
+    summary: "Update account",
+    diff: {},
+    expiresAt: new Date(Date.now() + 60_000),
+    idempotencyKey: `durable-account-${suffix}`,
+  });
+  await confirmDurableAction({
+    actionId: accountAction.actionId,
+    orgId,
+    requesterId,
+    expectedStateVersion: accountAction.stateVersion,
+    recheckPolicy: async () => policy,
+  });
+  const accountClaim = await claimDurableAction({
+    actionId: accountAction.actionId,
+    orgId,
+    recheckPolicy: async () => policy,
+    recheckTargets: async () => true,
+  });
+  assert.ok(accountClaim);
+  const executorRace = await Promise.allSettled(
+    Array.from({ length: 20 }, () =>
+      executeDurableAccountUpdate({
+        orgId,
+        actionId: accountAction.actionId,
+        fencingToken: accountClaim.fencingToken,
+      }),
+    ),
+  );
+  assert.equal(executorRace.filter((result) => result.status === "fulfilled").length, 20);
+  assert.equal(
+    new Set(
+      executorRace
+        .filter((result): result is PromiseFulfilledResult<{ id: string; changedFields: string[] }> =>
+          result.status === "fulfilled",
+        )
+        .map((result) => JSON.stringify(result.value)),
+    ).size,
+    1,
+  );
+  const [updatedAccount] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, accountId));
+  assert.equal(updatedAccount.name, "After durable update");
+  assert.equal(updatedAccount.status, "dormant");
+  const accountAudits = await db
+    .select()
+    .from(atelierAuditEvents)
+    .where(
+      and(
+        eq(atelierAuditEvents.orgId, orgId),
+        eq(atelierAuditEvents.entityId, accountId),
+        eq(atelierAuditEvents.action, "update"),
+      ),
+    );
+  assert.equal(accountAudits.length, 1);
+  const [completedAccountAction] = await db
+    .select()
+    .from(atelierAssistantActions)
+    .where(eq(atelierAssistantActions.id, accountAction.actionId));
+  assert.equal(completedAccountAction.state, "succeeded");
+  assert.deepEqual(completedAccountAction.auditEventIds, [accountAudits[0].id]);
+  assert.equal(JSON.stringify(accountAudits[0].payload).includes("After durable update"), false);
 
   const parentLedgerId = `budget_parent_${suffix}`;
   const childLedgerId = `budget_child_${suffix}`;
@@ -679,6 +775,8 @@ try {
     .delete(atelierAssistantEvents)
     .where(eq(atelierAssistantEvents.orgId, orgId));
   await db.delete(atelierAssistantActions).where(eq(atelierAssistantActions.orgId, orgId));
+  await db.delete(atelierAuditEvents).where(eq(atelierAuditEvents.orgId, orgId));
+  await db.delete(atelierAccounts).where(eq(atelierAccounts.orgId, orgId));
   await db.delete(atelierAssistantControls).where(eq(atelierAssistantControls.orgId, orgId));
   await db
     .delete(atelierAssistantBudgetReservations)
