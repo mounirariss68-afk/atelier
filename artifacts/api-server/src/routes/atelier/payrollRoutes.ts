@@ -373,6 +373,7 @@ function ensureCompHistoryReader(req: Request, res: Response): Me | null {
   }
   return me;
 }
+// @cli-skip: payroll compensation-change history is sensitive finance data; assistant read parity is not approved
 router.get("/finance/payroll/comp-changes", async (req, res) => {
   const me = ensureCompHistoryReader(req, res); if (!me) return;
   const employeeId = String(req.query.employeeId ?? "");
@@ -390,6 +391,7 @@ router.get("/finance/payroll/comp-changes", async (req, res) => {
   res.json({ items });
 });
 
+// @cli-skip: payroll advances expose sensitive compensation data; assistant read parity is not approved
 router.get("/finance/payroll/advances", async (req, res) => {
   const me = ensureFinanceLeadership(req, res); if (!me) return;
   const conds = [eq(atelierSalaryAdvances.orgId, me.orgId), isNull(atelierSalaryAdvances.deletedAt)];

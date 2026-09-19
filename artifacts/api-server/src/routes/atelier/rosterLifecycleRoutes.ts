@@ -1998,6 +1998,7 @@ function removalResponse(
   };
 }
 
+// @cli-skip: HR removal impact check remains route-authoritative until roster lifecycle conformance exists
 router.get("/roster/people/:id/removal-check", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -2010,6 +2011,7 @@ router.get("/roster/people/:id/removal-check", async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// @cli-skip: HR person archive is an audited lifecycle workflow; assistant authority parity is unproven
 router.post("/roster/people/:id/archive", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -2057,6 +2059,7 @@ router.post("/roster/people/:id/archive", async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// @cli-skip: permanent person removal is destructive HR work; assistant authority is not approved
 router.delete("/roster/people/:id", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

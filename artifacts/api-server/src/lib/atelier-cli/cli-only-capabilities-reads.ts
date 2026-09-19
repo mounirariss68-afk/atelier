@@ -46,7 +46,10 @@ import {
 } from "../atelier-agents/pipeline.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
-import { canSeeAccount } from "../../routes/atelier/accountRoutes.js";
+import {
+  canSeeAccount,
+  readAccountDossier,
+} from "../../routes/atelier/accountRoutes.js";
 import {
   isRestrictedPersona,
   isBoardObserver,
@@ -999,74 +1002,18 @@ defineCapability({
         return { ok: false, errorCode: "not_found", errorMessage: "no account matched" };
       }
     }
-    const [acc] = await db
-      .select()
-      .from(atelierAccounts)
-      .where(
-        and(
-          eq(atelierAccounts.id, accountId),
-          eq(atelierAccounts.orgId, ctx.persona.orgId),
-          isNull(atelierAccounts.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (!acc) {
+    const dossier = await readAccountDossier({
+      accountId,
+      persona: ctx.persona,
+    });
+    if (dossier.kind === "invalid_input") {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "accountId required" };
+    }
+    if (dossier.kind === "forbidden" || dossier.kind === "not_found") {
       return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
     }
-    // Task #1170 — apply canSeeAccount for BOTH the direct-accountId path and
-    // the accountQuery path (the latter is already gated by resolveAccount, but
-    // we enforce here too so the capability is safe regardless of call path).
-    const acl0 = await accessibleEngagementIds({
-      id: ctx.persona.id,
-      role: ctx.persona.role,
-    } as Parameters<typeof accessibleEngagementIds>[0]);
-    if (!(await canSeeAccount(acl0, { id: ctx.persona.id }, accountId))) {
-      return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
-    }
-    const [contacts, opps, engs] = await Promise.all([
-      db
-        .select({ id: atelierContacts.id })
-        .from(atelierContacts)
-        .where(
-          and(
-            eq(atelierContacts.accountId, accountId),
-            isNull(atelierContacts.deletedAt),
-          ),
-        ),
-      db
-        .select({ id: atelierOpportunities.id, salesStage: atelierOpportunities.salesStage })
-        .from(atelierOpportunities)
-        .where(
-          and(
-            eq(atelierOpportunities.accountId, accountId),
-            isNull(atelierOpportunities.deletedAt),
-          ),
-        ),
-      db
-        .select({ id: atelierEngagements.id, plmStage: atelierEngagements.plmStage })
-        .from(atelierEngagements)
-        .where(
-          and(
-            eq(atelierEngagements.accountId, accountId),
-            isNull(atelierEngagements.deletedAt),
-          ),
-        ),
-    ]);
-    // Task #614 — surface the captured firmographics in the dossier so the
-    // CLI summary is as useful as the account page. annualRevenue is a money
-    // surface, so it honours the same account-financials gate as the rest of
-    // the workspace: account-wide authority (firm-wide partner OR the
-    // account's partner owner) AND a non-restricted / non-board persona.
-    // Restricted callers see "Restricted" rather than the figure; blanks are
-    // simply omitted so the card never shows fabricated zeros.
-    const acl = await accessibleEngagementIds({
-      id: ctx.persona.id,
-      role: ctx.persona.role,
-    } as Parameters<typeof accessibleEngagementIds>[0]);
-    const canSeeFinancials =
-      (acl.all === true || acc.partnerOwnerId === ctx.persona.id) &&
-      !isRestrictedPersona(ctx.persona.role) &&
-      !isBoardObserver(ctx.persona.role);
+    const { account: acc, contacts, opportunities: opps, engagements: engs } =
+      dossier.workspace;
 
     const ENTITY_ROLE_LABELS: Record<string, string> = {
       hq: "Global HQ",
@@ -1088,11 +1035,10 @@ defineCapability({
       const asOf = r.asOf ? ` (${r.asOf})` : "";
       return `${ccy}${body}${asOf}`;
     };
-    const annualRevenue =
-      rev && rev.amount != null
-        ? canSeeFinancials
-          ? fmtRevenue(rev)
-          : "Restricted"
+    const annualRevenue = rev && rev.amount != null
+      ? fmtRevenue(rev)
+      : acc.annualRevenueRedacted
+        ? "Restricted"
         : null;
     const holding = acc.holdingStructure ?? null;
     const structureFlags: string[] = [];
@@ -1122,7 +1068,7 @@ defineCapability({
         openOpportunityCount: opps.filter(
           (o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage),
         ).length,
-        activeEngagementCount: engs.filter((e) => e.plmStage !== "closed").length,
+        activeEngagementCount: engs.filter((e) => e.status !== "closed").length,
         // Task #499 — dossier resolves a single account; navigate the
         // user to the account workspace alongside the summary card.
         navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },

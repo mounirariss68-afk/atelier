@@ -484,6 +484,7 @@ async function transitionChangeOrder(
 // Transitions — explicit endpoints
 // ---------------------------------------------------------------
 
+// @cli-skip: partner approval is an audited commercial workflow transition; assistant parity is unproven
 router.post(
   "/change-orders/:id/partner-approve",
   async (req: Request, res: Response) => {
@@ -507,6 +508,7 @@ const DispatchBody = z.object({
   clientSignerEmail: z.string().email().max(200),
 });
 
+// @cli-skip: dispatch sends an external commercial document; assistant side-effect parity is unproven
 router.post(
   "/change-orders/:id/dispatch",
   async (req: Request, res: Response) => {
@@ -537,6 +539,7 @@ const RecordAcceptanceBody = z.object({
   evidenceUrl: z.string().min(1).max(1000),
 });
 
+// @cli-skip: client acceptance recording is an external workflow transition; assistant parity is unproven
 router.post(
   "/change-orders/:id/record-acceptance",
   async (req: Request, res: Response) => {
@@ -566,6 +569,7 @@ const RecordRejectionBody = z.object({
   reason: z.string().min(1).max(2000),
 });
 
+// @cli-skip: client rejection recording is an external workflow transition; assistant parity is unproven
 router.post(
   "/change-orders/:id/record-rejection",
   async (req: Request, res: Response) => {
@@ -591,6 +595,7 @@ router.post(
   },
 );
 
+// @cli-skip: change-order withdrawal is an audited commercial transition; assistant parity is unproven
 router.post(
   "/change-orders/:id/withdraw",
   async (req: Request, res: Response) => {
@@ -606,6 +611,7 @@ router.post(
   },
 );
 
+// @cli-skip: change-order posting mutates financial state; assistant authority parity is unproven
 router.post(
   "/change-orders/:id/post",
   async (req: Request, res: Response) => {

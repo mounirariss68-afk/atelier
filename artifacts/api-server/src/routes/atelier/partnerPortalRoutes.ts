@@ -3284,6 +3284,7 @@ router.get("/partners/firms/:firmId/shared-documents/:id/download", async (req, 
   }
 });
 
+// @cli-skip: partner document revocation is an audited portal workflow; assistant authority parity is unproven
 router.post("/partners/firms/:firmId/shared-documents/:id/revoke", async (req, res, next) => {
   try {
     const me = requireLeadership(req, res);

@@ -100,6 +100,7 @@ router.get("/deliverable-acceptances", async (req: Request, res: Response) => {
   res.json({ acceptances: rows });
 });
 
+// @cli-skip: deliverable-acceptance detail is a client-signature workflow view; assistant read parity is unproven
 router.get(
   "/deliverable-acceptances/:id",
   async (req: Request, res: Response) => {
@@ -142,6 +143,7 @@ const CreateBody = z.object({
   attestationText: z.string().min(1).max(4000),
 });
 
+// @cli-skip: acceptance creation is an external-signature workflow; assistant side-effect parity is unproven
 router.post(
   "/deliverable-acceptances",
   async (req: Request, res: Response) => {
@@ -306,6 +308,7 @@ const SubmitBody = z.object({
   clientSignerTitle: z.string().max(200).default(""),
 });
 
+// @cli-skip: acceptance submission sends external workflow state; assistant side-effect parity is unproven
 router.post(
   "/deliverable-acceptances/:id/submit",
   async (req: Request, res: Response) => {
@@ -338,6 +341,7 @@ const RecordSignedBody = z.object({
   signedAt: z.string().datetime().optional(),
 });
 
+// @cli-skip: signed-status recording is an external workflow transition; assistant parity is unproven
 router.post(
   "/deliverable-acceptances/:id/record-signed",
   async (req: Request, res: Response) => {
@@ -461,6 +465,7 @@ const RejectBody = z.object({
   reason: z.string().min(1).max(2000),
 });
 
+// @cli-skip: rejected-status recording is an external workflow transition; assistant parity is unproven
 router.post(
   "/deliverable-acceptances/:id/record-rejected",
   async (req: Request, res: Response) => {
@@ -486,6 +491,7 @@ router.post(
   },
 );
 
+// @cli-skip: acceptance withdrawal is an audited external workflow transition; assistant parity is unproven
 router.post(
   "/deliverable-acceptances/:id/withdraw",
   async (req: Request, res: Response) => {

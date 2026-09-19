@@ -98,6 +98,7 @@ import {
   isOverdue,
   type ActivityWire,
 } from "../../lib/atelier-account-timeline.js";
+import { executeAccountDossierRead } from "../../lib/atelier-cli/account-dossier-contract.js";
 
 import {
   nepAccessForCached,
@@ -1811,21 +1812,47 @@ async function buildWorkspace(
   };
 }
 
-// @cli-skip: pending Task #340 read-parity migration
+/**
+ * Shared C16 account-dossier service contract. HTTP and assistant adapters
+ * intentionally map the same authority outcome to different public envelopes,
+ * but validation, account scope and canonical data loading live here.
+ */
+export async function readAccountDossier(args: {
+  accountId: string;
+  persona: { id: string; role?: string | null; orgId: string };
+}) {
+  return executeAccountDossierRead({
+    accountId: args.accountId,
+    loadAccess: () =>
+      accessibleEngagementIds(
+        args.persona as Parameters<typeof accessibleEngagementIds>[0],
+      ),
+    canSee: (access, accountId) => canSeeAccount(access, args.persona, accountId),
+    loadWorkspace: (access, accountId) =>
+      buildWorkspace(accountId, access, args.persona),
+  });
+}
+
 router.get("/accounts/:accountId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const access = await accessibleEngagementIds(me);
-  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+  const result = await readAccountDossier({
+    accountId: req.params.accountId,
+    persona: me,
+  });
+  if (result.kind === "invalid_input") {
+    res.status(400).json({ error: "invalid-account-id" });
+    return;
+  }
+  if (result.kind === "forbidden") {
     res.status(403).json({ error: "account-forbidden" });
     return;
   }
-  const ws = await buildWorkspace(req.params.accountId, access, me);
-  if (!ws) {
+  if (result.kind === "not_found") {
     res.status(404).json({ error: "not-found" });
     return;
   }
-  res.json(ws);
+  res.json(result.workspace);
 });
 
 // ---------- Account 360: financials, history & health (Task #570) ----------
@@ -5183,6 +5210,7 @@ router.get("/executive-mapper/coverage-rollup", async (req, res) => {
 // cannot collide with the /accounts/:accountId/* routes (all 2- or 4-seg).
 // @cli-skip: bespoke agent-read route, surfaced in the Accounts list UI only
 export const EXEC_MAP_STALE_DAYS = 30;
+// @cli-skip: executive-mapper coverage telemetry is an internal agent-health surface, not a user assistant capability
 router.get("/accounts/executive-mapper/coverage-staleness", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

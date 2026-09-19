@@ -246,6 +246,7 @@ function rateInput(body: Record<string, unknown>) {
   };
 }
 
+// @cli-skip: NEP rate registry is compensation-sensitive; assistant read parity is not approved
 router.get("/finance/nep-comp/engagement-rates", async (req, res, next) => {
   try {
     const me = readGate(req, res); if (!me) return;
@@ -257,6 +258,7 @@ router.get("/finance/nep-comp/engagement-rates", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// @cli-skip: NEP rate detail is compensation-sensitive; assistant read parity is not approved
 router.get("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
   try {
     const me = readGate(req, res); if (!me) return;
@@ -270,6 +272,7 @@ router.get("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// @cli-skip: NEP rate creation is a compensation workflow; assistant authority parity is unproven
 router.post("/finance/nep-comp/engagement-rates", async (req, res, next) => {
   try {
     const me = writeGate(req, res); if (!me) return;
@@ -300,6 +303,7 @@ router.post("/finance/nep-comp/engagement-rates", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// @cli-skip: NEP rate editing is a compensation workflow; assistant authority parity is unproven
 router.patch("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
   try {
     const me = writeGate(req, res); if (!me) return;
@@ -326,6 +330,7 @@ router.patch("/finance/nep-comp/engagement-rates/:id", async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// @cli-skip: NEP rate deletion is a compensation workflow; assistant authority parity is unproven
 router.delete("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
   try {
     const me = writeGate(req, res); if (!me) return;
@@ -473,6 +478,7 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
 });
 
 // Explicit legacy bridge: never inferred from role/name. Re-running is safe.
+// @cli-skip: NEP classification migration rewrites compensation history; assistant authority is not approved
 router.post("/finance/nep-comp/plans/:contractorId/classification-migration", async (req, res, next) => {
   try {
     const me = writeGate(req, res); if (!me) return;

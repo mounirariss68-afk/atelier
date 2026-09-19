@@ -1948,6 +1948,7 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
 // Task #1344 — settle a partner-funded contingent claim exactly once. This
 // deliberately lives beside reimbursement: outcome changes never pay a claim
 // directly; they only unlock the normal approved → reimbursed path.
+// @cli-skip: finance contingency resolution is an audited UI workflow; assistant executor parity is not yet proven
 router.post("/wallet/expenses/:id/contingency-outcome", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

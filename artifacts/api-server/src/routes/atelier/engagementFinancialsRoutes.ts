@@ -699,6 +699,7 @@ function buildActionCenter(a: ActionCenterArgs): ActionCenterItem[] {
 // ---------------------------------------------------------------
 // POST /finance/engagement-financials/:engId/billing-steward/run
 // ---------------------------------------------------------------
+// @cli-skip: Billing Steward execution is an internal finance workflow; assistant executor parity is unproven
 router.post(
   "/finance/engagement-financials/:engId/billing-steward/run",
   async (req, res) => {
@@ -827,6 +828,7 @@ router.post(
 // ---------------------------------------------------------------
 // POST /finance/engagement-financials/bills/:invoiceId/lead-approve
 // ---------------------------------------------------------------
+// @cli-skip: lead bill approval is an audited finance workflow; assistant authority parity is unproven
 router.post(
   "/finance/engagement-financials/bills/:invoiceId/lead-approve",
   async (req, res) => {
@@ -963,6 +965,7 @@ router.post(
 // ---------------------------------------------------------------
 // POST /finance/engagement-financials/bills/:invoiceId/finance-approve
 // ---------------------------------------------------------------
+// @cli-skip: finance bill approval is an audited finance workflow; assistant authority parity is unproven
 router.post(
   "/finance/engagement-financials/bills/:invoiceId/finance-approve",
   async (req, res) => {
@@ -1053,6 +1056,7 @@ async function loadInvoiceForAction(
   return inv ?? null;
 }
 
+// @cli-skip: reminder delivery is an outbound collections action; assistant side-effect parity is unproven
 router.post(
   "/finance/engagement-financials/invoices/:invId/send-reminder",
   async (req, res) => {
@@ -1091,6 +1095,7 @@ router.post(
   },
 );
 
+// @cli-skip: collection commitment logging is an audited finance workflow; assistant parity is unproven
 router.post(
   "/finance/engagement-financials/invoices/:invId/log-commitment",
   async (req, res) => {
@@ -1134,6 +1139,7 @@ router.post(
   },
 );
 
+// @cli-skip: dispute marking is an audited collections workflow; assistant parity is unproven
 router.post(
   "/finance/engagement-financials/invoices/:invId/mark-disputed",
   async (req, res) => {
@@ -1175,6 +1181,7 @@ router.post(
   },
 );
 
+// @cli-skip: collections escalation is an outbound leadership action; assistant side-effect parity is unproven
 router.post(
   "/finance/engagement-financials/invoices/:invId/escalate",
   async (req, res) => {

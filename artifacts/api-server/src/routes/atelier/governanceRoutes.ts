@@ -15,6 +15,7 @@ async function audit(me: Me, entityId: string, action: string, payload: Record<s
  await db.insert(atelierAuditEvents).values({ id: rid("aud"), orgId: me.orgId, entityType: "person_relationship_classification", entityId, actorType: "human", actorId: me.id, actorLabel: me.name, action, payload, payloadSummary: action });
 }
 const types = ["employee", "contractor", "equity_partner", "non_equity_partner", "partner_firm_resource"];
+// @cli-skip: admin-only identity mapping write; no assistant authority is intended
 router.put("/admin/roster/mappings/:stableKey", async (req, res, next) => {
  try {
   const me = admin(req, res); if (!me) return;
@@ -26,8 +27,10 @@ router.put("/admin/roster/mappings/:stableKey", async (req, res, next) => {
   await db.insert(atelierAdminPersonMappings).values(row); res.status(201).json({ mapping: row, idempotent: false });
  } catch (e) { next(e); }
 });
+// @cli-skip: admin-only identity mapping read; no assistant surface is intended
 router.get("/admin/roster/mappings", async (req, res, next) => { try { const me = admin(req, res); if (!me) return; res.json({ items: await db.select().from(atelierAdminPersonMappings).where(and(eq(atelierAdminPersonMappings.orgId, me.orgId), isNull(atelierAdminPersonMappings.deletedAt))) }); } catch (e) { next(e); } });
 
+// @cli-skip: HR roster classification write remains route-authoritative until shared executor conformance exists
 router.patch(["/roster/people/:id", "/roster/people/:id/classification"], async (req, res, next) => {
  try {
   const isDedicatedClassificationRoute = req.path.endsWith("/classification");
