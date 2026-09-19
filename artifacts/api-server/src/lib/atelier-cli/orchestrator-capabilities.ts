@@ -41,6 +41,7 @@
  */
 
 import { and, count, eq, ilike, isNull, or } from "drizzle-orm";
+import { recordRiserObservation } from "../assistant/observability-runtime.js";
 import {
   db,
   atelierAccounts,
@@ -282,6 +283,19 @@ defineCapability({
       accountId: scopeAccountId,
       engagementId: scopeEngagementId,
     });
+    await recordRiserObservation({
+      orgId,
+      conversationId: ctx.sessionId,
+      turnId: ctx.turnId,
+      stage: "resolution",
+      outcome:
+        candidates.length === 0
+          ? "not_found"
+          : candidates.length === 1
+            ? "unique"
+            : "ambiguous",
+      dimensions: { candidate_count: candidates.length },
+    }).catch(() => null);
     if (candidates.length === 0) {
       // "contact" is really a person search — it spans client contacts,
       // HR employees, and partner-firm people. Say so, so the user

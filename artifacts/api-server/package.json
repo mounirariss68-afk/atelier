@@ -155,6 +155,7 @@
     ,"test:riser-budget": "tsx ./tests/riser-budget/run.ts"
     ,"test:riser-compat": "CRM_TEST_DB_NAME=crm_test_riser_compat tsx ./tests/riser-compat/run.ts"
     ,"test:riser-privacy": "CRM_TEST_DB_NAME=crm_test_riser_privacy tsx ./tests/riser-privacy/run.ts"
+    ,"test:riser-observability": "CRM_TEST_DB_NAME=crm_test_riser_observability tsx ./tests/riser-observability/run.ts"
     ,"riser:legacy-turn-migration": "tsx ./scripts/riser-legacy-turn-migration.ts"
   },
   "dependencies": {

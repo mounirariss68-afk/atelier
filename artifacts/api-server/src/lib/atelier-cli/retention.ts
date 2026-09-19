@@ -8,6 +8,8 @@ import { withAssistantLifecycleRlsTransaction } from "../assistant/action-runtim
 const DAY_MS = 86_400_000;
 export const ASSISTANT_OCR_RETENTION_DAYS = 90;
 export const ASSISTANT_PAYLOAD_RETENTION_DAYS = 395;
+export const ASSISTANT_OBSERVATION_RETENTION_DAYS = 90;
+export const ASSISTANT_SECURITY_OBSERVATION_RETENTION_DAYS = 365;
 export const ASSISTANT_AUDIT_SHELL_RETENTION = "indefinite" as const;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -123,6 +125,7 @@ export interface RetentionSummary {
   promptPlanPurged: number;
   actionPayloadsPurged: number;
   eventPayloadsPurged: number;
+  observationsPurged: number;
   workflowPayloadsPurged: number;
   legacyPayloadsPurged: number;
   attachmentBlobsPurged: number;
@@ -255,6 +258,12 @@ export async function runRetention(
   const now = new Date(nowMs);
   const ocrCutoff = new Date(nowMs - ASSISTANT_OCR_RETENTION_DAYS * DAY_MS);
   const payloadCutoff = new Date(nowMs - ASSISTANT_PAYLOAD_RETENTION_DAYS * DAY_MS);
+  const observationCutoff = new Date(
+    nowMs - ASSISTANT_OBSERVATION_RETENTION_DAYS * DAY_MS,
+  );
+  const securityObservationCutoff = new Date(
+    nowMs - ASSISTANT_SECURITY_OBSERVATION_RETENTION_DAYS * DAY_MS,
+  );
   await queueExpiredAttachmentBlobs({
     cutoff: payloadCutoff,
     now,
@@ -308,6 +317,44 @@ export async function runRetention(
             )
         )
       RETURNING e.id
+    `);
+    const observationsPurged = await changed(tx, sql`
+      DELETE FROM atelier_assistant_observations o
+      WHERE (
+          (
+            o.security_event = false
+            AND o.stage <> 'terminal_outcome'
+            AND o.occurred_at < ${observationCutoff}
+          )
+          OR (
+            (o.security_event = true OR o.stage = 'terminal_outcome')
+            AND o.occurred_at < ${securityObservationCutoff}
+          )
+        )
+        AND NOT EXISTS (
+          ${activeHold("assistant_observation", sql`o.org_id`, sql`o.id`, now)}
+        )
+        AND (
+          o.action_id IS NULL OR NOT EXISTS (
+            ${activeHold("assistant_action", sql`o.org_id`, sql`o.action_id`, now)}
+          )
+        )
+        AND (
+          o.work_item_id IS NULL OR NOT EXISTS (
+            ${activeHold("work_item", sql`o.org_id`, sql`o.work_item_id`, now)}
+          )
+        )
+        AND (
+          o.turn_id IS NULL OR NOT EXISTS (
+            ${activeHold("cli_turn", sql`o.org_id`, sql`o.turn_id`, now)}
+          )
+        )
+        AND (
+          o.conversation_id IS NULL OR NOT EXISTS (
+            ${activeHold("cli_session", sql`o.org_id`, sql`o.conversation_id`, now)}
+          )
+        )
+      RETURNING o.id
     `);
     const workflowRows = await changed(tx, sql`
       UPDATE atelier_work_items w
@@ -451,6 +498,7 @@ export async function runRetention(
       promptPlanPurged,
       actionPayloadsPurged,
       eventPayloadsPurged,
+      observationsPurged,
       workflowPayloadsPurged,
       legacyPayloadsPurged,
       attachmentBlobsPurged,
@@ -459,6 +507,7 @@ export async function runRetention(
         promptPlanPurged +
         actionPayloadsPurged +
         eventPayloadsPurged +
+        observationsPurged +
         workflowPayloadsPurged +
         legacyPayloadsPurged,
     };

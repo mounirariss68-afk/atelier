@@ -20,14 +20,16 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, gte, sql, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, sql, isNull, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierCliTurns,
   atelierCliSessions,
   atelierAuditEvents,
+  atelierAssistantObservations,
 } from "@workspace/db";
+import { RiserObservationV1Schema } from "@workspace/assistant-protocol";
 import {
   helpForPersona,
   suggestionsForSurface,
@@ -38,6 +40,12 @@ import {
   type SurfaceContext,
 } from "../../lib/atelier-cli/capability-catalog.js";
 import { V3_AUDIT_ACTIONS } from "./auditContract.js";
+import {
+  evaluateRiserObservabilityAlerts,
+  reconcileRiserObservationWindow,
+  reconstructRiserTraces,
+  riserDashboardRollup,
+} from "../../lib/assistant/observability-runtime.js";
 
 function ensurePersona(
   req: Request,
@@ -48,6 +56,37 @@ function ensurePersona(
     return null;
   }
   return req.atelierPersona;
+}
+
+function toRiserObservation(
+  row: typeof atelierAssistantObservations.$inferSelect,
+) {
+  return RiserObservationV1Schema.parse({
+    version: row.version,
+    eventId: row.id,
+    orgId: row.orgId,
+    stage: row.stage,
+    outcome: row.outcome,
+    securityEvent: row.securityEvent,
+    samplingMode: row.samplingMode,
+    sampleRate: row.sampleRate / 10_000,
+    occurredAt: row.occurredAt.toISOString(),
+    conversationId: row.conversationId,
+    turnId: row.turnId,
+    intentId: row.intentId,
+    actionId: row.actionId,
+    workItemId: row.workItemId,
+    stepId: row.stepId,
+    attemptId: row.attemptId,
+    capabilityId: row.capabilityId,
+    catalogVersion: row.catalogVersion,
+    schemaVersion: row.schemaVersion,
+    policyVersion: row.policyVersion,
+    modelVersion: row.modelVersion,
+    deploymentVersion: row.deploymentVersion,
+    reasonCode: row.reasonCode,
+    dimensions: row.dimensions,
+  });
 }
 
 function ensureFoundingPartner(
@@ -250,6 +289,92 @@ router.get("/cli/turns/:id/recording", async (req, res) => {
 // ---------------------------------------------------------------------
 // GET /cli/admin/turns — observability listing.
 // ---------------------------------------------------------------------
+// @cli-skip: founder-only telemetry administration
+router.get("/cli/admin/riser-observability", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const days = Math.min(30, Math.max(1, Number(req.query.days ?? 7)));
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1_000);
+  const rows = await db
+    .select()
+    .from(atelierAssistantObservations)
+    .where(
+      and(
+        eq(atelierAssistantObservations.orgId, me.orgId),
+        gte(atelierAssistantObservations.occurredAt, since),
+      ),
+    )
+    .orderBy(desc(atelierAssistantObservations.occurredAt))
+    .limit(20_001);
+  const bounded = rows.length > 20_000;
+  const observations = rows.slice(0, 20_000).map(toRiserObservation);
+  const reconciliation = await reconcileRiserObservationWindow({
+    orgId: me.orgId,
+    since,
+  });
+  res.json({
+    version: "riser-observability/v1",
+    since: since.toISOString(),
+    bounded,
+    dashboard: bounded ? null : {
+      ...riserDashboardRollup(observations),
+      authoritativeReconciliationDefects: reconciliation.length,
+    },
+    alerts: bounded
+      ? [{
+          code: "observation_window_bounded",
+          severity: "critical",
+          incidentLink: "incident://riser/observation_window_bounded",
+          runbookLink: "docs://riser/observability-runbook/v1",
+        }]
+      : [
+          ...evaluateRiserObservabilityAlerts(observations),
+          ...(reconciliation.length
+            ? [{
+                code: "authoritative_trace_missing",
+                severity: "critical",
+                incidentLink: "incident://riser/authoritative_trace_missing",
+                runbookLink: "docs://riser/observability-runbook/v1",
+              }]
+            : []),
+        ],
+  });
+});
+
+// @cli-skip: founder-only telemetry administration
+router.get("/cli/admin/riser-observability/traces/:id", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const id = String(req.params.id ?? "");
+  if (!/^[A-Za-z0-9_.:/@+-]{1,200}$/.test(id)) {
+    res.status(400).json({ error: "invalid_trace_id" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(atelierAssistantObservations)
+    .where(
+      and(
+        eq(atelierAssistantObservations.orgId, me.orgId),
+        or(
+          eq(atelierAssistantObservations.conversationId, id),
+          eq(atelierAssistantObservations.turnId, id),
+          eq(atelierAssistantObservations.actionId, id),
+          eq(atelierAssistantObservations.workItemId, id),
+          eq(atelierAssistantObservations.stepId, id),
+          eq(atelierAssistantObservations.attemptId, id),
+        ),
+      ),
+    )
+    .orderBy(atelierAssistantObservations.occurredAt)
+    .limit(1_000);
+  res.json({
+    version: "riser-observability/v1",
+    bounded: rows.length === 1_000,
+    traces: reconstructRiserTraces(rows.map(toRiserObservation)),
+  });
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/admin/turns", async (req, res) => {
   const me = ensureFoundingPartner(req, res);

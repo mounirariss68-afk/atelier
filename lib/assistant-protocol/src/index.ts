@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export * from "./legacy.js";
 export * from "./privacy.js";
+export * from "./observability.js";
 
 export const ASSISTANT_PROTOCOL_VERSION = 1 as const;
 export const PRESENTATION_MINIMUM_DATA_VERSION = 1 as const;
@@ -275,7 +276,7 @@ const ACTION_TRANSITIONS: Readonly<Record<ActionStateV1, readonly ActionStateV1[
   draft: ["previewed", "cancelled"],
   previewed: ["awaiting_confirmation", "cancelled", "invalidated"],
   awaiting_confirmation: ["confirmed", "cancelled", "expired", "invalidated"],
-  confirmed: ["executing", "invalidated"],
+  confirmed: ["executing", "invalidated", "expired"],
   executing: ["succeeded", "failed", "partially_succeeded", "compensated"],
   succeeded: [],
   failed: [],

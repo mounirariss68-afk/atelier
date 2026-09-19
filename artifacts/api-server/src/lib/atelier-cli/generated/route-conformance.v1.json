@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1167,
+  "routeCount": 1169,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -675,6 +675,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "04e2ae382d5c3d11",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "get",
+      "path": "/cli/admin/riser-observability",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only telemetry administration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -24788,6 +24816,34 @@
       }
     },
     {
+      "routeId": "c3fed912654bb7d0",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "get",
+      "path": "/cli/admin/riser-observability/traces/:id",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only telemetry administration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "c4339f33d0a3de94",
       "file": "artifacts/api-server/src/routes/atelier/meProfileRoutes.ts",
       "method": "put",
@@ -35662,5 +35718,5 @@
       ]
     }
   ],
-  "conformanceVersion": "7397a2162776d9bb5164f71ac6d324b40c599b82235ea1702a5e96ff1c5603f7"
+  "conformanceVersion": "dcc93eac71798a25996c7c5d42a329ee80a6e5822b8a6c47f90fec9f580cf9dc"
 }

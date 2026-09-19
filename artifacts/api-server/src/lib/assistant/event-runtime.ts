@@ -7,6 +7,7 @@ import {
   sanitizeAssistantForSink,
   type AssistantEventV1,
 } from "@workspace/assistant-protocol";
+import { recordRiserObservationTx } from "./observability-runtime.js";
 
 type AssistantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -73,6 +74,78 @@ export async function appendAssistantEventTx(
       data: event.data,
       occurredAt: new Date(event.occurredAt),
     });
+    const observationBase = {
+      orgId: args.orgId,
+      conversationId: args.conversationId,
+      turnId: args.turnId,
+      actionId: args.correlationId,
+      deploymentVersion: process.env.REPLIT_DEPLOYMENT_ID ?? "development",
+    } as const;
+    if (args.type === "action.awaiting_confirmation") {
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "policy",
+        outcome: "allowed",
+        securityEvent: true,
+      });
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "preview",
+        outcome: "awaiting_confirmation",
+      });
+    } else if (args.type === "action.confirmed") {
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "confirm",
+        outcome: "confirmed",
+        securityEvent: true,
+      });
+    } else if (args.type === "action.executing") {
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "execute",
+        outcome: "executing",
+        securityEvent: true,
+      });
+    } else if (
+      args.type === "action.succeeded" ||
+      args.type === "action.failed" ||
+      args.type === "action.partially_succeeded" ||
+      args.type === "action.compensated"
+    ) {
+      const outcome = args.type.slice("action.".length) as
+        | "succeeded"
+        | "failed"
+        | "partially_succeeded"
+        | "compensated";
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "execute",
+        outcome,
+        securityEvent: true,
+      });
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "terminal_outcome",
+        outcome,
+      });
+    } else if (
+      args.type === "action.invalidated" ||
+      args.type === "action.cancelled" ||
+      args.type === "action.expired"
+    ) {
+      await recordRiserObservationTx(tx, {
+        ...observationBase,
+        stage: "terminal_outcome",
+        outcome:
+          args.type === "action.cancelled"
+            ? "cancelled"
+            : args.type === "action.expired"
+              ? "expired"
+              : "invalidated",
+        securityEvent: true,
+      });
+    }
     return event;
 }
 

@@ -543,11 +543,34 @@ export async function claimDurableAction(args: {
           eq(atelierAssistantActions.id, args.actionId),
           eq(atelierAssistantActions.orgId, args.orgId),
           eq(atelierAssistantActions.state, "confirmed"),
-          gt(atelierAssistantActions.expiresAt, new Date()),
         ),
       )
       .for("update");
     if (!row) return null;
+    if (row.expiresAt.getTime() <= Date.now()) {
+      assertActionTransition("confirmed", "expired");
+      await tx.update(atelierAssistantActions).set({
+        state: "expired",
+        stateVersion: row.stateVersion + 1,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(and(
+        eq(atelierAssistantActions.id, row.id),
+        eq(atelierAssistantActions.state, "confirmed"),
+      ));
+      if (row.conversationId && row.sourceTurnId) {
+        await appendAssistantEventTx(tx, {
+          orgId: row.orgId,
+          requesterId: row.requesterId,
+          conversationId: row.conversationId,
+          turnId: row.sourceTurnId,
+          correlationId: row.id,
+          type: "action.expired",
+          data: { actionId: row.id },
+        });
+      }
+      return null;
+    }
     try {
       assertCurrentCapabilityManifestVersion(row.catalogVersion);
     } catch {
@@ -628,6 +651,17 @@ export async function claimDurableAction(args: {
       )
       .returning({ id: atelierAssistantActions.id });
     if (!updated) return null;
+    if (row.conversationId && row.sourceTurnId) {
+      await appendAssistantEventTx(tx, {
+        orgId: row.orgId,
+        requesterId: row.requesterId,
+        conversationId: row.conversationId,
+        turnId: row.sourceTurnId,
+        correlationId: row.id,
+        type: "action.executing",
+        data: { actionId: row.id, fencingToken: fence },
+      });
+    }
     return {
       fencingToken: fence,
       input: await decryptAssistantValueAudited(

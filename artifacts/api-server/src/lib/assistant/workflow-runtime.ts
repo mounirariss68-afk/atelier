@@ -28,6 +28,7 @@ import {
   refundAssistantBudget,
   reserveRequiredAssistantBudget,
 } from "./budget-runtime.js";
+import { recordRiserObservationTx } from "./observability-runtime.js";
 
 const checkpointEvidenceValidator = new Ajv({
   allErrors: true,
@@ -183,6 +184,18 @@ export async function createDurableWork(args: {
       }];
     });
     if (checkpoints.length) await tx.insert(atelierWorkCheckpoints).values(checkpoints);
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId,
+      stage: "workflow_plan",
+      outcome: "created",
+      catalogVersion,
+      policyVersion: args.authorization.policyVersion,
+      dimensions: {
+        step_count: plan.steps.length,
+        checkpoint_count: checkpoints.length,
+      },
+    });
   });
   return { workItemId, planId };
 }
@@ -237,6 +250,17 @@ export async function claimWorkAttempt(args: {
         .update(atelierWorkItems)
         .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
         .where(eq(atelierWorkItems.id, stale.work.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: stale.work.id,
+        stepId: stale.step.id,
+        capabilityId: stale.step.capabilityId,
+        catalogVersion: stale.work.catalogVersion,
+        stage: "terminal_outcome",
+        outcome: "failed",
+        reasonCode: "catalog_mismatch",
+        securityEvent: true,
+      });
       return null;
     }
     const [record] = await tx
@@ -295,6 +319,16 @@ export async function claimWorkAttempt(args: {
       await tx.update(atelierWorkItems)
         .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
         .where(eq(atelierWorkItems.id, record.work.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: step.id,
+        capabilityId: step.capabilityId,
+        stage: "terminal_outcome",
+        outcome: "failed",
+        reasonCode: "authority_changed",
+        securityEvent: true,
+      });
       return null;
     }
     const policy = await evaluateAssistantPolicy({
@@ -314,6 +348,16 @@ export async function claimWorkAttempt(args: {
       await tx.update(atelierWorkItems)
         .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
         .where(eq(atelierWorkItems.id, record.work.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: step.id,
+        capabilityId: step.capabilityId,
+        stage: "terminal_outcome",
+        outcome: "failed",
+        reasonCode: "policy_denied",
+        securityEvent: true,
+      });
       return null;
     }
     const retryPolicy = step.retryPolicy as {
@@ -330,6 +374,15 @@ export async function claimWorkAttempt(args: {
       await tx.update(atelierWorkItems)
         .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
         .where(eq(atelierWorkItems.id, record.work.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: step.id,
+        capabilityId: step.capabilityId,
+        stage: "terminal_outcome",
+        outcome: "failed",
+        reasonCode: "workflow_error",
+      });
       return null;
     }
     const checkpoints = compensation ? [] : await tx
@@ -362,6 +415,18 @@ export async function claimWorkAttempt(args: {
         .update(atelierWorkSteps)
         .set({ status: "failed", updatedAt: new Date() })
         .where(eq(atelierWorkSteps.id, step.id));
+      await tx.update(atelierWorkItems)
+        .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
+        .where(eq(atelierWorkItems.id, record.work.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: step.id,
+        capabilityId: step.capabilityId,
+        stage: "terminal_outcome",
+        outcome: "failed",
+        reasonCode: "workflow_error",
+      });
       return null;
     }
     const fencingToken = attemptNumber;
@@ -377,6 +442,33 @@ export async function claimWorkAttempt(args: {
       fencingToken,
       errorClass: compensation ? "compensation_execution" : null,
       startedAt: new Date(),
+    });
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: record.work.id,
+      stepId: step.id,
+      attemptId,
+      capabilityId: step.capabilityId,
+      catalogVersion,
+      policyVersion: step.policyVersion,
+      stage: "lease",
+      outcome: "acquired",
+      dimensions: {
+        fencing_token: fencingToken,
+        compensation,
+      },
+    });
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: record.work.id,
+      stepId: step.id,
+      attemptId,
+      capabilityId: step.capabilityId,
+      catalogVersion,
+      policyVersion: step.policyVersion,
+      stage: "workflow_attempt",
+      outcome: "running",
+      dimensions: { attempt_number: attemptNumber },
     });
     await tx.update(atelierWorkSteps).set({ status: "running", updatedAt: new Date() }).where(eq(atelierWorkSteps.id, step.id));
     return {
@@ -597,6 +689,34 @@ export async function completeWorkAttempt(args: {
       )
       .returning({ id: atelierWorkAttempts.id });
     if (!completed) return false;
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: record.work.id,
+      stepId: record.step.id,
+      attemptId: record.attempt.id,
+      capabilityId: record.step.capabilityId,
+      catalogVersion: record.step.catalogVersion,
+      policyVersion: record.step.policyVersion,
+      stage: "workflow_attempt",
+      outcome: "succeeded",
+      dimensions: {
+        cost_micros: usage.costMicros,
+        tool_calls: usage.toolCalls,
+        provider_calls: usage.providerCalls,
+      },
+    });
+    if (record.attempt.errorClass === "compensation_execution") {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: record.step.id,
+        attemptId: record.attempt.id,
+        capabilityId: record.step.capabilityId,
+        stage: "compensation",
+        outcome: "succeeded",
+        securityEvent: true,
+      });
+    }
     if (
       record.work.cancellationRequestedAt &&
       record.attempt.errorClass !== "compensation_execution"
@@ -900,6 +1020,14 @@ export async function aggregateWorkResult(args: {
       eq(atelierWorkItems.id, work.id),
       eq(atelierWorkItems.status, "awaiting_aggregation"),
     ));
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: work.id,
+      catalogVersion: work.catalogVersion,
+      stage: "terminal_outcome",
+      outcome: "succeeded",
+      dimensions: { step_count: steps.length },
+    });
     return { result, evidence };
   });
 }
@@ -1006,6 +1134,15 @@ export async function failWorkAttempt(args: {
         status: "cancelled",
         updatedAt: new Date(),
       }).where(eq(atelierWorkSteps.id, record.step.id));
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: record.step.id,
+        attemptId: record.attempt.id,
+        capabilityId: record.step.capabilityId,
+        stage: "workflow_attempt",
+        outcome: "cancelled",
+      });
       return true;
     }
     await tx.update(atelierWorkAttempts).set({
@@ -1022,7 +1159,46 @@ export async function failWorkAttempt(args: {
       ),
       eq(atelierWorkAttempts.fencingToken, args.fencingToken),
     ));
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: record.work.id,
+      stepId: record.step.id,
+      attemptId: record.attempt.id,
+      capabilityId: record.step.capabilityId,
+      catalogVersion: record.step.catalogVersion,
+      policyVersion: record.step.policyVersion,
+      stage: "workflow_attempt",
+      outcome: canRetry ? "retryable" : args.outcome,
+      reasonCode: "workflow_error",
+      securityEvent:
+        args.outcome === "ambiguous" ||
+        args.outcome === "compensation_required",
+      dimensions: { attempt_number: record.attempt.attemptNumber },
+    });
+    if (args.leaseState === "expired") {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: record.step.id,
+        attemptId: record.attempt.id,
+        capabilityId: record.step.capabilityId,
+        stage: "lease",
+        outcome: "lost",
+        reasonCode: "lease_expired",
+        securityEvent: true,
+      });
+    }
     if (canRetry) {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: record.step.id,
+        attemptId: record.attempt.id,
+        capabilityId: record.step.capabilityId,
+        stage: "retry",
+        outcome: "scheduled",
+        dimensions: { next_attempt: record.attempt.attemptNumber + 1 },
+      });
       await tx.update(atelierWorkSteps).set({ status: "ready", updatedAt: new Date() })
         .where(eq(atelierWorkSteps.id, record.step.id));
       return true;
@@ -1057,6 +1233,16 @@ export async function failWorkAttempt(args: {
       (step) => step.status === "succeeded" && step.compensation !== null,
     );
     if (needsCompensation) {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stepId: record.step.id,
+        attemptId: record.attempt.id,
+        capabilityId: record.step.capabilityId,
+        stage: "compensation",
+        outcome: "required",
+        securityEvent: true,
+      });
       for (const step of siblings) {
         if (step.status === "succeeded" && step.compensation !== null) {
           await tx.update(atelierWorkSteps)
@@ -1093,15 +1279,24 @@ export async function failWorkAttempt(args: {
     const settlingStatus = record.work.cancellationRequestedAt
       ? "cancellation_settling"
       : "recovery_settling";
-    await tx.update(atelierWorkItems).set({
-      status: Number(remainingCommitting) > 0
+    const finalWorkStatus = Number(remainingCommitting) > 0
         ? settlingStatus
-        : needsCompensation ? "compensation_required" : terminalStatus,
+        : needsCompensation ? "compensation_required" : terminalStatus;
+    await tx.update(atelierWorkItems).set({
+      status: finalWorkStatus,
       completedAt: Number(remainingCommitting) > 0 || terminalStatus === "blocked"
         ? null
         : new Date(),
       updatedAt: new Date(),
     }).where(eq(atelierWorkItems.id, record.work.id));
+    if (finalWorkStatus === "failed") {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: record.work.id,
+        stage: "terminal_outcome",
+        outcome: "failed",
+      });
+    }
     return true;
   });
 }
@@ -1141,7 +1336,11 @@ export async function cancelDurableWork(args: {
       ))
     if (committing.length > 0) {
       const runningReservations = await tx
-        .select({ reservationId: atelierWorkAttempts.budgetReservationId })
+        .select({
+          id: atelierWorkAttempts.id,
+          stepId: atelierWorkAttempts.stepId,
+          reservationId: atelierWorkAttempts.budgetReservationId,
+        })
         .from(atelierWorkAttempts)
         .innerJoin(atelierWorkSteps, eq(atelierWorkAttempts.stepId, atelierWorkSteps.id))
         .where(and(
@@ -1166,6 +1365,16 @@ export async function cancelDurableWork(args: {
           where ${atelierWorkSteps.workItemId} = ${work.id}
         )`,
       ));
+      for (const row of runningReservations) {
+        await recordRiserObservationTx(tx, {
+          orgId: args.orgId,
+          workItemId: work.id,
+          stepId: row.stepId,
+          attemptId: row.id,
+          stage: "workflow_attempt",
+          outcome: "cancelled",
+        });
+      }
       const committingStepIds = committing.map((row) => row.stepId);
       await tx.update(atelierWorkSteps).set({
         status: "cancelled",
@@ -1185,7 +1394,11 @@ export async function cancelDurableWork(args: {
       return { status: "cancellation_pending" };
     }
     const runningReservations = await tx
-      .select({ reservationId: atelierWorkAttempts.budgetReservationId })
+      .select({
+        id: atelierWorkAttempts.id,
+        stepId: atelierWorkAttempts.stepId,
+        reservationId: atelierWorkAttempts.budgetReservationId,
+      })
       .from(atelierWorkAttempts)
       .innerJoin(atelierWorkSteps, eq(atelierWorkAttempts.stepId, atelierWorkSteps.id))
       .where(and(
@@ -1210,6 +1423,16 @@ export async function cancelDurableWork(args: {
           )`,
         ),
       );
+    for (const row of runningReservations) {
+      await recordRiserObservationTx(tx, {
+        orgId: args.orgId,
+        workItemId: work.id,
+        stepId: row.stepId,
+        attemptId: row.id,
+        stage: "workflow_attempt",
+        outcome: "cancelled",
+      });
+    }
     await tx
       .update(atelierWorkSteps)
       .set({ status: "cancelled", updatedAt: now })
@@ -1228,6 +1451,13 @@ export async function cancelDurableWork(args: {
         updatedAt: now,
       })
       .where(eq(atelierWorkItems.id, work.id));
+    await recordRiserObservationTx(tx, {
+      orgId: args.orgId,
+      workItemId: work.id,
+      catalogVersion: work.catalogVersion,
+      stage: "terminal_outcome",
+      outcome: "cancelled",
+    });
     return { status: "cancelled" };
   });
 }
@@ -1360,6 +1590,13 @@ export async function decideWorkCheckpoint(args: {
           eq(atelierWorkItems.id, args.workItemId),
           eq(atelierWorkItems.status, "blocked"),
         ));
+        await recordRiserObservationTx(tx, {
+          orgId: args.orgId,
+          workItemId: args.workItemId,
+          stage: "terminal_outcome",
+          outcome: acceptedRecovery ? "compensated" : "failed",
+          securityEvent: true,
+        });
         return updated;
       }
       if (requiredDecider.reason === "cancellation_during_commit") {
@@ -1438,6 +1675,13 @@ export async function decideWorkCheckpoint(args: {
             eq(atelierWorkItems.id, args.workItemId),
             eq(atelierWorkItems.status, "blocked"),
           ));
+          await recordRiserObservationTx(tx, {
+            orgId: args.orgId,
+            workItemId: args.workItemId,
+            stage: "terminal_outcome",
+            outcome: "succeeded",
+            securityEvent: true,
+          });
         } else {
           await tx.update(atelierWorkItems).set({
             status: "failed",
@@ -1447,6 +1691,13 @@ export async function decideWorkCheckpoint(args: {
             eq(atelierWorkItems.id, args.workItemId),
             eq(atelierWorkItems.status, "blocked"),
           ));
+          await recordRiserObservationTx(tx, {
+            orgId: args.orgId,
+            workItemId: args.workItemId,
+            stage: "terminal_outcome",
+            outcome: "failed",
+            securityEvent: true,
+          });
         }
         return updated;
       }
@@ -1470,6 +1721,13 @@ export async function decideWorkCheckpoint(args: {
         await tx.update(atelierWorkItems)
           .set({ status: "failed", completedAt: new Date(), updatedAt: new Date() })
           .where(eq(atelierWorkItems.id, args.workItemId));
+        await recordRiserObservationTx(tx, {
+          orgId: args.orgId,
+          workItemId: args.workItemId,
+          stage: "terminal_outcome",
+          outcome: "failed",
+          securityEvent: true,
+        });
       }
     }
     return updated ?? null;

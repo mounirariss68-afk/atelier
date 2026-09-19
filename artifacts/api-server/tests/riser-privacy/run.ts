@@ -69,6 +69,16 @@ await pool.query(
   ),
 );
 
+await pool.query(
+  readFileSync(
+    new URL(
+      "../../../../lib/db/drizzle/0086_riser_observability.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
+
 const event = (id: string, createdAt: Date, marker: string) => ({
   id,
   protocolVersion: 1,

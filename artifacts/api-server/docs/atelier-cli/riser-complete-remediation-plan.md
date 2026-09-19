@@ -746,6 +746,8 @@ fork.
 
 #### C23. Complete, privacy-safe observability
 
+**Status (2026-09-20): complete; independent read-only review PASS.**
+
 **Problem:** existing telemetry cannot measure no-tool turns, interpretation
 accuracy, card relevance, full action state, or workflow recovery.
 
@@ -767,6 +769,15 @@ dashboards.
 authority.  
 **Gate:** completeness checker, trace reconstruction, redaction fixtures, alert
 firing, and dashboard queries for no-tool/card relevance/replay gaps.
+
+**Evidence:** `riser-observability/v1` is emitted from authoritative turn,
+action, resolver, replay, and workflow boundaries. Observation writes are
+savepoint-isolated and no-throw; dimensions are content-free; lifecycle-role
+RLS and hold-aware 90/365-day retention are rehearsed. Dashboard windows fail
+closed when bounded, and completeness reconciles observations against durable
+terminal records. The C23, C21 privacy, runtime, foundation, 326-entry manifest,
+1,169-route conformance, legacy replay, library typecheck, and API build gates
+pass.
 
 #### C24. Release-blocking evaluation
 

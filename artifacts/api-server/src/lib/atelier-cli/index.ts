@@ -49,6 +49,10 @@ import {
 import { digestAssistantValue } from "../assistant/action-runtime.js";
 import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 import {
+  recordRiserObservation,
+  recordRiserTurnProjection,
+} from "../assistant/observability-runtime.js";
+import {
   emitCliTelemetry,
   safeCliErrorMessage,
   sanitizeCliPersistence,
@@ -1181,6 +1185,13 @@ async function runIdempotentJob(args: {
 
   if (claimed.length === 0) {
     // Lost the race. Poll the existing row until terminal, then replay.
+    await recordRiserObservation({
+      orgId: args.orgId,
+      conversationId: args.sessionId,
+      turnId: args.turnId,
+      stage: "replay",
+      outcome: "requested",
+    }).catch(() => null);
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       const [existing] = await db
@@ -1189,9 +1200,23 @@ async function runIdempotentJob(args: {
         .where(eq(atelierCliJobs.idempotencyKey, args.idemKey))
         .limit(1);
       if (existing && existing.status === "success") {
+        await recordRiserObservation({
+          orgId: args.orgId,
+          conversationId: args.sessionId,
+          turnId: args.turnId,
+          stage: "replay",
+          outcome: "completed",
+        }).catch(() => null);
         return { ok: true, data: existing.result as unknown, replayedIdempotent: true };
       }
       if (existing && existing.status === "error") {
+        await recordRiserObservation({
+          orgId: args.orgId,
+          conversationId: args.sessionId,
+          turnId: args.turnId,
+          stage: "replay",
+          outcome: "completed",
+        }).catch(() => null);
         return {
           ok: false,
           errorCode: "prior_attempt_failed",
@@ -1844,6 +1869,7 @@ async function modelStep(args: {
     let toolCall: ClaudeToolCall | null = null;
     if (tool) {
       let input: Record<string, unknown> = {};
+      let turnPersisted = false;
       try {
         input = tool.json ? (JSON.parse(tool.json) as Record<string, unknown>) : {};
       } catch {
@@ -3724,6 +3750,13 @@ export async function runTurn(
         // Replay all prev frames except its own `final` (which would
         // mask the replay marker). Then emit a fresh final tagged
         // replay:true so the client knows this was a dedupe.
+        await recordRiserObservation({
+          orgId: persona.orgId,
+          conversationId: session.id,
+          turnId: prev.id,
+          stage: "replay",
+          outcome: "requested",
+        }).catch(() => null);
         const persistedFrames = ((prev.frames as CliFrame[]) ?? []).slice();
         const persistedFinal = [...persistedFrames]
           .reverse()
@@ -3784,6 +3817,13 @@ export async function runTurn(
           terminal: true,
           outcome: replayOutcome,
         }));
+        await recordRiserObservation({
+          orgId: persona.orgId,
+          conversationId: session.id,
+          turnId: prev.id,
+          stage: "replay",
+          outcome: "completed",
+        }).catch(() => null);
         return {
           turnId: prev.id,
           sessionId: session.id,
@@ -3795,6 +3835,9 @@ export async function runTurn(
     const turnId = rid("clit");
     const frames: CliFrame[] = [];
     const toolCalls: Array<Record<string, unknown>> = [];
+    let presentationProposedCount = 0;
+    let presentationEmittedCount = 0;
+    let presentationSuppressedCount = 0;
     const t0 = Date.now();
     let finalEmitted = false;
 
@@ -4683,6 +4726,13 @@ export async function runTurn(
     const preLlmMatch = preLlmResolved.find((h) => h.kind === typedIntent.kind) ?? preLlmResolved[0];
     try {
       if (preLlmMatch) {
+        await recordRiserObservation({
+          orgId: persona.orgId,
+          conversationId: session.id,
+          turnId,
+          stage: "resolution",
+          outcome: "unique",
+        }).catch(() => null);
         preludeResolved = {
           kind: preLlmMatch.kind,
           id: preLlmMatch.id,
@@ -4709,6 +4759,19 @@ export async function runTurn(
           persona.orgId,
         );
         const top = pickConfident(candidates);
+        await recordRiserObservation({
+          orgId: persona.orgId,
+          conversationId: session.id,
+          turnId,
+          stage: "resolution",
+          outcome:
+            candidates.length === 0
+              ? "not_found"
+              : top
+                ? "unique"
+                : "ambiguous",
+          dimensions: { candidate_count: candidates.length },
+        }).catch(() => null);
         if (top) {
           preludeResolved = {
             kind: typedIntent.kind,
@@ -6382,13 +6445,16 @@ export async function runTurn(
       const isProposePreview =
         tc.name === "propose_write" &&
         (toolResult.data as { stage?: unknown } | null)?.stage === "preview";
+      if (managedPresentation) presentationProposedCount += 1;
       if (presentation && !isOverCap) {
+        presentationEmittedCount += 1;
         record({
           type: "presentation",
           data: presentation as unknown as Record<string, unknown>,
           outcome: { kind: "read", committed: false },
         });
       } else if (managedPresentation && toolResult.ok) {
+        presentationSuppressedCount += 1;
         emitCliTelemetry({
           evt: "presentation_suppressed",
           turnId,
@@ -6878,10 +6944,37 @@ export async function runTurn(
             updatedAt: new Date(),
           })
           .where(eq(atelierCliTurns.id, turnId));
+        turnPersisted = true;
       } catch (err) {
         const msg = safeCliErrorMessage(err);
         console.error("[atelier-cli] turn persist failed", turnId, msg);
         persistErrors.push(`turn:${msg}`);
+      }
+      if (turnPersisted) {
+        try {
+          await recordRiserTurnProjection({
+            orgId: persona.orgId,
+            conversationId: session.id,
+            turnId,
+            intentKind: earlyTypedIntent.kind,
+            intentOperation: earlyTypedIntent.verb,
+            modelVersion: lastModel || classification.model,
+            catalogVersion: currentCapabilityManifestVersion(),
+            candidateCount: retrieved.tools.length,
+            toolCount: toolCalls.length,
+            successfulToolCount: toolCalls.filter((call) => call.ok === true).length,
+            presentationProposedCount,
+            presentationEmittedCount,
+            presentationSuppressedCount,
+            status,
+          });
+        } catch (err) {
+          console.error(
+            "[atelier-cli] riser observation projection failed",
+            turnId,
+            safeCliErrorMessage(err),
+          );
+        }
       }
 
       // Update session bookkeeping. Maintain a short rolling summary by

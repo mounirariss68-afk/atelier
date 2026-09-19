@@ -97,6 +97,47 @@ export const atelierAssistantEvents = pgTable(
   ],
 );
 
+export const atelierAssistantObservations = pgTable(
+  "atelier_assistant_observations",
+  {
+    id: text("id").primaryKey(),
+    version: text("version").notNull(),
+    orgId: text("org_id").notNull(),
+    stage: text("stage").notNull(),
+    outcome: text("outcome").notNull(),
+    securityEvent: boolean("security_event").notNull().default(false),
+    samplingMode: text("sampling_mode").notNull().default("always"),
+    sampleRate: integer("sample_rate_basis_points").notNull().default(10_000),
+    conversationId: text("conversation_id"),
+    turnId: text("turn_id"),
+    intentId: text("intent_id"),
+    actionId: text("action_id"),
+    workItemId: text("work_item_id"),
+    stepId: text("step_id"),
+    attemptId: text("attempt_id"),
+    capabilityId: text("capability_id"),
+    catalogVersion: text("catalog_version"),
+    schemaVersion: text("schema_version"),
+    policyVersion: text("policy_version"),
+    modelVersion: text("model_version"),
+    deploymentVersion: text("deployment_version"),
+    reasonCode: text("reason_code"),
+    dimensions: jsonb("dimensions")
+      .$type<Record<string, string | number | boolean>>()
+      .notNull()
+      .default({}),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("idx_assistant_observations_org_time").on(t.orgId, t.occurredAt),
+    index("idx_assistant_observations_turn").on(t.orgId, t.turnId, t.occurredAt),
+    index("idx_assistant_observations_action").on(t.orgId, t.actionId, t.occurredAt),
+    index("idx_assistant_observations_work").on(t.orgId, t.workItemId, t.occurredAt),
+    index("idx_assistant_observations_stage").on(t.orgId, t.stage, t.occurredAt),
+  ],
+);
+
 export const atelierAssistantOutbox = pgTable(
   "atelier_assistant_outbox",
   {
