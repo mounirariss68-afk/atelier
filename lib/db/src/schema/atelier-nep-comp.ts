@@ -83,6 +83,9 @@ export const atelierNepCompPlans = pgTable(
     endedByUserId: text("ended_by_user_id"),
     statusNote: text("status_note"),
     notes: text("notes"),
+    /** Signed governing contract record/version provenance. */
+    governingContractId: text("governing_contract_id"),
+    governingContractVersionId: text("governing_contract_version_id"),
     ...COMMON,
   },
   (t) => [

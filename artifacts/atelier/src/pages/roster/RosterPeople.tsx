@@ -33,6 +33,11 @@ interface PersonRow {
   // composition deep-link narrows the listing (e.g. `?nationality=EG`).
   gender?: string | null;
   nationality?: string | null;
+  // Task #1342 — relationship classification is distinct from worker type.
+  relationshipType?: string | null;
+  compensationBasis?: string | null;
+  compensationStatus?: string | null;
+  provenance?: string | null;
 }
 
 function isProtectedDemo(person: Pick<PersonRow, "fullName" | "email" | "userId"> & { id?: string }): boolean {
@@ -52,9 +57,13 @@ const WORKER_COLOR: Record<WorkerType, string> = {
   partner_firm_resource: "border-l-purple-500",
 };
 
-// Task #412 — cohort filters drive the People directory from URL params.
-// They round-trip through the API; chip strip below mirrors them so the
-// user always sees what slice they're looking at and can clear it.
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  employee: "Employee",
+  contractor: "Contractor",
+  equity_partner: "Equity partner",
+  non_equity_partner: "Non-equity partner",
+  partner_firm_resource: "Partner-firm resource",
+};
 const COHORT_KEYS = ["nationality", "gender", "country", "seniority", "language"] as const;
 type CohortKey = (typeof COHORT_KEYS)[number];
 
@@ -95,6 +104,10 @@ export default function RosterPeople() {
     return (wt as WorkerType) ?? "all";
   });
   const [q, setQ] = React.useState("");
+  const [relationship, setRelationship] = React.useState(() => {
+    if (typeof window === "undefined") return "all";
+    return new URLSearchParams(window.location.search).get("relationshipType") ?? "all";
+  });
   const [cohort, setCohort] = React.useState<Record<CohortKey, string>>(readCohortFromUrl);
   // Task #723 — list/card toggle, persisted per page.
   const [viewMode, setViewMode] = useViewMode("roster-people");
@@ -103,18 +116,21 @@ export default function RosterPeople() {
    *  and survives reloads. The directory + Composition dashboard share
    *  this contract. */
   const syncUrl = React.useCallback(
-    (next: { filter?: WorkerType | "all"; cohort?: Record<CohortKey, string> }) => {
+    (next: { filter?: WorkerType | "all"; cohort?: Record<CohortKey, string>; relationship?: string }) => {
       const sp = new URLSearchParams();
       const wt = next.filter ?? filter;
       const co = next.cohort ?? cohort;
+      const rel = next.relationship ?? relationship;
       if (wt !== "all") sp.set("workerType", wt);
       for (const k of COHORT_KEYS) {
         if (co[k]) sp.set(k, co[k]);
       }
       const qs = sp.toString();
-      navigate(`/people/people${qs ? `?${qs}` : ""}`, { replace: true });
+      if (rel !== "all") sp.set("relationshipType", rel);
+      const finalQs = sp.toString();
+      navigate(`/people/people${finalQs ? `?${finalQs}` : ""}`, { replace: true });
     },
-    [filter, cohort, navigate],
+    [filter, cohort, relationship, navigate],
   );
 
   React.useEffect(() => {
@@ -125,6 +141,7 @@ export default function RosterPeople() {
     if (filter === "all") params.set("workerType", "internal");
     else params.set("workerType", filter);
     if (q.trim()) params.set("q", q.trim());
+    if (relationship !== "all") params.set("relationshipType", relationship);
     for (const k of COHORT_KEYS) {
       if (cohort[k]) params.set(k, cohort[k]);
     }
@@ -139,7 +156,7 @@ export default function RosterPeople() {
         setViewerScope(d.viewerScope === "reports" ? "reports" : "full");
       })
       .catch(() => setPeople([]));
-  }, [filter, q, cohort, reloadKey]);
+  }, [filter, q, cohort, relationship, reloadKey]);
 
   const counts = React.useMemo(() => {
     const c = { all: 0, employee: 0, contractor: 0, partner_firm_resource: 0 };
@@ -187,6 +204,24 @@ export default function RosterPeople() {
             </button>
           ),
         )}
+        <div className="flex items-center gap-2 text-text-mute text-xs font-mono uppercase ml-2">
+          Relationship
+        </div>
+        {(["all", "employee", "contractor", "equity_partner", "non_equity_partner"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => {
+              setRelationship(v);
+              syncUrl({ relationship: v });
+            }}
+            className={`px-3 py-1 rounded text-xs font-mono border transition-colors ${
+              relationship === v ? "bg-gold text-bg border-gold" : "border-border text-text-mute hover:text-text"
+            }`}
+            data-testid={`filter-relationship-${v}`}
+          >
+            {v === "all" ? "All" : relationshipLabel(v)}
+          </button>
+        ))}
         {/* Task #1171 — partner-firm contacts are not internal workers;
             they live in the Partners lens instead of this directory. */}
         <Link
@@ -318,13 +353,15 @@ export default function RosterPeople() {
                   {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
                   {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
                   {p.partnerFirmName && <MonoChip>{p.partnerFirmName}</MonoChip>}
+                  {p.relationshipType && <MonoChip tone="gold">{relationshipLabel(p.relationshipType)}</MonoChip>}
+                  {isCompensationPending(p.compensationStatus) && <MonoChip tone="amber">Compensation pending</MonoChip>}
                   <MonoChip>{p.status}</MonoChip>
                 </>
               }
               trailing={
                 <>
-                  {p.email && (
-                    <span className="text-xs text-text-faint truncate max-w-56 hidden md:inline">{p.email}</span>
+                  {safeDirectoryValue(p.email) && (
+                    <span className="text-xs text-text-faint truncate max-w-56 hidden md:inline">{safeDirectoryValue(p.email)}</span>
                   )}
                   <MonoChip>{WORKER_LABEL[p.workerType]}</MonoChip>
                 </>
@@ -351,13 +388,15 @@ export default function RosterPeople() {
                 {p.nationality && <MonoChip>nat · {countryName(p.nationality)}</MonoChip>}
                 {p.partnerFirmName && <MonoChip>{p.partnerFirmName}</MonoChip>}
                 {p.vendorEntity && <MonoChip>{p.vendorEntity}</MonoChip>}
+                 {p.relationshipType && <MonoChip tone="gold">{relationshipLabel(p.relationshipType)}</MonoChip>}
+                 {isCompensationPending(p.compensationStatus) && <MonoChip tone="amber">Compensation pending</MonoChip>}
                 <MonoChip>{p.status}</MonoChip>
               </>
             }
             data-testid={`person-card-${p.id}`}
           >
-            {p.email && (
-              <div className="text-xs text-text-faint truncate">{p.email}</div>
+            {safeDirectoryValue(p.email) && (
+              <div className="text-xs text-text-faint truncate">{safeDirectoryValue(p.email)}</div>
             )}
           </RecordCard>
         ))}
@@ -367,3 +406,12 @@ export default function RosterPeople() {
     </div>
   );
 }
+
+const safeDirectoryValue = (value?: string | null) =>
+  value && !/^\s*(\[redacted\]|redacted|hidden|masked)\s*$/i.test(value) ? value : null;
+
+const relationshipLabel = (value?: string | null) =>
+  value ? (RELATIONSHIP_LABEL[value] ?? value.replaceAll("_", " ")) : "";
+
+const isCompensationPending = (value?: string | null) =>
+  value === "pending" || value === "rules_pending" || value === "pending_rules";

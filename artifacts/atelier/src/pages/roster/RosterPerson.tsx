@@ -61,6 +61,27 @@ interface Person {
   travelProfile?: TravelProfileValue | null;
   // Task #1137 — whether current comp differs from the signed contract.
   compDiffersFromContract?: boolean | null;
+  // Task #1342 — stable-person relationship and restricted compensation data.
+  relationshipType?: string | null;
+  compensationBasis?: string | null;
+  compensationStatus?: string | null;
+  provenance?: string | null;
+}
+
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  employee: "Employee",
+  contractor: "Contractor",
+  equity_partner: "Equity partner",
+  non_equity_partner: "Non-equity partner",
+  partner_firm_resource: "Partner-firm resource",
+};
+const relationshipLabel = (value?: string | null) =>
+  value ? (RELATIONSHIP_LABEL[value] ?? value.replaceAll("_", " ")) : "Unclassified";
+const isCompensationPending = (value?: string | null) =>
+  value === "pending" || value === "rules_pending" || value === "pending_rules";
+function safeValue(value?: string | null): string | null {
+  if (!value || /^\s*(\[redacted\]|redacted|hidden|masked)\s*$/i.test(value)) return null;
+  return value;
 }
 
 function isProtectedDemo(person: Pick<Person, "fullName" | "email" | "userId"> & { id?: string }): boolean {
@@ -96,6 +117,8 @@ export default function RosterPerson() {
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
   const [viewerCanEditTitle, setViewerCanEditTitle] = React.useState(false);
   const [viewerCanEdit, setViewerCanEdit] = React.useState(false);
+  const [viewerCanEditClassification, setViewerCanEditClassification] =
+    React.useState(false);
   // Task #221 — sensitive-people gate (founding_partner | hr): drives the
   // Documents + Audit tabs; managers get a business-only "reports" scope.
   const [viewerCanSeeSensitive, setViewerCanSeeSensitive] = React.useState(false);
@@ -110,6 +133,7 @@ export default function RosterPerson() {
         setViewerCanSeeComp(!!d.viewerCanSeeComp);
         setViewerCanEditTitle(!!d.viewerCanEditTitle);
         setViewerCanEdit(!!d.viewerCanEdit);
+        setViewerCanEditClassification(!!d.viewerCanEditClassification);
         setViewerCanSeeSensitive(!!d.viewerCanSeeSensitive);
         setViewerScope(d.viewerScope === "reports" ? "reports" : "full");
       });
@@ -140,6 +164,9 @@ export default function RosterPerson() {
               ? "Partner contact"
               : person.workerType[0]!.toUpperCase() +
                 person.workerType.slice(1)}
+          </MonoChip>
+          <MonoChip tone="gold" data-testid="relationship-classification">
+            {relationshipLabel(person.relationshipType ?? person.workerType)}
           </MonoChip>
           {/* Task #1171 — partner contacts are badged with their firm and
               framed as external, never as our workers. */}
@@ -194,7 +221,14 @@ export default function RosterPerson() {
           </Card>
         )}
         {effectiveTab === "profile" && (
-          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEdit={viewerCanEdit && !protectedDemo} viewerCanEditTitle={viewerCanEditTitle && !protectedDemo} onUpdated={setPerson} />
+          <ProfileTab
+            person={person}
+            viewerCanSeeComp={viewerCanSeeComp}
+            viewerCanEdit={viewerCanEdit && !protectedDemo}
+            viewerCanEditClassification={viewerCanEditClassification && !protectedDemo}
+            viewerCanEditTitle={viewerCanEditTitle && !protectedDemo}
+            onUpdated={setPerson}
+          />
         )}
         {!protectedDemo && <SafeRemovalPanel role={user?.role} personId={personId} fullName={person.fullName} onRemoved={() => window.location.assign(dirHref)} />}
         {effectiveTab === "access" && <AccessTab personId={personId} />}
@@ -281,12 +315,14 @@ function ProfileTab({
   person,
   viewerCanSeeComp,
   viewerCanEdit,
+  viewerCanEditClassification,
   viewerCanEditTitle,
   onUpdated,
 }: {
   person: Person;
   viewerCanSeeComp: boolean;
   viewerCanEdit: boolean;
+  viewerCanEditClassification: boolean;
   viewerCanEditTitle: boolean;
   onUpdated: (p: Person) => void;
 }) {
@@ -331,6 +367,11 @@ function ProfileTab({
         <Field label="Status" value={person.status} />
         <Field label="Start" value={person.startDate} />
         <Field label="End" value={person.endDate} />
+        <ClassificationEditor
+          person={person}
+          canEdit={viewerCanEditClassification}
+          onUpdated={onUpdated}
+        />
         <DemographicsEditor person={person} onUpdated={onUpdated} />
       </Card>
       <Card className="p-4 space-y-3">
@@ -455,6 +496,39 @@ function ProfileTab({
         )}
       </Card>
       )}
+      {viewerCanSeeComp && (
+        person.relationshipType === "non_equity_partner" ||
+        person.relationshipType === "equity_partner" ||
+        person.compensationBasis
+      ) && (
+        <Card className="p-4 md:col-span-2" data-testid="relationship-compensation-card">
+          <h3 className="font-mono text-xs uppercase text-text-mute mb-2">
+            Relationship compensation
+          </h3>
+          <div className="flex flex-wrap gap-2 items-center">
+            {person.compensationBasis && (
+              <MonoChip>{safeValue(person.compensationBasis)?.replaceAll("_", " ") ?? "Restricted"}</MonoChip>
+            )}
+            {person.compensationStatus && (
+              <MonoChip tone={isCompensationPending(person.compensationStatus) ? "amber" : "green"}>
+                {isCompensationPending(person.compensationStatus)
+                  ? "Rules pending"
+                  : person.compensationStatus}
+              </MonoChip>
+            )}
+          </div>
+          {isCompensationPending(person.compensationStatus) && (
+            <p className="mt-3 rounded border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning" data-testid="profit-sharing-rules-pending">
+              Equity and profit-sharing rules are pending approval. No entitlement is final until the governing rules are published.
+            </p>
+          )}
+          {person.provenance && (
+            <p className="mt-2 text-xs text-text-faint" data-testid="nep-agreement-provenance">
+              Agreement provenance: {safeValue(person.provenance) ?? "Restricted"}
+            </p>
+          )}
+        </Card>
+      )}
       {/* Task #1157 — salary-advance shortcut for finance/HR viewing an employee. */}
       {person.workerType === "employee" && viewerCanSeeComp && (
         <PayrollAdvancesCard personId={person.id} personName={person.fullName} />
@@ -462,7 +536,7 @@ function ProfileTab({
       {/* Task #1298 — non-salaried NEP compensation shortcut for comp viewers
           on a contractor row (NEPs ride the contractor roster machinery).
           The finance page itself resolves whether an NEP plan exists. */}
-      {person.workerType === "contractor" && viewerCanSeeComp && (
+      {person.relationshipType === "non_equity_partner" && viewerCanSeeComp && (
         <Card className="p-4 md:col-span-2" data-testid="nep-comp-link-card">
           <h3 className="font-mono text-xs uppercase text-text-mute">
             Non-equity partner compensation
@@ -496,6 +570,101 @@ function ProfileTab({
           </p>
         </Card>
       )}
+    </div>
+  );
+}
+
+function ClassificationEditor({
+  person,
+  canEdit,
+  onUpdated,
+}: {
+  person: Person;
+  canEdit: boolean;
+  onUpdated: (p: Person) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(person.relationshipType ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(
+    () => setValue(person.relationshipType ?? ""),
+    [person.id, person.relationshipType],
+  );
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/people/${person.id}/classification`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ relationshipType: value }),
+      });
+      if (r.status === 403) {
+        setError("Only Founding Partners, HR, or Finance may edit classification.");
+        setEditing(false);
+        return;
+      }
+      if (!r.ok) throw new Error(`Save failed (${r.status}).`);
+      const d = await r.json();
+      if (d.person) {
+        onUpdated({ ...person, ...d.person, id: person.id } as Person);
+      }
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save classification.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border border-border-soft rounded p-2 space-y-2" data-testid="classification-group">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-text-mute">Relationship classification</span>
+        {!editing && canEdit && (
+          <button
+            onClick={() => { setError(null); setEditing(true); }}
+            className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
+            data-testid="classification-edit"
+          >
+            Edit classification
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="flex items-center gap-2">
+          <select
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="flex-1 rounded border border-border bg-bg px-2 py-1 text-sm"
+            data-testid="classification-select"
+          >
+            <option value="employee">Employee</option>
+            <option value="contractor">Contractor</option>
+            <option value="equity_partner">Equity partner</option>
+            <option value="non_equity_partner">Non-equity partner</option>
+            <option value="partner_firm_resource">Partner-firm resource</option>
+          </select>
+          <button
+            disabled={saving}
+            onClick={save}
+            className="rounded bg-gold px-3 py-1 text-xs text-bg"
+            data-testid="classification-save"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button disabled={saving} onClick={() => setEditing(false)} className="text-xs text-text-mute">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm">{relationshipLabel(person.relationshipType ?? person.workerType)}</p>
+      )}
+      {error && <p className="text-xs text-warning" role="alert">{error}</p>}
     </div>
   );
 }

@@ -46,6 +46,7 @@ import {
   atelierLegalEntities,
   atelierContractRecords,
   atelierContractSalaryProposals,
+  atelierNepCompPlans,
 } from "@workspace/db";
 // Task #538 — unified person model: structured names resolve through the
 // shared parser/sanitizer and persist via the person-sync helper.
@@ -81,6 +82,7 @@ import {
 } from "../../lib/atelier-business-card.js";
 // Task #387 — one-click zip of all active employees' print-ready cards.
 import JSZip from "jszip";
+import { loadRelationshipClassification } from "./governanceRoutes.js";
 
 const router: IRouter = Router();
 
@@ -99,6 +101,10 @@ export interface PersonWire {
   // Task #538 — unified person model. Structured name fields for form
   // prefill; displayName is server-recomputed and is what UIs render.
   personId?: string | null;
+  relationshipType?: string | null;
+  compensationBasis?: string | null;
+  compensationStatus?: string | null;
+  provenance?: string | null;
   honorific?: string | null;
   firstName?: string | null;
   middleName?: string | null;
@@ -280,6 +286,9 @@ export function toBusinessWire(p: PersonWire): PersonWire {
     id: p.id,
     workerType: p.workerType,
     protectedDemo: isProtectedDemoPerson(p),
+    // Relationship classification is a business-safe roster attribute.
+    // Compensation basis/status remain omitted for manager/self-scoped viewers.
+    relationshipType: p.relationshipType ?? null,
     fullName: p.fullName,
     // Task #538 — structured name is business identity, safe for scoped viewers.
     personId: p.personId ?? null,
@@ -356,6 +365,54 @@ async function ensureRosterViewAccess(
     res.status(404).json({ error: "person-not-found" });
     return null;
   }
+  if (person.personId) {
+    const c = await loadRelationshipClassification(me.orgId, person.personId);
+    if (c) {
+      person.relationshipType = c.relationshipType;
+      person.compensationStatus = c.status;
+      if (canSeeComp(me.role)) person.compensationBasis = c.compensationBasis;
+    }
+  }
+  if (
+    canSeeComp(me.role) &&
+    person.workerType === "contractor" &&
+    person.relationshipType === "non_equity_partner"
+  ) {
+    const [plan] = await db
+      .select({
+        governingContractId: atelierNepCompPlans.governingContractId,
+        governingContractVersionId:
+          atelierNepCompPlans.governingContractVersionId,
+      })
+      .from(atelierNepCompPlans)
+      .where(
+        and(
+          eq(atelierNepCompPlans.orgId, me.orgId),
+          eq(atelierNepCompPlans.contractorId, person.id),
+          isNull(atelierNepCompPlans.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierNepCompPlans.effectiveFrom))
+      .limit(1);
+    if (plan?.governingContractId) {
+      const [contract] = await db
+        .select({ title: atelierContractRecords.title })
+        .from(atelierContractRecords)
+        .where(
+          and(
+            eq(atelierContractRecords.orgId, me.orgId),
+            eq(atelierContractRecords.id, plan.governingContractId),
+          ),
+        )
+        .limit(1);
+      person.provenance = [
+        contract?.title ?? plan.governingContractId,
+        plan.governingContractVersionId,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+  }
   if (scope.kind === "full") return sanitizeForViewer(person, me);
   if (
     scope.personIds.has(person.id) ||
@@ -413,6 +470,7 @@ function rid(prefix: string): string {
 // -----------------------------------------------------------------
 
 export interface ListOpts {
+  orgId?: string;
   // Task #1171 — "internal" = employees + contractors only, excluding
   // partner-firm resources. The web People directory uses it so partner
   // contacts stop appearing mixed into the worker roster; default stays
@@ -428,6 +486,7 @@ export interface ListOpts {
   country?: string;              // current location ISO alpha-2
   seniority?: string;            // exact match against `seniority`
   includeComp: boolean;
+  relationshipType?: string;
 }
 
 export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
@@ -572,6 +631,12 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
 
   out.sort((a, b) => a.fullName.localeCompare(b.fullName));
   await attachStructuredNames(out);
+  const classifications = await Promise.all(out.map((p) => p.personId ? loadRelationshipClassification(opts.orgId ?? "aico", p.personId) : null));
+  for (let i = out.length - 1; i >= 0; i--) {
+    const c = classifications[i];
+    if (c) Object.assign(out[i], { relationshipType: c.relationshipType, compensationBasis: opts.includeComp ? c.compensationBasis : null, compensationStatus: c.status });
+    if (opts.relationshipType && (!c || c.relationshipType !== opts.relationshipType)) out.splice(i, 1);
+  }
   return out;
 }
 
@@ -1136,6 +1201,7 @@ router.get("/roster/people", async (req, res, next) => {
     const scope = await resolveRosterScope(me);
     const sensitiveViewer = canViewSensitivePeopleData(me.role);
     const list = await listPersons({
+      orgId: me.orgId,
       workerType: wt,
       q,
       status,
@@ -1145,6 +1211,7 @@ router.get("/roster/people", async (req, res, next) => {
       country: str("country"),
       seniority: str("seniority"),
       includeComp: scope.kind === "full" && canSeeComp(me.role),
+      relationshipType: str("relationshipType"),
     });
     if (scope.kind === "reports") {
       const people = list
@@ -2775,6 +2842,9 @@ router.get("/roster/people/:id", async (req, res, next) => {
       // Task #199/#221 — drives the full Edit Person affordance; must
       // mirror the gate on PATCH /roster/people/:id (founding_partner | hr).
       viewerCanEdit: canEditPeople(me.role),
+      // Task #1342 — classification is a separate audited governance write.
+      viewerCanEditClassification:
+        isFoundingPartner(me.role) || isHr(me.role) || isFinance(me.role),
       viewerScope: full ? "full" : "reports",
     });
   } catch (err) {
@@ -3565,13 +3635,13 @@ router.get("/roster/people/:id/conflicts", async (req, res, next) => {
   }
 });
 
-// =============================================================
+// -------------------------------------------------------------
 // Task #509 — Titles definition registry.
 // Maps display titles → canonical seniority values (rate-card compatible).
 // Reads: any org persona (dropdowns everywhere). Writes: HR + founding
 // partners only. When the table is empty the UI falls back to the legacy
 // hardcoded seniority list (production policy forbids seeding).
-// =============================================================
+// -------------------------------------------------------------
 
 const titleBody = z.object({
   title: z.string().trim().min(1).max(200),
@@ -3809,11 +3879,11 @@ export function rejectNonEmployeePersona(
   next();
 }
 
-// =============================================================
+// -------------------------------------------------------------
 // Task #254 — Sentinel side-effect: auto-revoke non-employee grants on close.
 // Exposed for both direct callers (engagement-close transition routes when
 // they land in #257) and the agent runner's emitAccessSentinelEvent dispatch.
-// =============================================================
+// -------------------------------------------------------------
 export async function revokeNonEmployeeAccessOnEngagementClose(args: {
   engagementId: string;
   closedByUserId: string;

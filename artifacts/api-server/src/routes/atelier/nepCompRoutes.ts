@@ -29,6 +29,9 @@ import {
   atelierNepEntitlements,
   atelierContractorPayments,
   atelierSelfBilledInvoices,
+  atelierContractRecords,
+  atelierContractDocuments,
+  atelierPersonRelationshipClassifications,
 } from "@workspace/db";
 import { canViewCompensation } from "./personaRoles.js";
 import {
@@ -41,6 +44,7 @@ import {
   type NepPlan,
   type NepEntitlement,
 } from "../../lib/atelier-nep-comp.js";
+import { loadRelationshipClassification } from "./governanceRoutes.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -103,6 +107,12 @@ function planWire(p: NepPlan) {
     statusNote: p.statusNote,
     notes: p.notes,
     createdAt: p.createdAt.toISOString(),
+    governingContractId: p.governingContractId,
+    governingContractVersionId: p.governingContractVersionId,
+    provenanceStatus:
+      p.governingContractId && p.governingContractVersionId
+        ? "verified"
+        : "requires_review",
   };
 }
 
@@ -199,6 +209,8 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
     const conversionMarginThresholdPct = num(b.conversionMarginThresholdPct);
     const effectiveFrom = typeof b.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.effectiveFrom)
       ? b.effectiveFrom : null;
+    const governingContractId = typeof b.governingContractId === "string" ? b.governingContractId : null;
+    const governingContractVersionId = typeof b.governingContractVersionId === "string" ? b.governingContractVersionId : null;
     if (
       dayRateAmount == null || dayRateAmount < 0 ||
       marginSharePctSale == null || marginSharePctSale < 0 || marginSharePctSale > 100 ||
@@ -206,11 +218,22 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
       originationWindowMonths == null || originationWindowMonths < 0 ||
       conversionRevenueThresholdUsd == null || conversionRevenueThresholdUsd < 0 ||
       conversionMarginThresholdPct == null || conversionMarginThresholdPct < 0 || conversionMarginThresholdPct > 100 ||
-      !effectiveFrom
+       !effectiveFrom || !governingContractId || !governingContractVersionId
     ) {
-      res.status(400).json({ error: "invalid-plan-terms", message: "All plan terms (day rate, both margin-share tiers, window months, conversion thresholds, effective date) are required and must be in range." });
+      res.status(400).json({ error: "invalid-plan-terms", message: "Plan terms and signed governing contract provenance are required." });
       return;
     }
+    const classification = contractor.personId ? await loadRelationshipClassification(me.orgId, contractor.personId) : null;
+    if (!classification || classification.relationshipType !== "non_equity_partner") { res.status(409).json({ error: "classification-required", message: "A canonical non_equity_partner classification is required before creating NEP compensation." }); return; }
+    const [contract] = await db.select().from(atelierContractRecords).where(and(eq(atelierContractRecords.orgId, me.orgId), eq(atelierContractRecords.id, governingContractId), eq(atelierContractRecords.status, "signed")));
+    const [signedDocument] = await db.select({ id: atelierContractDocuments.id }).from(atelierContractDocuments).where(and(
+      eq(atelierContractDocuments.orgId, me.orgId),
+      eq(atelierContractDocuments.id, governingContractVersionId),
+      eq(atelierContractDocuments.contractId, governingContractId),
+      eq(atelierContractDocuments.kind, "signed_pdf"),
+    ));
+    const allowedContract = contract && signedDocument && ["non_equity_partner_employment", "contractor_agreement"].includes(contract.contractType) && contract.counterpartyKind === "person" && (contract.personId === contractor.id || contract.personId === contractor.personId) && contract.currentDocumentId === governingContractVersionId;
+    if (!allowedContract) { res.status(409).json({ error: "signed-governing-contract-required", message: "The governing contract must be an org-scoped signed NEP/contractor agreement linked to this contractor or canonical person and its current signed document version." }); return; }
     const currency = typeof b.currency === "string" && b.currency ? b.currency.toUpperCase().slice(0, 3) : "USD";
     const priorPlans = await loadPlansForContractor(me.orgId, contractorId);
     if (priorPlans.some((p) => p.effectiveFrom === effectiveFrom)) {
@@ -243,6 +266,8 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
       status: lineageStatus,
       notes: typeof b.notes === "string" ? b.notes.slice(0, 4000) : null,
       createdByUserId: me.id,
+       governingContractId,
+       governingContractVersionId,
     });
     // Time charges ride the existing contractor day-rate machinery: keep
     // the roster day rate in lockstep with the CURRENTLY EFFECTIVE plan
@@ -267,7 +292,7 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
         contractorId, effectiveFrom, currency, dayRateAmount,
         marginSharePctSale, marginSharePctOriginationOnly, originationWindowMonths,
         conversionRevenueThresholdUsd, conversionMarginThresholdPct,
-        postConversionSalaryAmount: num(b.postConversionSalaryAmount),
+        postConversionSalaryAmount: num(b.postConversionSalaryAmount), governingContractId, governingContractVersionId,
         previousDayRate: prevRate,
         dayRateSynced,
         syncedDayRate: effectiveNow?.dayRateAmount ?? null,
@@ -276,6 +301,20 @@ router.post("/finance/nep-comp/plans", async (req, res, next) => {
     });
     const [row] = await db.select().from(atelierNepCompPlans).where(eq(atelierNepCompPlans.id, id));
     res.status(201).json({ ok: true, plan: planWire(row) });
+  } catch (err) { next(err); }
+});
+
+// Explicit legacy bridge: never inferred from role/name. Re-running is safe.
+router.post("/finance/nep-comp/plans/:contractorId/classification-migration", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res); if (!me) return;
+    const contractor = await loadContractor(me.orgId, req.params.contractorId);
+    if (!contractor || !contractor.personId) { res.status(404).json({ error: "contractor-person-not-found" }); return; }
+    if (req.body?.relationshipType !== "non_equity_partner") { res.status(400).json({ error: "explicit-nep-classification-required" }); return; }
+    const effectiveFrom = typeof req.body?.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.effectiveFrom) ? req.body.effectiveFrom : new Date().toISOString().slice(0, 10);
+    const [row] = await db.insert(atelierPersonRelationshipClassifications).values({ id: rid("rel"), orgId: me.orgId, personId: contractor.personId, relationshipType: "non_equity_partner", compensationBasis: "day_rate", status: "active", effectiveFrom, source: "explicit_legacy_migration", provenanceId: req.body?.provenanceId ?? null, createdByUserId: me.id }).onConflictDoUpdate({ target: [atelierPersonRelationshipClassifications.orgId, atelierPersonRelationshipClassifications.personId, atelierPersonRelationshipClassifications.effectiveFrom], set: { relationshipType: "non_equity_partner", compensationBasis: "day_rate", status: "active", updatedAt: new Date() } }).returning();
+    await audit({ entityType: "person_relationship_classification", entityId: row.id, actor: me, action: "nep_comp.classification_migration", payload: { contractorId: contractor.id, personId: contractor.personId }, summary: "Explicit legacy NEP classification migration." });
+    res.json({ ok: true, classification: row, idempotent: true });
   } catch (err) { next(err); }
 });
 
@@ -476,6 +515,12 @@ router.post("/finance/nep-comp/recompute", async (req, res, next) => {
       .filter((id) => !wantId || id === wantId);
     const results = [];
     for (const contractorId of contractorIds) {
+      const [contractor] = await db.select({ personId: atelierContractors.personId }).from(atelierContractors).where(and(eq(atelierContractors.orgId, me.orgId), eq(atelierContractors.id, contractorId)));
+      const classification = contractor?.personId ? await loadRelationshipClassification(me.orgId, contractor.personId) : null;
+      if (!classification || classification.relationshipType !== "non_equity_partner") {
+        res.status(409).json({ error: "classification-required", contractorId, message: "A canonical non_equity_partner classification is required before recompute." });
+        return;
+      }
       results.push(await recomputeNepEntitlements({ orgId: me.orgId, contractorId }));
       // Future-dated plan revisions take over the operational day rate
       // once effective; recompute is the standing hook that applies them.

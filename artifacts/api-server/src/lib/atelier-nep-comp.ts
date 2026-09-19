@@ -157,7 +157,13 @@ export function computeDueDate(collectedAt: Date | null, clientAcceptedAt: Date 
  */
 export function pickEffectivePlan(rows: NepPlan[], onDate: string): NepPlan | null {
   const eligible = rows
-    .filter((p) => !p.deletedAt && p.effectiveFrom <= onDate)
+    .filter(
+      (p) =>
+        !p.deletedAt &&
+        p.effectiveFrom <= onDate &&
+        Boolean(p.governingContractId) &&
+        Boolean(p.governingContractVersionId),
+    )
     .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
   return eligible[0] ?? null;
 }

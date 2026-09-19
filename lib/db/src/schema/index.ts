@@ -18,6 +18,7 @@ export * from "./atelier-entities";
 export * from "./atelier-expense-taxonomy";
 export * from "./atelier-margin-reporting";
 export * from "./atelier-nep-comp";
+export * from "./atelier-partner-governance";
 export * from "./atelier-merchants";
 export * from "./atelier-contract-lifecycle";
 export * from "./atelier-ms";
