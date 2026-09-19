@@ -169,5 +169,49 @@ test("other errors still render the generic error card", () => {
   assert(!html.includes('data-testid="cli-duplicate-rejection"'), "should not render dup card");
 });
 
+test("shared semantics hide prelude failures and clarification-pending results", () => {
+  const html = renderToStaticMarkup(
+    <ToolResultCardList
+      toolResults={[
+        {
+          tool: "prefill_from_specialist",
+          ok: false,
+          prelude: true,
+          errorCode: "unavailable",
+          errorMessage: "internal noise",
+        },
+        {
+          tool: "prefill_from_specialist",
+          ok: true,
+          data: { clarificationPending: true },
+        },
+      ]}
+      capabilities={[]}
+      locale="en"
+    />,
+  );
+  assert(!html.includes("internal noise"), "prelude failure must remain hidden");
+  assert(!html.includes("clarificationPending"), "clarification placeholder must remain hidden");
+});
+
+test("not_found uses the shared soft-error outcome", () => {
+  const html = renderToStaticMarkup(
+    <ToolResultCardList
+      toolResults={[
+        {
+          tool: "person_detail",
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: "Nobody matched.",
+        },
+      ]}
+      capabilities={[]}
+      locale="en"
+    />,
+  );
+  assert(html.includes('data-severity="soft_error"'), "not_found must be a soft error");
+  assert(html.includes("Nobody matched."), "soft-error message missing");
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

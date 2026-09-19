@@ -14,15 +14,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   abortOutcome,
   applyFrame,
+  chatProtocolRequestHeaders,
   confirmGate,
   deviceTimeZone,
   isSafeHttpUrl,
+  negotiateChatProtocol,
+  recoverTerminalTurn,
   restoreClarificationTurn,
   streamSse,
   tryFireNavigation,
   type PendingClarificationPayload,
+  type ChatProtocolCompatibility,
   type SseResponseLike,
 } from "@workspace/chat-core";
+import { webReplayFrames } from "./semanticAdapter";
 import type { CliTurn, CliTurnStatus, CliLocale, CliCapability } from "./types";
 import { localeInstruction } from "./locale";
 import type { DerivedPageContext } from "./pageContext";
@@ -133,6 +138,8 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   const [capabilities, setCapabilities] = useState<CliCapability[]>([]);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
   const [catalogSchemaVersion, setCatalogSchemaVersion] = useState<number | null>(null);
+  const [protocolMode, setProtocolMode] =
+    useState<ChatProtocolCompatibility["mode"] | "pending">("pending");
   const [confirming, setConfirming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   /** Task #24 — mirrors the `confirming` state synchronously so a
@@ -164,15 +171,35 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     let alive = true;
     fetch("/api/atelier/cli/capabilities", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { capabilities?: CliCapability[]; schemaVersion?: number }) => {
+      .then(
+        (j: {
+          protocolVersion?: number;
+          minimumClientProtocolVersion?: number;
+          presentationDataVersions?: number[];
+          capabilities?: CliCapability[];
+          schemaVersion?: number;
+        }) => {
         if (alive) {
+          const compatibility = negotiateChatProtocol(j);
+          if (!compatibility.compatible) {
+             setProtocolMode("unsupported");
+            setCapabilities([]);
+            setCatalogSchemaVersion(j.schemaVersion ?? null);
+            setCapabilitiesError(`unsupported-assistant-protocol:${compatibility.reason}`);
+            return;
+          }
+           setProtocolMode(compatibility.mode);
           setCapabilities(j.capabilities ?? []);
           setCatalogSchemaVersion(j.schemaVersion ?? null);
           setCapabilitiesError(null);
         }
-      })
+        },
+      )
       .catch((e: Error) => {
-        if (alive) setCapabilitiesError(e.message);
+        if (alive) {
+          setProtocolMode("unsupported");
+          setCapabilitiesError(e.message);
+        }
       });
     return () => {
       alive = false;
@@ -247,6 +274,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
           fetch(u, { ...init, credentials: "include" }) as Promise<SseResponseLike>,
         url,
         body,
+         headers: chatProtocolRequestHeaders(protocolMode === "pending" ? "legacy" : protocolMode),
         signal,
         allowRetry,
         onRetryWait: () => {
@@ -318,6 +346,44 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         }
         case "network_error": {
           if (!isActive()) return;
+          if (outcome.receivedFrame && live.serverTurnId) {
+            const recovery = await recoverTerminalTurn({
+              turnId: live.serverTurnId,
+              signal,
+              fetchSnapshot: async (turnId) => {
+                const response = await fetch(`/api/atelier/cli/turn/${turnId}`, {
+                  credentials: "include",
+                  signal,
+                });
+                if (response.status === 404) return null;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const body = (await response.json()) as {
+                  turn?: {
+                    id?: string;
+                    status?: string;
+                    terminal?: boolean;
+                    frames?: unknown[];
+                  };
+                };
+                if (!body.turn?.id) return null;
+                return {
+                  id: body.turn.id,
+                  status: body.turn.status ?? "streaming",
+                  terminal: body.turn.terminal === true,
+                  frames: body.turn.frames ?? [],
+                };
+              },
+            });
+            if (recovery.kind === "recovered" && isActive()) {
+              live = {
+                ...webReplayFrames(live, recovery.snapshot.frames),
+                reconnecting: false,
+                errorKind: undefined,
+              };
+              commit(live);
+              return;
+            }
+          }
           live = {
             ...live,
             status: "error",
@@ -333,7 +399,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         }
       }
     },
-    [onNavigate],
+    [onNavigate, protocolMode],
   );
 
   const submit = useCallback(
@@ -348,6 +414,27 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
 
       const clientTurnKey = uuid();
       activeTurnKeyRef.current = clientTurnKey;
+      if (protocolMode === "unsupported" || protocolMode === "pending") {
+        const unsupported: CliTurn = {
+          clientTurnKey,
+          prompt: args.prompt,
+          status: "error",
+          startedAt: Date.now(),
+          text: "",
+          trace: [],
+          toolResults: [],
+          error: {
+            code: "unsupported_assistant_protocol",
+            message:
+              protocolMode === "pending"
+                ? "Assistant compatibility is still being checked."
+                : (capabilitiesError ?? "This assistant version is not supported."),
+          },
+        };
+        setCurrent(unsupported);
+        setTurns((t) => [unsupported, ...t]);
+        return;
+      }
       const seed: CliTurn = {
         clientTurnKey,
         prompt: args.prompt,
@@ -356,6 +443,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         text: "",
         trace: [],
         toolResults: [],
+        protocolMode: protocolMode === "current" ? "current" : "legacy",
       };
       setCurrent(seed);
       setTurns((t) => [seed, ...t]);
@@ -389,7 +477,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         allowRetry: true,
       });
     },
-    [sessionId, locale, runTurnStream],
+    [sessionId, locale, runTurnStream, protocolMode, capabilitiesError],
   );
 
   const confirm = useCallback(

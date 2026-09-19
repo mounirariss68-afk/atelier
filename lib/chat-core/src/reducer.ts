@@ -24,10 +24,12 @@ import type {
   ChatTurnStatus,
 } from "./types";
 import {
+  ASSISTANT_PROTOCOL_VERSION,
   hasMinimumPresentationData,
   isAllowedPresentationV1Pair,
   PresentationV1Schema,
 } from "@workspace/assistant-protocol";
+import { isKnownChatFrameType } from "./frames";
 
 function liftNavigateTo(v: unknown): ChatNavigateTo | null {
   if (!v || typeof v !== "object") return null;
@@ -67,6 +69,60 @@ export function toolResultKey(result: {
 }
 
 export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T {
+  if (!isKnownChatFrameType(frame.type)) return turn;
+  const hasSemanticEnvelope = frame.mode === "semantic";
+  if (turn.protocolMode === "current" && !hasSemanticEnvelope) return turn;
+  if (turn.protocolMode === "legacy" && hasSemanticEnvelope) return turn;
+  if (
+    hasSemanticEnvelope &&
+    frame.type === "presentation" &&
+    (frame.outcome?.kind !== "read" || frame.outcome.committed !== false)
+  ) {
+    return turn;
+  }
+  if (
+    hasSemanticEnvelope &&
+    (frame.protocolVersion !== ASSISTANT_PROTOCOL_VERSION ||
+      typeof frame.sequence !== "number" ||
+      !Number.isInteger(frame.sequence) ||
+      frame.sequence < 0)
+  ) {
+    return turn;
+  }
+  if (
+    hasSemanticEnvelope &&
+    typeof turn.lastSequence === "number" &&
+    frame.sequence! <= turn.lastSequence
+  ) {
+    return turn;
+  }
+  if (hasSemanticEnvelope) {
+    const outcome = frame.outcome;
+    const commitState =
+      outcome?.kind === "proposed"
+        ? "proposed"
+        : outcome?.kind === "committed" && outcome.committed
+          ? "committed"
+          : outcome?.kind === "failed"
+            ? "failed"
+            : (turn.commitState ?? "none");
+    turn = {
+      ...turn,
+      protocolMode: "current",
+      lastSequence: frame.sequence,
+      ...(typeof frame.turnId === "string" && frame.turnId.length > 0
+        ? { serverTurnId: frame.turnId }
+        : {}),
+      ...(frame.terminal === true ? { terminal: true } : {}),
+      ...(outcome
+        ? {
+            commitState,
+            terminalOutcome: frame.terminal === true ? outcome.kind : turn.terminalOutcome,
+            ...(outcome.navigateTo ? { navigateTo: outcome.navigateTo } : {}),
+          }
+        : {}),
+    };
+  }
   // Capture the server turn id from ANY frame that carries one
   // (needs_clarification, final, replay-final, in-flight error…), not
   // only the happy-path `final` frame. Without this, a turn whose
@@ -210,7 +266,7 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
       // payload. Lift the first valid hint we see onto the turn so the
       // client's stream consumer can fire onNavigate.
       let nextNavigateTo = turn.navigateTo ?? null;
-      if (ok && d.data && typeof d.data === "object") {
+       if (!hasSemanticEnvelope && ok && d.data && typeof d.data === "object") {
         const lifted = liftNavigateTo((d.data as { navigateTo?: unknown }).navigateTo);
         if (lifted) nextNavigateTo = lifted;
       }
@@ -249,6 +305,7 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
             errorCode: d.errorCode,
             errorMessage: d.errorMessage,
             ...(d.prelude === true ? { prelude: true } : {}),
+            ...(hasSemanticEnvelope && frame.outcome ? { outcome: frame.outcome } : {}),
           },
         ],
       };
@@ -274,6 +331,7 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
         tool: d.resultSourceId,
         ok: true,
         data: d.data,
+        ...(frame.outcome ? { outcome: frame.outcome } : {}),
         presentation: {
           id: d.id,
           answersIntentIds: d.answersIntentIds,
@@ -330,7 +388,7 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
       // `diff.navigateTo`. Lift it onto the turn so the chat can land
       // on the context page while the user reviews the confirm card.
       let nextNavigateTo = turn.navigateTo ?? null;
-      const lifted = liftNavigateTo(d.diff?.navigateTo);
+      const lifted = hasSemanticEnvelope ? null : liftNavigateTo(d.diff?.navigateTo);
       if (lifted) nextNavigateTo = lifted;
       return {
         ...turn,

@@ -35,6 +35,7 @@ import type {
 export {
   applyFrame,
   parseFrame,
+  replayFrames,
   resolveClarificationFields,
   resetForRestream,
   type ChatFrame,

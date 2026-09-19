@@ -4,6 +4,37 @@ export * from "./legacy.js";
 export * from "./privacy.js";
 
 export const ASSISTANT_PROTOCOL_VERSION = 1 as const;
+export const PRESENTATION_MINIMUM_DATA_VERSION = 1 as const;
+export const ASSISTANT_FRAME_ENVELOPE_KEY = "__assistantEnvelope" as const;
+
+export const AssistantNavigateToV1Schema = z
+  .object({
+    path: z.string().min(1).max(1_000).startsWith("/"),
+    when: z.enum(["on_propose", "on_commit"]),
+  })
+  .strict()
+  .refine((value) => !value.path.startsWith("//") && !value.path.includes("\\"));
+
+export const AssistantFrameOutcomeV1Schema = z
+  .object({
+    kind: z.enum(["read", "proposed", "committed", "failed"]),
+    committed: z.boolean(),
+    navigateTo: AssistantNavigateToV1Schema.nullable().optional(),
+    replayedIdempotent: z.boolean().optional(),
+  })
+  .strict();
+
+export const AssistantFrameEnvelopeV1Schema = z
+  .object({
+    protocolVersion: z.literal(ASSISTANT_PROTOCOL_VERSION),
+    presentationDataVersion: z.literal(PRESENTATION_MINIMUM_DATA_VERSION),
+    mode: z.literal("semantic"),
+    turnId: z.string().min(1).max(200),
+    sequence: z.number().int().nonnegative(),
+    terminal: z.boolean(),
+    outcome: AssistantFrameOutcomeV1Schema.optional(),
+  })
+  .strict();
 
 const boundedId = z.string().min(1).max(200);
 const nullableId = boundedId.nullable().optional();
@@ -55,6 +86,7 @@ export const AssistantRequestV1Schema = z
   .strict();
 
 export type AssistantRequestV1 = z.infer<typeof AssistantRequestV1Schema>;
+export type AssistantFrameEnvelopeV1 = z.infer<typeof AssistantFrameEnvelopeV1Schema>;
 
 export const LegacyAssistantRequestSchema = AssistantRequestV1Schema.omit({
   protocolVersion: true,
@@ -286,7 +318,7 @@ export const PresentationV1Schema = z
     relationship: z.enum(["primary", "supplementary"]),
     cardType: z.string().min(1).max(100),
     data: z.unknown(),
-    minimumDataVersion: z.number().int().positive(),
+    minimumDataVersion: z.literal(PRESENTATION_MINIMUM_DATA_VERSION),
     relevanceReason: z.string().min(1).max(500),
   })
   .strict();

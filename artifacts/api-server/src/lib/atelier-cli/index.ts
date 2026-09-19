@@ -40,6 +40,11 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, ilike, isNull, ne, or, inArray } from "drizzle-orm";
 import {
+  ASSISTANT_FRAME_ENVELOPE_KEY,
+  ASSISTANT_PROTOCOL_VERSION,
+  PRESENTATION_MINIMUM_DATA_VERSION,
+} from "@workspace/assistant-protocol";
+import {
   composeReplayFromTurns,
   DEFAULT_REPLAY_BUDGET,
   type ReplayTurnRow,
@@ -218,6 +223,53 @@ export type CliFrameType =
 export interface CliFrame {
   type: CliFrameType;
   data: Record<string, unknown>;
+  protocolVersion?: number;
+  presentationDataVersion?: number;
+  mode?: "semantic" | "legacy";
+  turnId?: string;
+  sequence?: number;
+  terminal?: boolean;
+  outcome?: {
+    kind: "read" | "proposed" | "committed" | "failed";
+    committed: boolean;
+    navigateTo?: { path: string; when: "on_propose" | "on_commit" } | null;
+    replayedIdempotent?: boolean;
+  };
+}
+
+function cliNavigateTo(value: unknown): { path: string; when: "on_propose" | "on_commit" } | null {
+  if (!value || typeof value !== "object") return null;
+  const nav = value as { path?: unknown; when?: unknown };
+  if (
+    typeof nav.path !== "string" ||
+    !nav.path.startsWith("/") ||
+    nav.path.startsWith("//") ||
+    nav.path.includes("\\") ||
+    nav.path.length > 1_000 ||
+    (nav.when !== "on_propose" && nav.when !== "on_commit")
+  ) {
+    return null;
+  }
+  return { path: nav.path, when: nav.when };
+}
+
+function semanticCliFrame(args: {
+  frame: CliFrame;
+  turnId: string;
+  sequence: number;
+  outcome?: CliFrame["outcome"];
+  terminal?: boolean;
+}): CliFrame {
+  return {
+    ...args.frame,
+    protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+    presentationDataVersion: PRESENTATION_MINIMUM_DATA_VERSION,
+    mode: "semantic",
+    turnId: args.turnId,
+    sequence: args.sequence,
+    terminal: args.terminal === true,
+    ...(args.outcome ? { outcome: args.outcome } : {}),
+  };
 }
 
 export type CliTurnStatus =
@@ -3638,6 +3690,7 @@ export async function runTurn(
     // loop (e.g. the "already answered" narration), and a `let` further
     // down would be a temporal-dead-zone crash, not just undefined.
     let lastModel: string | undefined;
+    let authoritativeOutcome: CliFrame["outcome"] | undefined;
 
     function record(frame: CliFrame): void {
       if (frame.type === "tool_result") {
@@ -3668,6 +3721,40 @@ export async function runTurn(
       if (containsSensitiveKey(frame.data)) {
         (frame as { data?: unknown }).data = stripSensitiveValues(frame.data);
       }
+      const inferredOutcome =
+        frame.outcome ??
+        (frame.type === "needs_confirmation"
+          ? {
+              kind: "proposed" as const,
+              committed: false,
+              navigateTo: cliNavigateTo(
+                (frame.data.diff as { navigateTo?: unknown } | null | undefined)?.navigateTo,
+              ),
+            }
+          : frame.type === "presentation"
+            ? { kind: "read" as const, committed: false }
+            : frame.type === "error"
+              ? { kind: "failed" as const, committed: false }
+              : frame.type === "final"
+                ? authoritativeOutcome ??
+                  {
+                    kind:
+                      frame.data.status === "error" ||
+                      frame.data.status === "cancelled" ||
+                      frame.data.status === "partial"
+                        ? ("failed" as const)
+                        : ("read" as const),
+                    committed: false,
+                  }
+                : undefined);
+      if (inferredOutcome) authoritativeOutcome = inferredOutcome;
+      frame = semanticCliFrame({
+        frame,
+        turnId,
+        sequence: frames.length,
+        outcome: inferredOutcome,
+        terminal: frame.type === "final",
+      });
       frames.push(frame);
       if (frame.type === "final") finalEmitted = true;
       if (isClientVisibleCliFrameType(frame.type)) emit(frame);
@@ -6207,6 +6294,7 @@ export async function runTurn(
         record({
           type: "presentation",
           data: presentation as unknown as Record<string, unknown>,
+          outcome: { kind: "read", committed: false },
         });
       } else if (managedPresentation && toolResult.ok) {
         console.log(
@@ -6236,6 +6324,19 @@ export async function runTurn(
               data: toolResult.data,
               errorCode: toolResult.errorCode,
               errorMessage: toolResult.errorMessage,
+            },
+            outcome: {
+              kind: toolResult.ok
+                ? tool.isWrite
+                  ? "committed"
+                  : "read"
+                : "failed",
+              committed: toolResult.ok && tool.isWrite,
+              navigateTo: toolResult.ok
+                ? cliNavigateTo(
+                    (toolResult.data as { navigateTo?: unknown } | null | undefined)?.navigateTo,
+                  )
+                : null,
             },
           });
           if (!tool.isWrite && toolResult.ok !== false) cardsEmitted++;
@@ -6854,6 +6955,31 @@ export async function confirmPendingWrite(
     .from(atelierCliTurns)
     .where(eq(atelierCliTurns.id, turnId))
     .limit(1);
+  const priorFrames = ((turn?.frames as CliFrame[] | null | undefined) ?? []).slice();
+  let nextSequence =
+    priorFrames.reduce(
+      (max, frame) =>
+        typeof frame.sequence === "number" && Number.isInteger(frame.sequence)
+          ? Math.max(max, frame.sequence)
+          : max,
+      -1,
+    ) + 1;
+  const emittedConfirmFrames: CliFrame[] = [];
+  const emitSemantic = (
+    frame: CliFrame,
+    outcome: NonNullable<CliFrame["outcome"]>,
+    terminal = false,
+  ): void => {
+    const enveloped = semanticCliFrame({
+      frame,
+      turnId,
+      sequence: nextSequence++,
+      outcome,
+      terminal,
+    });
+    emittedConfirmFrames.push(enveloped);
+    emit(enveloped);
+  };
   // Helper: emit a single error frame + a single terminal final frame,
   // then return without throwing. Mirrors the runTurn contract so the
   // route layer never double-emits.
@@ -6861,17 +6987,22 @@ export async function confirmPendingWrite(
     code: string,
     message: string,
   ): { turnId: string; sessionId: string; status: CliTurnStatus } => {
-    emit({ type: "error", data: { code, message } });
-    emit({
-      type: "final",
-      data: {
-        status: "error",
-        turnId,
-        sessionId: turn?.sessionId ?? "",
-        confirmed: false,
-        error: message,
+    const outcome = { kind: "failed" as const, committed: false };
+    emitSemantic({ type: "error", data: { code, message } }, outcome);
+    emitSemantic(
+      {
+        type: "final",
+        data: {
+          status: "error",
+          turnId,
+          sessionId: turn?.sessionId ?? "",
+          confirmed: false,
+          error: message,
+        },
       },
-    });
+      outcome,
+      true,
+    );
     return {
       turnId,
       sessionId: turn?.sessionId ?? "",
@@ -6902,10 +7033,23 @@ export async function confirmPendingWrite(
   if (turn.status !== "awaiting_confirmation") {
     // Idempotent re-confirm: if it already succeeded, replay final frame.
     if (turn.status === "success" || turn.status === "partial") {
-      emit({
-        type: "final",
-        data: { status: turn.status, turnId, sessionId: turn.sessionId, replay: true },
-      });
+      const priorCommitted = priorFrames
+        .slice()
+        .reverse()
+        .find((frame) => frame.outcome?.kind === "committed" && frame.outcome.committed);
+      emitSemantic(
+        {
+          type: "final",
+          data: { status: turn.status, turnId, sessionId: turn.sessionId, replay: true },
+        },
+        {
+          kind: "committed",
+          committed: true,
+          navigateTo: priorCommitted?.outcome?.navigateTo ?? null,
+          replayedIdempotent: true,
+        },
+        true,
+      );
       return {
         turnId,
         sessionId: turn.sessionId,
@@ -6940,27 +7084,35 @@ export async function confirmPendingWrite(
     if (expected === LEGACY_TYPED_NAME_PLACEHOLDER) expected = "";
     const got = (opts.typedName ?? "").trim();
     if (!got || (expected && got.toLowerCase() !== expected.toLowerCase())) {
-      emit({
-        type: "needs_confirmation",
-        data: {
-          step: (turn.lastStepIdx ?? 0) + 1,
-          requiresTypedName: true,
-          irreversible: isIrreversibleTool(pending.tool),
-          typedNameExpected: expected || null,
-          message:
-            "this action is irreversible — please retype the name to confirm",
+      const proposedOutcome = { kind: "proposed" as const, committed: false };
+      emitSemantic(
+        {
+          type: "needs_confirmation",
+          data: {
+            step: (turn.lastStepIdx ?? 0) + 1,
+            requiresTypedName: true,
+            irreversible: isIrreversibleTool(pending.tool),
+            typedNameExpected: expected || null,
+            message:
+              "this action is irreversible — please retype the name to confirm",
+          },
         },
-      });
-      emit({
-        type: "final",
-        data: {
-          status: "awaiting_confirmation",
-          turnId,
-          sessionId: turn.sessionId,
-          confirmed: false,
-          typedNameRequired: true,
+        proposedOutcome,
+      );
+      emitSemantic(
+        {
+          type: "final",
+          data: {
+            status: "awaiting_confirmation",
+            turnId,
+            sessionId: turn.sessionId,
+            confirmed: false,
+            typedNameRequired: true,
+          },
         },
-      });
+        proposedOutcome,
+        true,
+      );
       return {
         turnId,
         sessionId: turn.sessionId,
@@ -7025,18 +7177,31 @@ export async function confirmPendingWrite(
           }),
       });
 
-  emit({
-    type: "tool_result",
-    data: {
-      step: stepIdx,
-      tool: pending.tool,
-      ok: result.ok,
-      data: result.data,
-      errorCode: result.errorCode,
-      errorMessage: result.errorMessage,
-      confirmed: true,
+  const confirmedOutcome: NonNullable<CliFrame["outcome"]> = {
+    kind: result.ok ? "committed" : "failed",
+    committed: result.ok,
+    navigateTo: result.ok
+      ? cliNavigateTo((result.data as { navigateTo?: unknown } | null | undefined)?.navigateTo)
+      : null,
+    replayedIdempotent: Boolean(
+      (result as { replayedIdempotent?: boolean }).replayedIdempotent,
+    ),
+  };
+  emitSemantic(
+    {
+      type: "tool_result",
+      data: {
+        step: stepIdx,
+        tool: pending.tool,
+        ok: result.ok,
+        data: result.data,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
+        confirmed: true,
+      },
     },
-  });
+    confirmedOutcome,
+  );
 
   // Task #1248 — a committed write must never end on a bare card: when
   // the tool stamps a `closingLine` on its commit payload, emit it as a
@@ -7048,7 +7213,10 @@ export async function confirmPendingWrite(
       ? ((result.data as { closingLine: string }).closingLine || "").trim()
       : "";
   if (closingLine) {
-    emit({ type: "narration", data: { text: closingLine, step: stepIdx } });
+    emitSemantic(
+      { type: "narration", data: { text: closingLine, step: stepIdx } },
+      confirmedOutcome,
+    );
   }
 
   // Task #340 — record write metadata on session draft so the next
@@ -7125,10 +7293,14 @@ export async function confirmPendingWrite(
   }
 
   const newStatus: CliTurnStatus = result.ok ? "success" : "error";
-  emit({
-    type: "final",
-    data: { status: newStatus, turnId, sessionId: turn.sessionId, confirmed: true },
-  });
+  emitSemantic(
+    {
+      type: "final",
+      data: { status: newStatus, turnId, sessionId: turn.sessionId, confirmed: true },
+    },
+    confirmedOutcome,
+    true,
+  );
 
   // Task #24 — deferred post-commit work (e.g. Pursuit Scout). The
   // success/final frames are already on the wire, so a slow follow-up
@@ -7146,36 +7318,10 @@ export async function confirmPendingWrite(
         },
       };
     }
-    if (afterFrame) emit(afterFrame);
+    if (afterFrame) emitSemantic(afterFrame, confirmedOutcome);
   }
 
-  const newFrames = [
-    ...((turn.frames as CliFrame[]) ?? []),
-    {
-      // Task #335 — persist `data` so the `meta.undo_last_action`
-      // capability can recover the created entity IDs without
-      // re-running the tool. Without this the confirm path silently
-      // strips the IDs the orchestrator just wrote.
-      type: "tool_result" as const,
-      data: {
-        step: stepIdx,
-        tool: pending.tool,
-        ok: result.ok,
-        data: result.data,
-        errorCode: result.errorCode,
-        confirmed: true,
-      },
-    },
-    // Task #1248 — persist the closing narration so historical turn
-    // replays also end with the confirmation sentence, not a bare card.
-    ...(closingLine
-      ? [{ type: "narration" as const, data: { text: closingLine, step: stepIdx } }]
-      : []),
-    { type: "final" as const, data: { status: newStatus, confirmed: true } },
-    // Task #24 — persist the deferred follow-up outcome (scout status)
-    // so historical turn replays show it too.
-    ...(afterFrame ? [afterFrame] : []),
-  ];
+  const newFrames = [...priorFrames, ...emittedConfirmFrames];
   const priorStepResults = Array.isArray(turn.stepResults)
     ? (turn.stepResults as Array<Record<string, unknown>>)
     : [];
@@ -7349,8 +7495,23 @@ export async function cancelPendingWrite(
 // ---------------------------------------------------------------------
 
 export function writeSseFrame(res: Response, frame: CliFrame): void {
+  const wireData =
+    frame.mode === "semantic"
+      ? {
+          ...frame.data,
+          [ASSISTANT_FRAME_ENVELOPE_KEY]: {
+            protocolVersion: frame.protocolVersion,
+            presentationDataVersion: frame.presentationDataVersion,
+            mode: frame.mode,
+            turnId: frame.turnId,
+            sequence: frame.sequence,
+            terminal: frame.terminal === true,
+            ...(frame.outcome ? { outcome: frame.outcome } : {}),
+          },
+        }
+      : frame.data;
   res.write(`event: ${frame.type}\n`);
-  res.write(`data: ${JSON.stringify(frame.data)}\n\n`);
+  res.write(`data: ${JSON.stringify(wireData)}\n\n`);
   const flush = (res as unknown as { flush?: () => void }).flush;
   if (typeof flush === "function") flush.call(res);
 }

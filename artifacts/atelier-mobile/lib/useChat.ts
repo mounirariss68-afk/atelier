@@ -13,12 +13,22 @@ import {
   uploadCliAttachment,
 } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
-import { applyFrame, resetForRestream, type ChatTurn, type ResultCard } from "@/lib/chatFrames";
+import {
+  applyFrame,
+  resetForRestream,
+  type ChatTurn,
+  type ResultCard,
+} from "@/lib/chatFrames";
+import { mobileReplayFrames } from "@/lib/semanticAdapter";
 import { applyChatCommitInvalidations } from "@/lib/chatWriteInvalidation";
 import {
+  chatProtocolRequestHeaders,
   deviceTimeZone,
+  negotiateChatProtocol,
+  recoverTerminalTurn,
   restoreClarificationTurn,
   streamSse,
+  type ChatProtocolCompatibility,
   type PendingClarificationPayload,
   type SseResponseLike,
 } from "@workspace/chat-core";
@@ -44,6 +54,7 @@ function uuid() {
 export type CapabilityShapes = Record<string, string>;
 
 let capabilityShapesCache: CapabilityShapes | null = null;
+let capabilityProtocolMode: ChatProtocolCompatibility["mode"] | "pending" = "pending";
 
 /**
  * Fetches (once per app run) the capability catalog and exposes the
@@ -58,19 +69,26 @@ export function useCapabilityShapes(): CapabilityShapes {
   useEffect(() => {
     if (capabilityShapesCache) return;
     let alive = true;
-    apiJson<{ capabilities?: { toolName?: string; resultCard?: string | null }[] }>(
-      "/api/atelier/cli/capabilities",
-    )
+    apiJson<{
+      protocolVersion?: number;
+      minimumClientProtocolVersion?: number;
+      presentationDataVersions?: number[];
+      capabilities?: { toolName?: string; resultCard?: string | null }[];
+    }>("/api/atelier/cli/capabilities")
       .then((j) => {
         const map: CapabilityShapes = {};
-        for (const c of j.capabilities ?? []) {
-          if (c.toolName && c.resultCard) map[c.toolName] = c.resultCard;
+        const compatibility = negotiateChatProtocol(j);
+        capabilityProtocolMode = compatibility.mode;
+        if (compatibility.compatible) {
+          for (const c of j.capabilities ?? []) {
+            if (c.toolName && c.resultCard) map[c.toolName] = c.resultCard;
+          }
         }
         capabilityShapesCache = map;
         if (alive) setShapes(map);
       })
       .catch(() => {
-        // Non-fatal — renderers degrade to the fallback grid.
+        capabilityProtocolMode = "unsupported";
       });
     return () => {
       alive = false;
@@ -80,8 +98,10 @@ export function useCapabilityShapes(): CapabilityShapes {
 }
 
 export function useChat() {
+  useCapabilityShapes();
   const queryClient = useQueryClient();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const turnsRef = useRef<ChatTurn[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sessions, setSessions] = useState<CliSessionMeta[]>([]);
@@ -140,7 +160,16 @@ export function useChat() {
   );
 
   const upsert = useCallback((key: string, updater: (t: ChatTurn) => ChatTurn) => {
-    setTurns((list) => list.map((t) => (t.key === key ? updater(t) : t)));
+    const current = turnsRef.current.find((turn) => turn.key === key);
+    const nextTurn = current ? updater(current) : null;
+    if (nextTurn) {
+      turnsRef.current = turnsRef.current.map((turn) => (turn.key === key ? nextTurn : turn));
+    }
+    setTurns((list) =>
+      list.map((turn) =>
+        turn.key === key ? (nextTurn ?? updater(turn)) : turn,
+      ),
+    );
   }, []);
 
   // Task #643 — clarification durability (shared with web): a pending
@@ -191,6 +220,7 @@ export function useChat() {
       setBusy(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
+      let recoveredTurnId: string | null = null;
       try {
         const outcome = await streamSse({
           fetchImpl: (u, init) =>
@@ -200,6 +230,12 @@ export function useChat() {
             }) as unknown as Promise<SseResponseLike>,
           url: `${API_BASE}${url}`,
           body,
+          headers: {
+            ...authHeader(),
+            ...chatProtocolRequestHeaders(
+              capabilityProtocolMode === "pending" ? "legacy" : capabilityProtocolMode,
+            ),
+          },
           signal: ctrl.signal,
           allowRetry,
           onHttpStatus: (status) => {
@@ -214,16 +250,22 @@ export function useChat() {
           },
           onFrame: (frame) => {
             const sid = (frame.data as { sessionId?: string }).sessionId;
+            const frameTurnId =
+              frame.turnId ?? (frame.data as { turnId?: string }).turnId;
+            if (frameTurnId) recoveredTurnId = frameTurnId;
             if (sid && !sessionRef.current) {
               sessionRef.current = sid;
               setSessionId(sid);
             }
-            upsert(key, (t) => ({ ...applyFrame(t, frame), reconnecting: false }));
+            const previous = turnsRef.current.find((turn) => turn.key === key);
+            if (!previous) return;
+            const next = { ...applyFrame(previous, frame), reconnecting: false };
+            upsert(key, () => next);
             // Task #828 — a committed chat write must refresh the cached
             // queries it touched (e.g. the Me tab's document list after
             // attaching an ID back side), or the UI keeps serving stale
             // data until app restart.
-            applyChatCommitInvalidations(queryClient, frame);
+            applyChatCommitInvalidations(queryClient, previous, next);
           },
         });
         switch (outcome.kind) {
@@ -246,6 +288,37 @@ export function useChat() {
             }));
             return;
           case "network_error":
+            if (outcome.receivedFrame && recoveredTurnId) {
+              const recovery = await recoverTerminalTurn({
+                turnId: recoveredTurnId,
+                signal: ctrl.signal,
+                fetchSnapshot: async (turnId) => {
+                  const body = await apiJson<{
+                    turn?: {
+                      id?: string;
+                      status?: string;
+                      terminal?: boolean;
+                      frames?: unknown[];
+                    };
+                  }>(`/api/atelier/cli/turn/${turnId}`);
+                  if (!body.turn?.id) return null;
+                  return {
+                    id: body.turn.id,
+                    status: body.turn.status ?? "streaming",
+                    terminal: body.turn.terminal === true,
+                    frames: body.turn.frames ?? [],
+                  };
+                },
+              });
+              if (recovery.kind === "recovered") {
+                upsert(key, (t) => ({
+                  ...mobileReplayFrames(t, recovery.snapshot.frames),
+                  reconnecting: false,
+                  errorKind: undefined,
+                }));
+                return;
+              }
+            }
             upsert(key, (t) => ({
               ...t,
               status: "error",
@@ -274,6 +347,29 @@ export function useChat() {
     ) => {
       activityRef.current = true;
       const key = uuid();
+      if (
+        capabilityProtocolMode === "unsupported" ||
+        capabilityProtocolMode === "pending"
+      ) {
+        const unsupported: ChatTurn = {
+          key,
+          prompt,
+          attachments,
+          status: "error",
+          text: "",
+          trace: [],
+          toolResults: [],
+          error: {
+            code: "unsupported_assistant_protocol",
+            message:
+              capabilityProtocolMode === "pending"
+                ? "Assistant compatibility is still being checked."
+                : "This assistant version is not supported.",
+          },
+        };
+        setTurns((t) => [...t, unsupported]);
+        return;
+      }
       const seed: ChatTurn = {
         key,
         prompt,
@@ -282,8 +378,10 @@ export function useChat() {
         text: "",
         trace: [],
         toolResults: [],
+        protocolMode: capabilityProtocolMode === "current" ? "current" : "legacy",
       };
-      setTurns((t) => [...t, seed]);
+      turnsRef.current = [...turnsRef.current, seed];
+      setTurns(turnsRef.current);
       await runStream(
         "/api/atelier/cli/turn",
         {
@@ -445,10 +543,7 @@ export function useChat() {
         // result cards exactly as live streaming would, so history loads render
         // the same structured cards as a live turn did.
         if (Array.isArray(t.frames) && t.frames.length > 0) {
-          let live = seed;
-          for (const frame of t.frames) {
-            live = applyFrame(live, frame as Parameters<typeof applyFrame>[1]);
-          }
+          const live = mobileReplayFrames(seed, t.frames);
           // Pin status to complete regardless of what the final frame recorded.
           return { ...live, status: "complete" as const };
         }

@@ -75,7 +75,7 @@ import {
 import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
 import { FlightPlannerCard } from "./FlightPlannerCard";
 import { Markdown } from "./Markdown";
-import { toolResultKey } from "@workspace/chat-core";
+import { webReplayFrames } from "./semanticAdapter";
 
 const MAX_INPUT_CHARS = 4000;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -2202,6 +2202,7 @@ function TurnBody({
             toolResults={turn.toolResults}
             capabilities={capabilities}
             locale={locale}
+            protocolMode={turn.protocolMode}
             onPickDisambig={onPickDisambig}
             onRunSlash={(cmd) => onPickSuggestion(cmd)}
             onPrompt={onPrompt}
@@ -2855,40 +2856,6 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
               : status === "async_dispatched"
                 ? "async_handoff"
                 : "complete";
-  let result: CliTurn["result"];
-  // Task #348 — also backfill toolResults from the stored frame log so
-  // historical replays render the same chart cards as live turns.
-  const toolResults: NonNullable<CliTurn["toolResults"]> = [];
-  const frames = row.frames;
-  if (Array.isArray(frames)) {
-    for (const f of frames) {
-      const fr = f as {
-        type?: string;
-        data?: {
-          result?: CliTurn["result"];
-          tool?: string;
-          ok?: boolean;
-          data?: unknown;
-          errorCode?: string;
-          errorMessage?: string;
-        };
-      };
-      if (fr?.type === "final" && fr.data?.result) {
-        result = fr.data.result;
-      } else if (fr?.type === "tool_result" && fr.data) {
-        const nextResult = {
-          tool: fr.data.tool ?? "tool",
-          ok: fr.data.ok !== false,
-          data: fr.data.data,
-          errorCode: fr.data.errorCode,
-          errorMessage: fr.data.errorMessage,
-        };
-        if (!toolResults.some((previous) => toolResultKey(previous) === toolResultKey(nextResult))) {
-          toolResults.push(nextResult);
-        }
-      }
-    }
-  }
   const stepResults = (row.stepResults as
     | Array<{
         index: number;
@@ -2897,25 +2864,30 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
       }>
     | null
     | undefined) ?? undefined;
-  return {
+  const seed: CliTurn = {
     clientTurnKey: `historical:${row.id}`,
     serverTurnId: String(row.id ?? ""),
     prompt: String(row.prompt ?? ""),
-    status: mappedStatus,
+    status: "streaming",
     startedAt: row.createdAt ? new Date(String(row.createdAt)).getTime() : Date.now(),
     text: "",
     trace: [],
-    result,
-    toolResults,
+    toolResults: [],
+  };
+  const replayed = webReplayFrames(seed, Array.isArray(row.frames) ? row.frames : []);
+  return {
+    ...replayed,
+    status: mappedStatus,
     partial:
       mappedStatus === "partial"
         ? {
+            ...(replayed.partial ?? {}),
             completedSteps: 0,
             failedStepIndex: -1,
             error: "(see transcript)",
             stepResults,
           }
-        : undefined,
+        : replayed.partial,
   };
 }
 

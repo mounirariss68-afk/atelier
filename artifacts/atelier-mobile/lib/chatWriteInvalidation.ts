@@ -7,14 +7,9 @@
 // invalidates its documents query after writes; this is the mobile
 // equivalent.
 //
-// General mechanism, not a per-tool one-off: committed write tool_result
-// frames carry a `navigateTo: { path, when: "on_commit" }` hint (the
-// chat write-capability contract REQUIRES navigateTo on commit-success),
-// so the destination path is a reliable, tool-agnostic signal for which
-// cached queries the write touched. Map path prefixes → query keys and
-// invalidate on every committed write frame. Pre-confirm previews
-// (prelude / pending-confirmation frames) never carry an on_commit
-// navigateTo, so they cannot trigger a refetch.
+// General mechanism, not a per-tool one-off: the server-owned semantic
+// envelope marks committed outcomes and carries the validated destination.
+// Raw tool payloads are evidence only and never authorize invalidation.
 import type { QueryClient } from "@tanstack/react-query";
 import {
   getAtelierGetMyProfileQueryKey,
@@ -34,9 +29,11 @@ const COMMIT_PATH_INVALIDATIONS: { prefix: string; keys: () => QueryKeyLike[] }[
 ];
 
 /** Minimal shape of an SSE frame as passed to the chat reducer. */
-interface FrameLike {
-  type?: string;
-  data?: unknown;
+interface TurnLike {
+  protocolMode?: string;
+  commitState?: string;
+  lastSequence?: number;
+  navigateTo?: { path?: unknown; when?: unknown } | null;
 }
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -48,16 +45,17 @@ function asObj(v: unknown): Record<string, unknown> {
  * keys that should be invalidated, or [] when the frame is not a
  * committed write touching a mapped path.
  */
-export function commitInvalidationKeys(frame: FrameLike): QueryKeyLike[] {
-  if (frame?.type !== "tool_result") return [];
-  const fd = asObj(frame.data);
-  if (fd.ok !== true) return [];
-  // Pre-confirm preview cards are streamed with prelude=true — the write
-  // has NOT happened yet.
-  if (fd.prelude === true) return [];
-  const payload = asObj(fd.data);
-  const nav = asObj(payload.navigateTo);
-  // Only a committed write carries navigateTo.when === "on_commit".
+export function commitInvalidationKeys(previous: TurnLike, next: TurnLike): QueryKeyLike[] {
+  if (next.protocolMode !== "current") return [];
+  if (previous.commitState === "committed" || next.commitState !== "committed") return [];
+  if (
+    typeof previous.lastSequence === "number" &&
+    typeof next.lastSequence === "number" &&
+    next.lastSequence <= previous.lastSequence
+  ) {
+    return [];
+  }
+  const nav = asObj(next.navigateTo);
   if (nav.when !== "on_commit" || typeof nav.path !== "string") return [];
   const path = nav.path;
   const out: QueryKeyLike[] = [];
@@ -70,9 +68,13 @@ export function commitInvalidationKeys(frame: FrameLike): QueryKeyLike[] {
 }
 
 /** Effectful wrapper wired into the chat stream's onFrame. Best-effort. */
-export function applyChatCommitInvalidations(queryClient: QueryClient, frame: FrameLike): void {
+export function applyChatCommitInvalidations(
+  queryClient: QueryClient,
+  previous: TurnLike,
+  next: TurnLike,
+): void {
   try {
-    for (const queryKey of commitInvalidationKeys(frame)) {
+    for (const queryKey of commitInvalidationKeys(previous, next)) {
       void queryClient.invalidateQueries({ queryKey });
     }
   } catch {

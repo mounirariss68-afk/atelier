@@ -30,8 +30,23 @@ import {
   resetForRestream,
 } from "../../../../lib/chat-core/src/reducer.js";
 import type { ChatFrame, ChatTurnCore } from "../../../../lib/chat-core/src/types.js";
+import * as webSemanticAdapter from "../../../atelier/src/components/cli/semanticAdapter.ts";
+import * as mobileSemanticAdapter from "../../../atelier-mobile/lib/semanticAdapter.ts";
 
 let passed = 0;
+const webSemanticSnapshot = webSemanticAdapter.webSemanticSnapshot;
+const mobileSemanticSnapshot =
+  mobileSemanticAdapter.mobileSemanticSnapshot ??
+  (
+    mobileSemanticAdapter.default as
+      | { mobileSemanticSnapshot?: typeof webSemanticSnapshot }
+      | undefined
+  )?.mobileSemanticSnapshot;
+assert.equal(
+  typeof mobileSemanticSnapshot,
+  "function",
+  "mobile semantic adapter must export its snapshot boundary",
+);
 const ok = (label: string) => {
   passed += 1;
   console.log(`✓ ${label}`);
@@ -196,6 +211,11 @@ const run = (frames: ChatFrame[], start = freshTurn()) =>
       id: "presentation:nested-empty",
       data: { items: [{ meta: {} }] },
     }),
+    frame("presentation", {
+      ...presentation,
+      id: "presentation:future-data-version",
+      minimumDataVersion: 2,
+    }),
   ]);
   assert.equal(t.toolResults.length, 1);
   assert.equal(t.toolResults[0].presentation?.cardType, "ranked_list");
@@ -213,6 +233,127 @@ const run = (frames: ChatFrame[], start = freshTurn()) =>
     `expected 1 tool result, got ${t.toolResults.length}`,
   );
   ok("duplicate tool_result frames don't duplicate client state");
+}
+
+// C14 cross-client golden corpus. These are intentionally separate web and
+// mobile adapter imports: mode propagation and render-dispatch decisions must
+// stay equivalent across live, confirm, history, and recovery paths.
+{
+  const semantic = (
+    type: ChatFrame["type"],
+    data: Record<string, unknown>,
+    sequence: number,
+    outcome?: ChatFrame["outcome"],
+  ): ChatFrame => ({
+    type,
+    data,
+    receivedAt: sequence,
+    protocolVersion: 1,
+    presentationDataVersion: 1,
+    mode: "semantic",
+    turnId: "turn_golden",
+    sequence,
+    terminal: type === "final" || type === "error",
+    ...(outcome ? { outcome } : {}),
+  });
+  const presentation = {
+    id: "presentation:golden:0",
+    answersIntentIds: ["intent:golden:0"],
+    capabilityId: "roster.list",
+    resultSourceId: "roster_list",
+    relationship: "primary",
+    cardType: "ranked_list",
+    data: { items: [{ id: "person_1", label: "Person One" }], total: 1 },
+    minimumDataVersion: 1,
+    relevanceReason: "The user explicitly requested this list.",
+  };
+  const legacyResult = frame("tool_result", {
+    tool: "roster_list",
+    ok: true,
+    data: { shape: "ranked_list", items: [{ id: "person_1" }] },
+  });
+  const currentPresentation = semantic(
+    "presentation",
+    presentation,
+    0,
+    { kind: "read", committed: false },
+  );
+  const currentFinal = semantic(
+    "final",
+    { status: "success", result: { title: "Done", summary: "Done." } },
+    1,
+    { kind: "read", committed: false },
+  );
+  const proposed = semantic(
+    "needs_confirmation",
+    { turnId: "turn_golden", diff: {} },
+    0,
+    {
+      kind: "proposed",
+      committed: false,
+      navigateTo: { path: "/review", when: "on_propose" },
+    },
+  );
+  const committed = semantic(
+    "final",
+    { status: "success", result: { title: "Saved", summary: "Saved." } },
+    1,
+    {
+      kind: "committed",
+      committed: true,
+      navigateTo: { path: "/saved", when: "on_commit" },
+    },
+  );
+  const corpus: Array<{ name: string; frames: ChatFrame[] }> = [
+    { name: "legacy-live", frames: [legacyResult, frame("final", { status: "success" })] },
+    { name: "current-live", frames: [currentPresentation, currentFinal] },
+    { name: "confirm", frames: [proposed, committed] },
+    {
+      name: "mixed-history-preflight",
+      frames: [legacyResult, currentPresentation, currentFinal],
+    },
+    {
+      name: "recovery-dedupes-sequence",
+      frames: [proposed, committed, committed],
+    },
+    {
+      name: "presentation-missing-outcome",
+      frames: [semantic("presentation", presentation, 0), currentFinal],
+    },
+    {
+      name: "presentation-committed-outcome",
+      frames: [
+        semantic("presentation", presentation, 0, {
+          kind: "committed",
+          committed: true,
+          navigateTo: { path: "/must-not-fire", when: "on_commit" },
+        }),
+        currentFinal,
+      ],
+    },
+  ];
+  for (const fixture of corpus) {
+    const web = webSemanticSnapshot(freshTurn(), fixture.frames, {
+      roster_list: "ranked_list",
+    });
+    const mobile = mobileSemanticSnapshot(freshTurn(), fixture.frames, {
+      roster_list: "ranked_list",
+    });
+    assert.deepEqual(mobile, web, `${fixture.name}: web/mobile snapshots diverged`);
+    if (fixture.name === "mixed-history-preflight") {
+      assert.equal(web.protocolMode, "current");
+      assert.equal(web.cards.length, 1, "leading legacy frame must be rejected");
+    }
+    if (
+      fixture.name === "presentation-missing-outcome" ||
+      fixture.name === "presentation-committed-outcome"
+    ) {
+      assert.equal(web.cards.length, 0, "missing outcome must not create a current card");
+      assert.equal(web.commitState, "none", "rejected presentation must not change authority");
+      assert.equal(web.navigateTo, null, "rejected presentation must not navigate");
+    }
+  }
+  ok("web/mobile golden adapters agree across live, confirm, history, and recovery");
 }
 
 console.log(`\n[reducer-parity-probe] ${passed} checks passed`);

@@ -53,7 +53,9 @@ import {
   CATALOG_SCHEMA_VERSION,
 } from "../../lib/atelier-cli/capability-catalog.js";
 import {
+  ASSISTANT_PROTOCOL_VERSION,
   LegacyAssistantRequestSchema,
+  PRESENTATION_MINIMUM_DATA_VERSION,
   upcastLegacyAssistantRequest,
   type LegacyAssistantRequest,
 } from "@workspace/assistant-protocol";
@@ -121,6 +123,41 @@ function openSse(res: Response): void {
   if (typeof res.flushHeaders === "function") res.flushHeaders();
 }
 
+type AssistantWireMode = "legacy" | "semantic" | "unsupported";
+
+function assistantWireMode(req: Request): AssistantWireMode {
+  const version = req.header("X-Assistant-Protocol-Version");
+  const presentations = req.header("X-Assistant-Presentation-Versions");
+  const mode = req.header("X-Assistant-Protocol-Mode");
+  if (version === undefined && presentations === undefined && mode === undefined) return "legacy";
+  if (
+    version !== String(ASSISTANT_PROTOCOL_VERSION) ||
+    mode !== "semantic" ||
+    !presentations
+      ?.split(",")
+      .map((value) => value.trim())
+      .includes(String(PRESENTATION_MINIMUM_DATA_VERSION))
+  ) {
+    return "unsupported";
+  }
+  return "semantic";
+}
+
+function frameForWireMode(frame: CliFrame, mode: Exclude<AssistantWireMode, "unsupported">): CliFrame {
+  if (mode === "semantic") return frame;
+  const {
+    protocolVersion: _protocolVersion,
+    presentationDataVersion: _presentationDataVersion,
+    mode: _mode,
+    turnId: _turnId,
+    sequence: _sequence,
+    terminal: _terminal,
+    outcome: _outcome,
+    ...legacyFrame
+  } = frame;
+  return legacyFrame;
+}
+
 /**
  * SSE comment heartbeat — keeps the Replit proxy (and any intermediary
  * load balancer) from dropping an idle connection during long agent runs.
@@ -150,6 +187,11 @@ const router: IRouter = Router();
 router.post("/cli/turn", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const wireMode = assistantWireMode(req);
+  if (wireMode === "unsupported") {
+    res.status(426).json({ error: "unsupported-assistant-protocol" });
+    return;
+  }
 
   const correlationId = randomUUID();
   const parsedLegacy = LegacyAssistantRequestSchema.safeParse(req.body);
@@ -267,7 +309,9 @@ router.post("/cli/turn", async (req, res) => {
   // this POST for the demo user; every other mutating route stays 403.
   if (isDemoUser({ userId: me.id, email: me.email })) {
     openSse(res);
-    runDemoShowcaseTurn(prompt, (frame) => writeSseFrame(res, frame));
+    runDemoShowcaseTurn(prompt, (frame) =>
+      writeSseFrame(res, frameForWireMode(frame, wireMode)),
+    );
     res.end();
     return;
   }
@@ -275,7 +319,7 @@ router.post("/cli/turn", async (req, res) => {
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
-  const emit = (frame: CliFrame) => writeSseFrame(res, frame);
+  const emit = (frame: CliFrame) => writeSseFrame(res, frameForWireMode(frame, wireMode));
 
   let closed = false;
   req.on("close", () => {
@@ -379,6 +423,11 @@ router.post("/cli/turn", async (req, res) => {
 router.post("/cli/turn/:id/confirm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const wireMode = assistantWireMode(req);
+  if (wireMode === "unsupported") {
+    res.status(426).json({ error: "unsupported-assistant-protocol" });
+    return;
+  }
   const correlationId = randomUUID();
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);
@@ -392,7 +441,8 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
     closed = true;
     stopHeartbeat();
   });
-  const emit = (frame: CliFrame) => (closed ? undefined : writeSseFrame(res, frame));
+  const emit = (frame: CliFrame) =>
+    closed ? undefined : writeSseFrame(res, frameForWireMode(frame, wireMode));
   // Task #24 — immediate feedback while the confirm serializes through
   // the per-user queue and commits.
   emit({ type: "progress", data: { pct: 2, message: "Confirming…" } });
@@ -641,6 +691,63 @@ router.get("/cli/turns/recent", async (req, res) => {
   });
 });
 
+const TERMINAL_RECOVERY_STATUSES = new Set([
+  "success",
+  "error",
+  "partial",
+  "cancelled",
+  "read_only_no_op",
+  "awaiting_confirmation",
+  "awaiting_clarification",
+  "async_dispatched",
+]);
+
+/**
+ * Read-only recovery after an SSE stream disconnects. The client replays the
+ * persisted frames and never resends the original turn or confirm request.
+ */
+// @cli-skip: transport recovery helper, not a capability
+router.get("/cli/turn/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [turn] = await db
+    .select({
+      id: atelierCliTurns.id,
+      status: atelierCliTurns.status,
+      frames: atelierCliTurns.frames,
+      finishedAt: atelierCliTurns.finishedAt,
+    })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.id, req.params.id),
+        eq(atelierCliTurns.userId, me.id),
+        eq(atelierCliTurns.orgId, me.orgId),
+      ),
+    )
+    .limit(1);
+  if (!turn) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const terminal = TERMINAL_RECOVERY_STATUSES.has(turn.status);
+  res.json({
+    turn: {
+      id: turn.id,
+      status: turn.status,
+      terminal,
+      frames: Array.isArray(turn.frames)
+        ? (turn.frames as Array<{ type?: unknown }>).filter(
+            (frame) =>
+              typeof frame?.type !== "string" ||
+              isClientVisibleCliFrameType(frame.type),
+          )
+        : [],
+      finishedAt: turn.finishedAt?.toISOString() ?? null,
+    },
+  });
+});
+
 /**
  * Clarification durability — returns the persona's most recent turn
  * still paused `awaiting_clarification`, so the chat client can restore
@@ -871,6 +978,9 @@ router.get("/cli/capabilities", async (req, res) => {
     orgId: me.orgId,
   });
   res.json({
+    protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+    minimumClientProtocolVersion: ASSISTANT_PROTOCOL_VERSION,
+    presentationDataVersions: [PRESENTATION_MINIMUM_DATA_VERSION],
     schemaVersion: CATALOG_SCHEMA_VERSION,
     capabilities: caps.map((c) => ({
       id: c.id,

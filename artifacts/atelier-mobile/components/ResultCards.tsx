@@ -13,6 +13,7 @@ import {
   looksLikeDate,
 } from "@/lib/format";
 import type { CapabilityShapes, ToolResult } from "@/lib/useChat";
+import { mobileDeriveToolResultSemantics } from "@/lib/semanticAdapter";
 
 type Json = Record<string, unknown>;
 
@@ -369,10 +370,12 @@ function RankedList({
   data,
   lang,
   onPrompt,
+  protocolMode = "legacy",
 }: {
   data: Json;
   lang: string;
   onPrompt?: (text: string) => void;
+  protocolMode?: import("@workspace/chat-core").ChatProtocolMode;
 }) {
   const c = useColors();
   const rtl = useRTL();
@@ -2135,6 +2138,7 @@ export function ToolResultCards({
   toolResults,
   shapes,
   onPrompt,
+  protocolMode = "legacy",
 }: {
   toolResults: ToolResult[];
   shapes: CapabilityShapes;
@@ -2142,46 +2146,34 @@ export function ToolResultCards({
    * present, flight result cards become tappable "select" targets and
    * the traveller picker / cabin chips submit follow-up prompts. */
   onPrompt?: (text: string) => void;
+  protocolMode?: import("@workspace/chat-core").ChatProtocolMode;
 }) {
   const c = useColors();
   const { t, lang } = useI18n();
   const rtl = useRTL();
   if (toolResults.length === 0) return null;
+  const semanticResults = mobileDeriveToolResultSemantics(
+    toolResults,
+    shapes,
+    protocolMode,
+  ).filter(
+    (decision) => decision.visible,
+  );
   return (
     <View style={{ gap: 10 }}>
-      {toolResults.map((tr, i) => {
+      {semanticResults.map(({ result: tr, cardType: shape, severity, key }, i) => {
         const dataObj = asObj(tr.data);
-        const shape =
-          tr.presentation?.cardType || asStr(dataObj.shape) || shapes[tr.tool] || null;
-
-        // Clean entity resolutions are implied by the answer — hide.
-        if (shape === "entity_resolution" && tr.ok) {
-          const opts = asArr(dataObj.options);
-          const entity = asObj(dataObj.entity);
-          if (opts.length === 0 && entity.id) return null;
-        }
-        // Silent prelude failures are internal noise.
-        if (tr.prelude && !tr.ok) return null;
-        // Task #410 — a "clarification pending" tool result is not a real
-        // result; the dedicated clarification card is the actual UI. The
-        // raw key/value grid ("PREFILL FROM SPECIALIST / CLARIFICATION
-        // PENDING / true") is confusing duplicate noise — hide it.
-        if (tr.ok && dataObj.clarificationPending === true) return null;
 
         if (shape === "write_success" && tr.ok) {
-          return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} lang={lang} />;
+          return <WriteSuccess key={`${key}-${i}`} data={dataObj} lang={lang} />;
         }
 
-        // Task #469 — a not_found is an ordinary answer ("nobody by
-        // that name"), not a failure: render it as muted prose, not a
-        // red error card.
-        const softMiss = !tr.ok && tr.errorCode === "not_found";
         let body: React.ReactNode;
         if (!tr.ok) {
           body = (
             <Text
               style={{
-                color: softMiss ? c.mutedForeground : c.destructive,
+                color: severity === "soft_error" ? c.mutedForeground : c.destructive,
                 fontFamily: "Inter_400Regular",
                 fontSize: 13,
                 textAlign: rtl.textAlign,
@@ -2274,13 +2266,13 @@ export function ToolResultCards({
 
         return (
           <Card
-            key={`${tr.tool}-${i}`}
+            key={`${key}-${i}`}
             style={{ gap: 10, borderRadius: 8, padding: 12, borderColor: c.border }}
           >
             <CardHeader
               icon={SHAPE_ICON[shape ?? ""] ?? "cpu"}
               title={humanLabel(tr.tool)}
-              ok={tr.ok || softMiss}
+              ok={severity !== "hard_error"}
             />
             {body}
           </Card>

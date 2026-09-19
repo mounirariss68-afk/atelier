@@ -36,9 +36,28 @@ export type ChatFrameType =
   | "error"
   | "budget_exceeded";
 
+export type ChatProtocolMode = "legacy" | "current";
+export type ChatCommitState = "none" | "proposed" | "committed" | "failed";
+export type ChatOutcomeKind = "read" | "proposed" | "committed" | "failed";
+
+export interface ChatFrameOutcome {
+  kind: ChatOutcomeKind;
+  committed: boolean;
+  navigateTo?: ChatNavigateTo | null;
+  replayedIdempotent?: boolean;
+}
+
 export interface ChatFrame {
   type: ChatFrameType;
   data: Record<string, unknown>;
+  /** Optional v1 semantic envelope. Missing fields select the legacy adapter. */
+  protocolVersion?: number;
+  presentationDataVersion?: number;
+  mode?: "semantic" | "legacy";
+  turnId?: string;
+  sequence?: number;
+  terminal?: boolean;
+  outcome?: ChatFrameOutcome;
   /** Wall-clock the client received the frame (used to render timing). */
   receivedAt: number;
 }
@@ -199,6 +218,8 @@ export interface ChatToolResult {
   errorMessage?: string;
   /** True for pre-confirm preview cards streamed before the write commits. */
   prelude?: boolean;
+  /** Server-authored outcome from a validated semantic frame. */
+  outcome?: ChatFrameOutcome;
   presentation?: {
     id: string;
     answersIntentIds: string[];
@@ -267,6 +288,11 @@ export interface ChatTurnCore {
   error?: { code: string; message: string };
   asyncJob?: { jobId: string; turnId: string };
   serverTurnId?: string;
+  protocolMode?: ChatProtocolMode;
+  lastSequence?: number;
+  commitState?: ChatCommitState;
+  terminal?: boolean;
+  terminalOutcome?: ChatOutcomeKind;
   /** Explicit auto-navigation hint lifted from propose/commit frames. */
   navigateTo?: ChatNavigateTo | null;
   /** True while the client is auto-retrying a transient failure. */

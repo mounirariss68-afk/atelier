@@ -1,4 +1,9 @@
 import type { ChatFrame, ChatFrameType } from "./types";
+import {
+  ASSISTANT_FRAME_ENVELOPE_KEY,
+  AssistantFrameEnvelopeV1Schema,
+} from "@workspace/assistant-protocol";
+import { isKnownChatFrameType, normalizeChatFrame } from "./frames";
 
 /**
  * Parse one fully-buffered SSE message block into a `ChatFrame`.
@@ -15,7 +20,7 @@ export function parseFrame(block: string): ChatFrame | null {
     if (raw.startsWith("event:")) event = raw.slice(6).trim() as ChatFrameType;
     else if (raw.startsWith("data:")) dataLines.push(raw.slice(5).trim());
   }
-  if (!event) return null;
+  if (!event || !isKnownChatFrameType(event)) return null;
   let data: Record<string, unknown> = {};
   if (dataLines.length > 0) {
     try {
@@ -24,7 +29,20 @@ export function parseFrame(block: string): ChatFrame | null {
       data = { _raw: dataLines.join("\n") };
     }
   }
-  return { type: event, data, receivedAt: Date.now() };
+  const rawEnvelope = data[ASSISTANT_FRAME_ENVELOPE_KEY];
+  if (rawEnvelope === undefined) {
+    return { type: event, data, receivedAt: Date.now() };
+  }
+  const parsedEnvelope = AssistantFrameEnvelopeV1Schema.safeParse(rawEnvelope);
+  if (!parsedEnvelope.success) return null;
+  const payload = { ...data };
+  delete payload[ASSISTANT_FRAME_ENVELOPE_KEY];
+  return normalizeChatFrame({
+    type: event,
+    data: payload,
+    receivedAt: Date.now(),
+    ...parsedEnvelope.data,
+  });
 }
 
 /**

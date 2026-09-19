@@ -696,6 +696,7 @@ function TurnBlock({
         <ToolResultCards
           toolResults={turn.toolResults}
           shapes={shapes}
+          protocolMode={turn.protocolMode}
           onPrompt={onPrompt}
         />
       ) : null}

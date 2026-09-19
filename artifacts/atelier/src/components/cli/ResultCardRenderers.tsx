@@ -44,8 +44,12 @@ import {
   BRIEF_VIEW_LABELS,
 } from "@/lib/briefView";
 import { useCreateAccount } from "@/components/CreateAccountContext";
+import {
+  type ChatToolResultSeverity,
+} from "@workspace/chat-core";
 import type { CliCapability, CliLocale } from "./types";
 import { s } from "./locale";
+import { webDeriveToolResultSemantics } from "./semanticAdapter";
 
 type Json = Record<string, unknown>;
 
@@ -555,6 +559,7 @@ export function ToolResultCardList({
   onPickDisambig,
   onRunSlash,
   onPrompt,
+  protocolMode = "legacy",
 }: {
   toolResults: NonNullable<import("./types").CliTurn["toolResults"]>;
   capabilities: CliCapability[];
@@ -566,70 +571,47 @@ export function ToolResultCardList({
   /** Task #745 — submit a prompt as a new turn (flight select, cabin
    * chips, traveller confirm). When absent, cards keep link behaviour. */
   onPrompt?: (text: string) => void;
+  protocolMode?: import("@workspace/chat-core").ChatProtocolMode;
 }) {
-  // Task #645 — one action must never render two identical cards: drop
-  // exact-duplicate tool results (same tool, outcome and payload) before
-  // mapping to cards.
-  const seenCardKeys = new Set<string>();
-  const dedupedResults = toolResults.filter((tr) => {
-    let key: string;
-    try {
-      key = `${tr.tool}|${tr.ok}|${tr.errorCode ?? ""}|${JSON.stringify(tr.data ?? null)}`;
-    } catch {
-      key = `${tr.tool}|${tr.ok}|${tr.errorCode ?? ""}`;
-    }
-    if (seenCardKeys.has(key)) return false;
-    seenCardKeys.add(key);
-    return true;
-  });
+  const capabilityCardTypes = Object.fromEntries(
+    capabilities.map((capability) => [capability.toolName, capability.resultCard]),
+  );
+  const semanticResults = webDeriveToolResultSemantics(
+    toolResults,
+    capabilityCardTypes,
+    protocolMode,
+  ).filter((decision) => decision.visible);
   return (
     <div className="space-y-2.5" data-testid="cli-tool-results">
-      {dedupedResults.map((tr, i) => {
-        const cap = capabilities.find((c) => c.toolName === tr.tool) ?? null;
-        // Task #411 — orchestrator coordinator tools (resolve_entity,
-        // evaluate_gate) emit shape-tagged payloads via the data
-        // envelope itself. Prefer the per-result shape hint over the
-        // capability default so a single tool can carry both flavours.
+      {semanticResults.map(({ result: tr, cardType: shape, severity, key }, i) => {
         const dataObj =
           tr.data && typeof tr.data === "object"
             ? (tr.data as Record<string, unknown>)
             : {};
-        const dataShape = (dataObj.shape ?? null) as string | null;
-        const shape = tr.presentation?.cardType ?? dataShape ?? cap?.resultCard ?? null;
-
-        // Task #573 — a clean, unambiguous entity resolution is already
-        // implied by the confirm summary / result card. Only show the
-        // resolution card when the resolver needs the user to
-        // disambiguate (options present) or when it found nothing.
-        if (shape === "entity_resolution" && tr.ok) {
-          const opts = dataObj.options;
-          const hasOptions = Array.isArray(opts) && opts.length > 0;
-          const entity = dataObj.entity as Record<string, unknown> | undefined;
-          if (!hasOptions && entity && entity.id) return null;
-        }
 
         // Task #573 — committed writes render as one clean success card,
         // not the raw {stage,verb,payload,…} entity_card debug echo.
         if (shape === "write_success" && tr.ok) {
-          return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} locale={locale} />;
+          return <WriteSuccess key={`${key}-${i}`} data={dataObj} locale={locale} />;
         }
 
         // Task #39 — a blocked duplicate commit gets a friendly card
         // that links to the existing deal, not a raw error dump.
         if (!tr.ok && tr.errorCode === "duplicate_opportunity") {
           return (
-            <DuplicateRejectionCard key={`${tr.tool}-${i}`} data={tr.data} locale={locale} />
+            <DuplicateRejectionCard key={`${key}-${i}`} data={tr.data} locale={locale} />
           );
         }
 
         return (
           <ToolResultCard
-            key={`${tr.tool}-${i}`}
+            key={`${key}-${i}`}
             tool={tr.tool}
             ok={tr.ok}
             data={tr.data}
             errorMessage={tr.errorMessage}
             shape={shape}
+            severity={severity}
             locale={locale}
             onPickDisambig={onPickDisambig}
             onRunSlash={onRunSlash}
@@ -647,6 +629,7 @@ function ToolResultCard({
   data,
   errorMessage,
   shape,
+  severity,
   locale,
   onPickDisambig,
   onRunSlash,
@@ -657,6 +640,7 @@ function ToolResultCard({
   data: unknown;
   errorMessage?: string;
   shape: string | null;
+  severity: ChatToolResultSeverity;
   locale: CliLocale;
   onPickDisambig?: (id: string, label: string) => void;
   onRunSlash?: (cmd: string) => void;
@@ -693,7 +677,14 @@ function ToolResultCard({
       </div>
       <div className="p-3">
         {!ok ? (
-          <div className="text-xs text-danger" data-testid="cli-tool-error">
+          <div
+            className={cn(
+              "text-xs",
+              severity === "soft_error" ? "text-text-muted" : "text-danger",
+            )}
+            data-testid="cli-tool-error"
+            data-severity={severity}
+          >
             {errorMessage ?? (locale === "ar" ? "فشلت الأداة" : "tool failed")}
           </div>
         ) : (

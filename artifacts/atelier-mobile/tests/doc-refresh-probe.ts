@@ -2,8 +2,8 @@
  * Task #828 — chat write → Me documents refresh probe (pure, no expo).
  *
  * Pins:
- *   1. A COMMITTED document write frame (tool_result, ok, navigateTo
- *      when:"on_commit" → /me/profile) yields the my-documents +
+ *   1. A server-authoritative COMMITTED outcome with navigateTo
+ *      when:"on_commit" → /me/profile yields the my-documents +
  *      my-profile query keys, so the Me tab list refetches.
  *   2. Pre-confirm previews, prelude results, failures, and commits
  *      that navigate elsewhere yield NO invalidations.
@@ -29,24 +29,21 @@ function check(name: string, ok: boolean, detail?: unknown) {
   }
 }
 
-const commitFrame = {
-  type: "tool_result",
-  data: {
-    tool: "attach_my_document_file",
-    ok: true,
-    data: {
-      id: "doc1",
-      kind: "national_id",
-      sides: "front_back",
-      label: 'Back side added to "Emirates ID"',
-      href: "/me/profile",
-      navigateTo: { path: "/me/profile", when: "on_commit" },
-    },
-  },
+const beforeCommit = {
+  protocolMode: "current",
+  commitState: "proposed",
+  lastSequence: 4,
+  navigateTo: { path: "/me/profile", when: "on_propose" },
+};
+const afterCommit = {
+  protocolMode: "current",
+  commitState: "committed",
+  lastSequence: 5,
+  navigateTo: { path: "/me/profile", when: "on_commit" },
 };
 
 // 1. Committed document write → docs + profile keys.
-const keys = commitInvalidationKeys(commitFrame);
+const keys = commitInvalidationKeys(beforeCommit, afterCommit);
 const flat = keys.map((k) => JSON.stringify(k));
 check(
   "commit to /me/profile invalidates my-documents",
@@ -59,76 +56,63 @@ check(
   flat,
 );
 
-// 2a. Pre-confirm preview (no navigateTo yet) — nothing to invalidate.
+// 2a. No accepted commit transition — nothing to invalidate.
 check(
-  "pre-confirm preview does not invalidate",
-  commitInvalidationKeys({
-    type: "tool_result",
-    data: {
-      tool: "attach_my_document_file",
-      ok: true,
-      data: { preview: { id: "doc1", side: "back" } },
-    },
+  "proposed state does not invalidate",
+  commitInvalidationKeys(beforeCommit, {
+    ...beforeCommit,
+    lastSequence: 5,
   }).length === 0,
 );
 
-// 2b. Prelude result with an on_commit navigateTo is still not a commit.
+// 2b. Duplicate/replayed committed state does not re-invalidate.
 check(
-  "prelude tool_result does not invalidate",
-  commitInvalidationKeys({
-    type: "tool_result",
-    data: {
-      tool: "attach_my_document_file",
-      ok: true,
-      prelude: true,
-      data: { navigateTo: { path: "/me/profile", when: "on_commit" } },
-    },
-  }).length === 0,
+  "duplicate committed state does not invalidate twice",
+  commitInvalidationKeys(afterCommit, { ...afterCommit, lastSequence: 6 }).length === 0,
 );
 
 // 2c. Failed tool → nothing.
 check(
-  "failed tool_result does not invalidate",
-  commitInvalidationKeys({
-    type: "tool_result",
-    data: {
-      tool: "attach_my_document_file",
-      ok: false,
-      data: { navigateTo: { path: "/me/profile", when: "on_commit" } },
-    },
+  "failed state does not invalidate",
+  commitInvalidationKeys(beforeCommit, {
+    ...beforeCommit,
+    commitState: "failed",
+    lastSequence: 5,
   }).length === 0,
 );
 
 // 2d. on_propose navigation is not a commit.
 check(
   "on_propose navigateTo does not invalidate",
-  commitInvalidationKeys({
-    type: "tool_result",
-    data: {
-      tool: "attach_my_document_file",
-      ok: true,
-      data: { navigateTo: { path: "/me/profile", when: "on_propose" } },
-    },
+  commitInvalidationKeys(beforeCommit, {
+    ...beforeCommit,
+    lastSequence: 5,
   }).length === 0,
 );
 
 // 2e. Commit elsewhere (meeting write) does not touch document queries.
 check(
   "commit to another surface does not invalidate documents",
-  commitInvalidationKeys({
-    type: "tool_result",
-    data: {
-      tool: "schedule_meeting",
-      ok: true,
-      data: { navigateTo: { path: "/me/meetings", when: "on_commit" } },
-    },
+  commitInvalidationKeys(beforeCommit, {
+    ...afterCommit,
+    navigateTo: { path: "/me/meetings", when: "on_commit" },
   }).length === 0,
 );
 
-// 2f. Non-tool frames (narration etc.) are ignored.
+// 2f. Legacy state and rejected duplicate sequence cannot authorize effects.
 check(
-  "narration frame does not invalidate",
-  commitInvalidationKeys({ type: "narration", data: { text: "done" } }).length === 0,
+  "legacy mode does not invalidate",
+  commitInvalidationKeys(
+    { ...beforeCommit, protocolMode: "legacy" },
+    { ...afterCommit, protocolMode: "legacy" },
+  ).length === 0,
+);
+check(
+  "non-increasing sequence does not invalidate",
+  commitInvalidationKeys(beforeCommit, {
+    ...afterCommit,
+    lastSequence: beforeCommit.lastSequence,
+  }).length === 0,
 );
 
 // 3. "Back side missing" indicator condition (mirrors me.tsx render:
