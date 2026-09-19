@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 import { and, asc, eq } from "drizzle-orm";
 import {
   db,
@@ -29,6 +30,7 @@ import {
 } from "../../src/lib/assistant/budget-runtime.js";
 import { evaluateAssistantPolicy } from "../../src/lib/assistant/control-runtime.js";
 import { executeDurableAccountUpdate } from "../../src/lib/assistant/durable-account-update.js";
+import { confirmAndExecuteDurableAccountUpdate } from "../../src/lib/assistant/durable-account-update-confirmation.js";
 import {
   cancelDurableWork,
   claimWorkAttempt,
@@ -362,6 +364,64 @@ try {
   assert.equal(completedAccountAction.state, "succeeded");
   assert.deepEqual(completedAccountAction.auditEventIds, [accountAudits[0].id]);
   assert.equal(JSON.stringify(accountAudits[0].payload).includes("After durable update"), false);
+
+  const adapterAccountId = `acct_adapter_${suffix}`;
+  const [adapterAccount] = await db
+    .insert(atelierAccounts)
+    .values({
+      id: adapterAccountId,
+      orgId,
+      name: "Before adapter",
+      country: "UAE",
+      sector: "Technology",
+    })
+    .returning();
+  const adapterAction = await createDurableActionPreview({
+    orgId,
+    requesterId,
+    conversationId,
+    sourceTurnId: `account_adapter_${suffix}`,
+    capabilityId: "coverage.account_update",
+    catalogVersion: "test-v1",
+    inputSchemaVersion: 1,
+    canonicalInput: { id: adapterAccountId, name: "After adapter" },
+    targetRefsAndRevisions: [{
+      type: "account",
+      id: adapterAccountId,
+      updatedAt: adapterAccount.updatedAt.toISOString(),
+    }],
+    policyDecision: policy,
+    riskClass: "write",
+    irreversible: false,
+    outboundChannels: [],
+    summary: "Update account through adapter",
+    diff: {},
+    expiresAt: new Date(Date.now() + 60_000),
+    idempotencyKey: `durable-account-adapter-${suffix}`,
+  });
+  const adapterArgs = {
+    actionId: adapterAction.actionId,
+    orgId,
+    requesterId,
+    persona: {
+      id: requesterId,
+      name: "Riser tester",
+      orgId,
+      role: "founding_partner" as const,
+    } as never,
+    expectedStateVersion: adapterAction.stateVersion,
+  };
+  const adapterOutcome = await confirmAndExecuteDurableAccountUpdate(adapterArgs);
+  assert.equal(adapterOutcome.state, "succeeded");
+  assert.deepEqual(
+    await confirmAndExecuteDurableAccountUpdate(adapterArgs),
+    adapterOutcome,
+  );
+  const adapterAudits = await db
+    .select()
+    .from(atelierAuditEvents)
+    .where(eq(atelierAuditEvents.entityId, adapterAccountId));
+  assert.equal(adapterAudits.length, 1);
 
   const parentLedgerId = `budget_parent_${suffix}`;
   const childLedgerId = `budget_child_${suffix}`;

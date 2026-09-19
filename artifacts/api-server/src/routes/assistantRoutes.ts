@@ -14,6 +14,7 @@ import atelierCliRoutes from "./atelier/cliRoutes.js";
 import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
 import { attachRls } from "./atelier/rls.js";
 import { cancelDurableAction } from "../lib/assistant/action-runtime.js";
+import { confirmAndExecuteDurableAccountUpdate } from "../lib/assistant/durable-account-update-confirmation.js";
 
 const router: IRouter = Router();
 router.use(attachPersona);
@@ -35,6 +36,17 @@ function delegateToLegacy(req: Parameters<RequestHandler>[0], res: Parameters<Re
       handle: (request: typeof req, response: typeof res, nextFn: typeof next) => void;
     }
   ).handle(req, res, next);
+}
+
+function durableAccountUpdateEnabled(orgId: string): boolean {
+  if (process.env.RISER_DURABLE_ACCOUNT_UPDATE !== "1") return false;
+  const allowlist = new Set(
+    (process.env.RISER_DURABLE_ACCOUNT_UPDATE_ORGS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  return allowlist.has(orgId);
 }
 
 router.post("/turns", (req, res, next) => {
@@ -128,7 +140,7 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const [action] = await db
-    .select({ id: atelierAssistantActions.id })
+    .select()
     .from(atelierAssistantActions)
     .where(
       and(
@@ -139,6 +151,37 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
     )
     .limit(1);
   if (action) {
+    if (
+      action.capabilityId === "coverage.account_update" &&
+      durableAccountUpdateEnabled(me.orgId)
+    ) {
+      try {
+        const outcome = await confirmAndExecuteDurableAccountUpdate({
+          actionId: action.id,
+          orgId: me.orgId,
+          requesterId: me.id,
+          persona: me,
+          expectedStateVersion:
+            typeof req.body?.stateVersion === "number" ? req.body.stateVersion : undefined,
+          typedEvidence:
+            typeof req.body?.typedEvidence === "string" ? req.body.typedEvidence : undefined,
+        });
+        res.json(outcome);
+      } catch (error) {
+        req.log?.warn?.(
+          {
+            actionId: action.id,
+            errorClass: error instanceof Error ? error.name : "unknown",
+          },
+          "durable account update confirmation failed",
+        );
+        res.status(409).json({
+          code: "action_not_confirmable",
+          message: "This action could not be confirmed safely.",
+        });
+      }
+      return;
+    }
     res.status(409).json({
       code: "action_executor_not_enabled",
       message: "This durable action cannot execute until its pinned executor is enabled.",

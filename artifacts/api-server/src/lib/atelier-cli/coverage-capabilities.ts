@@ -1743,6 +1743,7 @@ defineCapability({
   irreversible: false,
   surfaceOn: ["global"],
   source: "cli-only",
+  requiredRoles: ["founding_partner", "partner", "senior_manager", "non_equity_partner"],
   async run(input, ctx) {
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "account_update requires confirm:true." };
