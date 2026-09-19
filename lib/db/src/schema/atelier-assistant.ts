@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -8,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
@@ -209,6 +211,8 @@ export const atelierWorkItems = pgTable(
     policyContext: jsonb("policy_context").$type<unknown>().notNull(),
     catalogVersion: text("catalog_version").notNull(),
     cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
+    aggregateResult: jsonb("aggregate_result").$type<unknown>(),
+    aggregateEvidence: jsonb("aggregate_evidence").$type<unknown[]>().notNull().default([]),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -216,6 +220,10 @@ export const atelierWorkItems = pgTable(
   (t) => [
     index("idx_work_items_owner").on(t.orgId, t.requesterId),
     index("idx_work_items_status").on(t.orgId, t.status),
+    check(
+      "chk_work_item_status",
+      sql`${t.status} in ('draft','planned','blocked','cancellation_settling','recovery_settling','awaiting_aggregation','succeeded','failed','cancelled','compensation_required','compensated')`,
+    ),
   ],
 );
 
@@ -251,12 +259,30 @@ export const atelierWorkSteps = pgTable(
     inputEncrypted: text("input_encrypted").notNull(),
     authorityGrant: jsonb("authority_grant").$type<unknown>().notNull(),
     policyDecisionDigest: text("policy_decision_digest").notNull(),
+    policyVersion: text("policy_version").notNull().default("legacy-fail-closed"),
+    policyObligations: jsonb("policy_obligations").$type<string[]>().notNull().default([]),
+    toolsDataPerimeter: jsonb("tools_data_perimeter").$type<{
+      toolIds: string[];
+      dataClasses: string[];
+    }>().notNull().default({ toolIds: [], dataClasses: [] }),
+    budgetGrant: jsonb("budget_grant").$type<{
+      maxCostMicros: number;
+      maxToolCalls: number;
+      maxProviderCalls: number;
+    }>().notNull().default({
+      maxCostMicros: 0,
+      maxToolCalls: 0,
+      maxProviderCalls: 0,
+    }),
     catalogVersion: text("catalog_version").notNull(),
     inputSchemaVersion: integer("input_schema_version").notNull(),
     budgetLedgerId: text("budget_ledger_id").references(() => atelierAssistantBudgetLedgers.id),
     retryPolicy: jsonb("retry_policy").$type<unknown>().notNull(),
     resultSchemaHash: text("result_schema_hash").notNull(),
     compensation: jsonb("compensation").$type<unknown>(),
+    checkpointSpec: jsonb("checkpoint_spec").$type<unknown>(),
+    parentStepId: text("parent_step_id"),
+    evidenceLineage: jsonb("evidence_lineage").$type<string[]>().notNull().default([]),
     status: text("status").notNull().default("blocked"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -264,6 +290,10 @@ export const atelierWorkSteps = pgTable(
   (t) => [
     index("idx_work_steps_plan").on(t.planId),
     index("idx_work_steps_status").on(t.workItemId, t.status),
+    check(
+      "chk_work_step_status",
+      sql`${t.status} in ('blocked','ready','running','succeeded','failed','cancelled','compensation_required','compensated')`,
+    ),
   ],
 );
 
@@ -278,11 +308,18 @@ export const atelierWorkAttempts = pgTable(
     status: text("status").notNull().default("queued"),
     leaseOwner: text("lease_owner"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     fencingToken: integer("fencing_token").notNull().default(0),
+    budgetReservationId: text("budget_reservation_id").references(
+      () => atelierAssistantBudgetReservations.id,
+    ),
     result: jsonb("result").$type<unknown>(),
     errorClass: text("error_class"),
     publicError: jsonb("public_error").$type<unknown>(),
     evidence: jsonb("evidence").$type<unknown[]>().notNull().default([]),
+    costMicros: integer("cost_micros").notNull().default(0),
+    toolCalls: integer("tool_calls").notNull().default(0),
+    providerCalls: integer("provider_calls").notNull().default(0),
     startedAt: timestamp("started_at", { withTimezone: true }),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -291,6 +328,10 @@ export const atelierWorkAttempts = pgTable(
   (t) => [
     uniqueIndex("uq_work_attempt_number").on(t.stepId, t.attemptNumber),
     index("idx_work_attempt_lease").on(t.status, t.leaseExpiresAt),
+    check(
+      "chk_work_attempt_status",
+      sql`${t.status} in ('queued','running','committing','succeeded','retryable','permanent','ambiguous','blocked','cancelled','compensation_required','compensated')`,
+    ),
   ],
 );
 
@@ -314,5 +355,9 @@ export const atelierWorkCheckpoints = pgTable(
   },
   (t) => [
     index("idx_work_checkpoint_open").on(t.workItemId, t.decision, t.expiresAt),
+    check(
+      "chk_work_checkpoint_decision",
+      sql`${t.decision} is null or ${t.decision} in ('approve','reject')`,
+    ),
   ],
 );

@@ -88,6 +88,8 @@ const step = {
   input: { accountId: "acc_1" },
   authorityGrant: {},
   policyDecisionDigest: "d".repeat(64),
+  toolsDataPerimeter: { toolIds: [], dataClasses: ["account"] },
+  budget: { maxCostMicros: 1_000, maxToolCalls: 1, maxProviderCalls: 1 },
   resultSchemaHash: "e".repeat(12),
   retryPolicy: { maxAttempts: 2, maxWallMs: 1_000 },
 };
@@ -113,6 +115,14 @@ assert.throws(
       steps: [{ ...step, dependencies: ["missing"] }],
     }),
   /workflow-missing-dependency/,
+);
+assert.throws(
+  () =>
+    validateAcyclicWorkPlan({
+      ...plan,
+      steps: [{ ...step, dependencies: [step.id] }],
+    }),
+  /workflow-cycle/,
 );
 
 process.env.SESSION_SECRET ??= "riser-foundation-test-session-secret-32-bytes";

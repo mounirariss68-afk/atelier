@@ -93,7 +93,9 @@ DECLARE
     -- Task #1342 — stable-ID workforce governance. These are sensitive
     -- relationship, compensation provenance, agreement and equity records;
     -- route-level persona gates apply in addition to org isolation.
-    'atelier_person_relationship_classifications','atelier_admin_person_mappings'
+    'atelier_person_relationship_classifications','atelier_admin_person_mappings',
+    'atelier_assistant_budget_ledgers','atelier_assistant_budget_reservations',
+    'atelier_work_items'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their
@@ -131,6 +133,69 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+ALTER TABLE atelier_assistant_controls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_assistant_controls FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_assistant_controls_org_isolation ON atelier_assistant_controls;
+CREATE POLICY atelier_assistant_controls_org_isolation ON atelier_assistant_controls
+  USING (org_id IS NULL OR org_id = atelier_current_org())
+  WITH CHECK (org_id IS NULL OR org_id = atelier_current_org());
+
+ALTER TABLE atelier_work_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_work_plans FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_work_plans_org_isolation ON atelier_work_plans;
+CREATE POLICY atelier_work_plans_org_isolation ON atelier_work_plans
+  USING (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ));
+
+ALTER TABLE atelier_work_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_work_steps FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_work_steps_org_isolation ON atelier_work_steps;
+CREATE POLICY atelier_work_steps_org_isolation ON atelier_work_steps
+  USING (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ));
+
+ALTER TABLE atelier_work_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_work_attempts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_work_attempts_org_isolation ON atelier_work_attempts;
+CREATE POLICY atelier_work_attempts_org_isolation ON atelier_work_attempts
+  USING (EXISTS (
+    SELECT 1
+    FROM atelier_work_steps ws
+    JOIN atelier_work_items wi ON wi.id = ws.work_item_id
+    WHERE ws.id = step_id AND wi.org_id = atelier_current_org()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1
+    FROM atelier_work_steps ws
+    JOIN atelier_work_items wi ON wi.id = ws.work_item_id
+    WHERE ws.id = step_id AND wi.org_id = atelier_current_org()
+  ));
+
+ALTER TABLE atelier_work_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_work_checkpoints FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_work_checkpoints_org_isolation ON atelier_work_checkpoints;
+CREATE POLICY atelier_work_checkpoints_org_isolation ON atelier_work_checkpoints
+  USING (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM atelier_work_items wi
+    WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ));
 
 -- ============================================================
 -- Task #293 — Column-level RLS, self-service invariant, breakglass.

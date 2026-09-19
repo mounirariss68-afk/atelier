@@ -7,10 +7,9 @@ import {
   atelierWorkSteps,
 } from "@workspace/db";
 import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
-import { attachRls } from "./atelier/rls.js";
+import { attachRls, withRls } from "./atelier/rls.js";
 import {
   cancelDurableWork,
-  createDurableWork,
   decideWorkCheckpoint,
 } from "../lib/assistant/workflow-runtime.js";
 import { z } from "zod";
@@ -41,44 +40,42 @@ router.post("/", async (req, res) => {
   if (!enabled()) {
     return void res.status(503).json({ code: "workflow_writes_disabled" });
   }
-  try {
-    const body = createWorkflowSchema.parse(req.body);
-    const result = await createDurableWork({
-      orgId: me.orgId,
-      requesterId: me.id,
-      goal: body.goal,
-      policyContext: body.policyContext,
-      plan: body.plan,
-    });
-    res.status(201).json(result);
-  } catch (error) {
-    res.status(400).json({ code: error instanceof Error ? error.message : "invalid_workflow" });
-  }
+  createWorkflowSchema.parse(req.body);
+  res.status(503).json({ code: "workflow_writes_disabled" });
 });
 
 router.get("/:id", async (req, res) => {
   const me = req.atelierPersona;
   if (!me) return void res.status(401).json({ code: "no_active_persona" });
-  const [work] = await db
+  const [work] = await withRls(req, (tx) => tx
     .select()
     .from(atelierWorkItems)
-    .where(and(eq(atelierWorkItems.id, req.params.id), eq(atelierWorkItems.orgId, me.orgId)))
-    .limit(1);
+    .where(and(
+      eq(atelierWorkItems.id, req.params.id),
+      eq(atelierWorkItems.orgId, me.orgId),
+      eq(atelierWorkItems.requesterId, me.id),
+    ))
+    .limit(1));
   if (!work) return void res.status(404).json({ code: "work_not_found" });
-  const steps = await db.select().from(atelierWorkSteps).where(eq(atelierWorkSteps.workItemId, work.id));
+  const steps = await withRls(req, (tx) =>
+    tx.select().from(atelierWorkSteps).where(eq(atelierWorkSteps.workItemId, work.id)));
   res.json({ work, steps });
 });
 
 router.get("/:id/events", async (req, res) => {
   const me = req.atelierPersona;
   if (!me) return void res.status(401).json({ code: "no_active_persona" });
-  const [work] = await db
+  const [work] = await withRls(req, (tx) => tx
     .select({ id: atelierWorkItems.id })
     .from(atelierWorkItems)
-    .where(and(eq(atelierWorkItems.id, req.params.id), eq(atelierWorkItems.orgId, me.orgId)))
-    .limit(1);
+    .where(and(
+      eq(atelierWorkItems.id, req.params.id),
+      eq(atelierWorkItems.orgId, me.orgId),
+      eq(atelierWorkItems.requesterId, me.id),
+    ))
+    .limit(1));
   if (!work) return void res.status(404).json({ code: "work_not_found" });
-  const events = await db
+  const events = await withRls(req, (tx) => tx
     .select({
       id: atelierWorkAttempts.id,
       stepId: atelierWorkAttempts.stepId,
@@ -90,18 +87,19 @@ router.get("/:id/events", async (req, res) => {
     .from(atelierWorkAttempts)
     .innerJoin(atelierWorkSteps, eq(atelierWorkAttempts.stepId, atelierWorkSteps.id))
     .where(eq(atelierWorkSteps.workItemId, work.id))
-    .orderBy(asc(atelierWorkAttempts.createdAt));
+    .orderBy(asc(atelierWorkAttempts.createdAt)));
   res.json({ events });
 });
 
 router.post("/:id/cancel", async (req, res) => {
   const me = req.atelierPersona;
   if (!me) return void res.status(401).json({ code: "no_active_persona" });
-  const updated = await cancelDurableWork({
+  const updated = await withRls(req, (tx) => cancelDurableWork({
     orgId: me.orgId,
     requesterId: me.id,
     workItemId: req.params.id,
-  });
+    transactionRunner: { transaction: async (fn) => fn(tx) },
+  }));
   if (!updated) return void res.status(404).json({ code: "work_not_found" });
   res.json(updated);
 });
@@ -113,14 +111,16 @@ router.post("/:id/checkpoints/:checkpointId/decide", async (req, res) => {
   if (decision !== "approve" && decision !== "reject") {
     return void res.status(400).json({ code: "invalid_checkpoint_decision" });
   }
-  const checkpoint = await decideWorkCheckpoint({
+  const checkpoint = await withRls(req, (tx) => decideWorkCheckpoint({
     orgId: me.orgId,
     requesterId: me.id,
     workItemId: req.params.id,
     checkpointId: req.params.checkpointId,
     decision,
     evidence: req.body?.evidence ?? null,
-  });
+    deciderRoles: me.role ? [me.role] : [],
+    transactionRunner: { transaction: async (fn) => fn(tx) },
+  }));
   if (!checkpoint) return void res.status(404).json({ code: "checkpoint_not_found" });
   res.json(checkpoint);
 });

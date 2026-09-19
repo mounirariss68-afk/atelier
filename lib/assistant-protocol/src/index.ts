@@ -235,6 +235,25 @@ export const PolicyDecisionV1Schema = z.discriminatedUnion("effect", [
 
 export type PolicyDecisionV1 = z.infer<typeof PolicyDecisionV1Schema>;
 
+export const WorkflowStepResultV1Schema = z
+  .object({
+    ok: z.boolean(),
+    data: z.unknown().optional(),
+    errorCode: z.string().min(1).max(100).optional(),
+    errorMessage: z.string().min(1).max(1_000).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.ok && (value.errorCode || value.errorMessage)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "success-cannot-carry-error" });
+    }
+    if (!value.ok && (!value.errorCode || !value.errorMessage)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "failure-requires-public-error" });
+    }
+  });
+
+export type WorkflowStepResultV1 = z.infer<typeof WorkflowStepResultV1Schema>;
+
 export const ActionStateV1Schema = z.enum([
   "draft",
   "previewed",
@@ -405,11 +424,40 @@ export const WorkPlanV1Schema = z
             id: boundedId,
             capabilityId: boundedId.optional(),
             delegateAgentId: boundedId.optional(),
+            parentStepId: boundedId.optional(),
             dependencies: z.array(boundedId).max(100),
             input: z.unknown(),
             authorityGrant: z.record(z.string(), z.unknown()),
             policyDecisionDigest: z.string().min(32).max(200),
+            toolsDataPerimeter: z
+              .object({
+                toolIds: z.array(boundedId).max(100),
+                dataClasses: z.array(boundedId).max(100),
+              })
+              .strict(),
+            budget: z
+              .object({
+                maxCostMicros: z.number().int().nonnegative(),
+                maxToolCalls: z.number().int().nonnegative().max(10_000),
+                maxProviderCalls: z.number().int().nonnegative().max(10_000),
+              })
+              .strict(),
             resultSchemaHash: z.string().min(12).max(200),
+            compensation: z
+              .object({
+                capabilityId: boundedId,
+                input: z.unknown(),
+              })
+              .strict()
+              .optional(),
+            checkpoint: z
+              .object({
+                type: z.enum(["human_approval", "operator_review"]),
+                evidenceSchema: z.record(z.string(), z.unknown()),
+                expiresInMs: z.number().int().min(1_000).max(604_800_000),
+              })
+              .strict()
+              .optional(),
             retryPolicy: z
               .object({
                 maxAttempts: z.number().int().min(1).max(10),
@@ -455,6 +503,11 @@ export function validateAcyclicWorkPlan(plan: WorkPlanV1): void {
     const step = byId.get(id);
     if (!step) throw new Error("workflow-missing-step");
     visiting.add(id);
+    if (step.parentStepId) {
+      if (!ids.has(step.parentStepId)) throw new Error("workflow-missing-parent");
+      if (step.parentStepId === step.id) throw new Error("workflow-self-parent");
+      visit(step.parentStepId);
+    }
     for (const dependency of step.dependencies) {
       if (!ids.has(dependency)) throw new Error("workflow-missing-dependency");
       visit(dependency);

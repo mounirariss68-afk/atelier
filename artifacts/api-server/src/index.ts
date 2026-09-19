@@ -96,6 +96,19 @@ app.listen(port, (err) => {
     })().catch((err) => {
       logger.error({ err }, "Agent-run boot sweep failed");
     });
+    await (async () => {
+      const { reapExpiredWorkLeases } = await import("./lib/assistant/workflow-runtime");
+      const n = await reapExpiredWorkLeases(PROCESS_BOOT_TIME);
+      if (n > 0) logger.info({ reaped: n }, "Reconciled expired durable workflow leases");
+      const timer = setInterval(() => {
+        void reapExpiredWorkLeases().then((reaped) => {
+          if (reaped > 0) logger.info({ reaped }, "Reconciled expired durable workflow leases");
+        }).catch((err) => logger.error({ err }, "Periodic workflow lease reconciliation failed"));
+      }, 30_000);
+      timer.unref();
+    })().catch((err) => {
+      logger.error({ err }, "Durable workflow lease reconciliation failed");
+    });
     await ensureAtelierAuthSeed().catch((err) => {
       logger.error(
         { err },
