@@ -26,6 +26,7 @@ import {
   atelierEngagementPnlAudit,
   atelierTimesheetEntries,
   atelierEmployees,
+  atelierContractors,
   atelierRateCards,
   atelierRateCardRows,
   atelierExpenses,
@@ -33,13 +34,9 @@ import {
   atelierVendorCostSplits,
 } from "@workspace/db";
 import { convertToUsd } from "./atelier-fx.js";
+import { resolveContractorRate, contractorRatePerHour } from "./atelier-contractor-rates.js";
 
-const LIVE_TIMESHEET_STATUSES = [
-  "submitted",
-  "lead_approved",
-  "approved",
-  "partner_approved",
-] as const;
+const LIVE_TIMESHEET_STATUSES = ["lead_approved", "approved", "partner_approved"] as const;
 
 const LIVE_EXPENSE_STATUSES = ["submitted", "approved"] as const;
 
@@ -113,6 +110,8 @@ async function rollupLabour(
     .select({
       hours: atelierTimesheetEntries.hours,
       personId: atelierTimesheetEntries.personId,
+      personType: atelierTimesheetEntries.personType,
+      workDate: atelierTimesheetEntries.workDate,
     })
     .from(atelierTimesheetEntries)
     .where(
@@ -144,11 +143,31 @@ async function rollupLabour(
   for (const e of entries) {
     const h = Number(e.hours || 0);
     if (h <= 0) continue;
-    const empSeniority = (seniorityById.get(e.personId) ?? "consultant").toLowerCase();
-    const cardKey = SENIORITY_TO_CARD[empSeniority] ?? "AIEngineer";
-    const dayRate = rateBySeniority.get(cardKey) ?? FALLBACK_DAY_RATE_COST_USD;
+    let dayRate: number;
+    let dayRateCurrency = "USD";
+    if (e.personType === "contractor") {
+      const [c] = await db.select({ orgId: atelierContractors.orgId }).from(atelierContractors).where(and(
+        eq(atelierContractors.id, e.personId), isNull(atelierContractors.deletedAt),
+      ));
+      const resolved = c?.orgId ? await resolveContractorRate({
+        orgId: c.orgId, contractorId: e.personId, engagementId, workDate: e.workDate,
+        fallbackDayRate: FALLBACK_DAY_RATE_COST_USD,
+      }) : null;
+      dayRate = resolved ? contractorRatePerHour(resolved) * HOURS_PER_DAY : FALLBACK_DAY_RATE_COST_USD;
+      dayRateCurrency = resolved?.currency ?? "USD";
+    } else {
+      const empSeniority = (seniorityById.get(e.personId) ?? "consultant").toLowerCase();
+      const cardKey = SENIORITY_TO_CARD[empSeniority] ?? "AIEngineer";
+      dayRate = rateBySeniority.get(cardKey) ?? FALLBACK_DAY_RATE_COST_USD;
+    }
     hours += h;
-    costUsd += (h / HOURS_PER_DAY) * dayRate;
+    const localCost = (h / HOURS_PER_DAY) * dayRate;
+    if (dayRateCurrency.toUpperCase() === "USD") {
+      costUsd += localCost;
+    } else {
+      const converted = await convertToUsd(localCost, dayRateCurrency, e.workDate);
+      costUsd += converted.usdAmount;
+    }
   }
   return { hours, costUsd };
 }

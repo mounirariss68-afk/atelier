@@ -1150,6 +1150,39 @@ export const atelierEngagements = pgTable(
   ],
 );
 
+/**
+ * Effective-dated contractor cost terms for an engagement.  This is an
+ * operational cost rate (never a client sell rate); agreement/scope fields
+ * retain the provenance used by Finance when a term is changed.
+ */
+export const atelierContractorEngagementRates = pgTable(
+  "atelier_contractor_engagement_rates",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    contractorId: text("contractor_id").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    effectiveFrom: text("effective_from").notNull(),
+    effectiveTo: text("effective_to"),
+    dayRateAmount: doublePrecision("day_rate_amount").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    agreementRef: text("agreement_ref"),
+    agreementVersionRef: text("agreement_version_ref"),
+    scope: jsonb("scope").$type<string[]>().notNull().default([]),
+    /** When true, this engagement term is permitted to supersede a NEP plan. */
+    allowsNepOverride: boolean("allows_nep_override").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    updatedByUserId: text("updated_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_ctr_eng_rate_lookup").on(t.orgId, t.contractorId, t.engagementId, t.effectiveFrom),
+    index("idx_atelier_ctr_eng_rate_effective").on(t.engagementId, t.effectiveFrom),
+  ],
+);
+
 // ============================================================
 // DELIVERABLES + VERSIONS
 // ============================================================
@@ -4439,7 +4472,7 @@ export const atelierContractorPayments = pgTable(
     index("idx_atelier_cp_eng_week").on(t.engagementId, t.weekIso),
     index("idx_atelier_cp_payee_status").on(t.payeeUserId, t.status),
     index("idx_atelier_cp_status").on(t.status),
-    uniqueIndex("uq_atelier_cp_payee_eng_week").on(t.payeeUserId, t.engagementId, t.weekIso),
+    uniqueIndex("uq_atelier_cp_payee_eng_week_rate").on(t.payeeUserId, t.engagementId, t.weekIso, t.ratePerHour, t.rateCurrency),
   ],
 );
 

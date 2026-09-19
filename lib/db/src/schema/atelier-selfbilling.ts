@@ -149,7 +149,7 @@ export const atelierSelfBilledInvoices = pgTable(
     ...COMMON,
   },
   (t) => [
-    uniqueIndex("uq_atelier_sbi_supplier_week").on(t.orgId, t.supplierType, t.supplierId, t.weekIso),
+    uniqueIndex("uq_atelier_sbi_supplier_week_currency").on(t.orgId, t.supplierType, t.supplierId, t.weekIso, t.currency),
     index("idx_atelier_sbi_status").on(t.status),
     index("idx_atelier_sbi_payee").on(t.payeeUserId),
     index("idx_atelier_sbi_week").on(t.weekIso),

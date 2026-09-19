@@ -84,6 +84,8 @@ async function main(): Promise<void> {
      atelierPersonRelationshipClassifications,
     atelierInvoice, atelierContractorPayments,
     atelierNepCompPlans, atelierNepEntitlements,
+     atelierContractorEngagementRates,
+     atelierSelfBilledInvoices,
     atelierPaymentRuns, atelierPaymentRunItems, atelierBankAccount,
     atelierBankSignatories, atelierAuditEvents,
     atelierTimesheetWeeks, atelierTimesheetEntries,
@@ -329,6 +331,74 @@ async function main(): Promise<void> {
     const detailFuture = await call("GET", `/finance/nep-comp/plans/${CT_PERSON}`, FP_ID);
     check("current plan is still the latest ALREADY-effective revision", detailFuture.body?.currentPlan?.dayRateAmount === 2600);
 
+    // --- Engagement rate CRUD + canonical work-date resolver --------------
+    group("Engagement rates: CRUD, provenance, precedence and work dates");
+    {
+      const { resolveContractorRate } = await import("../../src/lib/atelier-contractor-rates.js");
+      const termBody = {
+        contractorId: CT_PERSON, engagementId: ENG_SALE,
+        effectiveFrom: "2026-01-01", effectiveTo: "2026-05-31",
+        amount: 1800, currency: "USD", governingAgreementRef: GOV_CONTRACT,
+        scopeRef: GOV_DOC, scope: ["signed-rate-schedule"], allowsNepOverride: false,
+      };
+      check("engagement rate CRUD requires write authorization",
+        (await call("POST", "/finance/nep-comp/engagement-rates", PT_ID, termBody)).status === 403);
+      check("engagement rate rejects missing provenance",
+        (await call("POST", "/finance/nep-comp/engagement-rates", FP_ID,
+          { ...termBody, scope: [] })).status === 400);
+      check("engagement rate rejects inverted effective dates",
+        (await call("POST", "/finance/nep-comp/engagement-rates", FP_ID,
+          { ...termBody, effectiveFrom: "2026-06-01", effectiveTo: "2026-05-31" })).status === 400);
+      const r1 = await call("POST", "/finance/nep-comp/engagement-rates", FP_ID, termBody);
+      const rateId = r1.body?.rate?.id;
+      check("founder creates engagement rate with provenance", r1.status === 201 && !!rateId &&
+        r1.body?.rate?.agreementRef === GOV_CONTRACT && r1.body?.rate?.scopeRef === GOV_DOC);
+      check("duplicate engagement-rate effective date is rejected",
+        (await call("POST", "/finance/nep-comp/engagement-rates", FP_ID, termBody)).status === 409);
+      const r2 = await call("POST", "/finance/nep-comp/engagement-rates", FP_ID, {
+        ...termBody, effectiveFrom: "2026-06-01", effectiveTo: null, amount: 2200,
+      });
+      const rate2Id = r2.body?.rate?.id;
+      check("second effective-dated project rate is created", r2.status === 201 && !!rate2Id);
+      const updated = rateId ? await call("PATCH", `/finance/nep-comp/engagement-rates/${rateId}`, FP_ID, { amount: 1900 }) : { status: 0, body: null };
+      check("engagement rate update preserves effective date/provenance", updated.status === 200 &&
+        updated.body?.rate?.dayRateAmount === 1900 && updated.body?.rate?.agreementRef === GOV_CONTRACT);
+      const listed = await call("GET", `/finance/nep-comp/engagement-rates?contractorId=${CT_PERSON}&engagementId=${ENG_SALE}`, HR_ID);
+      check("authorized rate listing returns both project revisions", listed.status === 200 && listed.body?.items?.length === 2);
+      check("canonical resolver gives NEP plan precedence without override", (await resolveContractorRate({
+        orgId: ORG, contractorId: CT_PERSON, engagementId: ENG_SALE, workDate: "2026-04-01",
+      })).source === "nep_plan" && (await resolveContractorRate({
+        orgId: ORG, contractorId: CT_PERSON, engagementId: ENG_SALE, workDate: "2026-06-01",
+      })).source === "nep_plan");
+      check("NEP plan takes precedence without explicit override", (await resolveContractorRate({
+        orgId: ORG, contractorId: CT_PERSON, engagementId: ENG_SALE, workDate: "2026-07-01",
+      })).source === "nep_plan");
+      const enabled = rate2Id ? await call("PATCH", `/finance/nep-comp/engagement-rates/${rate2Id}`, FP_ID, {
+        allowsNepOverride: true,
+      }) : { status: 0, body: null };
+      const splitRate = await resolveContractorRate({
+        orgId: ORG, contractorId: CT_PERSON, engagementId: ENG_SALE, workDate: "2026-06-01",
+      });
+      check("explicit project override enables the effective mid-week rate", enabled.status === 200 &&
+        splitRate.source === "engagement_term" && splitRate.dayRateAmount === 2200);
+      const override = await call("POST", "/finance/nep-comp/engagement-rates", FP_ID, {
+        ...termBody, engagementId: ENG_ORIG, effectiveFrom: "2026-01-01", effectiveTo: null,
+        amount: 3100, allowsNepOverride: true,
+      });
+      check("explicit project override is accepted", override.status === 201);
+      const overrideResolved = await resolveContractorRate({
+        orgId: ORG, contractorId: CT_PERSON, engagementId: ENG_ORIG, workDate: "2026-07-01",
+      });
+      check("explicit project override beats NEP plan", overrideResolved.source === "engagement_term" && overrideResolved.dayRateAmount === 3100);
+      const rosterResolved = await resolveContractorRate({
+        orgId: ORG, contractorId: CT2_PERSON, engagementId: null, workDate: "2026-07-01",
+      });
+      check("resolver falls back to roster rate when no plan/project term", rosterResolved.source === "roster");
+      if (rateId) check("engagement rate delete is soft-delete and authorized",
+        (await call("DELETE", `/finance/nep-comp/engagement-rates/${rateId}`, FP_ID)).status === 200);
+      await db.delete(atelierContractorEngagementRates).where(eq(atelierContractorEngagementRates.contractorId, CT_PERSON));
+    }
+
     // --- 3. attribution + recompute ---
     group("Attribution + entitlement recompute");
     const mc = await call("POST", `/finance/nep-comp/engagements/${ENG_SALE}/material-contribution`, FP_ID, { userId: NEP_ID });
@@ -498,6 +568,96 @@ async function main(): Promise<void> {
       await db.delete(atelierContractorPayments).where(inArray(atelierContractorPayments.weekIso, [WK_CUR, WK_FUT]));
     }
 
+    // --- Proposal correction, immutable history, FX and self-billing buckets
+    group("Proposal correction + multi-currency evidence reconciliation");
+    {
+      const { runPaymentProposer } = await import("../../src/lib/atelier-payment-proposer.js");
+      const { runSelfBillingClerk } = await import("../../src/lib/atelier-agents/selfBillingClerk.js");
+      const WK = "2030-W02";
+      const WID = `tsw_reconcile_${STAMP}`;
+      const eurRate = `rate_eur_${STAMP}`;
+      const gbpRate = `rate_gbp_${STAMP}`;
+      await db.insert(atelierTimesheetWeeks).values({
+        id: WID, orgId: ORG, personId: CT2_PERSON, personType: "contractor",
+        weekIso: WK, weekStartDate: "2030-01-07", status: "lead_approved",
+        totalHours: 9, billableHours: 9,
+      });
+      await db.insert(atelierTimesheetEntries).values([
+        { id: `tse_eur_${STAMP}`, orgId: ORG, weekId: WID, personId: CT2_PERSON, personType: "contractor",
+          workDate: "2030-01-07", engagementId: ENG_LATE, activityCode: "billable", hours: 4, billable: true, status: "approved" },
+        { id: `tse_gbp_${STAMP}`, orgId: ORG, weekId: WID, personId: CT2_PERSON, personType: "contractor",
+          workDate: "2030-01-08", engagementId: ENG_LATE, activityCode: "billable", hours: 5, billable: true, status: "approved" },
+      ]);
+      await db.insert(atelierContractorEngagementRates).values([
+        { id: eurRate, orgId: ORG, contractorId: CT2_PERSON, engagementId: ENG_LATE,
+          effectiveFrom: "2029-01-01", effectiveTo: "2030-01-07", dayRateAmount: 800, currency: "EUR",
+          agreementRef: GOV_CONTRACT, agreementVersionRef: GOV_DOC, scope: ["eur-rate"], allowsNepOverride: true },
+        { id: gbpRate, orgId: ORG, contractorId: CT2_PERSON, engagementId: ENG_LATE,
+          effectiveFrom: "2030-01-08", effectiveTo: null, dayRateAmount: 900, currency: "GBP",
+          agreementRef: GOV_CONTRACT, agreementVersionRef: GOV_DOC, scope: ["gbp-rate"], allowsNepOverride: true },
+      ]);
+      await runPaymentProposer({ weeksIso: [WK], triggeredBy: "test" });
+      let proposals: any[] = await db.select().from(atelierContractorPayments).where(and(
+        eq(atelierContractorPayments.weekIso, WK), eq(atelierContractorPayments.engagementId, ENG_LATE),
+      ));
+      check("proposer creates one payable evidence bucket per currency", proposals.length === 2 &&
+        new Set(proposals.map((p) => p.rateCurrency)).size === 2);
+      const eurProposal = proposals.find((p) => p.rateCurrency === "EUR");
+      check("proposal retains exact entry evidence and non-USD amount",
+        eurProposal?.evidenceEntryIds?.length === 1 && eurProposal?.evidenceEntryIds?.[0] === `tse_eur_${STAMP}` &&
+        eurProposal?.costCurrency === "EUR" && Number(eurProposal?.usdAmount) > 0);
+      // A correction rerun updates only the still-proposed bucket. Approved and
+      // paid history remains immutable and is never duplicated.
+      await db.update(atelierContractorEngagementRates).set({ dayRateAmount: 850 }).where(eq(atelierContractorEngagementRates.id, eurRate));
+      await db.update(atelierContractorPayments).set({ status: "approved" }).where(eq(atelierContractorPayments.id, eurProposal.id));
+      let correctionError: unknown = null;
+      try { await runPaymentProposer({ weeksIso: [WK], triggeredBy: "test" }); } catch (err) { correctionError = err; }
+      proposals = await db.select().from(atelierContractorPayments).where(and(
+        eq(atelierContractorPayments.weekIso, WK), eq(atelierContractorPayments.engagementId, ENG_LATE),
+      ));
+      check("rerun correction completes without a duplicate-key failure", correctionError === null);
+      check("rerun preserves one approved historical bucket", proposals.filter((p) => p.rateCurrency === "EUR" && p.status === "approved").length === 1 &&
+        proposals.find((p) => p.rateCurrency === "EUR")?.status === "approved");
+      const gbpProposal = proposals.find((p) => p.rateCurrency === "GBP");
+      check("approved evidence is not proposed again after a rate correction",
+        proposals.filter((p) => p.status === "proposed").length === 1 &&
+        proposals.filter((p) => p.status === "proposed").every((p) => p.evidenceEntryIds?.length === 1));
+      const financeQueue = await call("GET", "/wallet/approvals", FIN_ID);
+      check("Finance can retrieve the payment maker-checker queue", financeQueue.status === 200);
+      await db.update(atelierContractorPayments).set({ status: "paid" }).where(eq(atelierContractorPayments.id, gbpProposal.id));
+      let paidRerunError: unknown = null;
+      try { await runPaymentProposer({ weeksIso: [WK], triggeredBy: "test" }); } catch (err) { paidRerunError = err; }
+      const afterPaid = await db.select().from(atelierContractorPayments).where(and(
+        eq(atelierContractorPayments.weekIso, WK), eq(atelierContractorPayments.engagementId, ENG_LATE),
+      ));
+      check("paid evidence is never proposed again", paidRerunError === null &&
+        afterPaid.filter((p) => p.status === "paid").length === 1 &&
+        afterPaid.filter((p) => p.status === "proposed").length === 0);
+
+      // Restore the signed rate before composing self-billing so the
+      // currency/evidence reconciliation assertion is independent from the
+      // immutable-history correction scenario above.
+      await db.update(atelierContractorEngagementRates).set({ dayRateAmount: 800 })
+        .where(eq(atelierContractorEngagementRates.id, eurRate));
+      const clerk = await runSelfBillingClerk({ input: { weeksIso: [WK], supplierType: "contractor" }, triggeredByUserId: FIN_ID });
+      check("self-billing creates separate same-week currency invoices", clerk.output.invoicesCreated === 2);
+      const invoices: any[] = await db.select().from(atelierSelfBilledInvoices).where(and(
+        eq(atelierSelfBilledInvoices.weekIso, WK), eq(atelierSelfBilledInvoices.supplierId, CT2_PERSON),
+      ));
+      check("self-billing links exact same-currency proposal buckets only",
+        invoices.length === 2 && invoices.every((i) => i.contractorPaymentIds?.length === 1) &&
+        invoices.every((i) => i.currency === (i.contractorPaymentIds?.[0] === eurProposal?.id ? "EUR" : "GBP")));
+      check("non-USD proposal and self-bill USD totals reconcile",
+        invoices.every((i) => Number(i.totalUsd) > 0) &&
+        invoices.reduce((s, i) => s + Number(i.totalUsd), 0) > 0 &&
+        afterPaid.reduce((s, p) => s + Number(p.usdAmount), 0) >= invoices.reduce((s, i) => s + Number(i.totalUsd), 0) - 0.01);
+      await db.delete(atelierSelfBilledInvoices).where(eq(atelierSelfBilledInvoices.weekIso, WK));
+      await db.delete(atelierContractorPayments).where(eq(atelierContractorPayments.weekIso, WK));
+      await db.delete(atelierTimesheetEntries).where(eq(atelierTimesheetEntries.weekId, WID));
+      await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.id, WID));
+      await db.delete(atelierContractorEngagementRates).where(inArray(atelierContractorEngagementRates.id, [eurRate, gbpRate]));
+    }
+
     // --- Tenant isolation (RLS) regression -------------------------------
     // The live connection is BYPASSRLS (superuser), so like the CRM suite we
     // assert the DB-layer control at the observable layers: RLS is
@@ -511,9 +671,13 @@ async function main(): Promise<void> {
                    AND p.policyname = c.relname || '_org_isolation'
                    AND p.qual LIKE '%atelier_current_org%') AS policies
         FROM pg_class c
-        WHERE c.relname IN ('atelier_nep_comp_plans','atelier_nep_entitlements')
+        WHERE c.relname IN (
+          'atelier_nep_comp_plans',
+          'atelier_nep_entitlements',
+          'atelier_contractor_engagement_rates'
+        )
       `)) as any).rows ?? [];
-      check("both NEP tables present in pg_class", rlsRows.length === 2, JSON.stringify(rlsRows));
+      check("NEP and engagement-rate tables present in pg_class", rlsRows.length === 3, JSON.stringify(rlsRows));
       for (const r of rlsRows) {
         check(`${r.relname}: RLS enabled + forced`, r.relrowsecurity === true && r.relforcerowsecurity === true, JSON.stringify(r));
         check(`${r.relname}: org-isolation policy on atelier_current_org()`, Number(r.policies) === 1, JSON.stringify(r));
@@ -555,6 +719,7 @@ async function main(): Promise<void> {
     try {
       await db.delete(atelierNepEntitlements).where(eq(atelierNepEntitlements.contractorId, CT_PERSON));
       await db.delete(atelierNepCompPlans).where(eq(atelierNepCompPlans.contractorId, CT_PERSON));
+      await db.delete(atelierContractorEngagementRates).where(eq(atelierContractorEngagementRates.contractorId, CT_PERSON));
       await db.delete(atelierContractDocuments).where(inArray(atelierContractDocuments.contractId, [GOV_CONTRACT, `contract_unsigned_${STAMP}`]));
       await db.delete(atelierContractRecords).where(inArray(atelierContractRecords.id, [GOV_CONTRACT, `contract_unsigned_${STAMP}`]));
       await db.delete(atelierPersonRelationshipClassifications).where(eq(atelierPersonRelationshipClassifications.personId, CT_CANONICAL));

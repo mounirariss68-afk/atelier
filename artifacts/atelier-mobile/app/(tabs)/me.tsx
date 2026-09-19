@@ -54,7 +54,7 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { AppBackground } from "@/components/AppBackground";
 import { AppHeader } from "@/components/AppHeader";
 import { useColors } from "@/hooks/useColors";
-import { API_BASE, authHeader } from "@/lib/api";
+import { API_BASE, apiJson, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
 import { getFileSystem, getSharing } from "@/lib/nativeModules";
 import { runExclusivePick } from "@/lib/pickerGuard";
@@ -679,6 +679,215 @@ function MyTasksSection() {
       </Card>
     </>
   );
+}
+
+type MyTimeEntry = {
+  id: string;
+  workDate: string;
+  engagementId: string | null;
+  hours: number;
+  narrative: string | null;
+  status: string;
+  source?: string;
+};
+type MyTimeWeek = {
+  id: string;
+  weekIso: string;
+  weekStartDate: string;
+  status: string;
+  totalHours: number;
+  billableHours: number;
+  suspiciousFlags: string[];
+  rejectionReason: string | null;
+};
+type MyTimeContext = { id: string; name: string };
+
+/** Task #1343 — compact self-scoped Time surface. */
+function MyTimeSection() {
+  const c = useColors();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const [week, setWeek] = useState<MyTimeWeek | null>(null);
+  const [entries, setEntries] = useState<MyTimeEntry[]>([]);
+  const [engagements, setEngagements] = useState<MyTimeContext[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<MyTimeEntry | null>(null);
+  const [workDate, setWorkDate] = useState("");
+  const [engagementId, setEngagementId] = useState("");
+  const [hours, setHours] = useState("");
+  const [narrative, setNarrative] = useState("");
+  const [acknowledge, setAcknowledge] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [current, contexts] = await Promise.all([
+        apiJson<{ week: MyTimeWeek; entries: MyTimeEntry[] }>("/api/atelier/me/timesheets/current"),
+        apiJson<{ engagements?: MyTimeContext[] }>("/api/atelier/me/expense-contexts"),
+      ]);
+      setWeek(current.week);
+      setEntries(current.entries ?? []);
+      setEngagements(contexts.engagements ?? []);
+    } catch (e) {
+      feedback.toast((e as Error).message || "Unable to load Time", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [feedback]);
+
+  React.useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  const resetForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+    setWorkDate("");
+    setEngagementId("");
+    setHours("");
+    setNarrative("");
+  };
+  const beginEdit = (entry: MyTimeEntry) => {
+    setEditing(entry);
+    setWorkDate(entry.workDate);
+    setEngagementId(entry.engagementId ?? "");
+    setHours(String(entry.hours));
+    setNarrative(entry.narrative ?? "");
+    setFormOpen(true);
+  };
+  const save = async () => {
+    if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(workDate) || !hours || !narrative.trim()) {
+      feedback.toast("Date, hours, and a narrative are required.", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiJson(`/api/atelier/me/timesheets/${week.id}/entries`, {
+        method: "POST",
+        body: {
+          ...(editing ? { id: editing.id } : {}),
+          workDate,
+          engagementId: engagementId || null,
+          hours: Number(hours),
+          narrative: narrative.trim(),
+        },
+      });
+      resetForm();
+      await load();
+      hapticSuccess();
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally { setBusy(false); }
+  };
+  const remove = async (id: string) => {
+    setBusy(true);
+    try {
+      await apiJson(`/api/atelier/me/timesheets/entries/${id}`, { method: "DELETE" });
+      await load();
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally { setBusy(false); }
+  };
+  const submit = async () => {
+    if (!week) return;
+    setBusy(true);
+    try {
+      await apiJson(`/api/atelier/me/timesheets/${week.id}/submit`, {
+        method: "POST",
+        body: { acknowledgeFlags: acknowledge },
+      });
+      setAcknowledge(false);
+      await load();
+      hapticSuccess();
+    } catch (e) {
+      const err = e as { data?: { error?: string; flags?: string[] }; message?: string };
+      if (err.data?.error === "suspicious-pattern") setAcknowledge(true);
+      else feedback.toast(err.message ?? "Unable to submit week", "error");
+    } finally { setBusy(false); }
+  };
+  const grouped = useMemo(() => {
+    const map = new Map<string, MyTimeEntry[]>();
+    entries.forEach((entry) => map.set(entry.workDate, [...(map.get(entry.workDate) ?? []), entry]));
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [entries]);
+  const canEdit = week?.status === "draft" || week?.status === "rejected";
+  const statusColor = week?.status === "rejected" ? c.destructive : week?.status === "approved" ? c.accent : c.primary;
+
+  return (
+    <View style={{ gap: 12, marginTop: 4 }}>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: c.foreground, fontFamily: "Comfortaa_700Bold", fontSize: 17 }}>Time</Text>
+        <PressScale onPress={() => { setEditing(null); setWorkDate(week?.weekStartDate ?? ""); setFormOpen(true); }} disabled={!canEdit}>
+          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: c.tint08, borderWidth: 1, borderColor: c.tint25 }}>
+            <Feather name="plus" size={14} color={c.primary} />
+            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Add entry</Text>
+          </View>
+        </PressScale>
+      </View>
+      {loading ? <Card><ActivityIndicator color={c.primary} /></Card> : week ? (
+        <>
+          <Card style={{ gap: 8 }}>
+            <View style={{ flexDirection: rtl.row, justifyContent: "space-between", alignItems: "center" }}>
+              <View>
+                <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>Current week · {week.weekIso}</Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>{Number(week.totalHours ?? 0).toFixed(1)}h total · {Number(week.billableHours ?? 0).toFixed(1)}h engagement</Text>
+              </View>
+              <Chip label={week.status.replace("_", " ")} color={statusColor} />
+            </View>
+            {week.status === "rejected" && (
+              <View style={{ backgroundColor: c.destructiveTint, borderRadius: 12, padding: 10, gap: 3 }}>
+                <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Needs changes</Text>
+                <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 12 }}>{week.rejectionReason || "Your approver returned this week. Update the entries and submit again."}</Text>
+              </View>
+            )}
+            {acknowledge ? (
+              <View style={{ backgroundColor: c.tint08, borderRadius: 12, padding: 10, gap: 8 }}>
+                <Text style={{ color: c.foreground, fontFamily: "Inter_400Regular", fontSize: 12 }}>A pattern was flagged in this week. Review your entries, then acknowledge it to submit.</Text>
+                <Button label="Acknowledge & submit" onPress={() => void submit()} loading={busy} />
+              </View>
+            ) : canEdit ? <Button label="Submit week" onPress={() => void submit()} loading={busy} disabled={entries.length === 0} /> : null}
+          </Card>
+          {formOpen && canEdit ? (
+            <Card style={{ gap: 10 }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{editing ? "Edit entry" : "New entry"}</Text>
+              <TextInput value={workDate} onChangeText={setWorkDate} placeholder="Work date (YYYY-MM-DD)" placeholderTextColor={c.mutedForeground} style={timeInput(c)} />
+              <TextInput value={hours} onChangeText={setHours} placeholder="Hours" placeholderTextColor={c.mutedForeground} keyboardType="decimal-pad" style={timeInput(c)} />
+              <TextInput value={narrative} onChangeText={setNarrative} placeholder="What did you work on? (required)" placeholderTextColor={c.mutedForeground} multiline style={[timeInput(c), { minHeight: 64, textAlignVertical: "top" }]} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                <Chip label="Internal" color={!engagementId ? c.primary : c.mutedForeground} />
+                {engagements.map((item) => <Pressable key={item.id} onPress={() => setEngagementId(engagementId === item.id ? "" : item.id)}><Chip label={item.name} color={engagementId === item.id ? c.primary : c.mutedForeground} /></Pressable>)}
+              </ScrollView>
+              <View style={{ flexDirection: rtl.row, gap: 8, justifyContent: "flex-end" }}>
+                <Button label="Cancel" variant="secondary" onPress={resetForm} />
+                <Button label={busy ? "Saving…" : "Save"} onPress={() => void save()} loading={busy} />
+              </View>
+            </Card>
+          ) : null}
+          {grouped.length === 0 ? <EmptyState icon="clock" title="No entries yet" body="Add your work for this week by day and engagement." /> : grouped.map(([day, rows]) => (
+            <Card key={day} style={{ gap: 8 }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>{day}</Text>
+              {rows.map((entry) => (
+                <View key={entry.id} style={{ flexDirection: rtl.row, gap: 8, alignItems: "center", borderTopWidth: 1, borderTopColor: c.borderSoft, paddingTop: 8 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{engagements.find((x) => x.id === entry.engagementId)?.name ?? "Internal work"} · {Number(entry.hours).toFixed(1)}h</Text>
+                    <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>{entry.narrative}</Text>
+                  </View>
+                  {canEdit ? <><Pressable onPress={() => beginEdit(entry)} hitSlop={8}><Feather name="edit-2" size={17} color={c.primary} /></Pressable><Pressable onPress={() => void remove(entry.id)} hitSlop={8}><Feather name="trash-2" size={17} color={c.destructive} /></Pressable></> : null}
+                </View>
+              ))}
+            </Card>
+          ))}
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function timeInput(c: ReturnType<typeof useColors>) {
+  return { borderWidth: 1, borderColor: c.borderSoft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: c.foreground, fontFamily: "Inter_400Regular" as const, fontSize: 14 };
 }
 
 function LettersSection() {
@@ -1464,11 +1673,11 @@ export default function MeScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   // Task #1036 — the page content below the QR business card is split
   // into three tabs. Selection survives while the screen stays mounted.
-  // MVP Me surface: Profile, personal documents, and Pay. Expenses remains
-  // the dedicated bottom tab; Time is not yet a mobile surface. Keep the
+  // Me surface: Profile, personal documents, Pay, and self-scoped Time.
+  // Expenses remains the dedicated bottom tab. Keep the
   // profile card above this switcher so the complete profile/photo/contact
   // experience stays available on every Me tab.
-  const [meTab, setMeTab] = useState<"profile" | "documents" | "pay">("profile");
+  const [meTab, setMeTab] = useState<"profile" | "documents" | "pay" | "time">("profile");
 
   const refetchDocs = docs.refetch;
   const focusedOnceRef = React.useRef(false);
@@ -1940,6 +2149,7 @@ export default function MeScreen() {
             [
               { key: "profile", label: t("me.profile") },
               { key: "documents", label: t("me.tabDocuments") },
+              { key: "time", label: "Time" },
               { key: "pay", label: isContractor ? t("me.tabPayContractor") : t("me.tabPay") },
             ] as const
           ).map((tab) => {
@@ -2135,6 +2345,7 @@ export default function MeScreen() {
             {isContractor ? <SelfBillingSection /> : null}
           </>
         ) : null}
+        {meTab === "time" ? <MyTimeSection /> : null}
       </ScrollView>
 
       <Modal visible={qrOpen} animationType="slide" transparent onRequestClose={() => setQrOpen(false)}>

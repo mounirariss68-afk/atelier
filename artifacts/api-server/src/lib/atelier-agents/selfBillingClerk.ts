@@ -38,7 +38,7 @@ import {
 } from "@workspace/db";
 import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { convertToUsd } from "../atelier-fx.js";
-import { isoWeekStart, resolveContractorDayRateForDate } from "../atelier-nep-comp.js";
+import { resolveContractorRate, contractorRatePerHour } from "../atelier-contractor-rates.js";
 import { runAgent } from "./runAgent.js";
 
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
@@ -235,7 +235,7 @@ async function executeSelfBillingClerk(
       .where(
         and(
           isNull(atelierTimesheetWeeks.deletedAt),
-          eq(atelierTimesheetWeeks.status, "lead_approved"),
+          inArray(atelierTimesheetWeeks.status, ["lead_approved", "partner_approved"]),
           eq(atelierTimesheetWeeks.personType, "contractor"),
           inArray(atelierTimesheetWeeks.weekIso, weeksIso),
         ),
@@ -256,26 +256,6 @@ async function executeSelfBillingClerk(
         });
         continue;
       }
-      // Effective-dated NEP plans win over the roster field, resolved as of
-      // the WORK week — a future-dated revision starts pricing on its
-      // effective date without any manual sync (Task #1298).
-      const workDate = isoWeekStart(wk.weekIso);
-      const planRate = workDate
-        ? await resolveContractorDayRateForDate(con.orgId, con.id, workDate)
-        : null;
-      const effDayRate = planRate?.dayRateAmount ?? con.dayRateAmount;
-      const effCurrency = planRate?.currency ?? con.dayRateCurrency;
-      const hasRate = effDayRate != null && effDayRate > 0;
-      const ratePerHour = hasRate ? effDayRate! / 8 : DEFAULT_HOURLY_FALLBACK_USD;
-      const rateCurrency = hasRate ? (effCurrency ?? "USD") : "USD";
-      if (!hasRate) {
-        out.exceptions.push({
-          code: "missing_day_rate",
-          supplierId: con.id,
-          weekIso: wk.weekIso,
-          message: `Contractor ${con.fullName} has no day rate; $${DEFAULT_HOURLY_FALLBACK_USD}/hr fallback applied.`,
-        });
-      }
       let payeeUserId: string | null = null;
       if (con.email) {
         const [u] = await db.select().from(atelierUsers).where(eq(atelierUsers.email, con.email));
@@ -289,58 +269,66 @@ async function executeSelfBillingClerk(
             isNull(atelierTimesheetEntries.deletedAt),
             eq(atelierTimesheetEntries.weekId, wk.id),
             eq(atelierTimesheetEntries.billable, true),
+            inArray(atelierTimesheetEntries.status, ["lead_approved", "approved", "partner_approved"]),
           ),
         );
-      const key = `${con.id}|${wk.weekIso}`;
-      let draft = byKey.get(key);
-      if (!draft) {
-        draft = {
-          supplierType: "contractor",
-          supplierId: con.id,
-          supplierName: con.fullName,
-          supplierEmail: con.email ?? null,
-          payeeUserId,
-          supplierVatTreatment: con.vatTreatment ?? null,
-          weekIso: wk.weekIso,
-          currency: rateCurrency,
-          lines: [],
-          rateSnapshot: {
-            source: planRate ? "nep_plan" : hasRate ? "contractor_day_rate" : "fallback",
-            dayRateAmount: effDayRate ?? null,
-            dayRateCurrency: effCurrency ?? null,
-            ratePerHour,
-            capturedAt: now,
-          },
-          contractorPaymentIds: [],
-          partnerFirmInvoiceIds: [],
-        };
-        byKey.set(key, draft);
-        drafts.push(draft);
-      }
-      // one line per engagement
-      const perEng = new Map<string, { hours: number; ids: string[] }>();
       for (const e of entries) {
         if (!e.engagementId || !(e.hours && e.hours > 0)) continue;
-        const cur = perEng.get(e.engagementId) ?? { hours: 0, ids: [] };
-        cur.hours += e.hours;
-        cur.ids.push(e.id);
-        perEng.set(e.engagementId, cur);
-      }
-      for (const [engId, v] of perEng) {
-        const existing = draft.lines.find((l) => l.engagementId === engId);
+        const resolved = await resolveContractorRate({
+          orgId: con.orgId, contractorId: con.id, engagementId: e.engagementId,
+          workDate: e.workDate, fallbackDayRate: DEFAULT_HOURLY_FALLBACK_USD * 8,
+        });
+        const ratePerHour = contractorRatePerHour(resolved) || DEFAULT_HOURLY_FALLBACK_USD;
+        const rateCurrency = resolved.currency || "USD";
+        // Invoice currency is part of the bucket: a term can change currency
+        // during a week and must never be silently converted to roster currency.
+        const key = `${con.id}|${wk.weekIso}|${rateCurrency}`;
+        let draft = byKey.get(key);
+        if (!draft) {
+          draft = {
+            supplierType: "contractor",
+            supplierId: con.id,
+            supplierName: con.fullName,
+            supplierEmail: con.email ?? null,
+            payeeUserId,
+            supplierVatTreatment: con.vatTreatment ?? null,
+            weekIso: wk.weekIso,
+            currency: rateCurrency,
+            lines: [],
+            rateSnapshot: {
+              source: resolved.source === "roster" ? "contractor_day_rate" : resolved.source === "engagement_term" ? "contractor_day_rate" : resolved.source,
+              dayRateAmount: resolved.dayRateAmount,
+              dayRateCurrency: resolved.currency,
+              ratePerHour,
+              capturedAt: now,
+            },
+            contractorPaymentIds: [],
+            partnerFirmInvoiceIds: [],
+          };
+          byKey.set(key, draft);
+          drafts.push(draft);
+        }
+        if (!draft.rateSnapshot) draft.rateSnapshot = {
+          source: resolved.source === "roster" ? "contractor_day_rate" : resolved.source === "engagement_term" ? "contractor_day_rate" : resolved.source,
+          dayRateAmount: resolved.dayRateAmount,
+          dayRateCurrency: resolved.currency,
+          ratePerHour,
+          capturedAt: now,
+        };
+        const existing = draft.lines.find((l) => l.engagementId === e.engagementId && l.rateCurrency === rateCurrency && l.ratePerHour === ratePerHour);
         if (existing) {
-          existing.hours += v.hours;
+          existing.hours += e.hours;
           existing.amount = +(existing.hours * ratePerHour).toFixed(2);
-          existing.evidenceIds.push(...v.ids);
+          existing.evidenceIds.push(e.id);
         } else {
           draft.lines.push({
-            engagementId: engId,
-            engagementName: engagementName.get(engId) ?? null,
-            hours: v.hours,
+            engagementId: e.engagementId,
+            engagementName: engagementName.get(e.engagementId) ?? null,
+            hours: e.hours,
             ratePerHour,
             rateCurrency,
-            amount: +(v.hours * ratePerHour).toFixed(2),
-            evidenceIds: v.ids,
+            amount: +(e.hours * ratePerHour).toFixed(2),
+            evidenceIds: [e.id],
           });
         }
       }
@@ -442,6 +430,7 @@ async function executeSelfBillingClerk(
           eq(atelierSelfBilledInvoices.supplierType, d.supplierType),
           eq(atelierSelfBilledInvoices.supplierId, d.supplierId),
           eq(atelierSelfBilledInvoices.weekIso, d.weekIso),
+          eq(atelierSelfBilledInvoices.currency, d.currency),
           isNull(atelierSelfBilledInvoices.deletedAt),
         ),
       );
@@ -569,8 +558,27 @@ async function reconcile(
           isNull(atelierContractorPayments.deletedAt),
         ),
       );
-    proposalIds = props.map((p) => p.id);
-    if (props.length > 0) proposalTotalUsd = +props.reduce((s, p) => s + (p.usdAmount ?? 0), 0).toFixed(2);
+    const evidenceBuckets = new Set(d.lines.map((l) => [...l.evidenceIds].sort().join(",")));
+    const matchedCandidates = props.filter((p) =>
+      (p.rateCurrency ?? "USD").toUpperCase() === d.currency.toUpperCase() &&
+      evidenceBuckets.has([...((p.evidenceEntryIds ?? []) as string[])].sort().join(",")),
+    );
+    // A corrected proposed row may coexist with immutable history for the
+    // same evidence. Link one canonical row per evidence set (the oldest
+    // historical row), never both.
+    const matchedByEvidence = new Map<string, typeof matchedCandidates[number]>();
+    for (const p of matchedCandidates) {
+      const key = [...((p.evidenceEntryIds ?? []) as string[])].sort().join(",");
+      const prior = matchedByEvidence.get(key);
+      const immutable = p.status === "approved" || p.status === "partner_approved" ||
+        p.status === "paid" || p.status === "rejected";
+      const priorImmutable = prior && (prior.status === "approved" || prior.status === "partner_approved" ||
+        prior.status === "paid" || prior.status === "rejected");
+      if (!prior || (immutable && !priorImmutable)) matchedByEvidence.set(key, p);
+    }
+    const matched = [...matchedByEvidence.values()];
+    proposalIds = matched.map((p) => p.id);
+    if (matched.length > 0) proposalTotalUsd = +matched.reduce((s, p) => s + (p.usdAmount ?? 0), 0).toFixed(2);
   } else {
     const props = await db
       .select()

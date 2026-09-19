@@ -34,6 +34,7 @@ import {
   atelierAuditEvents,
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
+  atelierPartnerFirms,
   atelierPartnerFirmHours,
   atelierTimesheetEntries,
   atelierInvoiceLineDrafts,
@@ -113,6 +114,14 @@ function isLeadership(me: typeof atelierUsers.$inferSelect): boolean {
 }
 function isPartnerOrOps(me: typeof atelierUsers.$inferSelect): boolean {
   return isLeadership(me);
+}
+
+// Task #1343 — payment decisions are a maker-checker boundary. Finance is
+// allowed at this financial approval stage, while partner-tier eligibility is
+// retained. A founding partner may use the existing, documented founder
+// self-approval policy; the decision audit stamps that exception.
+function canApprovePayment(me: typeof atelierUsers.$inferSelect): boolean {
+  return me.role === "partner" || me.role === "founding_partner" || me.role === "finance";
 }
 
 async function audit(args: {
@@ -2536,7 +2545,9 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
 router.get("/wallet/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  // Finance is a maker-checker approver for this same queue; do not expose
+  // any broader wallet surface here than the partner approval queue.
+  if (!canApprovePayment(me)) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -2635,7 +2646,7 @@ router.post("/wallet/approvals/run", async (req, res) => {
 router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (!canApprovePayment(me)) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -2656,6 +2667,14 @@ router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
     res.status(409).json({ error: "not-proposed", status: row.status });
     return;
   }
+  const founderSelfApproval = row.payeeUserId === me.id;
+  if (founderSelfApproval && me.role !== "founding_partner") {
+    res.status(403).json({
+      error: "no-self-approval",
+      message: "You cannot approve your own contractor payment proposal.",
+    });
+    return;
+  }
   const rationale = (req.body?.rationale as string) || null;
   await db
     .update(atelierContractorPayments)
@@ -2672,8 +2691,16 @@ router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
     entityId: row.id,
     actor: me,
     action: "wallet.payment.approve",
-    payload: { usdAmount: row.usdAmount, rationale },
-    summary: `Approved $${row.usdAmount.toFixed(2)} for ${row.payeeName} (${row.weekIso}).`,
+    payload: {
+      usdAmount: row.usdAmount,
+      rationale,
+      ...(founderSelfApproval
+        ? { founderSelfApproval: true, approvalAuthority: "founder_self" }
+        : {}),
+    },
+    summary: founderSelfApproval
+      ? `Founder self-approved $${row.usdAmount.toFixed(2)} for ${row.payeeName} (${row.weekIso}); explicit founder self-approval exception documented.`
+      : `Approved $${row.usdAmount.toFixed(2)} for ${row.payeeName} (${row.weekIso}).`,
   });
   res.json({ ok: true });
 });
@@ -2682,7 +2709,7 @@ router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
 router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (!canApprovePayment(me)) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -2707,6 +2734,14 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
     res.status(409).json({ error: "not-proposed", status: row.status });
     return;
   }
+  const founderSelfApproval = row.payeeUserId === me.id;
+  if (founderSelfApproval && me.role !== "founding_partner") {
+    res.status(403).json({
+      error: "no-self-approval",
+      message: "You cannot reject your own contractor payment proposal.",
+    });
+    return;
+  }
   await db
     .update(atelierContractorPayments)
     .set({
@@ -2721,8 +2756,15 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
     entityId: row.id,
     actor: me,
     action: "wallet.payment.reject",
-    payload: { reason },
-    summary: `Rejected ${row.payeeName} (${row.weekIso}): ${reason}`,
+    payload: {
+      reason,
+      ...(founderSelfApproval
+        ? { founderSelfApproval: true, approvalAuthority: "founder_self" }
+        : {}),
+    },
+    summary: founderSelfApproval
+      ? `Founder self-rejected ${row.payeeName} (${row.weekIso}); explicit founder self-approval exception documented: ${reason}`
+      : `Rejected ${row.payeeName} (${row.weekIso}): ${reason}`,
   });
   res.json({ ok: true });
 });
@@ -2731,7 +2773,7 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
 router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (!canApprovePayment(me)) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -2750,6 +2792,29 @@ router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
   }
   if (row.status !== "proposed") {
     res.status(409).json({ error: "not-proposed", status: row.status });
+    return;
+  }
+  // Task #1343 — use only explicit relationship mappings; never infer
+  // beneficial ownership from names or other fuzzy identity signals.
+  const [firm] = await db
+    .select({
+      primaryContactUserId: atelierPartnerFirms.primaryContactUserId,
+    })
+    .from(atelierPartnerFirms)
+    .where(
+      and(
+        eq(atelierPartnerFirms.id, row.partnerFirmId),
+        eq(atelierPartnerFirms.orgId, me.orgId),
+        isNull(atelierPartnerFirms.deletedAt),
+      ),
+    );
+  const directFirmOwner =
+    firm?.primaryContactUserId === me.id || me.partnerFirmId === row.partnerFirmId;
+  if (directFirmOwner) {
+    res.status(403).json({
+      error: "no-self-approval",
+      message: "You cannot approve a partner-firm payment for a firm you own or represent.",
+    });
     return;
   }
   const rationale = (req.body?.rationale as string) || null;
@@ -2778,7 +2843,7 @@ router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
 router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (!canApprovePayment(me)) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -2801,6 +2866,27 @@ router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
   // silently flipped back to rejected.
   if (row.status !== "proposed") {
     res.status(409).json({ error: "not-proposed", status: row.status });
+    return;
+  }
+  const [firm] = await db
+    .select({
+      primaryContactUserId: atelierPartnerFirms.primaryContactUserId,
+    })
+    .from(atelierPartnerFirms)
+    .where(
+      and(
+        eq(atelierPartnerFirms.id, row.partnerFirmId),
+        eq(atelierPartnerFirms.orgId, me.orgId),
+        isNull(atelierPartnerFirms.deletedAt),
+      ),
+    );
+  const directFirmOwner =
+    firm?.primaryContactUserId === me.id || me.partnerFirmId === row.partnerFirmId;
+  if (directFirmOwner) {
+    res.status(403).json({
+      error: "no-self-approval",
+      message: "You cannot reject a partner-firm payment for a firm you own or represent.",
+    });
     return;
   }
   await db

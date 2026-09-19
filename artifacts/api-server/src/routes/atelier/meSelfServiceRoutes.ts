@@ -65,12 +65,14 @@ import {
   signalWire,
   recomputeWeekTotals,
   detectSuspiciousFlags,
+  validateLedgerEntryInput,
   isoWeekOf,
   type PersonRow,
 } from "./ledgerRoutes";
 import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
 // Task #501 — founder submit-notifications shared with the wallet route.
 import { notifyFoundersOfSubmittedExpense } from "./walletRoutes";
+import { recomputeEngagementCostToDate } from "../../lib/atelier-engagement-pnl-recompute.js";
 import {
   canApproveAsLead,
   canApproveAsPartner,
@@ -234,6 +236,7 @@ router.get("/me/timesheets/current", async (req, res, next) => {
   try {
     const ctx = await requireSelfPerson(req, res);
     if (!ctx) return;
+    const { me } = ctx;
     const { weekIso } = isoWeekOf(new Date());
     const week = await ensureWeekShell(ctx.person, weekIso);
     // Approved-leave overlay: leave that intersects this week rides on the
@@ -320,6 +323,11 @@ router.post("/me/timesheets/:weekId/entries", async (req, res, next) => {
       res.status(400).json({ error: "invalid-body" });
       return;
     }
+    const structuralError = await validateLedgerEntryInput({ me, week, body, existingId: id });
+    if (structuralError) {
+      res.status(400).json({ error: "invalid-entry", reason: structuralError });
+      return;
+    }
     const values = {
       weekId: week.id,
       personId: week.personId,
@@ -353,9 +361,30 @@ router.post("/me/timesheets/:weekId/entries", async (req, res, next) => {
         return;
       }
     } else {
-      await db.insert(atelierTimesheetEntries).values({ id: rid("tse"), ...values });
+      try {
+        await db.transaction(async (tx) => {
+          const duplicate = await tx.select({ id: atelierTimesheetEntries.id })
+            .from(atelierTimesheetEntries)
+            .where(and(
+              eq(atelierTimesheetEntries.weekId, week.id),
+              eq(atelierTimesheetEntries.personId, week.personId),
+              eq(atelierTimesheetEntries.workDate, workDate),
+              eq(atelierTimesheetEntries.engagementId, values.engagementId as string),
+              isNull(atelierTimesheetEntries.deletedAt),
+            )).limit(1);
+          if (duplicate.length) throw new Error("duplicate-engagement-date");
+          await tx.insert(atelierTimesheetEntries).values({ id: rid("tse"), ...values });
+        });
+      } catch (err) {
+        if (err instanceof Error && err.message === "duplicate-engagement-date") {
+          res.status(409).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
     }
     await recomputeWeekTotals(week.id);
+    if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { actorUserId: me.id }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -399,6 +428,7 @@ router.delete("/me/timesheets/entries/:entryId", async (req, res, next) => {
   try {
     const ctx = await requireSelfPerson(req, res);
     if (!ctx) return;
+    const { me } = ctx;
     const [entry] = await db
       .select()
       .from(atelierTimesheetEntries)
@@ -426,6 +456,7 @@ router.delete("/me/timesheets/entries/:entryId", async (req, res, next) => {
       .set({ deletedAt: new Date() })
       .where(eq(atelierTimesheetEntries.id, entry.id));
     await recomputeWeekTotals(week.id);
+    if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { actorUserId: me.id }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -446,6 +477,24 @@ router.post("/me/timesheets/:weekId/submit", async (req, res, next) => {
       .select()
       .from(atelierTimesheetEntries)
       .where(and(eq(atelierTimesheetEntries.weekId, week.id), isNull(atelierTimesheetEntries.deletedAt)));
+    for (const entry of entries) {
+      const structuralError = await validateLedgerEntryInput({
+        me,
+        week,
+        existingId: entry.id,
+        body: {
+          workDate: entry.workDate,
+          hours: Number(entry.hours),
+          engagementId: entry.engagementId,
+          billable: entry.billable,
+          narrative: entry.narrative,
+        },
+      });
+      if (structuralError) {
+        res.status(400).json({ error: "invalid-entry", entryId: entry.id, reason: structuralError });
+        return;
+      }
+    }
     const signals = await db
       .select()
       .from(atelierTimesheetSignals)

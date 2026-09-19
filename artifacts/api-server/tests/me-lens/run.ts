@@ -33,7 +33,15 @@ const HR_ID = `p_test_hr_${STAMP}`;
 const EMP_ID = `p_test_emp_${STAMP}`;
 const CT_ID = `p_test_ct_${STAMP}`;
 const CONSULTANT_ID = `p_test_cons_${STAMP}`;
+const LEAD_ID = `p_test_lead_${STAMP}`;
 const JOINER_EMAIL = `test.joiner.${STAMP}@cognirise.ai`;
+const ME_ENG_ID = `eng_me_${STAMP}`;
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 const failures: string[] = [];
 function check(name: string, cond: boolean, detail?: string): void {
@@ -67,6 +75,8 @@ async function main(): Promise<void> {
     atelierTimesheetWeeks,
     atelierTimesheetEntries,
     atelierExpenses,
+    atelierEngagements,
+    atelierEngagementAccess,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -103,6 +113,7 @@ async function main(): Promise<void> {
       { id: EMP_ID, role: "employee", roleLabel: "Employee", name: "Test Employee" },
       { id: CT_ID, role: "contractor", roleLabel: "Contractor", name: "Test Contractor" },
       { id: CONSULTANT_ID, role: "consultant", roleLabel: "Consultant", name: "Test Consultant" },
+      { id: LEAD_ID, role: "engagement_lead", roleLabel: "Engagement Lead", name: "Test Lead" },
     ];
     for (const p of personas) {
       await db.insert(atelierUsers).values({
@@ -134,6 +145,16 @@ async function main(): Promise<void> {
       orgId: ORG,
       fullName: "Test Contractor",
       email: `${CT_ID}@cognirise.ai`,
+    });
+    await db.insert(atelierEngagements).values({
+      id: ME_ENG_ID, orgId: ORG, accountId: `acct_me_${STAMP}`, slug: `me-eng-${STAMP}`,
+      name: "Me Lens Test Engagement", plmStage: "deliver", startDate: "2026-01-01",
+      plannedEndDate: "2026-12-31",
+      partnerOwnerId: LEAD_ID, engagementLeadId: LEAD_ID,
+    });
+    await db.insert(atelierEngagementAccess).values({
+      id: `access_me_${STAMP}`, orgId: ORG, engagementId: ME_ENG_ID,
+      userId: EMP_ID, roleOnEngagement: "contributor", status: "active",
     });
 
     // =====================================================================
@@ -310,11 +331,50 @@ async function main(): Promise<void> {
     });
     check("owner adds draft entry \u2192 200", addEntry.status === 200 && addEntry.body?.ok === true, `status=${addEntry.status}`);
 
+    const weekStart = curWeek.body?.week?.weekStartDate as string;
+    const invalidDate = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, { workDate: "2026-02-30", hours: 1 });
+    check("invalid calendar date rejected", invalidDate.body?.reason === "work-date-must-be-strict-iso");
+    const outside = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, { workDate: "2026-01-01", hours: 1 });
+    check("date outside selected week rejected", outside.body?.reason === "work-date-outside-week");
+    const fractional = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, { workDate: weekStart, hours: 1.1 });
+    check("hours must be positive quarter-hours", fractional.body?.reason === "hours-must-be-positive-quarter-hours");
+    const noNarrative = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: addDays(weekStart, 1), hours: 1, engagementId: ME_ENG_ID,
+    });
+    check("billable entry requires narrative", noNarrative.body?.reason === "billable-narrative-required");
+    const foreignEngagement = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: addDays(weekStart, 1), hours: 1, engagementId: `foreign-eng_${STAMP}`, narrative: "wrong org",
+    });
+    check("engagement must belong to caller org", foreignEngagement.body?.reason === "engagement-not-found-in-org");
+    const billable = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: addDays(weekStart, 1), hours: 1, engagementId: ME_ENG_ID, narrative: "assigned billable work",
+    });
+    check("assigned billable entry accepted", billable.status === 200);
+    const duplicate = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: addDays(weekStart, 1), hours: 1, engagementId: ME_ENG_ID, narrative: "duplicate",
+    });
+    check("duplicate engagement/date rejected", duplicate.status === 400 && duplicate.body?.reason === "duplicate-engagement-date");
+    const daily = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, { workDate: addDays(weekStart, 2), hours: 14.25, narrative: "daily overflow" });
+    check("daily limit enforced", daily.body?.reason === "daily-hours-exceed-14");
+    for (const day of [2, 3, 4, 5]) {
+      await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+        workDate: addDays(weekStart, day), hours: 14, narrative: `weekly probe ${day}`,
+      });
+    }
+    const weekly = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: addDays(weekStart, 6), hours: 10, narrative: "weekly overflow",
+    });
+    check("weekly limit enforced", weekly.body?.reason === "weekly-hours-exceed-70");
+    await db.delete(atelierTimesheetEntries).where(and(
+      eq(atelierTimesheetEntries.personId, `emp_test_${STAMP}`),
+      like(atelierTimesheetEntries.narrative, "weekly probe%"),
+    ));
+
     const afterAdd = await call("GET", "/me/timesheets/current", EMP_ID);
     const myEntry = afterAdd.body?.entries?.find?.((e: any) => e.narrative === "probe internal work");
     check(
       "entry lands on own week with recomputed totals",
-      !!myEntry && afterAdd.body?.week?.totalHours === 6,
+      !!myEntry && afterAdd.body?.week?.totalHours === 63,
       `entries=${afterAdd.body?.entries?.length} total=${afterAdd.body?.week?.totalHours}`,
     );
 
@@ -328,7 +388,7 @@ async function main(): Promise<void> {
     const afterEdit = await call("GET", "/me/timesheets/current", EMP_ID);
     check(
       "owner edits own entry \u2192 hours updated",
-      editEntry.status === 200 && afterEdit.body?.week?.totalHours === 7.5,
+      editEntry.status === 200 && afterEdit.body?.week?.totalHours === 8.5,
       `status=${editEntry.status} total=${afterEdit.body?.week?.totalHours}`,
     );
 
@@ -347,7 +407,7 @@ async function main(): Promise<void> {
     check(
       "owner deletes own draft entry \u2192 200, totals recomputed",
       scratch.status === 200 && ownDelete.status === 200 &&
-        afterOwnDelete.body?.week?.totalHours === 7.5 &&
+        afterOwnDelete.body?.week?.totalHours === 8.5 &&
         !afterOwnDelete.body?.entries?.some?.((e: any) => e.id === scratchEntry?.id),
       `add=${scratch.status} del=${ownDelete.status} total=${afterOwnDelete.body?.week?.totalHours}`,
     );
@@ -663,9 +723,11 @@ async function main(): Promise<void> {
       await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.personId, `emp_test_${STAMP}`));
       await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.id, `tsw_test_${STAMP}`));
       await db.delete(atelierExpenses).where(eq(atelierExpenses.id, `exp_test_${STAMP}`));
+      await db.delete(atelierEngagementAccess).where(eq(atelierEngagementAccess.id, `access_me_${STAMP}`));
+      await db.delete(atelierEngagements).where(eq(atelierEngagements.id, ME_ENG_ID));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, `emp_test_${STAMP}`));
       await db.delete(atelierContractors).where(eq(atelierContractors.id, `ct_test_${STAMP}`));
-      for (const id of [HR_ID, EMP_ID, CT_ID, CONSULTANT_ID]) {
+      for (const id of [HR_ID, EMP_ID, CT_ID, CONSULTANT_ID, LEAD_ID]) {
         await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
       }
       await db.delete(atelierUsers).where(like(atelierUsers.id, `p_joiner_%`));

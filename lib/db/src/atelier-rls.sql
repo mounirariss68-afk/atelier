@@ -89,7 +89,7 @@ DECLARE
     -- Non-salaried NEP compensation: effective-dated plans + per-engagement
     -- margin-share entitlements (sensitive comp/payout data; comp-visibility
     -- role gates live in the route layer).
-    'atelier_nep_comp_plans','atelier_nep_entitlements',
+    'atelier_nep_comp_plans','atelier_nep_entitlements','atelier_contractor_engagement_rates',
     -- Task #1342 — stable-ID workforce governance. These are sensitive
     -- relationship, compensation provenance, agreement and equity records;
     -- route-level persona gates apply in addition to org isolation.

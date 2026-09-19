@@ -32,6 +32,7 @@ import {
   atelierEngagements,
   atelierAuditEvents,
   atelierPartnerFirmResources,
+  atelierEngagementAccess,
 } from "@workspace/db";
 import { runTimeSteward, runUtilizationAnalyst } from "../../lib/atelier-agents/runner.js";
 import {
@@ -61,6 +62,7 @@ import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
 // Task #383 — opt-in expense auto-approval when countersigning a timesheet.
 import { autoApproveTimesheetExpenses } from "./walletRoutes";
 import { canViewPersonViaRosterScope } from "./rosterRoutes";
+import { recomputeEngagementCostToDate } from "../../lib/atelier-engagement-pnl-recompute.js";
 
 const router: IRouter = Router();
 
@@ -398,6 +400,60 @@ export function detectSuspiciousFlags(entries: ReturnType<typeof entryWire>[], s
   return flags;
 }
 
+/** Structural validation shared by the ledger and Me entry writers. */
+export async function validateLedgerEntryInput(args: {
+  me: typeof atelierUsers.$inferSelect;
+  week: typeof atelierTimesheetWeeks.$inferSelect;
+  body: Record<string, unknown>;
+  existingId?: string;
+}): Promise<string | null> {
+  const { me, week, body } = args;
+  const workDate = typeof body.workDate === "string" ? body.workDate : "";
+  const hours = Number(body.hours);
+  if (!isValidIsoDateStrict(workDate)) return "work-date-must-be-strict-iso";
+  const weekForDate = isoWeekOf(new Date(`${workDate}T00:00:00Z`)).weekIso;
+  if (weekForDate !== week.weekIso) return "work-date-outside-week";
+  if (!Number.isFinite(hours) || hours <= 0 || Math.round(hours * 4) !== hours * 4)
+    return "hours-must-be-positive-quarter-hours";
+  const engagementId = typeof body.engagementId === "string" ? body.engagementId : null;
+  const billable = !!engagementId && body.billable !== false;
+  const narrative = typeof body.narrative === "string" ? body.narrative.trim() : "";
+  if (billable && !narrative) return "billable-narrative-required";
+  const [engagement] = engagementId
+    ? await db.select().from(atelierEngagements).where(and(
+        eq(atelierEngagements.id, engagementId),
+        eq(atelierEngagements.orgId, me.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ))
+    : [];
+  if (engagementId && !engagement) return "engagement-not-found-in-org";
+  // Contractors (and any self-service caller) must have an active grant.
+  if (engagementId) {
+    const [grant] = await db.select({ id: atelierEngagementAccess.id })
+      .from(atelierEngagementAccess)
+      .where(and(
+        eq(atelierEngagementAccess.engagementId, engagementId),
+        eq(atelierEngagementAccess.userId, me.id),
+        eq(atelierEngagementAccess.status, "active"),
+        isNull(atelierEngagementAccess.deletedAt),
+      )).limit(1);
+    if (!grant) return "caller-not-assigned-to-engagement";
+  }
+  const prior = await db.select().from(atelierTimesheetEntries).where(and(
+    eq(atelierTimesheetEntries.weekId, week.id),
+    eq(atelierTimesheetEntries.personId, week.personId),
+    isNull(atelierTimesheetEntries.deletedAt),
+  ));
+  const relevant = prior.filter((e) => e.id !== args.existingId);
+  const daily = relevant.filter((e) => e.workDate === workDate).reduce((s, e) => s + Number(e.hours || 0), 0) + hours;
+  if (daily > 14) return "daily-hours-exceed-14";
+  const weekly = relevant.reduce((s, e) => s + Number(e.hours || 0), 0) + hours;
+  if (weekly > 70) return "weekly-hours-exceed-70";
+  if (engagementId && relevant.some((e) => e.workDate === workDate && e.engagementId === engagementId))
+    return "duplicate-engagement-date";
+  return null;
+}
+
 // =====================================================================
 // GET /ledger/timesheets/current  → current week for the active persona
 // =====================================================================
@@ -576,6 +632,11 @@ router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
+  const structuralError = await validateLedgerEntryInput({ me, week, body, existingId: id });
+  if (structuralError) {
+    res.status(400).json({ error: "invalid-entry", reason: structuralError });
+    return;
+  }
   const values = {
     weekId: week.id,
     personId: week.personId,
@@ -611,9 +672,30 @@ router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
       return;
     }
   } else {
-    await db.insert(atelierTimesheetEntries).values({ id: rid("tse"), ...values });
+    try {
+      await db.transaction(async (tx) => {
+        const duplicate = await tx.select({ id: atelierTimesheetEntries.id })
+          .from(atelierTimesheetEntries)
+          .where(and(
+            eq(atelierTimesheetEntries.weekId, week.id),
+            eq(atelierTimesheetEntries.personId, week.personId),
+            eq(atelierTimesheetEntries.workDate, workDate),
+            eq(atelierTimesheetEntries.engagementId, values.engagementId as string),
+            isNull(atelierTimesheetEntries.deletedAt),
+          )).limit(1);
+        if (duplicate.length) throw new Error("duplicate-engagement-date");
+        await tx.insert(atelierTimesheetEntries).values({ id: rid("tse"), ...values });
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "duplicate-engagement-date") {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
   }
   await recomputeWeekTotals(week.id);
+  if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { actorUserId: me.id }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -701,6 +783,7 @@ router.delete("/ledger/timesheets/entries/:entryId", async (req, res) => {
     .set({ deletedAt: new Date() })
     .where(eq(atelierTimesheetEntries.id, entry.id));
   await recomputeWeekTotals(week.id);
+  if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { actorUserId: me.id }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -727,6 +810,17 @@ router.post("/ledger/timesheets/:weekId/submit", async (req, res) => {
     .select()
     .from(atelierTimesheetEntries)
     .where(and(eq(atelierTimesheetEntries.weekId, week.id), isNull(atelierTimesheetEntries.deletedAt)));
+  // Structural defects are never advisory and acknowledgeFlags cannot bypass.
+  for (const entry of entries) {
+    const structuralError = await validateLedgerEntryInput({
+      me, week, existingId: entry.id,
+      body: { workDate: entry.workDate, hours: Number(entry.hours), engagementId: entry.engagementId, billable: entry.billable, narrative: entry.narrative },
+    });
+    if (structuralError) {
+      res.status(400).json({ error: "invalid-entry", entryId: entry.id, reason: structuralError });
+      return;
+    }
+  }
   const signals = await db.select().from(atelierTimesheetSignals).where(eq(atelierTimesheetSignals.weekId, week.id));
   const flags = detectSuspiciousFlags(entries.map(entryWire), signals.map(signalWire));
   const force = !!req.body?.acknowledgeFlags;
@@ -911,33 +1005,50 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
     return void res.status(400).json({ error: "invalid-role" });
   }
   if (role === "lead" && !canApproveLead(me)) return void res.status(403).json({ error: "forbidden" });
-  if (role === "partner" && !canApprovePartner(me)) return void res.status(403).json({ error: "forbidden" });
+  if (role === "partner" && !canApprovePartner(me) && me.role !== "finance")
+    return void res.status(403).json({ error: "forbidden" });
 
-  // Object-level authorization (Task #292 — 9-persona model).
-  // senior_manager (replaces engagement_lead) may only countersign entries
-  // on engagements they actually lead. Partner-tier + finance bypass this
-  // check (firm-wide scope).
-  if (engagementId && me.role === "senior_manager") {
-    const [eng] = await db
-      .select()
-      .from(atelierEngagements)
-      .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
-    if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
-    if (eng.engagementLeadId !== me.id)
-      return void res.status(403).json({ error: "forbidden", reason: "Not the engagement lead." });
-  }
+  const ownerUserId = await resolveUserIdForPerson(me.orgId, week.personId);
+  if (ownerUserId === me.id) return void res.status(403).json({ error: "self-approval-forbidden" });
 
   // Source entry status we'll advance, and target status. Lead countersign
   // requires entries currently 'submitted'; partner countersign requires
   // 'lead_approved'.
   const fromStatus = role === "lead" ? "submitted" : "lead_approved";
-  const toStatus = role === "lead" ? "lead_approved" : "approved";
+  const toStatus = role === "lead" ? "lead_approved" : "partner_approved";
 
   // Engagement-scoped entry update. Build the engagement filter so null
   // (internal) is matched explicitly.
   const engFilter = engagementId
     ? eq(atelierTimesheetEntries.engagementId, engagementId)
     : isNull(atelierTimesheetEntries.engagementId);
+  if (role === "lead") {
+    const candidateEntries = await db.select({ engagementId: atelierTimesheetEntries.engagementId })
+      .from(atelierTimesheetEntries).where(and(
+        eq(atelierTimesheetEntries.weekId, week.id), engFilter,
+        eq(atelierTimesheetEntries.status, "submitted"),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ));
+    for (const target of candidateEntries) {
+      if (!target.engagementId) continue;
+      const [eng] = await db.select({ leadId: atelierEngagements.engagementLeadId })
+        .from(atelierEngagements).where(and(
+          eq(atelierEngagements.id, target.engagementId),
+          eq(atelierEngagements.orgId, me.orgId),
+          isNull(atelierEngagements.deletedAt),
+        ));
+      const [leadGrant] = await db.select({ id: atelierEngagementAccess.id })
+        .from(atelierEngagementAccess).where(and(
+          eq(atelierEngagementAccess.engagementId, target.engagementId),
+          eq(atelierEngagementAccess.userId, me.id),
+          eq(atelierEngagementAccess.roleOnEngagement, "engagement_lead"),
+          eq(atelierEngagementAccess.status, "active"),
+          isNull(atelierEngagementAccess.deletedAt),
+        )).limit(1);
+      if (!eng || (eng.leadId !== me.id && !leadGrant))
+        return void res.status(403).json({ error: "not-engagement-lead", reason: "Lead approval requires actual engagement lead eligibility." });
+    }
+  }
   const updated = await db
     .update(atelierTimesheetEntries)
     .set({ status: toStatus, updatedAt: new Date() })
@@ -995,9 +1106,9 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
     payload: { role, engagementId, entriesAdvanced: updated.length },
     summary: `${me.name} ${role}-approved ${updated.length} entr${updated.length === 1 ? "y" : "ies"} on week ${week.weekIso} (eng=${engagementId ?? "internal"})`,
   });
+  if (engagementId) await recomputeEngagementCostToDate(engagementId, { actorUserId: me.id }).catch(() => {});
 
   // Task #53 — drop a card on the week owner's Me home.
-  const ownerUserId = await resolveUserIdForPerson(me.orgId, week.personId);
   if (ownerUserId && ownerUserId !== me.id) {
     await emitSelfNotification({
       orgId: me.orgId,
@@ -1035,6 +1146,9 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
   if (!week) return void res.status(404).json({ error: "week-not-found" });
   if (week.status !== "submitted" && week.status !== "lead_approved")
     return void res.status(409).json({ error: "out-of-order", reason: `Week is ${week.status}.` });
+  const entriesBeforeReject = await db.select({ engagementId: atelierTimesheetEntries.engagementId })
+    .from(atelierTimesheetEntries)
+    .where(and(eq(atelierTimesheetEntries.weekId, week.id), isNull(atelierTimesheetEntries.deletedAt)));
   await db
     .update(atelierTimesheetWeeks)
     .set({
@@ -1049,6 +1163,9 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
     .update(atelierTimesheetEntries)
     .set({ status: "draft", updatedAt: new Date() })
     .where(eq(atelierTimesheetEntries.weekId, week.id));
+  for (const engagementId of new Set(entriesBeforeReject.map((e) => e.engagementId).filter((id): id is string => !!id))) {
+    await recomputeEngagementCostToDate(engagementId, { actorUserId: me.id }).catch(() => {});
+  }
   await audit({
     entityType: "timesheet_week",
     entityId: week.id,

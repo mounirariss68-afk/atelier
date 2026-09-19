@@ -30,7 +30,7 @@ import {
 import { and, eq, isNull, inArray, or } from "drizzle-orm";
 import { convertToUsd } from "./atelier-fx.js";
 import { proposeSupplierInvoiceAllocation } from "./atelier-entity-allocation.js";
-import { isoWeekStart, resolveContractorDayRateForDate } from "./atelier-nep-comp.js";
+import { resolveContractorRate, contractorRatePerHour } from "./atelier-contractor-rates.js";
 
 const PARTNER_APPROVAL_THRESHOLD_USD = 250;
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
@@ -148,7 +148,7 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
     .where(
       and(
         isNull(atelierTimesheetWeeks.deletedAt),
-        eq(atelierTimesheetWeeks.status, "lead_approved"),
+        inArray(atelierTimesheetWeeks.status, ["lead_approved", "partner_approved"]),
         eq(atelierTimesheetWeeks.personType, "contractor"),
         inArray(atelierTimesheetWeeks.weekIso, weeksIso),
       ),
@@ -176,16 +176,6 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
       summary.contractorProposals.skipped++;
       continue;
     }
-    // Effective-dated NEP plans win over the roster field, resolved as of
-    // the WORK week — future-dated revisions activate on their effective
-    // date without manual sync (Task #1298).
-    const wkStart = isoWeekStart(wk.weekIso);
-    const planRate = wkStart
-      ? await resolveContractorDayRateForDate(con.orgId, con.id, wkStart)
-      : null;
-    const effDayRate = planRate?.dayRateAmount ?? con.dayRateAmount;
-    const ratePerHour = effDayRate ? effDayRate / 8 : DEFAULT_HOURLY_FALLBACK_USD;
-    const rateCurrency = (planRate?.currency ?? con.dayRateCurrency) ?? "USD";
     // Resolve linked user (if any) so payeeUserId is a real user id when
     // the contractor has logged in; else fall back to contractor.id.
     let payeeUserId = con.id;
@@ -202,11 +192,23 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
           isNull(atelierTimesheetEntries.deletedAt),
           eq(atelierTimesheetEntries.weekId, wk.id),
           eq(atelierTimesheetEntries.billable, true),
+          inArray(atelierTimesheetEntries.status, ["lead_approved", "approved", "partner_approved"]),
         ),
       );
     for (const e of entries) {
       if (!e.engagementId) continue;
-      const key = `${payeeUserId}|${e.engagementId}|${wk.weekIso}`;
+      const rate = await resolveContractorRate({
+        orgId: con.orgId,
+        contractorId: con.id,
+        engagementId: e.engagementId,
+        workDate: e.workDate,
+        fallbackDayRate: DEFAULT_HOURLY_FALLBACK_USD * 8,
+      });
+      const ratePerHour = contractorRatePerHour(rate) || DEFAULT_HOURLY_FALLBACK_USD;
+      const rateCurrency = rate.currency || "USD";
+      // Currency/rate changes are separate payable buckets, even within one
+      // engagement-week. Evidence remains attached to its exact bucket.
+      const key = `${payeeUserId}|${e.engagementId}|${wk.weekIso}|${ratePerHour}|${rateCurrency}`;
       const cur = buckets.get(key) ?? {
         contractorId: con.id,
         payeeUserId,
@@ -240,6 +242,7 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
     const usdAmount = +fx.usdAmount.toFixed(2);
     const requiresPartner = usdAmount > PARTNER_APPROVAL_THRESHOLD_USD;
 
+    const evidenceKey = (ids: string[]) => [...ids].sort().join(",");
     const [existing] = await db
       .select()
       .from(atelierContractorPayments)
@@ -251,9 +254,30 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
           isNull(atelierContractorPayments.deletedAt),
         ),
       );
-    if (existing) {
+    // Evidence is the stable identity of a bucket. If the rate was corrected,
+    // reuse the old proposed row rather than leaving two payable proposals.
+    const candidates = await db.select().from(atelierContractorPayments).where(and(
+      eq(atelierContractorPayments.payeeUserId, b.payeeUserId),
+      eq(atelierContractorPayments.engagementId, b.engagementId),
+      eq(atelierContractorPayments.weekIso, b.weekIso),
+      isNull(atelierContractorPayments.deletedAt),
+    ));
+    const evidenceMatch = candidates.find((p) => p.status === "proposed" &&
+      evidenceKey(p.evidenceEntryIds ?? []) === evidenceKey(b.entryIds));
+    const immutableMatch = candidates.find((p) => p.status !== "proposed" &&
+      evidenceKey(p.evidenceEntryIds ?? []) === evidenceKey(b.entryIds));
+    // Paid/approved history owns this exact evidence bucket. Never attempt
+    // another insert (even when its rate was subsequently corrected).
+    if (immutableMatch) {
+      summary.contractorProposals.skipped++;
+      continue;
+    }
+    const row = (existing && existing.status === "proposed" &&
+      existing.ratePerHour === b.ratePerHour && existing.rateCurrency === b.rateCurrency)
+      ? existing : evidenceMatch;
+    if (row) {
       // Only refresh proposed rows; never disturb partner-approved/paid.
-      if (existing.status !== "proposed") {
+      if (row.status !== "proposed") {
         summary.contractorProposals.skipped++;
         continue;
       }
@@ -272,7 +296,7 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
           proposalRunId,
           updatedAt: new Date(),
         })
-        .where(eq(atelierContractorPayments.id, existing.id));
+        .where(eq(atelierContractorPayments.id, row.id));
       summary.contractorProposals.updated++;
     } else {
       await db.insert(atelierContractorPayments).values({
@@ -295,6 +319,42 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
         evidenceEntryIds: b.entryIds,
       });
       summary.contractorProposals.created++;
+    }
+  }
+
+  // Retire proposed rows whose evidence is no longer represented by the
+  // current run (for example, a corrected rate split). Immutable history is
+  // deliberately excluded.
+  const currentEvidence = new Map<string, Set<string>>();
+  for (const b of buckets.values()) {
+    const k = `${b.payeeUserId}|${b.engagementId}|${b.weekIso}`;
+    const set = currentEvidence.get(k) ?? new Set<string>();
+    set.add([...b.entryIds].sort().join(","));
+    currentEvidence.set(k, set);
+  }
+  const priorProposals = await db.select().from(atelierContractorPayments).where(and(
+    inArray(atelierContractorPayments.weekIso, weeksIso),
+    eq(atelierContractorPayments.status, "proposed"),
+    isNull(atelierContractorPayments.deletedAt),
+  ));
+  const immutableRows = await db.select().from(atelierContractorPayments).where(and(
+    inArray(atelierContractorPayments.weekIso, weeksIso),
+    inArray(atelierContractorPayments.status, ["partner_approved", "paid", "rejected"]),
+    isNull(atelierContractorPayments.deletedAt),
+  ));
+  const immutableEvidence = new Set(immutableRows.map((p) =>
+    `${p.payeeUserId}|${p.engagementId}|${p.weekIso}|${[...((p.evidenceEntryIds ?? []) as string[])].sort().join(",")}`,
+  ));
+  for (const prior of priorProposals) {
+    const k = `${prior.payeeUserId}|${prior.engagementId}|${prior.weekIso}`;
+    const active = currentEvidence.get(k);
+    const evidence = [...((prior.evidenceEntryIds ?? []) as string[])].sort().join(",");
+    if (immutableEvidence.has(`${k}|${evidence}`) || (active && !active.has(evidence))) {
+      await db.update(atelierContractorPayments).set({
+        deletedAt: new Date(),
+        notes: `${prior.notes ? `${prior.notes}; ` : ""}Superseded by payment proposer run ${proposalRunId}.`,
+        updatedAt: new Date(),
+      }).where(eq(atelierContractorPayments.id, prior.id));
     }
   }
 

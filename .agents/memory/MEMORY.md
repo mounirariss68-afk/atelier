@@ -1,17 +1,22 @@
-- [Merge marker checker](merge-marker-checker.md) — continueMergeResolution greps the 7-equals marker as a substring; decorative `// ====` comments trip it — use dashes.
-- [Production deploy runtime deps](production-deploy-runtime-deps.md) — npm-reinstall esbuild-externals; strip CUDA bins for 8GiB cap; navy-logo bg via ImageMagick color-key ([logo-bg-removal.md](logo-bg-removal.md)).
-- [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; navy logo only fits server PDFs.
+- [Merge safety](merge-marker-checker.md) — avoid decorative conflict markers; preserve capability blocks and data moves per [merge-loss notes](finance-doc-merge-loss.md).
+- [Deployment/runtime assets](production-deploy-runtime-deps.md) — runtime dependency and size constraints; bundled file paths in [sibling assets](api-server-sibling-assets.md).
+- [API and SQL authoring](atelier-api-types-codegen.md) — edit OpenAPI before generated types; SQL-array interpolation details in [Drizzle IN](drizzle-sql-array-in.md).
+- [External and long LLM jobs](perplexity-connection.md) — direct Perplexity path; multi-minute probes need a [workflow](long-llm-jobs-need-workflow.md).
+- [Test harness techniques](stub-anthropic-probe.md) — deterministic LLM stubs; [TSX UI](atelier-tsx-ui-tests.md) and [browser E2E](headless-browser-e2e.md) setup.
+- [Database maintenance](rag-fresh-db-provisioning.md) — fresh DB guards; [cleanup](oneoff-db-cleanups.md) and [post-merge timing](post-merge-db-push-timeout.md).
+- [React Native edge cases](rn-shrinkwrap-flex-text.md) — flex-text collapse and safe [sheet/picker deferral](rn-sheet-picker-defer.md).
+- [Routing/export quirks](atelier-finance-route-shadowing.md) — route order; [cash shape](atelier-cash-matchproposal.md), [filenames](download-filename-headers.md), [PPTX](pptxgenjs-interop.md).
+- [Runtime boundaries](atelier-winloss-global-db.md) — intentional global DB use; production slot stays Atelier per [publish slot](publish-slot-atelier.md).
+- [LLM reply truncation](llm-reply-truncation-defense.md) — detect max-token stops before JSON parsing; bounded header-only retry; never log model output.
 - [Atelier account-scope auth split](atelier-account-auth-split.md) — reads gate on shared `canSeeAccount`; financial blocks gate separately; don't over-restrict the whole route.
 - [Atelier org chart invariants](atelier-org-chart-invariants.md) — reports_to allows multi-manager (BFS all edges); user lookups must be orgId-scoped.
 - [Cognirise rebrand keeps](cognirise-rebrand-keeps.md) — tenant key "aico" + opaque IDs deliberately KEPT; founder titles are data-only ([founder-titles.md](founder-titles.md)).
 - [Atelier RLS test scoping](atelier-rls-test-scoping.md) — DATABASE_URL is BYPASSRLS; assert scoping via RLS helpers + app ACL; restricted personas get 403.
 - [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk scope stamped at ingest-LINK time; purge rides on account delete; retrieval fail-loud; chunk text only via inert safeBlocks.
-- [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.
 - [Chat account-create prefill](atelier-account-prefill-clamp.md) — clamp prefills to zod caps; Cartographer timeout degrades to manual card (atelier-advisory-prefill-degrade.md).
 - [Pursuit Scout create contract](atelier-scout-create-contract.md) — opp create commits before scout; failed/empty scout via 201 `scout.status`, never rollback; reuse isScoutBriefEmpty.
 - [Opp plm_stage retired](atelier-opp-plm-stage-retired.md) — opp sales_stage is sole stage SoT (contract=won); engagement plmStage kept; push-based DB skips migration backfills.
 - [Atelier employee seed onConflict](atelier-employee-seed-onconflict.md) — employee insert is onConflictDoNothing; new columns need the idempotent update loop to backfill on re-seed.
-- [Atelier API generation](atelier-api-types-codegen.md) — edit OpenAPI, not generated types; links cover hook barrels and DB declaration rebuilds.
 - [Cartographer entity-scope](cartographer-entity-scope.md) — guardCartographerEntityScope() is the safety net; Exec Mapper reuses queue/guard/applier (atelier-executive-mapper.md).
 - [Research priority-refs & recency](atelier-research-priority-refs-shape.md) — strategicPriorityRefs is {text,sourceUrls}; recency layer in [atelier-research-recency.md](atelier-research-recency.md).
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — answers merge at TOP-LEVEL args; multi-field in [cli-multifield-clarification.md](cli-multifield-clarification.md); slash-menu UX quirks in [cli-slash-command-ux.md](cli-slash-command-ux.md).
@@ -25,26 +30,19 @@
 - [Atelier account/contact merge](atelier-merge.md) — survivor=path id, dup=body, archives dup (soft), idempotent already_merged; both gate CREATE_ROLES+canSeeAccount; contactRelationships has no updatedAt.
 - [Atelier auth lockdown](atelier-auth-lockdown.md) — single global 401 gate (mount new routers after it); NODE_ENV=test harness bypass killed by REPLIT_DEPLOYMENT; boot seed is data-only.
 - [Atelier auth security](atelier-2fa.md) — CAS-based code checks + requireFreshTotp step-up; security log needs explicit orgId + targetEmail ([atelier-security-log.md](atelier-security-log.md)); user_managed/credential-link rules in [atelier-password-user-managed.md](atelier-password-user-managed.md).
-- [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.
 - [Prod go-live re-runs](atelier-contract-templates-ingested.md) — templates/signing entities, entity-embeddings backfill ([atelier-entity-embeddings-backfill.md](atelier-entity-embeddings-backfill.md)) and agent-registry allowlist restore ([agent-registry-restore.md](agent-registry-restore.md)) must be re-run on prod; task-agent DB data never merges.
 - [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
-- [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch site ships from a separate project, never re-add its block; deck quirks in launch-*.md.
-- [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete; polymorphic pane hrefs filter deleted targets; delete/close paths resolve pane items org-scoped.
-- [Long LLM jobs need a workflow](long-llm-jobs-need-workflow.md) — multi-minute web-search LLM probes stall/die under nohup in the shell; run one-offs as a temp console workflow.
 - [Opportunity-child FK integrity](atelier-opp-child-fks.md) — opp children FK-cascade (or SET NULL); meetings/transcripts are polymorphic → hard-delete opps ONLY via shared hardDeleteOpportunities helper; broad meeting reads filter on live parent.
 - [Me lens & Me-tab linkage](atelier-me-lens.md) — employee/contractor locked to /me/* (deactivate deletes sessions); timesheets/skills key on roster person id, expenses/payments on user id ([atelier-me-tab-linkage.md](atelier-me-tab-linkage.md)).
 - [Atelier pay hub invariants](atelier-pay-hub.md) — HR approve is sole IBAN write path; pay doc bytes in-row behind ACL; IBAN/SWIFT visible only to fp/partner/finance ([atelier-entity-bank-accounts.md](atelier-entity-bank-accounts.md)).
 - [Atelier performance & learning](atelier-perf-learning.md) — hrNotes never in self shape; contractors 403 on reviews/goals but DO get audience-filtered /me/learning; name inline orval bodies.
 - [Prod DB replace path](prod-db-replace.md) — prod DB is read-only to the agent; only Publish "Overwrite data" can replace it; chunked read-only exports for backups; pre-replace snapshot in backups/.
-- [Atelier tsx UI tests of page modules](atelier-tsx-ui-tests.md) — need --tsconfig jsx react-jsx + guard import.meta.env; expo/RN mock probes in [expo-module-mock-probes.md](expo-module-mock-probes.md).
 - [Atelier DocuSeal e-sign](atelier-esign.md) — webhook trigger-only (authoritative re-fetch); terminal statuses never regress; see also docuseal-live-quirks.md, atelier-esign-extra-fields.md.
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
-- [Fresh/scratch DB provisioning](rag-fresh-db-provisioning.md) — guard boot DDL with to_regclass (batches are ONE tx); db push blocked by orphaned FK child rows — delete first ([db-push-orphan-fk.md](db-push-orphan-fk.md)).
 - [Per-actor email From](atelier-email-sender.md) — sendEmail requires explicit sender (actor|"system"); verified-domain actors send as themselves, others branded+Reply-To; live /domains lookup.
 - [Atelier contract lifecycle](atelier-contract-lifecycle.md) — no "redline" doc kind; PDF converts at send-time; employees see contracts only via bespoke /me/contracts (self-scope gate).
-- [Headless browser E2E](headless-browser-e2e.md) — drive the logged-in UI with puppeteer-core + nix chromium in <115s phase scripts; restore pnpm-lock after add/remove.
 - [Atelier finance real-facts wiring](atelier-finance-real-facts.md) — Plan/Comply/Reports read loadFinanceFacts()/DB; comply table is atelier_finance_compliance_entries, NOT roster compliance_records.
 - [Chat person-write routing ACL](atelier-person-write-routing.md) — contact_update routes to employees/partner rosters; field-level ACL must mirror REST (titles HR/founding only; self = phone only).
 - [Roster person edit surface](atelier-person-edit.md) — full-profile PATCH whitelists per worker type; users table column is `name` (not fullName) when syncing employee identity to the login row.
@@ -57,22 +55,18 @@
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
 - [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).
-- [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
 - [CogniDocs parsing](cognidocs-parsing.md) — receipts/invoices/statements parse ONLY via CogniDocs (×10k ints, sign from `direction` only, jobId replay, cognidocs_invoice_id dedupe, stub-test pattern).
 - [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist stays esbuild-external; watchdog in [atelier-receipt-async-parse.md](atelier-receipt-async-parse.md); enrichment in [atelier-receipt-enrichment.md](atelier-receipt-enrichment.md); vision OCR in [chat-receipt-vision.md](chat-receipt-vision.md).
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (alias→memory→fuzzy→keyword→AI); org aliases learned from corrections apply pre-memory; wallet routes raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
 - [Chat person cross-domain fallback](atelier-person-crossdomain.md) — person detail tools auto-fallback CRM↔roster (ACL-filter BEFORE capping candidates); "final:" markers stripped server-side; card meta keys never render.
-- [Finance route shadowing](atelier-finance-route-shadowing.md) — wouter Switch first-match: remove the FinanceSection placeholder route when adding a real page at the same /finance/* path.
 - [Self-only chat clamp & person scoping](atelier-selfonly-chat-roles.md) — employee/contractor chat = me.* only (SELF_ONLY_CHAT_ROLES + /cli allowlist); listPersons is unscoped — roster-scope name matches BEFORE disambiguation ([atelier-chat-person-scoping.md](atelier-chat-person-scoping.md)).
 - [Self-billing (RCTI) invariants](atelier-self-billing.md) — clerk reruns skip approved/disputed/paid; run builds take approved-only; harness now auto-creates pgvector before push (stale-scratch-schema failures fixed).
 - [Atelier self-only shell gating](atelier-selfonly-shell-gating.md) — guard holds org routes unmounted until /me loads; app-wide dialogs gate queries on open; polls/tabs gated on role or employees 403-flood.
-- [RN sheet → picker deferral](rn-sheet-picker-defer.md) — never timer-race native pickers after Modal close; defer via onDismiss + single-flight runExclusivePick or expo-document-picker wedges.
 - [Atelier pricing structures](atelier-pricing-structures.md) — 0.2/0.6/0.2 blend, run status "complete", opp seeds need slug/lead/etc; fit-scorecard recompute only via computeFitTotals ([atelier-qualify-fit-scorecard.md](atelier-qualify-fit-scorecard.md)).
 - [Durable deferred-retry for locked runs](billing-event-rescan.md) — skipped event launches need a durable, CAS-acked pending signal consumed on completion/failure/boot; never in-memory timers or timestamp windows.
 - [Billing trigger draft concurrency](billing-trigger-concurrency.md) — invoice-from-trigger paths must FOR UPDATE-claim the trigger row in a tx; overlapping runs otherwise draft duplicates.
 - [Chat titles & timesheet tools](chat-session-titles.md) — Haiku title after first turn (title IS NULL); timesheet writes resolve person+ISO week server-side ([atelier-chat-timesheet.md](atelier-chat-timesheet.md)).
-- [Cash matchProposal shape](atelier-cash-matchproposal.md) — matchProposal.recommended is a string ACTION ("apply_full"); the invoice lives in candidates[0]; consumers must handle both shapes.
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock; isDefault dunning ladders only; close-stack quirks in [atelier-finance-654.md](atelier-finance-654.md).
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
 - [Atelier GL statements](atelier-gl-statements.md) — entity P&L/BS/CF from GL journals; BS/CF identities by construction (new stock buckets must wire into CF); IC tagged by account name; budget firm-level only.
@@ -103,7 +97,6 @@
 - [Chat narration/card contract](atelier-narration-contract.md) — pre-tool prose buffered, flushed only on tool success; card-restating final prose trimmed via pure narration-contract helpers; clients dedupe identical tool_result frames.
 - [Atelier payroll person fields](atelier-payroll-person-fields.md) — payroll comp fields write ONLY via the dedicated audited roster payroll PATCH (general PATCH field-locked); dev data passes never merge.
 - [Intent-router resilience](atelier-intent-router-resilience.md) — turn-opening classifier retries then degrades to deterministic (never throws); clarification continuations skip it entirely.
-- [Download filename headers](download-filename-headers.md) — any Content-Disposition built from user data must use the shared httpFilename helper (RFC 5987 dual form) or non-ASCII names crash Node with a 500 HTML page.
 - [Account industry taxonomy resolver](atelier-industry-taxonomy.md) — ALL industry writes via resolveIndustryTaxonomy; unmappable → skip, never raw NAICS; backfill rerun notes in [atelier-industry-backfill.md](atelier-industry-backfill.md).
 - [Statutory payroll & filings](atelier-payroll-engine.md) — comp-history segments, advance caps, payslip-on-post; filings overdue derived at read time ([atelier-statutory-filings.md](atelier-statutory-filings.md), [atelier-statutory-payroll.md](atelier-statutory-payroll.md)).
 - [Atelier chat travel tools](atelier-travel-tools.md) — flights=Ignav, hotels=StayingAPI; tools DB-free, booking deep-link only; prefs masked outside self+fp/hr (atelier-travel-profile.md, atelier-travel-*.md).
@@ -122,7 +115,6 @@
 - [Display currency preference](atelier-display-currency.md) — rollups over mixed-currency money must use the server-converted `display` block (never client-side FX); settings PATCH must invalidate the expenses query.
 - [Doc-email cross-domain routing](atelier-doc-email-crossdomain.md) — both email tools share split/match helpers; handoff only on unambiguous full resolve; self-only roles never probe the library; Arabic و needs whitespace match, not \b.
 - [Universal entity.detail registry](atelier-entity-detail.md) — untyped id probes defer provider "forbidden" until all providers tried (visibility runs before existence); self-only widening = me.* + entity.detail only.
-- [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss handlers use global db on purpose (withRls pins a conn across long LLM runs); isolation via RLS defaults.
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
 - [NEP scoped access](atelier-nep-access.md) — visibility ONLY via atelier-nep-access helpers; agreement flow in [nep-agreement-flow.md](nep-agreement-flow.md); comp plans in [atelier-nep-comp.md](atelier-nep-comp.md) (strict effective dating, no retroactive fallback; day rate syncs only from currently effective plan).
 - [Alliance partner portal invariants](atelier-partner-portal.md) — restricted chat roles need clamps at all four tool layers; /cli sub-path allowlist; new roles must join the openapi role enum or /me 500s.
@@ -137,13 +129,11 @@
 - [Personal tasks & reminders](atelier-personal-tasks.md) — ownership-in-WHERE self-scope; every mutation dismisses stale reminder cards; delegation in [atelier-task-delegation.md](atelier-task-delegation.md); pushes ride card insert returning() ([atelier-push-notifications.md](atelier-push-notifications.md)).
 - [Atelier PDF brand kit](atelier-pdf-brand-kit.md) — shared glass kit, addBrandPage first, zero bottom margin or phantom pages; bio/card quirks in [atelier-bio-card.md](atelier-bio-card.md).
 - [Account brief balanced view](atelier-brief-balanced-view.md) — all brief surfaces render ONE "Our view" via distillBriefView(); server + web copies must stay in lockstep, never read stressTest directly.
-- [pptxgenjs in api-server](pptxgenjs-interop.md) — CJS interop: constructor may sit on `.default` in the app graph; resolve `mod.default ?? mod` or routes 500 while standalone probes pass.
 - [Bank statement recon invariants](atelier-bank-recon.md) — durable file storage is a hard import precondition; race-safe dedupe; exceptions derived at read time, finalise gated on acknowledgement.
 - [Chat commit-token defense](chat-commit-token.md) — twoPhaseConfirm is model-trusted; forged confirm:true only re-previews; async background hand-off REMOVED — writes commit only via /confirm gates.
 - [Entity allocation engine](atelier-entity-allocation.md) — benefit-principle propose/decide helpers are the only allocation path; scratch-DB leftover entities break country rules in probes.
 - [Finance autopilot policy & inbox](atelier-finance-autopilot.md) — evaluateAutoPost is the SOLE authorization to skip human review; never-auto matrix; shared inbox loader; scheduler lockKeys.
 - [Payables nav & action panel](atelier-payables-nav.md) — landing + tab strip share one grouped structure; "Needs your action" reuses the unified inbox, never a parallel aggregation.
-- [One-off DB cleanups](oneoff-db-cleanups.md) — purge = committed idempotent script + explicit per-table delete/unlink policy + system audit row + rerun-safe fixture-scoped probe.
 - [Guarded PDF statement parse](pdf-bank-statement-parse.md) — date-anchored deterministic rows; multi-amount rows flagged never guessed; commit via canonical CSV through the shared import core.
 - [WPS SIF & Payroll Clerk](atelier-wps-sif.md) — pure SIF builder + DB export seam (future Wio API); exempt≠invalid; WPS ids via payroll PATCH only; clerk drafts never post.
 - [UAE FTA VAT 201 export](atelier-vat201.md) — VAT 201 boxes tie to the calculator via the ONE shared GL collector; data-gap boxes default to zero with notes; exports audit as vat.vat201_exported.
@@ -152,8 +142,6 @@
 - [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).
 - [Vendor tooling cost splits](atelier-tooling-splits.md) — mined items are POST-credit net (never re-subtract credits); flat vendors use __vendor_default__ + % rules; recon gate quarantines, never scales.
-- [Merge-loss lessons](finance-doc-merge-loss.md) — merges can silently delete capability blocks (diff vs pre-merge); jsonb data moves must ride boot chores, never SQL migration files.
-- [LLM reply-truncation defense](llm-reply-truncation-defense.md) — JSON-parsing LLM calls must detect stop_reason max_tokens (else "non-json" lies); header-only retry shares ONE deadline; never log model output.
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
 - [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.
-- [Post-merge DB push timeout](post-merge-db-push-timeout.md) — schema pull can take ~92s; keep the post-merge setup allowance at five minutes.
+- [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.

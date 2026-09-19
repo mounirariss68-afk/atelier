@@ -31,6 +31,7 @@ import {
   atelierSelfBilledInvoices,
   atelierContractRecords,
   atelierContractDocuments,
+  atelierContractorEngagementRates,
   atelierPersonRelationshipClassifications,
 } from "@workspace/db";
 import { canViewCompensation } from "./personaRoles.js";
@@ -168,6 +169,173 @@ async function resolveContractorUserId(orgId: string, email: string): Promise<st
 // ---------------------------------------------------------------------------
 // Plans
 // ---------------------------------------------------------------------------
+
+function strictDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function rateWire(row: typeof atelierContractorEngagementRates.$inferSelect) {
+  return {
+    id: row.id,
+    contractorId: row.contractorId,
+    engagementId: row.engagementId,
+    effectiveFrom: row.effectiveFrom,
+    effectiveTo: row.effectiveTo,
+    dayRateAmount: row.dayRateAmount,
+    amount: row.dayRateAmount,
+    currency: row.currency,
+    governingAgreementRef: row.agreementRef,
+    scopeRef: row.agreementVersionRef,
+    agreementRef: row.agreementRef,
+    agreementVersionRef: row.agreementVersionRef,
+    scope: row.scope,
+    allowsNepOverride: row.allowsNepOverride,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+async function rateSubjects(orgId: string, contractorId: string, engagementId: string) {
+  const [contractor] = await db.select({ id: atelierContractors.id })
+    .from(atelierContractors).where(and(
+      eq(atelierContractors.orgId, orgId), eq(atelierContractors.id, contractorId),
+      isNull(atelierContractors.deletedAt),
+    ));
+  const [engagement] = await db.select({ id: atelierEngagements.id })
+    .from(atelierEngagements).where(and(
+      eq(atelierEngagements.orgId, orgId), eq(atelierEngagements.id, engagementId),
+      isNull(atelierEngagements.deletedAt),
+    ));
+  return { contractor, engagement };
+}
+
+function rateInput(body: Record<string, unknown>) {
+  const effectiveFrom = body.effectiveFrom;
+  const effectiveTo = body.effectiveTo;
+  const amount = body.amount ?? body.dayRateAmount;
+  const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
+  const governingAgreementRef = body.governingAgreementRef ?? body.agreementRef;
+  const scopeRef = body.scopeRef ?? body.agreementVersionRef;
+  const scope = Array.isArray(body.scope) && body.scope.every((v) => typeof v === "string")
+    ? body.scope as string[] : [];
+  const n = typeof amount === "number" ? amount : Number(amount);
+  if (!strictDate(effectiveFrom) || (effectiveTo !== undefined && effectiveTo !== null && !strictDate(effectiveTo)))
+    return { error: "invalid-effective-dates" as const };
+  if (effectiveTo != null && (effectiveTo as string) < (effectiveFrom as string))
+    return { error: "effective-to-before-from" as const };
+  if (!Number.isFinite(n) || n <= 0) return { error: "amount-must-be-positive" as const };
+  if (!/^[A-Z]{3}$/.test(currency)) return { error: "invalid-currency" as const };
+  if (typeof governingAgreementRef !== "string" || !governingAgreementRef.trim() ||
+      typeof scopeRef !== "string" || !scopeRef.trim() || scope.length === 0)
+    return { error: "governing-agreement-and-scope-provenance-required" as const };
+  if (typeof body.allowsNepOverride !== "boolean")
+    return { error: "allows-nep-override-explicit-required" as const };
+  return {
+    value: {
+      effectiveFrom: effectiveFrom as string,
+      effectiveTo: effectiveTo == null ? null : effectiveTo as string,
+      dayRateAmount: n,
+      currency,
+      agreementRef: governingAgreementRef.trim(),
+      agreementVersionRef: scopeRef.trim(),
+      scope,
+      allowsNepOverride: body.allowsNepOverride,
+    },
+  };
+}
+
+router.get("/finance/nep-comp/engagement-rates", async (req, res, next) => {
+  try {
+    const me = readGate(req, res); if (!me) return;
+    const conditions = [eq(atelierContractorEngagementRates.orgId, me.orgId), isNull(atelierContractorEngagementRates.deletedAt)];
+    if (typeof req.query.contractorId === "string") conditions.push(eq(atelierContractorEngagementRates.contractorId, req.query.contractorId));
+    if (typeof req.query.engagementId === "string") conditions.push(eq(atelierContractorEngagementRates.engagementId, req.query.engagementId));
+    const rows = await db.select().from(atelierContractorEngagementRates).where(and(...conditions)).orderBy(desc(atelierContractorEngagementRates.effectiveFrom));
+    res.json({ items: rows.map(rateWire) });
+  } catch (err) { next(err); }
+});
+
+router.get("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
+  try {
+    const me = readGate(req, res); if (!me) return;
+    const [row] = await db.select().from(atelierContractorEngagementRates).where(and(
+      eq(atelierContractorEngagementRates.orgId, me.orgId),
+      eq(atelierContractorEngagementRates.id, req.params.id),
+      isNull(atelierContractorEngagementRates.deletedAt),
+    ));
+    if (!row) return void res.status(404).json({ error: "rate-term-not-found" });
+    res.json({ rate: rateWire(row) });
+  } catch (err) { next(err); }
+});
+
+router.post("/finance/nep-comp/engagement-rates", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res); if (!me) return;
+    const b = req.body ?? {};
+    const contractorId = typeof b.contractorId === "string" ? b.contractorId : "";
+    const engagementId = typeof b.engagementId === "string" ? b.engagementId : "";
+    const subjects = await rateSubjects(me.orgId, contractorId, engagementId);
+    if (!subjects.contractor) return void res.status(404).json({ error: "contractor-not-found" });
+    if (!subjects.engagement) return void res.status(404).json({ error: "engagement-not-found" });
+    const parsed = rateInput(b);
+    if ("error" in parsed) return void res.status(400).json({ error: parsed.error });
+    const [duplicate] = await db.select({ id: atelierContractorEngagementRates.id })
+      .from(atelierContractorEngagementRates).where(and(
+        eq(atelierContractorEngagementRates.orgId, me.orgId),
+        eq(atelierContractorEngagementRates.contractorId, contractorId),
+        eq(atelierContractorEngagementRates.engagementId, engagementId),
+        eq(atelierContractorEngagementRates.effectiveFrom, parsed.value.effectiveFrom),
+        isNull(atelierContractorEngagementRates.deletedAt),
+      ));
+    if (duplicate) return void res.status(409).json({ error: "duplicate-effective-date" });
+    const id = rid("ctr_rate");
+    const [row] = await db.insert(atelierContractorEngagementRates).values({
+      id, orgId: me.orgId, contractorId, engagementId, ...parsed.value,
+      createdByUserId: me.id, updatedByUserId: me.id,
+    }).returning();
+    await audit({ entityType: "contractor_engagement_rate", entityId: id, actor: me, action: "nep_comp.engagement_rate_create", payload: { contractorId, engagementId, effectiveFrom: parsed.value.effectiveFrom, allowsNepOverride: parsed.value.allowsNepOverride }, summary: `Created contractor engagement rate term effective ${parsed.value.effectiveFrom}.` });
+    res.status(201).json({ ok: true, rate: rateWire(row) });
+  } catch (err) { next(err); }
+});
+
+router.patch("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res); if (!me) return;
+    const [existing] = await db.select().from(atelierContractorEngagementRates).where(and(
+      eq(atelierContractorEngagementRates.orgId, me.orgId), eq(atelierContractorEngagementRates.id, req.params.id),
+      isNull(atelierContractorEngagementRates.deletedAt),
+    ));
+    if (!existing) return void res.status(404).json({ error: "rate-term-not-found" });
+    const parsed = rateInput({ ...existing, ...req.body });
+    if ("error" in parsed) return void res.status(400).json({ error: parsed.error });
+    const [duplicate] = await db.select({ id: atelierContractorEngagementRates.id })
+      .from(atelierContractorEngagementRates).where(and(
+        eq(atelierContractorEngagementRates.orgId, me.orgId),
+        eq(atelierContractorEngagementRates.contractorId, existing.contractorId),
+        eq(atelierContractorEngagementRates.engagementId, existing.engagementId),
+        eq(atelierContractorEngagementRates.effectiveFrom, parsed.value.effectiveFrom),
+        isNull(atelierContractorEngagementRates.deletedAt),
+      ));
+    if (duplicate && duplicate.id !== existing.id) return void res.status(409).json({ error: "duplicate-effective-date" });
+    const [row] = await db.update(atelierContractorEngagementRates).set({ ...parsed.value, updatedByUserId: me.id, updatedAt: new Date() })
+      .where(and(eq(atelierContractorEngagementRates.id, existing.id), isNull(atelierContractorEngagementRates.deletedAt))).returning();
+    await audit({ entityType: "contractor_engagement_rate", entityId: existing.id, actor: me, action: "nep_comp.engagement_rate_update", payload: { changes: req.body }, summary: "Updated contractor engagement rate term." });
+    res.json({ ok: true, rate: rateWire(row) });
+  } catch (err) { next(err); }
+});
+
+router.delete("/finance/nep-comp/engagement-rates/:id", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res); if (!me) return;
+    const [row] = await db.update(atelierContractorEngagementRates).set({ deletedAt: new Date(), updatedByUserId: me.id, updatedAt: new Date() })
+      .where(and(eq(atelierContractorEngagementRates.orgId, me.orgId), eq(atelierContractorEngagementRates.id, req.params.id), isNull(atelierContractorEngagementRates.deletedAt))).returning();
+    if (!row) return void res.status(404).json({ error: "rate-term-not-found" });
+    await audit({ entityType: "contractor_engagement_rate", entityId: row.id, actor: me, action: "nep_comp.engagement_rate_delete", payload: {}, summary: "Soft-deleted contractor engagement rate term." });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
 
 // @cli-skip: finance comp administration; read-parity handled by the finance NEP-comp web surface
 router.get("/finance/nep-comp/plans", async (req, res, next) => {
