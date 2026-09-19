@@ -1,21 +1,19 @@
 import { Router, type IRouter, type RequestHandler } from "express";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
   db,
   atelierAssistantActions,
   atelierAssistantEvents,
   atelierCliTurns,
 } from "@workspace/db";
-import {
-  AssistantRequestV1Schema,
-  upcastLegacyFrame,
-} from "@workspace/assistant-protocol";
+import { AssistantRequestV1Schema } from "@workspace/assistant-protocol";
 import atelierCliRoutes from "./atelier/cliRoutes.js";
 import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
-import { attachRls } from "./atelier/rls.js";
+import { attachRls, withRls } from "./atelier/rls.js";
 import { cancelDurableAction } from "../lib/assistant/action-runtime.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../lib/assistant/durable-account-update-confirmation.js";
 import { durableAccountUpdateEnabled } from "../lib/assistant/durable-account-update-canary.js";
+import { mergeAssistantReplayEvents } from "../lib/assistant/legacy-event-reader.js";
 
 const router: IRouter = Router();
 router.use(attachPersona);
@@ -67,8 +65,11 @@ router.post("/turns", (req, res, next) => {
 router.get("/conversations/:id/events", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const after = Number(req.query.after ?? -1);
-  const durable = await db
+  const after =
+    typeof req.query.after === "string" && req.query.after.length <= 500
+      ? req.query.after
+      : null;
+  const durable = await withRls(req, (tx) => tx
     .select()
     .from(atelierAssistantEvents)
     .where(
@@ -76,32 +77,18 @@ router.get("/conversations/:id/events", async (req, res) => {
         eq(atelierAssistantEvents.orgId, me.orgId),
         eq(atelierAssistantEvents.requesterId, me.id),
         eq(atelierAssistantEvents.conversationId, req.params.id),
-        gt(atelierAssistantEvents.conversationSequence, Number.isSafeInteger(after) ? after : -1),
       ),
     )
-    .orderBy(asc(atelierAssistantEvents.conversationSequence))
-    .limit(1_000);
-  if (durable.length > 0) {
-    res.json({
-      protocolVersion: 1,
-      events: durable.map((event) => ({
-        protocolVersion: event.protocolVersion,
-        conversationId: event.conversationId,
-        turnId: event.turnId,
-        eventId: event.id,
-        sequence: event.sequence,
-        cursor: event.conversationSequence,
-        occurredAt: event.occurredAt.toISOString(),
-        correlationId: event.correlationId,
-        type: event.type,
-        data: event.data,
-      })),
-      source: "durable",
-    });
-    return;
-  }
-  const legacy = await db
-    .select({ id: atelierCliTurns.id, frames: atelierCliTurns.frames })
+    .orderBy(asc(atelierAssistantEvents.occurredAt), asc(atelierAssistantEvents.id)));
+  const legacy = await withRls(req, (tx) => tx
+    .select({
+      id: atelierCliTurns.id,
+      status: atelierCliTurns.status,
+      prompt: atelierCliTurns.prompt,
+      frames: atelierCliTurns.frames,
+      pendingWrite: atelierCliTurns.pendingWrite,
+      createdAt: atelierCliTurns.createdAt,
+    })
     .from(atelierCliTurns)
     .where(
       and(
@@ -110,26 +97,28 @@ router.get("/conversations/:id/events", async (req, res) => {
         eq(atelierCliTurns.sessionId, req.params.id),
       ),
     )
-    .orderBy(asc(atelierCliTurns.createdAt))
-    .limit(100);
+    .orderBy(asc(atelierCliTurns.createdAt), asc(atelierCliTurns.id)));
+  const events = mergeAssistantReplayEvents({
+    conversationId: req.params.id,
+    durable,
+    legacy,
+    after,
+  });
   res.json({
     protocolVersion: 1,
-    source: "legacy-upcast",
-    events: legacy.flatMap((turn) =>
-      turn.frames.map((frame, index) => ({
-        ...upcastLegacyFrame(frame),
-        conversationId: req.params.id,
-        turnId: turn.id,
-        sequence: index,
-      })),
-    ),
+    source: durable.length > 0 && legacy.length > 0
+      ? "mixed"
+      : durable.length > 0
+        ? "durable"
+        : "legacy-upcast",
+    events,
   });
 });
 
 router.post("/actions/:id/confirm", async (req, res, next) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [action] = await db
+  const [action] = await withRls(req, (tx) => tx
     .select()
     .from(atelierAssistantActions)
     .where(
@@ -139,7 +128,7 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
         eq(atelierAssistantActions.requesterId, me.id),
       ),
     )
-    .limit(1);
+    .limit(1));
   if (action) {
     if (
       action.capabilityId === "coverage.account_update" &&
@@ -186,7 +175,7 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
 router.post("/actions/:id/cancel", async (req, res, next) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [action] = await db
+  const [action] = await withRls(req, (tx) => tx
     .select({ id: atelierAssistantActions.id })
     .from(atelierAssistantActions)
     .where(
@@ -196,7 +185,7 @@ router.post("/actions/:id/cancel", async (req, res, next) => {
         eq(atelierAssistantActions.requesterId, me.id),
       ),
     )
-    .limit(1);
+    .limit(1));
   if (!action) {
     delegateToLegacy(req, res, next, `/cli/turn/${encodeURIComponent(req.params.id)}/cancel`);
     return;

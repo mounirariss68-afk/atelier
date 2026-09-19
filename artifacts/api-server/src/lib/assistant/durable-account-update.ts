@@ -6,17 +6,21 @@ import {
   atelierAssistantActions,
   atelierAuditEvents,
 } from "@workspace/db";
-import { decryptAssistantValue } from "./action-runtime.js";
+import {
+  decryptAssistantValue,
+  withAssistantRlsTransaction,
+} from "./action-runtime.js";
 import { appendAssistantEventTx } from "./event-runtime.js";
 
 const ALLOWED_STATUSES = new Set(["active", "dormant", "archived"]);
 
 export async function executeDurableAccountUpdate(args: {
   orgId: string;
+  requesterId: string;
   actionId: string;
   fencingToken: number;
 }): Promise<{ id: string; changedFields: string[] }> {
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await withAssistantRlsTransaction(args, async (tx) => {
     const [action] = await tx
       .select()
       .from(atelierAssistantActions)

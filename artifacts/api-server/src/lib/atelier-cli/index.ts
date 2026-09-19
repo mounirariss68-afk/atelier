@@ -43,7 +43,10 @@ import {
   ASSISTANT_FRAME_ENVELOPE_KEY,
   ASSISTANT_PROTOCOL_VERSION,
   PRESENTATION_MINIMUM_DATA_VERSION,
+  upcastPersistedTurnV1,
 } from "@workspace/assistant-protocol";
+import { digestAssistantValue } from "../assistant/action-runtime.js";
+import { currentCapabilityManifestVersion } from "./capability-manifest.js";
 import {
   composeReplayFromTurns,
   DEFAULT_REPLAY_BUDGET,
@@ -282,6 +285,63 @@ export type CliTurnStatus =
   | "error"
   | "read_only_no_op"
   | "async_dispatched";
+
+function canonicalTurnMetadata(args: {
+  turnId: string;
+  status: CliTurnStatus;
+  prompt: string;
+  frames: unknown[];
+  pendingWrite: unknown;
+}) {
+  const sourceVersions = {
+    protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+    promptVersion: digestAssistantValue(SYSTEM_PROMPT),
+    catalogVersion: currentCapabilityManifestVersion(),
+    schemaVersion: 1,
+    policyVersion: (() => {
+      const pending = args.pendingWrite &&
+        typeof args.pendingWrite === "object" &&
+        !Array.isArray(args.pendingWrite)
+        ? args.pendingWrite as Record<string, unknown>
+        : null;
+      const decision = pending?.policyDecision &&
+        typeof pending.policyDecision === "object" &&
+        !Array.isArray(pending.policyDecision)
+        ? pending.policyDecision as Record<string, unknown>
+        : null;
+      return typeof decision?.policyVersion === "string"
+        ? decision.policyVersion
+        : null;
+    })(),
+  };
+  const canonical = upcastPersistedTurnV1({
+    turnId: args.turnId,
+    status: args.status,
+    prompt: args.prompt,
+    frames: args.frames,
+    pendingWrite: args.pendingWrite,
+    source: sourceVersions,
+  });
+  const now = new Date();
+  const retentionMs = Math.max(
+    366 * 24 * 60 * 60 * 1_000,
+    Number(process.env.RISER_LEGACY_TURN_RETENTION_MS ?? 365 * 24 * 60 * 60 * 1_000),
+  );
+  return {
+    persistedSchemaVersion: canonical.schemaVersion,
+    canonicalState: canonical.state,
+    originalPayload: canonical.originalPayload,
+    sourceVersions,
+    legacyPayloadDigest: digestAssistantValue(canonical.originalPayload),
+    quarantineReasons: canonical.quarantineReasons,
+    upcastedAt: now,
+    legacyReadUntil: new Date(now.getTime() + retentionMs),
+  };
+}
+
+function canonicalTurnWritesEnabled(): boolean {
+  return process.env.RISER_CANONICAL_TURN_WRITES_ENABLED === "1";
+}
 
 export interface CliPersona {
   id: string;
@@ -3934,6 +3994,7 @@ export async function runTurn(
             status: atelierCliTurns.status,
             prompt: atelierCliTurns.prompt,
             frames: atelierCliTurns.frames,
+            persistedSchemaVersion: atelierCliTurns.persistedSchemaVersion,
           })
           .from(atelierCliTurns)
           .where(
@@ -3947,7 +4008,11 @@ export async function runTurn(
         // Task #410 — same relaxation as the explicit path: a turn that
         // asked a question but then errored mid-orchestration is still
         // answerable by recency.
-        if (prevTurn && isClarificationResumable(prevTurn.status, prevTurn.frames)) {
+        if (
+          prevTurn &&
+          prevTurn.persistedSchemaVersion === null &&
+          isClarificationResumable(prevTurn.status, prevTurn.frames)
+        ) {
           rehydrateFromTurnRow(prevTurn);
         } else if (
           // Task #799 — a typed reply right after a disambiguation card
@@ -6749,6 +6814,10 @@ export async function runTurn(
       // caller is not misled by a phantom success.
       const persistErrors: string[] = [];
       try {
+        const persistedPrompt = sensitivePromptTurn
+          ? SENSITIVE_PROMPT_PLACEHOLDER
+          : promptRedacted;
+        const persistedPendingWrite = stripSensitiveValues(pendingWrite);
         await db
           .update(atelierCliTurns)
           .set({
@@ -6759,10 +6828,19 @@ export async function runTurn(
             // turns and strips sensitive keys from the pendingWrite pin
             // (confirm replays re-fetch the unlocked CogniDocs job by
             // id, never the password).
-            ...(sensitivePromptTurn ? { prompt: SENSITIVE_PROMPT_PLACEHOLDER } : {}),
+            ...(sensitivePromptTurn ? { prompt: persistedPrompt } : {}),
             frames,
             toolCalls,
-            pendingWrite: stripSensitiveValues(pendingWrite),
+            pendingWrite: persistedPendingWrite,
+            ...(canonicalTurnWritesEnabled()
+              ? canonicalTurnMetadata({
+                  turnId,
+                  status,
+                  prompt: persistedPrompt,
+                  frames,
+                  pendingWrite: persistedPendingWrite,
+                })
+              : {}),
             planJson,
             stepResults,
             costCents,
@@ -7011,6 +7089,12 @@ export async function confirmPendingWrite(
   };
 
   if (!turn) return fail("not_found", `turn ${turnId} not found`);
+  if (turn.durableActionId) {
+    return fail(
+      "migrated_action",
+      `This confirmation was migrated to durable action ${turn.durableActionId}.`,
+    );
+  }
   // Task #361 — capability `approverRoles` enables initiator/approver
   // separation on irreversible writes (e.g. revrec_post_period: initiated
   // by finance, posted by founding_partner). When set, the confirming
@@ -7369,6 +7453,17 @@ export async function confirmPendingWrite(
       toolCalls: mergedToolCalls,
       stepResults: mergedStepResults,
       pendingWrite: null,
+      ...(canonicalTurnWritesEnabled() && turn.persistedSchemaVersion === 1
+        ? {
+            canonicalState: canonicalTurnMetadata({
+              turnId,
+              status: newStatus,
+              prompt: turn.prompt,
+              frames: newFrames,
+              pendingWrite: null,
+            }).canonicalState,
+          }
+        : {}),
       lastStepIdx: stepIdx,
       finishedAt: new Date(),
       updatedAt: new Date(),
@@ -7446,6 +7541,17 @@ export async function cancelPendingWrite(
         ? "clarification cancelled by user"
         : null,
       pendingWrite: null,
+      ...(canonicalTurnWritesEnabled() && turn.persistedSchemaVersion === 1
+        ? {
+            canonicalState: canonicalTurnMetadata({
+              turnId,
+              status: "cancelled",
+              prompt: turn.prompt,
+              frames: Array.isArray(turn.frames) ? turn.frames : [],
+              pendingWrite: null,
+            }).canonicalState,
+          }
+        : {}),
       finishedAt: new Date(),
       updatedAt: new Date(),
     })

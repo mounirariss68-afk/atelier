@@ -148,9 +148,11 @@
     ,"check:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts --check"
     ,"generate:route-conformance": "tsx ./scripts/generate-route-conformance.ts"
     ,"check:route-conformance": "tsx ./scripts/generate-route-conformance.ts --check"
-    ,"test:riser-foundation": "pnpm run check:riser-manifest && pnpm run check:route-conformance && tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts && tsx ./tests/riser-foundation/presentation.ts && tsx ./tests/riser-foundation/account-dossier-conformance.ts && tsx ./tests/riser-foundation/conformance.ts"
+    ,"test:riser-foundation": "pnpm run check:riser-manifest && pnpm run check:route-conformance && tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts && tsx ./tests/riser-foundation/presentation.ts && tsx ./tests/riser-foundation/account-dossier-conformance.ts && tsx ./tests/riser-foundation/conformance.ts && pnpm run test:riser-legacy-replay"
     ,"test:riser-runtime": "tsx ./tests/riser-runtime/run.ts"
     ,"test:riser-http": "CRM_TEST_DB_NAME=crm_test_riser_http tsx ./tests/riser-http/run.ts"
+    ,"test:riser-legacy-replay": "tsx ./tests/chat/legacy-replay-probe.ts && tsx ./tests/chat/legacy-event-reader-probe.ts && tsx ./tests/chat/legacy-turn-migration-probe.ts"
+    ,"riser:legacy-turn-migration": "tsx ./scripts/riser-legacy-turn-migration.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

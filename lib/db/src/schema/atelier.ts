@@ -5071,6 +5071,22 @@ export const atelierCliTurns = pgTable(
     frames: jsonb("frames").$type<unknown[]>().notNull().default([]),
     toolCalls: jsonb("tool_calls").$type<unknown[]>().notNull().default([]),
     pendingWrite: jsonb("pending_write").$type<unknown>(),
+    persistedSchemaVersion: integer("persisted_schema_version"),
+    canonicalState: text("canonical_state"),
+    originalPayload: jsonb("original_payload").$type<unknown>(),
+    sourceVersions: jsonb("source_versions").$type<{
+      protocolVersion?: string | number | null;
+      promptVersion?: string | null;
+      catalogVersion?: string | null;
+      schemaVersion?: string | number | null;
+      policyVersion?: string | null;
+    }>(),
+    legacyPayloadDigest: text("legacy_payload_digest"),
+    durableActionId: text("durable_action_id"),
+    quarantineReasons: jsonb("quarantine_reasons").$type<string[]>().notNull().default([]),
+    upcastedAt: timestamp("upcasted_at"),
+    legacyReadUntil: timestamp("legacy_read_until"),
+    pendingWriteRetiredAt: timestamp("pending_write_retired_at"),
     // True if this turn was submitted with dryRun=true (plan only, no
     // Confirm option offered).
     dryRun: boolean("dry_run").notNull().default(false),

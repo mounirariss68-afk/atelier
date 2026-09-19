@@ -244,6 +244,7 @@ try {
     await claimDurableAction({
       actionId: action.actionId,
       orgId: "wrong-org",
+      requesterId,
       recheckPolicy: async () => policy,
       recheckTargets: async () => true,
     }),
@@ -252,6 +253,7 @@ try {
   const actionClaim = await claimDurableAction({
     actionId: action.actionId,
     orgId,
+    requesterId,
     recheckPolicy: async () => policy,
     recheckTargets: async () => true,
   });
@@ -261,6 +263,7 @@ try {
     completeDurableAction({
       actionId: action.actionId,
       orgId,
+      requesterId,
       fencingToken: actionClaim.fencingToken + 1,
       status: "succeeded",
       result: { id: "acc_test" },
@@ -270,6 +273,7 @@ try {
   const actionResult = await completeDurableAction({
     actionId: action.actionId,
     orgId,
+    requesterId,
     fencingToken: actionClaim.fencingToken,
     status: "succeeded",
     result: { id: "acc_test" },
@@ -279,6 +283,7 @@ try {
     await completeDurableAction({
       actionId: action.actionId,
       orgId,
+      requesterId,
       fencingToken: actionClaim.fencingToken,
       status: "succeeded",
       result: { id: "different" },
@@ -316,6 +321,7 @@ try {
     await claimDurableAction({
       actionId: staleTargetAction.actionId,
       orgId,
+      requesterId,
       recheckPolicy: async () => policy,
       recheckTargets: async () => false,
     }),
@@ -371,6 +377,7 @@ try {
   const accountClaim = await claimDurableAction({
     actionId: accountAction.actionId,
     orgId,
+    requesterId,
     recheckPolicy: async () => policy,
     recheckTargets: async () => true,
   });
@@ -379,6 +386,7 @@ try {
     Array.from({ length: 20 }, () =>
       executeDurableAccountUpdate({
         orgId,
+        requesterId,
         actionId: accountAction.actionId,
         fencingToken: accountClaim.fencingToken,
       }),

@@ -17,7 +17,10 @@
  * evict the rest of the window.
  */
 
+import { upcastPersistedTurnV1 } from "@workspace/assistant-protocol";
+
 export interface ReplayTurnRow {
+  id?: string;
   prompt: string;
   status: string;
   /** Persisted SSE frame trace for the turn (jsonb). */
@@ -211,9 +214,18 @@ export function composeReplayFromTurns(
   let truncated = false;
   for (const row of rows.slice(0, budget.maxTurns)) {
     if (!row || typeof row.prompt !== "string") continue;
-    if (row.status === "streaming") continue; // concurrent/unfinished turn
-    const p = clip(row.prompt.trim() || "(empty message)", budget.promptChars);
-    const a = composeAssistantReplay(Array.isArray(row.frames) ? row.frames : [], budget);
+    const canonical = upcastPersistedTurnV1({
+      turnId: row.id ?? `legacy-replay-${pairs.length}`,
+      status: row.status,
+      prompt: row.prompt,
+      frames: row.frames,
+    });
+    if (canonical.state === "running") continue; // concurrent/unfinished turn
+    const p = clip(canonical.prompt.trim() || "(empty message)", budget.promptChars);
+    const a = composeAssistantReplay(
+      canonical.frames.map((frame) => frame.original),
+      budget,
+    );
     const cost = p.text.length + a.text.length;
     if (chars + cost > budget.totalChars) {
       truncated = true;

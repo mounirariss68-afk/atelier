@@ -50,6 +50,7 @@ DECLARE
     -- Task #331 — Atelier CLI sessions / turns / async jobs. Org-scoped
     -- only; per-engagement narrowing happens inside the tool layer.
     'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs',
+    'atelier_assistant_budget_ledgers','atelier_assistant_budget_reservations',
     -- Task #741 — typed per-session chat facts. Org-scoped; user_id
     -- narrowing is enforced in the read/write helpers (facts are only
     -- ever queried under the stating user's own id).
@@ -195,6 +196,55 @@ CREATE POLICY atelier_work_checkpoints_org_isolation ON atelier_work_checkpoints
   WITH CHECK (EXISTS (
     SELECT 1 FROM atelier_work_items wi
     WHERE wi.id = work_item_id AND wi.org_id = atelier_current_org()
+  ));
+
+ALTER TABLE atelier_assistant_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_assistant_actions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_assistant_actions_requester_isolation
+  ON atelier_assistant_actions;
+CREATE POLICY atelier_assistant_actions_requester_isolation
+  ON atelier_assistant_actions
+  USING (
+    org_id = atelier_current_org()
+    AND requester_id = current_setting('app.user_id', true)
+  )
+  WITH CHECK (
+    org_id = atelier_current_org()
+    AND requester_id = current_setting('app.user_id', true)
+  );
+
+ALTER TABLE atelier_assistant_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_assistant_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_assistant_events_requester_isolation
+  ON atelier_assistant_events;
+CREATE POLICY atelier_assistant_events_requester_isolation
+  ON atelier_assistant_events
+  USING (
+    org_id = atelier_current_org()
+    AND requester_id = current_setting('app.user_id', true)
+  )
+  WITH CHECK (
+    org_id = atelier_current_org()
+    AND requester_id = current_setting('app.user_id', true)
+  );
+
+ALTER TABLE atelier_assistant_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atelier_assistant_outbox FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS atelier_assistant_outbox_requester_isolation
+  ON atelier_assistant_outbox;
+CREATE POLICY atelier_assistant_outbox_requester_isolation
+  ON atelier_assistant_outbox
+  USING (EXISTS (
+    SELECT 1 FROM atelier_assistant_actions action
+    WHERE action.id = action_id
+      AND action.org_id = atelier_current_org()
+      AND action.requester_id = current_setting('app.user_id', true)
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM atelier_assistant_actions action
+    WHERE action.id = action_id
+      AND action.org_id = atelier_current_org()
+      AND action.requester_id = current_setting('app.user_id', true)
   ));
 
 -- ============================================================

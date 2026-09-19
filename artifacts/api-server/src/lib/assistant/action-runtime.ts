@@ -1,5 +1,5 @@
 import { createHash, createCipheriv, createDecipheriv, hkdfSync, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { db, atelierAssistantActions } from "@workspace/db";
 import {
   ActionPreviewV1Schema,
@@ -101,7 +101,7 @@ export async function cancelDurableAction(args: {
   orgId: string;
   requesterId: string;
 }): Promise<{ state: ActionStateV1; stateVersion: number }> {
-  return db.transaction(async (tx) => {
+  return withAssistantRlsTransaction(args, async (tx) => {
     const rows = await tx
       .select()
       .from(atelierAssistantActions)
@@ -155,7 +155,27 @@ export async function cancelDurableAction(args: {
   });
 }
 
-export async function createDurableActionPreview(args: {
+export type AssistantActionTransaction =
+  Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function withAssistantRlsTransaction<T>(
+  args: { orgId: string; requesterId: string },
+  fn: (tx: AssistantActionTransaction) => Promise<T>,
+): Promise<T> {
+  if (!args.orgId || !args.requesterId) {
+    throw new Error("assistant-rls-context-required");
+  }
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT
+      set_config('app.org_id', ${args.orgId}, true),
+      set_config('app.user_id', ${args.requesterId}, true)`);
+    return fn(tx);
+  });
+}
+
+export async function createDurableActionPreviewTx(
+  tx: AssistantActionTransaction,
+  args: {
   orgId: string;
   requesterId: string;
   conversationId: string;
@@ -187,7 +207,12 @@ export async function createDurableActionPreview(args: {
   ) {
     throw new Error("action-capability-manifest-mismatch");
   }
-  const policy = await authoritativePolicy(args.orgId, args.capabilityId, args.policyDecision);
+  const policy = await authoritativePolicy(
+    args.orgId,
+    args.capabilityId,
+    args.policyDecision,
+    tx,
+  );
   if (policy.effect !== "allow") throw new Error("action-policy-not-allowed");
   if (args.expiresAt.getTime() <= Date.now()) throw new Error("action-expiry-invalid");
   const inputDigest = digestAssistantValue(args.canonicalInput);
@@ -222,7 +247,7 @@ export async function createDurableActionPreview(args: {
     expiresAt: args.expiresAt.toISOString(),
   });
 
-  const existing = await db
+  const existing = await tx
     .select()
     .from(atelierAssistantActions)
     .where(
@@ -246,9 +271,7 @@ export async function createDurableActionPreview(args: {
     };
   }
 
-  try {
-    await db.transaction(async (tx) => {
-      await tx.insert(atelierAssistantActions).values({
+  await tx.insert(atelierAssistantActions).values({
       id: actionId,
       orgId: args.orgId,
       requesterId: args.requesterId,
@@ -273,8 +296,8 @@ export async function createDurableActionPreview(args: {
       state: "awaiting_confirmation",
       stateVersion: 3,
       idempotencyKey: args.idempotencyKey,
-      });
-      await appendAssistantEventTx(tx, {
+  });
+  await appendAssistantEventTx(tx, {
       orgId: args.orgId,
       requesterId: args.requesterId,
       conversationId: args.conversationId,
@@ -282,33 +305,31 @@ export async function createDurableActionPreview(args: {
       correlationId: actionId,
       type: "action.awaiting_confirmation",
       data: { actionId, preview, stateVersion: 3 },
-      });
-    });
-  } catch (error) {
-    const [raced] = await db
-      .select()
-      .from(atelierAssistantActions)
-      .where(
-        and(
-          eq(atelierAssistantActions.orgId, args.orgId),
-          eq(atelierAssistantActions.requesterId, args.requesterId),
-          eq(atelierAssistantActions.idempotencyKey, args.idempotencyKey),
-        ),
-      )
-      .limit(1);
-    if (
-      raced &&
-      raced.requestDigest === requestDigest
-    ) {
-      return {
-        actionId: raced.id,
-        preview: raced.previewSnapshot,
-        stateVersion: raced.stateVersion,
-      };
-    }
-    throw error;
-  }
+  });
   return { actionId, preview, stateVersion: 3 };
+}
+
+export async function createDurableActionPreview(
+  args: Parameters<typeof createDurableActionPreviewTx>[1],
+): Promise<{ actionId: string; preview: unknown; stateVersion: number }> {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT
+        set_config('app.org_id', ${args.orgId}, true),
+        set_config('app.user_id', ${args.requesterId}, true)`);
+      return createDurableActionPreviewTx(tx, args);
+    });
+  } catch {
+    // A concurrent insert may win the unique idempotency key. Re-enter the
+    // same transaction-aware constructor so it recomputes and compares the
+    // request digest; never return an existing action by key alone.
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT
+        set_config('app.org_id', ${args.orgId}, true),
+        set_config('app.user_id', ${args.requesterId}, true)`);
+      return createDurableActionPreviewTx(tx, args);
+    });
+  }
 }
 
 export async function confirmDurableAction(args: {
@@ -319,7 +340,7 @@ export async function confirmDurableAction(args: {
   typedEvidence?: string;
   recheckPolicy: (action: typeof atelierAssistantActions.$inferSelect) => Promise<PolicyDecisionV1>;
 }): Promise<{ state: "confirmed"; stateVersion: number }> {
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await withAssistantRlsTransaction(args, async (tx) => {
     const [row] = await tx
       .select()
       .from(atelierAssistantActions)
@@ -438,10 +459,11 @@ export async function confirmDurableAction(args: {
 export async function claimDurableAction(args: {
   actionId: string;
   orgId: string;
+  requesterId: string;
   recheckPolicy: (action: typeof atelierAssistantActions.$inferSelect) => Promise<PolicyDecisionV1>;
   recheckTargets: (targets: unknown[]) => Promise<boolean>;
 }): Promise<{ fencingToken: number; input: unknown } | null> {
-  return db.transaction(async (tx) => {
+  return withAssistantRlsTransaction(args, async (tx) => {
     const [row] = await tx
       .select()
       .from(atelierAssistantActions)
@@ -542,11 +564,12 @@ export async function claimDurableAction(args: {
 export async function completeDurableAction(args: {
   actionId: string;
   orgId: string;
+  requesterId: string;
   fencingToken: number;
   status: "succeeded" | "failed" | "partially_succeeded" | "compensated";
   result: unknown;
 }): Promise<{ state: ActionStateV1; result: unknown }> {
-  return db.transaction(async (tx) => {
+  return withAssistantRlsTransaction(args, async (tx) => {
     const [row] = await tx
       .select()
       .from(atelierAssistantActions)

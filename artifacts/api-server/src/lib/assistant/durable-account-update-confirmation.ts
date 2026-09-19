@@ -5,6 +5,7 @@ import {
   claimDurableAction,
   completeDurableAction,
   confirmDurableAction,
+  withAssistantRlsTransaction,
 } from "./action-runtime.js";
 import { executeDurableAccountUpdate } from "./durable-account-update.js";
 import { evaluateAssistantPolicy } from "./control-runtime.js";
@@ -71,7 +72,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
   typedEvidence?: string;
 }): Promise<{ state: string; result: unknown }> {
   const load = async () => {
-    const [action] = await db
+    const [action] = await withAssistantRlsTransaction(args, (tx) => tx
       .select()
       .from(atelierAssistantActions)
       .where(
@@ -83,7 +84,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
           eq(atelierAssistantActions.sourceTurnId, args.sourceTurnId),
           eq(atelierAssistantActions.capabilityId, "coverage.account_update"),
         ),
-      );
+      ));
     return action;
   };
   let action = await load();
@@ -140,6 +141,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
     const claim = await claimDurableAction({
       actionId: action.id,
       orgId: action.orgId,
+      requesterId: action.requesterId,
       recheckPolicy: async () => policyAtClaim,
       recheckTargets: async () => targetsCurrentAtClaim,
     });
@@ -151,6 +153,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
     } else {
       const result = await executeDurableAccountUpdate({
         orgId: action.orgId,
+        requesterId: action.requesterId,
         actionId: action.id,
         fencingToken: claim.fencingToken,
       });
@@ -167,6 +170,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
       const terminal = await completeDurableAction({
         actionId: action.id,
         orgId: action.orgId,
+        requesterId: action.requesterId,
         fencingToken: action.executorFence,
         status: "failed",
         result: { code: "policy_drift" },
@@ -175,6 +179,7 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
     }
     const result = await executeDurableAccountUpdate({
       orgId: action.orgId,
+      requesterId: action.requesterId,
       actionId: action.id,
       fencingToken: action.executorFence,
     });
