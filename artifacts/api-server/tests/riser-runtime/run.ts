@@ -31,6 +31,7 @@ import {
 import { evaluateAssistantPolicy } from "../../src/lib/assistant/control-runtime.js";
 import { executeDurableAccountUpdate } from "../../src/lib/assistant/durable-account-update.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../../src/lib/assistant/durable-account-update-confirmation.js";
+import { createDurableAccountUpdatePreview } from "../../src/lib/assistant/durable-account-update-preview.js";
 import {
   cancelDurableWork,
   claimWorkAttempt,
@@ -403,6 +404,8 @@ try {
     actionId: adapterAction.actionId,
     orgId,
     requesterId,
+    conversationId,
+    sourceTurnId: `account_adapter_${suffix}`,
     persona: {
       id: requesterId,
       name: "Riser tester",
@@ -422,6 +425,45 @@ try {
     .from(atelierAuditEvents)
     .where(eq(atelierAuditEvents.entityId, adapterAccountId));
   assert.equal(adapterAudits.length, 1);
+
+  const previewAccountId = `acct_preview_${suffix}`;
+  const [previewAccount] = await db
+    .insert(atelierAccounts)
+    .values({
+      id: previewAccountId,
+      orgId,
+      name: "Before preview",
+      country: "UAE",
+      sector: "Technology",
+    })
+    .returning();
+  const previewArgs = {
+    persona: {
+      id: requesterId,
+      name: "Riser tester",
+      orgId,
+      role: "founding_partner" as const,
+    } as never,
+    conversationId,
+    turnId: `account_preview_${suffix}`,
+    step: 0,
+    input: { id: previewAccountId, name: "After preview" },
+  };
+  const preview = await createDurableAccountUpdatePreview(previewArgs);
+  assert.deepEqual(await createDurableAccountUpdatePreview(previewArgs), preview);
+  const [stillUnchanged] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, previewAccount.id));
+  assert.equal(stillUnchanged.name, "Before preview");
+  const [previewAction] = await db
+    .select()
+    .from(atelierAssistantActions)
+    .where(eq(atelierAssistantActions.id, preview.actionId));
+  assert.equal(previewAction.state, "awaiting_confirmation");
+  assert.equal(previewAction.capabilityId, "coverage.account_update");
+  assert.equal(previewAction.targetRefsAndRevisions[0]?.id, previewAccountId);
+  assert.equal(previewAction.targetRefsAndRevisions[0]?.updatedAt, previewAccount.updatedAt.toISOString());
 
   const parentLedgerId = `budget_parent_${suffix}`;
   const childLedgerId = `budget_child_${suffix}`;

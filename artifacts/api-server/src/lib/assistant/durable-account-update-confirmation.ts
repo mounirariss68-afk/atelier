@@ -64,6 +64,8 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
   actionId: string;
   orgId: string;
   requesterId: string;
+  conversationId: string;
+  sourceTurnId: string;
   persona: Persona;
   expectedStateVersion?: number;
   typedEvidence?: string;
@@ -77,6 +79,8 @@ export async function confirmAndExecuteDurableAccountUpdate(args: {
           eq(atelierAssistantActions.id, args.actionId),
           eq(atelierAssistantActions.orgId, args.orgId),
           eq(atelierAssistantActions.requesterId, args.requesterId),
+          eq(atelierAssistantActions.conversationId, args.conversationId),
+          eq(atelierAssistantActions.sourceTurnId, args.sourceTurnId),
           eq(atelierAssistantActions.capabilityId, "coverage.account_update"),
         ),
       );

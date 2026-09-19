@@ -109,6 +109,9 @@ function ingestSessionFacts(args: {
   }
 }
 import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
+import { durableAccountUpdateEnabled } from "../assistant/durable-account-update-canary.js";
+import { createDurableAccountUpdatePreview } from "../assistant/durable-account-update-preview.js";
+import { confirmAndExecuteDurableAccountUpdate } from "../assistant/durable-account-update-confirmation.js";
 import type { Response } from "express";
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
 // inside getToolsForPersona() so tests / sandbox tooling can stub
@@ -467,6 +470,7 @@ export interface ToolResult {
     diff: Record<string, unknown>;
     /** The exact pending mutation to replay on confirm. */
     pending: { tool: string; input: Record<string, unknown> };
+    durableAction?: { actionId: string; stateVersion: number };
   };
   /**
    * Task #340 — when set, the orchestrator emits a `needs_clarification`
@@ -5956,6 +5960,14 @@ export async function runTurn(
         message: string,
         data?: Record<string, unknown>,
       ) => ctx.progress?.(pct, message, data);
+      const durableAccountCanary =
+        tc.name === "account_update" && durableAccountUpdateEnabled(persona.orgId);
+      if (durableAccountCanary) {
+        const sanitized = { ...tc.input };
+        delete sanitized.confirm;
+        delete sanitized.commitToken;
+        tc.input = sanitized;
+      }
       const isCommit = tool.isWrite && tc.input.confirm === true;
       const idemKey = `${turnId}:${step}`;
       if (financeDocAgentGuard) {
@@ -5963,6 +5975,36 @@ export async function runTurn(
           ok: false,
           errorCode: "finance_doc_attachments",
           errorMessage: financeDocAgentGuard,
+        };
+      } else if (
+        durableAccountCanary &&
+        input.dryRun !== true
+      ) {
+        const preview = await createDurableAccountUpdatePreview({
+          persona: persona as never,
+          conversationId: session.id,
+          turnId,
+          step,
+          input: tc.input,
+        });
+        toolResult = {
+          ok: true,
+          data: { actionId: preview.actionId, stateVersion: preview.stateVersion },
+          confirmation: {
+            summary: preview.summary,
+            diff: preview.diff,
+            pending: {
+              tool: "account_update",
+              input: {
+                __durableActionId: preview.actionId,
+                __durableStateVersion: preview.stateVersion,
+              },
+            },
+            durableAction: {
+              actionId: preview.actionId,
+              stateVersion: preview.stateVersion,
+            },
+          },
         };
       } else if (isCommit) {
         toolResult = await runIdempotentJob({
@@ -5992,7 +6034,11 @@ export async function runTurn(
           // actually COMMITTED. Reads, previews awaiting confirmation, and
           // idempotent-replay results scrub the promise sentences; the
           // dead-end deflection scrub applies to all flushed narration.
-          const wroteOk = isCommit && toolResult.ok === true && !toolResult.confirmation;
+          const wroteOk =
+            tool.isWrite &&
+            tc.input.confirm === true &&
+            toolResult.ok === true &&
+            !toolResult.confirmation;
           let flushText = stripDeadEndDocumentAdvice(pendingNarration.text);
           if (flushText && !wroteOk && !committedWriteOk && looksLikeWritePromise(flushText)) {
             flushText = stripUnfulfilledWritePromises(flushText);
@@ -6379,6 +6425,8 @@ export async function runTurn(
               catEntry?.irreversible === true || forceTypedName === true
                 ? ((diff.typedNameRequired as string) ?? null)
                 : null,
+            actionId: toolResult.confirmation.durableAction?.actionId ?? null,
+            stateVersion: toolResult.confirmation.durableAction?.stateVersion ?? null,
           },
         });
         pendingWrite = toolResult.confirmation.pending;
@@ -6848,22 +6896,55 @@ export async function confirmPendingWrite(
   // Task #340 — track the just-confirmed write so meta.undo_last can
   // find it. We update session draft AFTER the tool runs successfully
   // below; this comment marks the intent.
-  const result = await runIdempotentJob({
-    idemKey,
-    orgId: persona.orgId,
-    turnId,
-    sessionId: turn.sessionId,
-    userId: persona.id,
-    kind: pending.tool,
-    input: pending.input,
-    run: () =>
-      tool.run(pending.input, {
-        persona,
+  const durableActionId =
+    typeof pending.input.__durableActionId === "string"
+      ? pending.input.__durableActionId
+      : null;
+  const durableStateVersion =
+    typeof pending.input.__durableStateVersion === "number"
+      ? pending.input.__durableStateVersion
+      : undefined;
+  if (
+    durableActionId &&
+    (pending.tool !== "account_update" || !durableAccountUpdateEnabled(persona.orgId))
+  ) {
+    return fail("durable_action_disabled", "This durable action is currently disabled.");
+  }
+  const result: ToolResult = durableActionId
+    ? await confirmAndExecuteDurableAccountUpdate({
+        actionId: durableActionId,
+        orgId: persona.orgId,
+        requesterId: persona.id,
+        conversationId: turn.sessionId,
+        sourceTurnId: turn.id,
+        persona: persona as never,
+        expectedStateVersion: durableStateVersion,
+      }).then((outcome) => ({
+        ok: outcome.state === "succeeded",
+        data: outcome.result,
+        ...(outcome.state === "succeeded"
+          ? {}
+          : {
+              errorCode: `durable_action_${outcome.state}`,
+              errorMessage: "The account update could not be completed safely.",
+            }),
+      }))
+    : await runIdempotentJob({
+        idemKey,
+        orgId: persona.orgId,
         turnId,
         sessionId: turn.sessionId,
-        stepIdx,
-      }),
-  });
+        userId: persona.id,
+        kind: pending.tool,
+        input: pending.input,
+        run: () =>
+          tool.run(pending.input, {
+            persona,
+            turnId,
+            sessionId: turn.sessionId,
+            stepIdx,
+          }),
+      });
 
   emit({
     type: "tool_result",

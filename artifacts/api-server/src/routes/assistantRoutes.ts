@@ -15,6 +15,7 @@ import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
 import { attachRls } from "./atelier/rls.js";
 import { cancelDurableAction } from "../lib/assistant/action-runtime.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../lib/assistant/durable-account-update-confirmation.js";
+import { durableAccountUpdateEnabled } from "../lib/assistant/durable-account-update-canary.js";
 
 const router: IRouter = Router();
 router.use(attachPersona);
@@ -36,17 +37,6 @@ function delegateToLegacy(req: Parameters<RequestHandler>[0], res: Parameters<Re
       handle: (request: typeof req, response: typeof res, nextFn: typeof next) => void;
     }
   ).handle(req, res, next);
-}
-
-function durableAccountUpdateEnabled(orgId: string): boolean {
-  if (process.env.RISER_DURABLE_ACCOUNT_UPDATE !== "1") return false;
-  const allowlist = new Set(
-    (process.env.RISER_DURABLE_ACCOUNT_UPDATE_ORGS ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-  );
-  return allowlist.has(orgId);
 }
 
 router.post("/turns", (req, res, next) => {
@@ -160,6 +150,8 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
           actionId: action.id,
           orgId: me.orgId,
           requesterId: me.id,
+          conversationId: action.conversationId ?? "",
+          sourceTurnId: action.sourceTurnId ?? "",
           persona: me,
           expectedStateVersion:
             typeof req.body?.stateVersion === "number" ? req.body.stateVersion : undefined,
