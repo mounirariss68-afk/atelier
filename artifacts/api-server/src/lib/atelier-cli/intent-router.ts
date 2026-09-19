@@ -19,6 +19,7 @@
  */
 
 import { z } from "zod";
+import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 
 const HAIKU_MODEL = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
 
@@ -273,7 +274,9 @@ export async function classifyIntentTyped(
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const { anthropic } = await getPrivacyAuthorizedAnthropic({
+      dataClasses: ["confidential"],
+    });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), CLASSIFIER_TIMEOUT_MS);
     try {

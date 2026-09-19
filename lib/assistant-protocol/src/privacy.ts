@@ -43,7 +43,7 @@ export const ASSISTANT_SINK_MAX_CLASS: Record<
 };
 
 export const ASSISTANT_PROVIDER_ALLOWLIST = {
-  anthropic: AssistantDataClass.CONFIDENTIAL,
+  anthropic: AssistantDataClass.RESTRICTED,
   cognidocs: AssistantDataClass.RESTRICTED,
   ignav: AssistantDataClass.CONFIDENTIAL,
   stayingapi: AssistantDataClass.CONFIDENTIAL,

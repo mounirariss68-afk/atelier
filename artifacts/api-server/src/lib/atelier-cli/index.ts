@@ -47,6 +47,7 @@ import {
   upcastPersistedTurnV1,
 } from "@workspace/assistant-protocol";
 import { digestAssistantValue } from "../assistant/action-runtime.js";
+import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 import { currentCapabilityManifestVersion } from "./capability-manifest.js";
 import {
   composeReplayFromTurns,
@@ -1685,7 +1686,9 @@ async function modelStep(args: {
    * partially streamed text. */
   onStreamReset?: () => void;
 }): Promise<ClaudeStep> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+  });
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 30_000));
   // Retry-with-jitter on transient upstream failures (5xx / network / 429).
@@ -1922,7 +1925,9 @@ export async function generateAndSaveSessionTitle(
   prompt: string,
 ): Promise<void> {
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const { anthropic } = await getPrivacyAuthorizedAnthropic({
+      dataClasses: ["internal"],
+    });
     const ac = new AbortController();
     const timer = setTimeout(
       () => ac.abort(),

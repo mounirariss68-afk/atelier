@@ -989,7 +989,9 @@ router.post("/finance/entities/extract", async (req, res) => {
   }
 
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const { anthropic } = await (
+      await import("../../lib/assistant/provider-runtime.js")
+    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 90_000);
     const resp = await anthropic.messages

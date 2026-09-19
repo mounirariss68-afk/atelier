@@ -107,7 +107,7 @@ assert.deepEqual(
 assert.throws(
   () => assertAssistantProviderAllowed({
     provider: "anthropic",
-    dataClasses: ["restricted"],
+    dataClasses: ["secret"],
   }),
   /assistant-provider-data-class-denied/,
 );

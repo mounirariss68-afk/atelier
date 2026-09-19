@@ -575,7 +575,9 @@ async function callClaudeJson<T>(
      */
     timeoutMs?: number;
   }): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await (
+    await import("../assistant/provider-runtime.js")
+  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
   const ac = new AbortController();
   const timeoutMs = opts?.timeoutMs ?? Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -2729,7 +2731,9 @@ export async function callClaudeJsonWithWebSearch<T>(
         .then(undefined, () => {});
     }
   };
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await (
+    await import("../assistant/provider-runtime.js")
+  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
   const ac = new AbortController();
   // Web-search research legitimately spends minutes when a heavy account
   // (e.g. a large conglomerate) drives the full 6-search / dozens-of-sources
@@ -3151,7 +3155,9 @@ async function callClaudeJsonWithPerplexityResearch<T>(
     `fields — never invent URLs. If the dossier does not support a claim, omit the claim or ` +
     `record it as an open question.\n\n${research.dossier}`;
 
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await (
+    await import("../assistant/provider-runtime.js")
+  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
   const ac = new AbortController();
   const idleMs = Number(
     process.env.ATELIER_WEBSEARCH_TIMEOUT_MS ??

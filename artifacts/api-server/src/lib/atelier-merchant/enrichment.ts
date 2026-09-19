@@ -18,6 +18,7 @@ import {
 import { DEFAULT_TAXONOMY } from "../atelier-expense-taxonomy";
 import { normalizeMerchant } from "./normalizer";
 import { resetIndex } from "./tokenMatcher";
+import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 
 const MODEL = "claude-sonnet-4-5";
 const SOURCE_TAG = "ai_enrichment_v1";
@@ -68,7 +69,9 @@ export async function runMerchantEnrichment(): Promise<{
     return { processed: 0, classified: 0, inserted: 0, remainingPending: 0 };
   }
 
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+  });
 
   const merchantList = pending
     .map((m, i) => `${i + 1}. "${m.rawMerchantText}"`)

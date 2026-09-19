@@ -22,6 +22,7 @@
  */
 
 import { normalizeControlIntent, type ControlIntent } from "./session-facts.js";
+import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 
 export const RESOLVER_CONTRACT_VERSION = 1;
 
@@ -518,7 +519,9 @@ export async function resolveWithModel(args: {
 }): Promise<Record<string, string> | null> {
   if (!resolverLlmEnabled()) return null;
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const { anthropic } = await getPrivacyAuthorizedAnthropic({
+      dataClasses: ["confidential"],
+    });
     const asked = askedFieldSpecs(args.pending);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_RESOLVER_LLM_TIMEOUT_MS ?? 8_000));

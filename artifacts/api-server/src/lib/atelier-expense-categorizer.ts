@@ -15,6 +15,7 @@
 
 import { db, atelierMerchantCategoryMap } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
+import { getPrivacyAuthorizedAnthropic } from "./assistant/provider-runtime.js";
 import {
   loadTaxonomy,
   normalizeMerchantKey,
@@ -90,7 +91,9 @@ export async function aiCategorize(input: {
     })
     .join("\n");
 
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await getPrivacyAuthorizedAnthropic({
+    dataClasses: ["confidential"],
+  });
   const ac = new AbortController();
   const timer = setTimeout(
     () => ac.abort(),

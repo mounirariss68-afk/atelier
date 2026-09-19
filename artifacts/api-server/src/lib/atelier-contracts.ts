@@ -280,7 +280,9 @@ export interface DetectedFields {
  * via ANTHROPIC_BASE_URL in tests). Throws loudly on non-JSON output.
  */
 export async function detectTemplateFields(templateText: string): Promise<DetectedFields> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await (
+    await import("./assistant/provider-runtime.js")
+  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
   const ac = new AbortController();
   const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);

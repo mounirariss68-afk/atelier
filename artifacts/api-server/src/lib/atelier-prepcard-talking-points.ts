@@ -95,7 +95,9 @@ export async function getWatchOutTalkingPoints(
   }
 
   try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const { anthropic } = await (
+      await import("./assistant/provider-runtime.js")
+    ).getPrivacyAuthorizedAnthropic({ dataClasses: ["confidential"] });
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
     const system =

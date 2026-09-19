@@ -299,7 +299,9 @@ export async function extractFromDocumentText(
       "No readable text in the signed contract document.",
     );
   }
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await (
+    await import("./assistant/provider-runtime.js")
+  ).getPrivacyAuthorizedAnthropic({ dataClasses: ["restricted"] });
   const ac = new AbortController();
   const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);

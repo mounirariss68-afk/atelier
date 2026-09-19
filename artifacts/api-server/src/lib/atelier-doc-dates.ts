@@ -11,6 +11,7 @@
  */
 
 import { extractText as unpdfExtractText, getDocumentProxy } from "unpdf";
+import { getPrivacyAuthorizedAnthropic } from "./assistant/provider-runtime.js";
 
 export interface DocDateExtraction {
   expiresAt: string | null;
@@ -71,7 +72,9 @@ async function askModel(
           }
       >,
 ): Promise<DocDateExtraction> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const { anthropic } = await getPrivacyAuthorizedAnthropic({
+    dataClasses: ["restricted"],
+  });
   const ac = new AbortController();
   const timer = setTimeout(
     () => ac.abort(),
