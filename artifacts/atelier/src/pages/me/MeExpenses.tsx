@@ -59,6 +59,11 @@ interface Claim {
   merchantResolution?: string | null;
   rejectedReason: string | null;
   reimbursedAt: string | null;
+  businessPurpose?: string | null;
+  owedTo?: string | null;
+  reimbursementTrigger?: "immediate" | "project_win" | "project_start" | "not_applicable" | null;
+  clientBillable?: boolean;
+  requiredAction?: string | null;
   createdAt: string;
 }
 
@@ -376,6 +381,10 @@ const emptyForm = {
   accountId: "",
   engagementId: "",
   internalProjectLabel: "",
+  businessPurpose: "",
+  owedTo: "",
+  reimbursementTrigger: "not_applicable",
+  clientBillable: false,
 };
 
 export default function MeExpenses() {
@@ -645,6 +654,10 @@ export default function MeExpenses() {
             expenseDate: form.expenseDate,
             contextType: form.contextType,
             receiptPath: receiptPath ?? undefined,
+            businessPurpose: form.businessPurpose.trim() || undefined,
+            owedTo: form.owedTo.trim() || undefined,
+            reimbursementTrigger: form.reimbursementTrigger,
+            clientBillable: form.clientBillable,
           }),
         });
         const j = await r.json().catch(() => ({}));
@@ -700,6 +713,10 @@ export default function MeExpenses() {
       setError("Merchant and amount are required.");
       return;
     }
+    if (!form.businessPurpose.trim()) {
+      setError("Business purpose is required before saving a claim.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -734,6 +751,10 @@ export default function MeExpenses() {
           internalProjectLabel:
             form.contextType === "internal" ? form.internalProjectLabel : undefined,
           receiptPath: receiptPath ?? undefined,
+          businessPurpose: form.businessPurpose.trim() || undefined,
+          owedTo: form.owedTo.trim() || undefined,
+          reimbursementTrigger: form.reimbursementTrigger,
+          clientBillable: form.clientBillable,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -1197,6 +1218,22 @@ export default function MeExpenses() {
           <div className="pt-1 font-mono text-[10px] uppercase tracking-widest text-text-faint border-t border-border-soft">
             Attribution &amp; funding — always entered by you
           </div>
+          <div className="rounded-md border border-gold/30 bg-gold/5 p-3 text-xs text-text-mute space-y-1" data-testid="expense-evidence-guidance">
+            <p className="font-semibold text-text">Before you submit</p>
+            <p>Keep a readable receipt and explain the business purpose. Claims over a policy cap may need partner approval; missing evidence can hold reimbursement.</p>
+          </div>
+          <label className="text-xs text-text-mute space-y-1 sm:col-span-2">
+            <span className="font-mono uppercase tracking-wider text-[10px]">
+              Business purpose <span className="text-gold">*</span>
+            </span>
+            <textarea
+              className={`${inputCls} min-h-[72px]`}
+              value={form.businessPurpose}
+              onChange={(e) => setForm((f) => ({ ...f, businessPurpose: e.target.value }))}
+              placeholder="What was this spend for, and who benefited?"
+              data-testid="exp-business-purpose"
+            />
+          </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs text-text-mute space-y-1">
               <span className="font-mono uppercase tracking-wider text-[10px]">Funding source</span>
@@ -1365,6 +1402,39 @@ export default function MeExpenses() {
                 </label>
               </>
             )}
+            <label className="text-xs text-text-mute space-y-1">
+              <span className="font-mono uppercase tracking-wider text-[10px]">Owed to / beneficiary</span>
+              <input
+                className={inputCls}
+                value={form.owedTo}
+                onChange={(e) => setForm((f) => ({ ...f, owedTo: e.target.value }))}
+                placeholder="Person or partner to reimburse"
+                data-testid="exp-owed-to"
+              />
+            </label>
+            <label className="text-xs text-text-mute space-y-1">
+              <span className="font-mono uppercase tracking-wider text-[10px]">Reimbursement timing</span>
+              <select
+                className={inputCls}
+                value={form.reimbursementTrigger}
+                onChange={(e) => setForm((f) => ({ ...f, reimbursementTrigger: e.target.value }))}
+                data-testid="exp-reimbursement-trigger"
+              >
+                <option value="not_applicable">Standard approval</option>
+                <option value="immediate">After approval</option>
+                <option value="project_win">Only if pursuit wins</option>
+                <option value="project_start">Only when project starts</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-text-mute sm:col-span-2 min-h-[44px]">
+              <input
+                type="checkbox"
+                checked={form.clientBillable}
+                onChange={(e) => setForm((f) => ({ ...f, clientBillable: e.target.checked }))}
+                data-testid="exp-client-billable"
+              />
+              <span>Client-billable recovery — include this cost in the client recovery review</span>
+            </label>
           </div>
           <label className="block text-xs text-text-mute space-y-1">
             <span className="font-mono uppercase tracking-wider text-[10px]">
@@ -1503,7 +1573,16 @@ export default function MeExpenses() {
                     </span>
                   )}
                   <MonoChip>{c.contextType}</MonoChip>
+                  {c.clientBillable && <MonoChip tone="gold">client recovery</MonoChip>}
                   <span className="text-xs text-text-faint">{c.expenseDate}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-mute">
+                  {c.requiredAction && <span className="text-gold">Next: {c.requiredAction}</span>}
+                  {c.businessPurpose && <span>Purpose: {c.businessPurpose}</span>}
+                  {c.owedTo && <span>Owed to: {c.owedTo}</span>}
+                  {c.reimbursementTrigger && c.reimbursementTrigger !== "not_applicable" && (
+                    <span>Reimbursement: {c.reimbursementTrigger.replace(/_/g, " ")}</span>
+                  )}
                 </div>
                 {c.merchantNormalized && c.merchantNormalized !== c.merchant && (
                   <p className="text-xs text-text-faint" data-testid={`exp-merchant-normalized-${c.id}`}>

@@ -44,6 +44,7 @@ import {
   atelierGlJournalEntry,
   atelierGlJournalLine,
 } from "@workspace/db";
+import { isExpenseEconomicallyActive } from "./atelier-expense-lifecycle.js";
 
 type OppRow = typeof atelierOpportunities.$inferSelect;
 
@@ -694,7 +695,13 @@ export async function computeRealizationReport(filters: {
       .from(atelierRevenueAdjustment)
       .where(and(eq(atelierRevenueAdjustment.orgId, filters.orgId), inArray(atelierRevenueAdjustment.engagementId, engIds), isNull(atelierRevenueAdjustment.deletedAt))),
     db
-      .select({ id: atelierExpenses.id, engagementId: atelierExpenses.engagementId, usdAmount: atelierExpenses.usdAmount })
+      .select({
+        id: atelierExpenses.id,
+        engagementId: atelierExpenses.engagementId,
+        usdAmount: atelierExpenses.usdAmount,
+        contingencyStatus: atelierExpenses.contingencyStatus,
+        directCostStatus: atelierExpenses.directCostStatus,
+      })
       .from(atelierExpenses)
       .where(
         and(
@@ -727,7 +734,7 @@ export async function computeRealizationReport(filters: {
     if (delta < 0) writeOffByEng.set(a.engagementId, (writeOffByEng.get(a.engagementId) ?? 0) + Math.abs(delta));
   }
   const nonRecoveredByEng = new Map<string, number>();
-  for (const e of billableExpenses) {
+  for (const e of billableExpenses.filter(isExpenseEconomicallyActive)) {
     if (!e.engagementId || recoveredExpenseIds.has(e.id)) continue;
     nonRecoveredByEng.set(e.engagementId, (nonRecoveredByEng.get(e.engagementId) ?? 0) + Number(e.usdAmount || 0));
   }

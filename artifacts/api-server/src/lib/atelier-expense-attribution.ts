@@ -13,6 +13,7 @@ import {
   atelierAccounts,
   atelierBankAccount,
   atelierLegalEntities,
+  atelierTimesheetWeeks,
 } from "@workspace/db";
 import {
   COST_CENTERS,
@@ -31,6 +32,7 @@ export interface ExpenseExtrasInput {
   fundingSource?: unknown;
   fundingBankAccountId?: unknown;
   timesheetWeekId?: unknown;
+  clientBillable?: unknown;
 }
 
 export interface ExpenseExtrasPatch {
@@ -45,6 +47,7 @@ export interface ExpenseExtrasPatch {
   fundingSource?: string;
   fundingBankAccountId?: string | null;
   timesheetWeekId?: string | null;
+  clientBillable?: boolean;
 }
 
 const CATEGORY_SOURCES = new Set(["merchant_memory", "ai", "manual"]);
@@ -59,7 +62,7 @@ export async function resolveExpenseExtras(
   res: Response,
   orgId: string,
   b: ExpenseExtrasInput,
-  context: { contextType: string; accountId: string | null },
+  context: { contextType: string; accountId: string | null; personId?: string },
 ): Promise<ExpenseExtrasPatch | null> {
   const patch: ExpenseExtrasPatch = {};
 
@@ -198,6 +201,19 @@ export async function resolveExpenseExtras(
   // ── Timesheet week link (optional; validated loosely — existence checked at approve) ──
   if (b.timesheetWeekId !== undefined) {
     patch.timesheetWeekId = b.timesheetWeekId ? String(b.timesheetWeekId).slice(0, 80) : null;
+    if (patch.timesheetWeekId && context.personId) {
+      const [week] = await db.select({ id: atelierTimesheetWeeks.id })
+        .from(atelierTimesheetWeeks)
+        .where(and(eq(atelierTimesheetWeeks.id, patch.timesheetWeekId), eq(atelierTimesheetWeeks.orgId, orgId), eq(atelierTimesheetWeeks.personId, context.personId), isNull(atelierTimesheetWeeks.deletedAt)));
+      if (!week) {
+        res.status(400).json({ error: "timesheet-week-not-found", message: "The linked timesheet week must belong to the claimant." });
+        return null;
+      }
+    }
+  }
+
+  if (b.clientBillable !== undefined) {
+    patch.clientBillable = b.clientBillable === true;
   }
 
   return patch;

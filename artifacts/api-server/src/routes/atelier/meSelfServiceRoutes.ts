@@ -54,6 +54,8 @@ import {
   atelierLeaveTypeEntitlements,
   atelierRosterReportsTo,
   atelierHolidayOverrides,
+  atelierContractRecords,
+  atelierContractDocuments,
 } from "@workspace/db";
 import {
   resolvePersonForCaller,
@@ -83,6 +85,7 @@ import {
 } from "../../lib/atelier-agents/runner.js";
 import { proposeExpenseAllocation } from "../../lib/atelier-entity-allocation.js";
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
+import { normalizeContingencyType, wireReimbursementTrigger, resolveExpenseBeneficiary } from "../../lib/atelier-expense-lifecycle.js";
 import { convertToUsd, convertUsdTo, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
 import { PUSH_CATEGORIES, resolvePushCategoryPrefs } from "../../lib/expoPush.js";
 import {
@@ -1954,6 +1957,16 @@ function claimToWire(e: typeof atelierExpenses.$inferSelect) {
     costCenter: e.costCenter,
     fundingSource: e.fundingSource,
     fundingBankAccountId: e.fundingBankAccountId,
+    businessPurpose: e.businessPurpose,
+    beneficiaryUserId: e.beneficiaryUserId,
+    owedTo: e.beneficiaryName,
+    beneficiaryName: e.beneficiaryName,
+    contingencyType: e.contingencyType,
+    reimbursementTrigger: wireReimbursementTrigger(e.contingencyType),
+    contingencyStatus: e.contingencyStatus,
+    projectOutcome: e.projectOutcome,
+    recoveryStatus: e.recoveryStatus,
+    directCostStatus: e.directCostStatus,
     timesheetWeekId: e.timesheetWeekId,
     approvalRoute: e.approvalRoute,
     clientBillable: e.clientBillable,
@@ -2008,7 +2021,7 @@ async function resolveContext(
     engagementId = String(b.engagementId ?? "");
     const [eng] = engagementId
       ? await db
-          .select({ id: atelierEngagements.id })
+          .select({ id: atelierEngagements.id, accountId: atelierEngagements.accountId })
           .from(atelierEngagements)
           .where(
             and(
@@ -2020,6 +2033,10 @@ async function resolveContext(
       : [undefined];
     if (!eng) {
       res.status(400).json({ error: "engagement-not-found" });
+      return null;
+    }
+    if (b.accountId && b.accountId !== eng.accountId) {
+      res.status(400).json({ error: "engagement-account-mismatch" });
       return null;
     }
   } else if (contextType === "internal") {
@@ -2255,6 +2272,12 @@ router.get("/me/expense-policy", async (req, res, next) => {
         hardBlockAmountUsd: pick("hardBlockAmountUsd") as number | null,
         approvalThresholdUsd: pick("approvalThresholdUsd") as number | null,
         flightClassMax: pick("flightClassMax") as string | null,
+         eligibleRoles: pick("eligibleRoles") as string[] | null,
+         requiresReceipt: pick("requiresReceipt") as boolean | null,
+         requiresBusinessPurpose: pick("requiresBusinessPurpose") as boolean | null,
+         periodicCapUsd: pick("periodicCapUsd") as number | null,
+         periodicCapPeriod: pick("periodicCapPeriod") as string | null,
+         exceptionApproverRole: pick("exceptionApproverRole") as string | null,
         rationale: (ordered.find((r) => r.rationale)?.rationale ?? null) as
           | string
           | null,
@@ -2287,6 +2310,13 @@ router.post("/me/expenses", async (req, res, next) => {
       res.status(400).json({ error: "merchant-required" });
       return;
     }
+    const businessPurpose = typeof b.businessPurpose === "string"
+      ? b.businessPurpose.trim().slice(0, 1000)
+      : "";
+    if (!businessPurpose) {
+      res.status(400).json({ error: "business-purpose-required", message: "Explain the business purpose before saving the claim." });
+      return;
+    }
     const dateStr = isIsoDate(b.expenseDate) ? b.expenseDate : new Date().toISOString().slice(0, 10);
     const ctxTag = await resolveContext(res, me.orgId, b);
     if (!ctxTag) return;
@@ -2298,8 +2328,75 @@ router.post("/me/expenses", async (req, res, next) => {
     const extras = await resolveExpenseExtras(res, me.orgId, b, {
       contextType: ctxTag.contextType,
       accountId: ctxTag.accountId,
+      personId: me.id,
     });
     if (!extras) return;
+    const beneficiaryResult = await resolveExpenseBeneficiary(me.orgId, b.beneficiaryUserId ?? b.owedTo ?? me.id);
+    if (!beneficiaryResult.beneficiary) {
+      res.status(409).json({ error: beneficiaryResult.ambiguous ? "beneficiary-ambiguous" : "beneficiary-not-found" });
+      return;
+    }
+    const beneficiary = beneficiaryResult.beneficiary;
+    const fundingSource = extras.fundingSource ?? "personal_claim";
+    if (fundingSource === "personal_claim" && beneficiary.id !== me.id) {
+      res.status(400).json({ error: "personal-claim-beneficiary-must-be-self" });
+      return;
+    }
+    if (fundingSource === "company_account" && beneficiary.id !== me.id) {
+      res.status(400).json({ error: "company-account-no-beneficiary" });
+      return;
+    }
+    if (me.role === "non_equity_partner") {
+      const canonicalPersonId = me.personId ?? me.id;
+      let contractId = typeof b.governingContractId === "string" ? b.governingContractId : "";
+      let versionId = typeof b.governingContractVersionId === "string" ? b.governingContractVersionId : "";
+      if (!contractId || !versionId) {
+        const [contractor] = await db.select({ personId: atelierContractors.personId }).from(atelierContractors)
+          .where(and(eq(atelierContractors.orgId, me.orgId), eq(atelierContractors.personId, canonicalPersonId), isNull(atelierContractors.deletedAt)));
+        const [auto] = await db.select().from(atelierContractRecords).where(and(
+          eq(atelierContractRecords.orgId, me.orgId), eq(atelierContractRecords.status, "signed"),
+          eq(atelierContractRecords.counterpartyKind, "person"),
+          eq(atelierContractRecords.personId, contractor?.personId ?? canonicalPersonId),
+        )).orderBy(desc(atelierContractRecords.updatedAt)).limit(1);
+        contractId = auto?.id ?? "";
+        versionId = auto?.currentDocumentId ?? "";
+      }
+      const [contract] = await db.select().from(atelierContractRecords).where(and(
+        eq(atelierContractRecords.id, contractId), eq(atelierContractRecords.orgId, me.orgId),
+        eq(atelierContractRecords.status, "signed"), eq(atelierContractRecords.personId, canonicalPersonId),
+      ));
+      const [version] = await db.select().from(atelierContractDocuments).where(and(
+        eq(atelierContractDocuments.id, versionId), eq(atelierContractDocuments.contractId, contractId),
+      ));
+      if (!contract || !version || contract.currentDocumentId !== versionId ||
+        !["non_equity_partner_employment", "contractor_agreement"].includes(contract.contractType)) {
+        res.status(409).json({ error: "signed-governing-contract-required" });
+        return;
+      }
+      b.governingContractId = contractId;
+      b.governingContractVersionId = versionId;
+      const scope = (contract.fieldValues ?? {}) as Record<string, unknown>;
+      const categories = scope.expenseCategories ?? scope.allowedExpenseCategories;
+      const projects = scope.projectIds ?? scope.allowedProjects;
+      const requestedCategory = typeof b.category === "string" ? b.category : "other";
+      if (Array.isArray(categories) && categories.length > 0 && !categories.includes(requestedCategory)) {
+        res.status(409).json({ error: "expense-category-not-in-agreement" });
+        return;
+      }
+      if (Array.isArray(projects) && projects.length > 0 && !projects.includes(ctxTag.engagementId)) {
+        res.status(409).json({ error: "expense-project-not-in-agreement" });
+        return;
+      }
+    }
+    const trigger = normalizeContingencyType(b.contingencyType ?? b.reimbursementTrigger);
+    if (trigger !== "none" && fundingSource !== "partner_paid") {
+      res.status(400).json({ error: "contingency-requires-partner-funding" });
+      return;
+    }
+    if (trigger !== "none" && !["engagement", "account"].includes(ctxTag.contextType)) {
+      res.status(400).json({ error: "contingency-requires-pursuit-context" });
+      return;
+    }
     // No explicit category pair → try org-wide merchant memory (instant,
     // deterministic). AI proposals are fetched by the UI via the suggest
     // endpoint so create never blocks on a model call.
@@ -2320,7 +2417,9 @@ router.post("/me/expenses", async (req, res, next) => {
     await db.insert(atelierExpenses).values({
       id,
       personId: me.id,
-      personType: me.role === "contractor" ? "contractor" : "employee",
+      personType: ["contractor", "partner", "founding_partner", "non_equity_partner"].includes(me.role)
+        ? me.role
+        : "employee",
       engagementId: ctxTag.engagementId,
       expenseDate: dateStr,
       captureSource: "manual",
@@ -2342,8 +2441,18 @@ router.post("/me/expenses", async (req, res, next) => {
       accountId: ctxTag.accountId,
       internalProjectLabel: ctxTag.internalProjectLabel,
       receiptFileRef: receiptPath,
+       receiptFixtureKey: typeof b.receiptFixtureKey === "string" ? b.receiptFixtureKey : null,
       receiptEncryptedAtRest: !!receiptPath,
       summary: (typeof b.description === "string" && b.description.trim()) || merchant,
+      businessPurpose,
+       beneficiaryUserId: beneficiary.id,
+       beneficiaryName: beneficiary.name,
+       governingContractId: typeof b.governingContractId === "string" ? b.governingContractId : null,
+       governingContractVersionId: typeof b.governingContractVersionId === "string" ? b.governingContractVersionId : null,
+       contingencyType: trigger,
+       contingencyStatus: trigger !== "none" ? "pending" : "not_applicable",
+       directCostStatus: "excluded",
+       recoveryStatus: extras.clientBillable ? "pending" : "not_billable",
       status: "draft",
       policyStatus: "green",
       createdByUserId: me.id,
@@ -2424,6 +2533,10 @@ async function requireOwnDraftExpense(
     res.status(409).json({ error: "not-editable", status: row.status });
     return null;
   }
+  if (["activated", "lost", "abandoned"].includes(row.contingencyStatus)) {
+    res.status(409).json({ error: "contingency-terminal" });
+    return null;
+  }
   return { me, row };
 }
 
@@ -2445,6 +2558,22 @@ router.patch("/me/expenses/:id", async (req, res, next) => {
     if (b.description !== undefined) {
       const d = String(b.description).slice(0, 2000);
       patch.description = d.trim() ? d : null;
+    }
+    if (b.businessPurpose !== undefined) {
+      const purpose = String(b.businessPurpose).trim().slice(0, 1000);
+      if (!purpose) return void res.status(400).json({ error: "business-purpose-required" });
+      patch.businessPurpose = purpose;
+    }
+    if (b.beneficiaryUserId !== undefined || b.owedTo !== undefined) {
+      const result = await resolveExpenseBeneficiary(me.orgId, b.beneficiaryUserId ?? b.owedTo);
+      if (!result.beneficiary) return void res.status(409).json({ error: result.ambiguous ? "beneficiary-ambiguous" : "beneficiary-not-found" });
+      patch.beneficiaryUserId = result.beneficiary.id;
+      patch.beneficiaryName = result.beneficiary.name;
+    }
+    if (b.contingencyType !== undefined || b.reimbursementTrigger !== undefined) {
+      const c = normalizeContingencyType(b.contingencyType ?? b.reimbursementTrigger);
+      patch.contingencyType = c;
+      patch.contingencyStatus = c === "none" ? "not_applicable" : "pending";
     }
     if (b.category !== undefined) {
       // Task #757 — mirror create: an empty category falls back to "other"
@@ -2495,11 +2624,24 @@ router.patch("/me/expenses/:id", async (req, res, next) => {
       const effCtx = {
         contextType: (patch.contextType as string) ?? row.contextType,
         accountId: (patch.accountId as string | null) ?? row.accountId,
+        personId: me.id,
       };
       const extras = await resolveExpenseExtras(res, me.orgId, b, effCtx);
       if (!extras) return;
       Object.assign(patch, extras);
     }
+    const effectiveFunding = (patch.fundingSource as string | undefined) ?? row.fundingSource;
+    const effectiveTrigger = normalizeContingencyType((patch.contingencyType as string | undefined) ?? row.contingencyType);
+    const effectiveBeneficiary = (patch.beneficiaryUserId as string | undefined) ?? row.beneficiaryUserId ?? me.id;
+    if (effectiveFunding === "personal_claim" && effectiveBeneficiary !== me.id)
+      return void res.status(400).json({ error: "personal-claim-beneficiary-must-be-self" });
+    if (effectiveFunding === "company_account" && effectiveBeneficiary !== me.id)
+      return void res.status(400).json({ error: "company-account-no-beneficiary" });
+    if (effectiveTrigger !== "none" && effectiveFunding !== "partner_paid")
+      return void res.status(400).json({ error: "contingency-requires-partner-funding" });
+    const effectiveContext = (patch.contextType as string | undefined) ?? row.contextType;
+    if (effectiveTrigger !== "none" && !["account", "engagement"].includes(effectiveContext))
+      return void res.status(400).json({ error: "contingency-requires-pursuit-context" });
     // Task #757 — keep the display summary consistent with a manual edit,
     // but never clobber an auditor-composed summary (auditorRunId set).
     if (!row.auditorRunId && (b.description !== undefined || b.merchant !== undefined)) {
@@ -2551,6 +2693,14 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       });
       return;
     }
+    if (!row.businessPurpose?.trim()) {
+      res.status(409).json({ error: "business-purpose-required", message: "Add a business purpose before submitting." });
+      return;
+    }
+    if (!row.receiptFileRef && !row.receiptFixtureKey && row.captureSource !== "mileage" && row.captureSource !== "per_diem") {
+      res.status(409).json({ error: "receipt-required", message: "Attach a receipt before submitting this claim." });
+      return;
+    }
     // Deterministic policy evaluation (no LLM auditor on the Me lens —
     // claims here are simple reimbursables; the wallet's Expense Auditor
     // remains available on the finance side).
@@ -2563,6 +2713,11 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       country: row.vatCountry ?? null,
       role: me.role,
       flightClass: null,
+      submitterRole: me.role,
+      hasReceipt: !!row.receiptFileRef || !!row.receiptFixtureKey,
+      businessPurpose: row.businessPurpose,
+      personId: row.personId,
+      expenseDate: row.expenseDate,
     });
     const overrideRationale =
       typeof req.body?.overrideRationale === "string" ? req.body.overrideRationale.slice(0, 2000) : null;

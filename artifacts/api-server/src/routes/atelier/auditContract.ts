@@ -63,6 +63,7 @@ export const V3_AUDIT_ACTIONS = {
   EXPENSE_APPROVE: "expense.approve",
   EXPENSE_REJECT: "expense.reject",
   EXPENSE_POLICY_RED: "expense.policy.red",
+  EXPENSE_CONTINGENCY_OUTCOME: "expense.contingency_outcome",
   CONTRACTOR_PAYMENT_PROPOSED: "wallet.contractor_payment.proposed",
   CONTRACTOR_PAYMENT_APPROVED: "wallet.contractor_payment.approved",
   CONTRACTOR_PAYMENT_REJECTED: "wallet.contractor_payment.rejected",

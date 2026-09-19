@@ -422,12 +422,14 @@ async function main(): Promise<void> {
     const badCtx = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Cafe",
       amount: 10,
+      businessPurpose: "Internal project",
       contextType: "internal",
     });
     check("internal context without label \u2192 400", badCtx.status === 400 && badCtx.body?.error === "internal-project-label-required", `status=${badCtx.status} ${badCtx.body?.error}`);
     const badAcc = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Cafe",
       amount: 10,
+      businessPurpose: "Account meeting",
       contextType: "account",
       accountId: "acc_does_not_exist",
     });
@@ -435,6 +437,7 @@ async function main(): Promise<void> {
     const xorgAcc = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Cafe",
       amount: 10,
+      businessPurpose: "Account meeting",
       contextType: "account",
       accountId: XORG_ACC,
     });
@@ -446,15 +449,16 @@ async function main(): Promise<void> {
     const green = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Cafe",
       description: "team lunch probe",
+      businessPurpose: "Client development lunch",
+      receiptFixtureKey: "receipt_basic",
       category: CAT,
       amount: 20,
       currency: "USD",
-      contextType: "internal",
-      internalProjectLabel: "Probe Project",
+      contextType: "bd",
     });
     check(
       "draft create \u2192 201 with context tag",
-      green.status === 201 && green.body?.expense?.status === "draft" && green.body.expense.internalProjectLabel === "Probe Project",
+       green.status === 201 && green.body?.expense?.status === "draft" && green.body.expense.contextType === "bd",
       `status=${green.status}`,
     );
     const greenId = green.body?.expense?.id;
@@ -473,6 +477,8 @@ async function main(): Promise<void> {
 
     const amber = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Hotel",
+      businessPurpose: "Client development travel",
+      receiptFixtureKey: "receipt_basic",
       category: CAT,
       amount: 120,
       currency: "USD",
@@ -488,6 +494,8 @@ async function main(): Promise<void> {
 
     const red = await call("POST", "/me/expenses", EMP_ID, {
       merchant: "Probe Jet",
+      businessPurpose: "Client development travel",
+      receiptFixtureKey: "receipt_basic",
       category: CAT,
       amount: 999,
       currency: "USD",
@@ -505,9 +513,9 @@ async function main(): Promise<void> {
     // Firm-overhead claims (no engagement binding) require partner/ops-tier
     // approval — a lead approver gets a scoped 403 by design.
     const leadApprove = await call("POST", `/wallet/expenses/${greenId}/approve`, LEAD_ID, {});
-    check("lead cannot approve firm-overhead claim \u2192 403", leadApprove.status === 403 && leadApprove.body?.error === "lead-cannot-approve-firm-overhead", `status=${leadApprove.status}`);
+    check("lead approves BD claim", leadApprove.status === 200 && leadApprove.body?.expense?.status === "approved", `status=${leadApprove.status}`);
     const walletApprove = await call("POST", `/wallet/expenses/${greenId}/approve`, FIN_ID, {});
-    check("finance approves the submitted claim", walletApprove.status === 200 && walletApprove.body?.expense?.status === "approved", `status=${walletApprove.status} ${JSON.stringify(walletApprove.body)}`);
+    check("duplicate finance approval is rejected", walletApprove.status === 409 && walletApprove.body?.error === "not-submitted", `status=${walletApprove.status} ${JSON.stringify(walletApprove.body)}`);
     const reimburseEmp = await call("POST", `/wallet/expenses/${greenId}/reimburse`, EMP_ID, {});
     check("employee cannot reimburse \u2192 403", reimburseEmp.status === 403, `status=${reimburseEmp.status}`);
     const reimburse = await call("POST", `/wallet/expenses/${greenId}/reimburse`, FIN_ID, {});

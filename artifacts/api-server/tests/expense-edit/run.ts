@@ -105,6 +105,8 @@ async function main(): Promise<void> {
       currency: "USD",
       expenseDate: "2026-07-10",
       description: "   ",
+      businessPurpose: "Team meal",
+      receiptFixtureKey: "receipt_basic",
       contextType: "bd",
     });
     check("create → 201", created.status === 201, `status=${created.status} ${JSON.stringify(created.body)}`);
@@ -157,6 +159,7 @@ async function main(): Promise<void> {
       merchant: "Wallet Probe",
       amount: 0,
       currency: "USD",
+      businessPurpose: "Test invalid amount",
     });
     check("wallet create amount=0 → 400 invalid-amount", walletBad.status === 400 && walletBad.body?.error === "invalid-amount", `status=${walletBad.status} ${JSON.stringify(walletBad.body)}`);
 
@@ -165,6 +168,7 @@ async function main(): Promise<void> {
       amount: 10,
       currency: "USD",
       description: "  ",
+      businessPurpose: "Office supplies",
     });
     check("wallet create blank description stored as NULL", walletOk.status === 201 && walletOk.body?.expense?.description == null, `status=${walletOk.status} desc=${JSON.stringify(walletOk.body?.expense?.description)}`);
   } finally {

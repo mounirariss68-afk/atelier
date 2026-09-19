@@ -4140,6 +4140,13 @@ export const atelierExpensePolicies = pgTable(
     approvalThresholdUsd: doublePrecision("approval_threshold_usd"),
     flightClassMax: text("flight_class_max"), // economy | premium_economy | business
     rationale: text("rationale"),
+    // Task #1344 — explicit claimant/evidence and rolling-period controls.
+    eligibleRoles: jsonb("eligible_roles").$type<string[]>().notNull().default([]),
+    requiresReceipt: boolean("requires_receipt").notNull().default(false),
+    requiresBusinessPurpose: boolean("requires_business_purpose").notNull().default(true),
+    periodicCapUsd: doublePrecision("periodic_cap_usd"),
+    periodicCapPeriod: text("periodic_cap_period"), // month | quarter | year
+    exceptionApproverRole: text("exception_approver_role").default("partner"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -4273,6 +4280,20 @@ export const atelierExpenses = pgTable(
     costCenter: text("cost_center"), // internal context: management | operations | marketing
     fundingSource: text("funding_source").notNull().default("personal_claim"), // personal_claim | partner_paid | company_account
     fundingBankAccountId: text("funding_bank_account_id"), // atelier_bank_account.id when company_account
+    // Task #1344 — policy evidence, reimbursement beneficiary and contingent
+    // project funding. Outcome fields are immutable once terminal.
+    businessPurpose: text("business_purpose"),
+    beneficiaryUserId: text("beneficiary_user_id"),
+    beneficiaryName: text("beneficiary_name"),
+    governingContractId: text("governing_contract_id"),
+    governingContractVersionId: text("governing_contract_version_id"),
+    contingencyType: text("contingency_type"), // none | win | project_start
+    contingencyStatus: text("contingency_status").notNull().default("not_applicable"), // not_applicable | pending | activated | lost | abandoned
+    projectOutcome: text("project_outcome"), // won | started | lost | abandoned
+    recoveryStatus: text("recovery_status").notNull().default("not_billable"), // not_billable | pending | recovered | unrecovered
+    // `included` preserves historical approved expense economics when this
+    // column is first added. New drafts explicitly start `excluded`.
+    directCostStatus: text("direct_cost_status").notNull().default("included"), // excluded | pending | included
     timesheetWeekId: text("timesheet_week_id"), // optional link to a ledger week (auto-approve opt-in)
     approvalRoute: text("approval_route"), // engagement_lead | line_manager | hr | leadership (stamped at first approval)
     // Task #1095 — entity-allocation engine (benefit principle). `entityId`

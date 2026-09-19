@@ -125,6 +125,7 @@
     "test:procurement-renewal": "tsx ./tests/crm/procurement-renewal-probe.ts",
     "test:alliance": "tsx ./tests/alliance/run.ts",
     "test:expense-edit": "tsx ./tests/expense-edit/run.ts",
+    "test:task-1344-lifecycle": "NODE_ENV=test tsx ./tests/task-1344-lifecycle/run.ts",
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
     "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
     "test:pov-revision": "CRM_TEST_DB_NAME=crm_test_pov tsx ./tests/crm/pov-revision-probe.ts",

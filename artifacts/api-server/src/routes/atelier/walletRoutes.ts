@@ -42,6 +42,9 @@ import {
   atelierRosterReportsTo,
   atelierEngagementBudget,
   atelierEngagementExpenseAlerts,
+  atelierContractors,
+  atelierContractRecords,
+  atelierContractDocuments,
 } from "@workspace/db";
 // Task #383 — taxonomy + merchant memory.
 import { learnMerchantMapping } from "../../lib/atelier-expense-categorizer.js";
@@ -81,6 +84,7 @@ import { runMerchantEnrichment } from "../../lib/atelier-merchant/enrichment.js"
 import { rememberMerchantAlias, listAliasMatchKeys } from "../../lib/atelier-merchant/aliases.js";
 import { normalizeMerchant } from "../../lib/atelier-merchant/normalizer.js";
 import { atelierUnmatchedMerchants } from "@workspace/db";
+import { normalizeContingencyType, wireReimbursementTrigger, resolveExpenseBeneficiary } from "../../lib/atelier-expense-lifecycle.js";
 
 const router: IRouter = Router();
 
@@ -267,6 +271,16 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
     costCenter: e.costCenter,
     fundingSource: e.fundingSource,
     fundingBankAccountId: e.fundingBankAccountId,
+    businessPurpose: e.businessPurpose,
+    beneficiaryUserId: e.beneficiaryUserId,
+    owedTo: e.beneficiaryName,
+    beneficiaryName: e.beneficiaryName,
+    contingencyType: e.contingencyType,
+    reimbursementTrigger: wireReimbursementTrigger(e.contingencyType),
+    contingencyStatus: e.contingencyStatus,
+    projectOutcome: e.projectOutcome,
+    recoveryStatus: e.recoveryStatus,
+    directCostStatus: e.directCostStatus,
     timesheetWeekId: e.timesheetWeekId,
     approvalRoute: e.approvalRoute,
     // Task #1095 — entity-allocation lifecycle + trip context.
@@ -650,6 +664,15 @@ interface CreateExpenseBody {
   engagementId?: string | null;
   merchant?: string;
   description?: string;
+  businessPurpose?: string;
+  beneficiaryUserId?: string;
+  owedTo?: string;
+  contingencyType?: "none" | "win" | "project_start";
+  reimbursementTrigger?: "none" | "win" | "project_start";
+  governingContractId?: string;
+  governingContractVersionId?: string;
+  fundingSource?: "personal_claim" | "partner_paid" | "company_account";
+  fundingBankAccountId?: string | null;
   category?: string;
   amount?: number;
   currency?: string;
@@ -667,7 +690,7 @@ interface CreateExpenseBody {
   tripPurpose?: string;
   // Task #1092 — attribution parity with the Me-lens create path so
   // internal spend (incl. pre-formation entities) can be tagged at create.
-  contextType?: "bd" | "internal" | "account";
+  contextType?: "bd" | "account" | "engagement" | "internal";
   accountId?: string | null;
   entityId?: string | null;
   costCenter?: string | null;
@@ -699,6 +722,83 @@ router.post("/wallet/expenses", async (req, res) => {
     typeof b.description === "string" && b.description.trim()
       ? b.description.slice(0, 2000)
       : null;
+  const businessPurpose = typeof b.businessPurpose === "string" ? b.businessPurpose.trim().slice(0, 1000) : "";
+  const beneficiaryResult = await resolveExpenseBeneficiary(me.orgId, b.beneficiaryUserId ?? b.owedTo ?? me.id);
+  if (!beneficiaryResult.beneficiary) {
+    res.status(409).json({ error: beneficiaryResult.ambiguous ? "beneficiary-ambiguous" : "beneficiary-not-found" });
+    return;
+  }
+  const beneficiary = beneficiaryResult.beneficiary;
+  const contingencyType = normalizeContingencyType(b.contingencyType ?? b.reimbursementTrigger);
+  const fundingSource = b.fundingSource ?? "personal_claim";
+  if (fundingSource === "personal_claim" && beneficiary.id !== me.id) {
+    res.status(400).json({ error: "personal-claim-beneficiary-must-be-self" });
+    return;
+  }
+  if (fundingSource === "company_account" && beneficiary.id !== me.id) {
+    res.status(400).json({ error: "company-account-no-beneficiary" });
+    return;
+  }
+  if (me.role === "non_equity_partner") {
+    const canonicalPersonId = me.personId ?? me.id;
+    let contractId = b.governingContractId;
+    let versionId = b.governingContractVersionId;
+    if (!contractId || !versionId) {
+      const [contractor] = await db.select({ id: atelierContractors.id, personId: atelierContractors.personId })
+        .from(atelierContractors).where(and(eq(atelierContractors.orgId, me.orgId), eq(atelierContractors.personId, canonicalPersonId), isNull(atelierContractors.deletedAt)));
+      const [auto] = await db.select().from(atelierContractRecords).where(and(
+        eq(atelierContractRecords.orgId, me.orgId), eq(atelierContractRecords.status, "signed"),
+        eq(atelierContractRecords.counterpartyKind, "person"),
+        eq(atelierContractRecords.personId, contractor?.personId ?? canonicalPersonId),
+      )).orderBy(desc(atelierContractRecords.updatedAt)).limit(1);
+      contractId = auto?.id;
+      versionId = auto?.currentDocumentId ?? undefined;
+    }
+    if (!contractId || !versionId) {
+      res.status(409).json({ error: "signed-governing-contract-required" });
+      return;
+    }
+    const [contract] = await db.select().from(atelierContractRecords).where(and(
+      eq(atelierContractRecords.id, contractId),
+      eq(atelierContractRecords.orgId, me.orgId),
+      eq(atelierContractRecords.status, "signed"),
+      eq(atelierContractRecords.personId, canonicalPersonId),
+    ));
+    const [version] = await db.select().from(atelierContractDocuments).where(and(
+      eq(atelierContractDocuments.id, versionId),
+      eq(atelierContractDocuments.contractId, contractId),
+    ));
+    if (!contract || !version || contract.currentDocumentId !== versionId ||
+      !["non_equity_partner_employment", "contractor_agreement"].includes(contract.contractType)) {
+      res.status(409).json({ error: "signed-governing-contract-required" });
+      return;
+    }
+    (b as any).governingContractId = contractId;
+    (b as any).governingContractVersionId = versionId;
+    const scope = (contract.fieldValues ?? {}) as Record<string, unknown>;
+    const categories = scope.expenseCategories ?? scope.allowedExpenseCategories;
+    const projects = scope.projectIds ?? scope.allowedProjects;
+    if (Array.isArray(categories) && categories.length > 0 && !categories.includes(category)) {
+      res.status(409).json({ error: "expense-category-not-in-agreement" });
+      return;
+    }
+    if (Array.isArray(projects) && projects.length > 0 && !projects.includes(b.engagementId)) {
+      res.status(409).json({ error: "expense-project-not-in-agreement" });
+      return;
+    }
+  }
+  if (contingencyType !== "none" && fundingSource !== "partner_paid") {
+    res.status(400).json({ error: "contingency-requires-partner-funding" });
+    return;
+  }
+  if (contingencyType !== "none" && b.contextType !== "engagement" && b.contextType !== "account") {
+    res.status(400).json({ error: "contingency-requires-pursuit-context" });
+    return;
+  }
+  if (!businessPurpose) {
+    res.status(400).json({ error: "business-purpose-required", message: "Explain the business purpose before saving the claim." });
+    return;
+  }
 
   if (captureSource === "mileage") {
     const km = Math.max(0, Number(b.km ?? 0));
@@ -729,29 +829,42 @@ router.post("/wallet/expenses", async (req, res) => {
   // valid targets for the pre-formation cost pools). BD/account spend
   // keeps its existing flow (attribution set post-create via PATCH).
   const wantContext = b.contextType === "internal";
-  let extras: import("../../lib/atelier-expense-attribution.js").ExpenseExtrasPatch | null = null;
-  if (wantContext) {
-    extras = await resolveExpenseExtras(res, me.orgId, b as Record<string, unknown>, {
-      contextType: "internal",
-      accountId: null,
-    });
-    if (!extras) return; // 4xx already written
-  }
+  let extras: import("../../lib/atelier-expense-attribution.js").ExpenseExtrasPatch | null = await resolveExpenseExtras(
+    res,
+    me.orgId,
+    b as Record<string, unknown>,
+    { contextType: wantContext ? "internal" : (b.contextType ?? "bd"), accountId: b.accountId ?? null, personId: me.id },
+  );
+  if (!extras) return; // 4xx already written
 
   const id = rid("exp");
   const receiptFileRef = b.receiptFileName ? encryptedReceiptRef(b.receiptFileName) : null;
 
   await db.insert(atelierExpenses).values({
     id,
-    ...(wantContext ? { contextType: "internal", ...extras } : {}),
+    contextType: b.contextType ?? "bd",
+    accountId: b.accountId ?? null,
+    ...extras,
+    fundingSource,
     personId: me.id,
-    personType: me.role === "contractor" ? "contractor" : "employee",
+    personType: ["contractor", "partner", "founding_partner", "non_equity_partner"].includes(me.role)
+      ? me.role
+      : "employee",
     engagementId: b.engagementId ?? null,
     expenseDate: dateStr,
     captureSource,
     cardId: b.cardId ?? null,
     merchant,
     description,
+    businessPurpose,
+    beneficiaryUserId: beneficiary.id,
+    beneficiaryName: beneficiary.name,
+    governingContractId: b.governingContractId ?? null,
+    governingContractVersionId: b.governingContractVersionId ?? null,
+    contingencyType,
+    contingencyStatus: contingencyType !== "none" ? "pending" : "not_applicable",
+    directCostStatus: "excluded",
+    recoveryStatus: extras.clientBillable ? "pending" : "not_billable",
     category,
     amount,
     currency,
@@ -1066,6 +1179,14 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
   }
 
   const body = (req.body ?? {}) as SubmitBody;
+  if (!existing.businessPurpose?.trim()) {
+    res.status(409).json({ error: "business-purpose-required", message: "Add a business purpose before submitting." });
+    return;
+  }
+  if (!existing.receiptFileRef && !existing.receiptFixtureKey && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
+    res.status(409).json({ error: "receipt-required", message: "Attach a receipt before submitting this claim." });
+    return;
+  }
 
   // Run the Auditor first to get the proposal + initial policy outcome.
   await runAuditOnExpense(existing.id, me.id);
@@ -1151,6 +1272,11 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     country: postPatch.vatCountry ?? null,
     role: submitter?.role ?? null,
     flightClass: postPatch.category === "flight" ? (flightClassMatch?.[1] ?? null) : null,
+    submitterRole: submitter?.role ?? null,
+    hasReceipt: !!postPatch.receiptFileRef || !!postPatch.receiptFixtureKey,
+    businessPurpose: postPatch.businessPurpose,
+    personId: postPatch.personId,
+    expenseDate: postPatch.expenseDate,
   });
   await db
     .update(atelierExpenses)
@@ -1514,6 +1640,14 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     res.status(409).json({ error: "not-submitted" });
     return;
   }
+  if (!existing.businessPurpose?.trim()) {
+    res.status(409).json({ error: "business-purpose-required" });
+    return;
+  }
+  if (!existing.receiptFileRef && !existing.receiptFixtureKey && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
+    res.status(409).json({ error: "receipt-required" });
+    return;
+  }
   // Task #383 — dual-route authority: engagement lead for project-linked,
   // line manager (BFS) / HR for internal, leadership always.
   const approvalRoute = await resolveApprovalAuthority(res, me, existing);
@@ -1579,6 +1713,8 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
       ...correction,
       status: "approved",
       approvalRoute,
+       directCostStatus: existing.contingencyStatus === "pending" ? "pending" : "included",
+       recoveryStatus: (correction.clientBillable ?? existing.clientBillable) ? "pending" : "not_billable",
       approvedAt: new Date(),
       approvedByUserId: me.id,
       updatedAt: new Date(),
@@ -1745,6 +1881,21 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
     res.status(409).json({ error: "not-approved", status: existing.status });
     return;
   }
+  if (existing.policyStatus === "red" || !existing.businessPurpose?.trim()) {
+    res.status(409).json({ error: "policy-or-evidence-incomplete", message: "Policy, evidence and business purpose must pass before reimbursement." });
+    return;
+  }
+  if (existing.contingencyStatus === "pending") {
+    res.status(409).json({ error: "contingency-pending", message: "Record the qualifying project outcome before reimbursing this contingent claim." });
+    return;
+  }
+  if (existing.contingencyStatus === "lost" || existing.contingencyStatus === "abandoned") {
+    res.status(409).json({
+      error: "contingency-not-met",
+      message: "This pursuit closed without meeting the reimbursement condition.",
+    });
+    return;
+  }
   // Task #383 — company-account spend has NO reimbursement leg: the firm
   // already paid from its own bank account. Refuse instead of silently
   // creating a payout obligation.
@@ -1783,6 +1934,61 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
   invalidateFinanceFacts(); // Task #1069 — refresh cash/AP facts promptly.
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });
+});
+
+// Task #1344 — settle a partner-funded contingent claim exactly once. This
+// deliberately lives beside reimbursement: outcome changes never pay a claim
+// directly; they only unlock the normal approved → reimbursed path.
+router.post("/wallet/expenses/:id/contingency-outcome", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden", message: "Only leadership can settle a project expense outcome." });
+    return;
+  }
+  const outcome = String(req.body?.outcome ?? "");
+  if (!["won", "started", "lost", "abandoned"].includes(outcome)) {
+    res.status(400).json({ error: "invalid-project-outcome" });
+    return;
+  }
+  const [existing] = await db.select().from(atelierExpenses).where(and(
+    eq(atelierExpenses.id, req.params.id),
+    eq(atelierExpenses.orgId, me.orgId),
+    isNull(atelierExpenses.deletedAt),
+  ));
+  if (!existing) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (existing.contingencyType === "none" || existing.contingencyStatus === "not_applicable") {
+    res.status(409).json({ error: "not-contingent" });
+    return;
+  }
+  const qualifies = existing.contingencyType === "win" ? outcome === "won" : outcome === "started";
+  const nextStatus = qualifies ? "activated" : outcome === "abandoned" ? "abandoned" : "lost";
+  const [updated] = await db.update(atelierExpenses).set({
+    projectOutcome: outcome,
+    contingencyStatus: nextStatus,
+    directCostStatus: qualifies && ["approved", "reimbursed"].includes(existing.status)
+      ? "included"
+      : "excluded",
+    updatedAt: new Date(),
+  }).where(and(eq(atelierExpenses.id, existing.id), eq(atelierExpenses.contingencyStatus, "pending"))).returning();
+  if (!updated) {
+    const [current] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
+    res.json({ expense: expenseToWire(current, me), alreadySettled: true });
+    return;
+  }
+  await audit({
+    entityType: "expense",
+    entityId: updated.id,
+    actor: me,
+    action: "expense.contingency_outcome",
+    payload: { outcome, contingencyType: updated.contingencyType, contingencyStatus: nextStatus },
+    summary: `Settled contingent expense ${updated.merchant ?? updated.id} as ${outcome}.`,
+  });
+  invalidateFinanceFacts();
+  res.json({ expense: expenseToWire(updated, me), activated: qualifies });
 });
 
 // -------

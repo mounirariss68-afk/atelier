@@ -44,6 +44,7 @@ import {
   atelierEngagementCostToDate,
   atelierRevenueMilestone,
 } from "@workspace/db";
+import { isExpenseEconomicallyActive } from "../../lib/atelier-expense-lifecycle.js";
 
 // FX aligned with financePlanFpaEngine.FX_TO_USD.
 const FX_TO_USD: Record<string, number> = {
@@ -503,6 +504,7 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
     if (k && monthly[k]) monthly[k].directCostUsd += cp.usdAmount ?? 0;
   }
   for (const ex of expenses) {
+    if (!isExpenseEconomicallyActive(ex)) continue;
     const k = monthKeyFromIso(ex.expenseDate);
     if (!k || !monthly[k]) continue;
     if (ex.clientBillable) monthly[k].directCostUsd += ex.usdAmount ?? 0;
@@ -555,7 +557,7 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
     if (row) row.directCostUsd += cp.usdAmount ?? 0;
   }
   for (const ex of expenses) {
-    if (!ex.clientBillable || !ex.engagementId) continue;
+    if (!isExpenseEconomicallyActive(ex) || !ex.clientBillable || !ex.engagementId) continue;
     const row = rowFor(ex.engagementId);
     if (row) row.directCostUsd += ex.usdAmount ?? 0;
   }

@@ -30,6 +30,7 @@ import {
   atelierAuditEvents,
   type InvoiceLineDraftLine,
 } from "@workspace/db";
+import { isExpenseEconomicallyActive } from "./atelier-expense-lifecycle.js";
 import { and, eq, isNull } from "drizzle-orm";
 import { convertToUsd } from "./atelier-fx.js";
 import { buildContractDigest } from "./atelier-contract-digest.js";
@@ -212,7 +213,7 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
         isNull(atelierExpenses.deletedAt),
       ),
     );
-  for (const ex of expenses) {
+  for (const ex of expenses.filter(isExpenseEconomicallyActive)) {
     const net = +ex.usdAmount.toFixed(2);
     // markupPct is stored in percent units (e.g. 10 = 10%); convert to a
     // fraction before multiplying so the line-markup is a real currency

@@ -132,6 +132,11 @@ export default function NewExpenseScreen() {
   const [date, setDate] = useState(today());
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [businessPurpose, setBusinessPurpose] = useState("");
+  const [owedTo, setOwedTo] = useState("");
+  const [reimbursementTrigger, setReimbursementTrigger] = useState("not_applicable");
+  const [clientBillable, setClientBillable] = useState(false);
+  const [policy, setPolicy] = useState<{ principles?: string; caps?: Array<{ category: string; capAmountUsd?: number | null; capUnit?: string | null; approvalThresholdUsd?: number | null }> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   // Set when the receipt was uploaded but AI parsing failed — offers a retry.
@@ -141,6 +146,13 @@ export default function NewExpenseScreen() {
   // Task #411 — the auto pipeline creates the draft as soon as a receipt is
   // attached; re-attaching or saving reuses this id (no duplicate records).
   const [draftId, setDraftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void apiJson<{ principles?: string; caps?: Array<{ category: string; capAmountUsd?: number | null; capUnit?: string | null; approvalThresholdUsd?: number | null }> }>(
+      "/api/atelier/me/expense-policy",
+      {},
+    ).then(setPolicy).catch(() => undefined);
+  }, []);
 
   // Task #477 — pickers launch via the Sheet's `defer` option (runs after the
   // modal has FULLY dismissed — iOS Modal onDismiss), replacing the old fixed
@@ -213,6 +225,11 @@ export default function NewExpenseScreen() {
         return null;
       }
     }
+    if (!businessPurpose.trim()) {
+      hapticError();
+      feedback.toast("Add the business purpose before saving.", "error");
+      return null;
+    }
     const fields: AtelierSelfExpenseCreate = {
       amount: Number.isFinite(amt) && amt > 0 ? amt : 0.01,
       currency: currency.trim().toUpperCase().slice(0, 3) || "USD",
@@ -227,8 +244,14 @@ export default function NewExpenseScreen() {
       fields.fundingBankAccountId = fundingBankAccountId;
     }
     if (description.trim()) fields.description = description.trim();
+    Object.assign(fields as unknown as Record<string, unknown>, {
+      businessPurpose: businessPurpose.trim(),
+      owedTo: owedTo.trim() || undefined,
+      reimbursementTrigger,
+      clientBillable,
+    });
     return fields;
-  }, [amount, merchant, currency, date, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, description, receiptUri, t, feedback]);
+  }, [amount, merchant, currency, date, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, description, businessPurpose, owedTo, reimbursementTrigger, clientBillable, receiptUri, t, feedback]);
 
   const taxonomy = taxonomyQuery.data ?? null;
   const selectedCat = taxonomy?.categories.find((cc) => cc.code === categoryCode) ?? null;
@@ -349,7 +372,11 @@ export default function NewExpenseScreen() {
               ...(fundingSource === "company_account" && fundingBankAccountId
                 ? { fundingBankAccountId }
                 : {}),
-            },
+              businessPurpose: businessPurpose.trim() || undefined,
+              owedTo: owedTo.trim() || undefined,
+              reimbursementTrigger,
+              clientBillable,
+            } as any,
           });
           id = created.expense.id;
           setDraftId(id);
@@ -377,7 +404,7 @@ export default function NewExpenseScreen() {
         setBusyLabel("");
       }
     },
-    [draftId, amount, currency, merchant, date, description, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
+    [draftId, amount, currency, merchant, date, description, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, businessPurpose, owedTo, reimbursementTrigger, clientBillable, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
   );
   autoProcessRef.current = autoProcess;
 
@@ -734,6 +761,71 @@ export default function NewExpenseScreen() {
             multiline
             style={{ minHeight: 72, textAlignVertical: "top" }}
           />
+           <Card style={{ gap: 10, backgroundColor: c.tint08, borderColor: c.tint25 }}>
+             <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
+               Policy &amp; reimbursement
+             </Text>
+             <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 }}>
+               Keep a readable receipt and explain the business purpose. Over-cap claims may need partner approval.
+             </Text>
+             {policy?.principles ? (
+               <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 }}>
+                 {policy.principles}
+               </Text>
+             ) : null}
+             {(policy?.caps ?? []).slice(0, 4).map((cap) => (
+               <Text key={cap.category} style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 11 }}>
+                 {cap.category}: {cap.capAmountUsd == null ? "no cap" : `up to $${cap.capAmountUsd}${cap.capUnit ? ` ${cap.capUnit.replace(/_/g, " ")}` : ""}`}
+                 {cap.approvalThresholdUsd != null ? ` · approval over $${cap.approvalThresholdUsd}` : ""}
+               </Text>
+             ))}
+             <Field
+               label="Business purpose *"
+               value={businessPurpose}
+               onChangeText={setBusinessPurpose}
+               placeholder="What was this spend for?"
+               multiline
+               style={{ minHeight: 64, textAlignVertical: "top" }}
+             />
+             <Field
+               label="Owed to / beneficiary"
+               value={owedTo}
+               onChangeText={setOwedTo}
+               placeholder="Person or partner to reimburse"
+             />
+             <PickerRow
+               label="Reimbursement timing"
+               value={
+                 reimbursementTrigger === "project_win"
+                   ? "Only if pursuit wins"
+                   : reimbursementTrigger === "project_start"
+                     ? "Only when project starts"
+                     : reimbursementTrigger === "immediate"
+                       ? "After approval"
+                       : "Standard approval"
+               }
+               onPress={() =>
+                 setReimbursementTrigger((v) =>
+                   v === "not_applicable"
+                     ? "immediate"
+                     : v === "immediate"
+                       ? "project_win"
+                       : v === "project_win"
+                         ? "project_start"
+                         : "not_applicable",
+                 )
+               }
+             />
+             <Pressable
+               onPress={() => setClientBillable((v) => !v)}
+               style={{ flexDirection: rtl.row, alignItems: "center", gap: 10 }}
+             >
+               <Feather name={clientBillable ? "check-square" : "square"} size={18} color={c.primary} />
+               <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, flex: 1 }}>
+                 Client-billable recovery
+               </Text>
+             </Pressable>
+           </Card>
           </Card>
           </FadeInView>
 

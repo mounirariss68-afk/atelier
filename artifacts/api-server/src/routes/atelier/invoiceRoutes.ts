@@ -58,6 +58,7 @@ import { sendEmail } from "../../lib/email.js";
 import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { invoiceAccountResolves } from "../../lib/invoiceAccountGuard.js";
+import { isExpenseEconomicallyActive } from "../../lib/atelier-expense-lifecycle.js";
 
 const router: IRouter = Router();
 
@@ -602,7 +603,8 @@ router.post("/wallet/invoices/:id/compose", async (req, res) => {
       ),
     );
   const expInWindow = expRows.filter(
-    (e) => e.expenseDate >= fromDate && e.expenseDate <= toDate && !billedRefs.has(e.id),
+    (e) => isExpenseEconomicallyActive(e) &&
+      e.expenseDate >= fromDate && e.expenseDate <= toDate && !billedRefs.has(e.id),
   );
 
   let ord = existing.length;

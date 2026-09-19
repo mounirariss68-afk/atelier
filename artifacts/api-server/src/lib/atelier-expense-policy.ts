@@ -8,7 +8,7 @@
  * always installs defaults so this only matters in dev.
  */
 
-import { db, atelierExpensePolicies, atelierAuditEvents } from "@workspace/db";
+import { db, atelierExpensePolicies, atelierAuditEvents, atelierExpenses } from "@workspace/db";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { rid } from "./atelier-contracts.js";
 
@@ -25,7 +25,7 @@ export interface PolicyOutcome {
   approvalRequired: boolean;
 }
 
-interface ExpenseDraft {
+export interface ExpenseDraft {
   orgId: string;
   category: string;
   usdAmount: number;
@@ -34,6 +34,12 @@ interface ExpenseDraft {
   country?: string | null;
   role?: string | null;
   flightClass?: string | null; // economy | premium_economy | business | first
+  submitterRole?: string | null;
+  hasReceipt?: boolean;
+  businessPurpose?: string | null;
+  priorPeriodUsd?: number;
+  personId?: string;
+  expenseDate?: string;
 }
 
 const FLIGHT_CLASS_RANK: Record<string, number> = {
@@ -87,9 +93,44 @@ export async function evaluateExpense(
     return true;
   }
   const matched = rules.filter(applies).sort((a, b) => specificity(b) - specificity(a));
+  const periodicRule = matched.find((r) => r.periodicCapUsd != null && r.periodicCapPeriod);
+  const priorPeriodUsd = periodicRule && draft.personId
+    ? await priorPeriodExpenseUsd({
+      orgId: draft.orgId,
+      personId: draft.personId,
+      category: draft.category,
+      expenseDate: draft.expenseDate ?? new Date().toISOString().slice(0, 10),
+      period: periodicRule.periodicCapPeriod,
+    })
+    : draft.priorPeriodUsd ?? 0;
   const seenAxis = new Set<string>();
 
   for (const r of matched) {
+    if (r.eligibleRoles?.length && (!draft.submitterRole || !r.eligibleRoles.includes(draft.submitterRole))) {
+      findings.push({
+        ruleId: r.id,
+        severity: "red",
+        category: r.category,
+        message: `This expense category is not eligible for the ${draft.submitterRole ?? "unknown"} claimant role.`,
+      });
+      continue;
+    }
+    if (r.requiresReceipt && draft.hasReceipt === false && draft.category !== "mileage" && draft.category !== "per_diem") {
+      findings.push({
+        ruleId: r.id,
+        severity: "red",
+        category: r.category,
+        message: `${r.category} expenses require a receipt before submission.`,
+      });
+    }
+    if (r.requiresBusinessPurpose && draft.businessPurpose !== undefined && !draft.businessPurpose?.trim()) {
+      findings.push({
+        ruleId: r.id,
+        severity: "red",
+        category: r.category,
+        message: `${r.category} expenses require a business purpose.`,
+      });
+    }
     // Each "axis" (cap, hard_block, approval_threshold, flight_class) is
     // applied at most once — most-specific rule wins.
     if (r.hardBlockAmountUsd != null && !seenAxis.has("hard")) {
@@ -134,6 +175,19 @@ export async function evaluateExpense(
         approvalRequired = true;
       }
     }
+    if (r.periodicCapUsd != null && !seenAxis.has("periodic")) {
+      seenAxis.add("periodic");
+      const prior = priorPeriodUsd;
+      if (prior + draft.usdAmount > r.periodicCapUsd) {
+        findings.push({
+          ruleId: r.id,
+          severity: "amber",
+          category: r.category,
+          message: `${r.category} periodic cap of $${r.periodicCapUsd.toFixed(2)} (${r.periodicCapPeriod ?? "period"}) would be exceeded; exception approval is required.`,
+        });
+        approvalRequired = true;
+      }
+    }
   }
 
   const status: PolicyOutcome["status"] = findings.some((f) => f.severity === "red")
@@ -142,6 +196,40 @@ export async function evaluateExpense(
       ? "amber"
       : "green";
   return { status, findings, approvalRequired };
+}
+
+/** Sum prior submitted/approved/reimbursed claims in the policy's period. */
+export async function priorPeriodExpenseUsd(args: {
+  orgId: string;
+  personId: string;
+  category: string;
+  expenseDate: string;
+  period: string | null;
+  excludeId?: string;
+}): Promise<number> {
+  if (!args.period) return 0;
+  const d = new Date(`${args.expenseDate}T00:00:00Z`);
+  const start = new Date(d);
+  const end = new Date(d);
+  if (args.period === "month") {
+    start.setUTCDate(1); end.setUTCMonth(end.getUTCMonth() + 1, 1);
+  } else if (args.period === "quarter") {
+    start.setUTCMonth(Math.floor(start.getUTCMonth() / 3) * 3, 1);
+    end.setUTCMonth(Math.floor(end.getUTCMonth() / 3) * 3 + 3, 1);
+  } else {
+    start.setUTCMonth(0, 1); end.setUTCFullYear(end.getUTCFullYear() + 1, 0, 1);
+  }
+  const rows = await db.select({ usdAmount: atelierExpenses.usdAmount, expenseDate: atelierExpenses.expenseDate })
+    .from(atelierExpenses)
+    .where(and(
+      eq(atelierExpenses.orgId, args.orgId),
+      eq(atelierExpenses.personId, args.personId),
+      eq(atelierExpenses.category, args.category),
+      isNull(atelierExpenses.deletedAt),
+      or(eq(atelierExpenses.status, "submitted"), eq(atelierExpenses.status, "approved"), eq(atelierExpenses.status, "reimbursed")),
+    ));
+  return rows.filter((r) => r.expenseDate >= start.toISOString().slice(0, 10) && r.expenseDate < end.toISOString().slice(0, 10))
+    .reduce((sum, r) => sum + (r.usdAmount ?? 0), 0);
 }
 
 /**
@@ -267,7 +355,7 @@ export const DEFAULT_POLICIES: Array<{
  * kept next to the rules so copy and caps evolve together.
  */
 export const POLICY_PRINCIPLES =
-  "Reasonable, receipted, client-first. Spend the firm's money like your own: book economy and mid-range, keep receipts, and log client attendees on meals. Going over a cap isn't a violation — add a note and it routes for a quick partner OK. The only hard stops are compliance ones, like large client gifts.";
+  "Employees, contractors, equity partners, and approved non-equity partners may claim reasonable business expenses when their agreement permits the category or project. Attach a receipt (except mileage/per diem), state the business purpose, and use the project, client-development, or firm-overhead context. Caps are per trip/day/item/month as shown; an exception needs a written rationale and the named approver. Personal claims reimburse the claimant, partner-paid claims reimburse the recorded beneficiary, and company-account spend is never reimbursed. Contingent claims pay only after the recorded win/project-start condition is met; lost or abandoned pursuits close without reimbursement.";
 
 /**
  * Default rules materialized for one org: per-org row ids (so two orgs

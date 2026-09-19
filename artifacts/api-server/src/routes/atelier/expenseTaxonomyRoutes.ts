@@ -36,6 +36,7 @@ import { suggestCategory } from "../../lib/atelier-expense-categorizer.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
 import { isHeicPayload, convertHeicToJpeg } from "../../lib/atelier-heic.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import { isExpenseEconomicallyActive } from "../../lib/atelier-expense-lifecycle.js";
 import {
   createBrandDoc,
   addBrandPage,
@@ -583,6 +584,7 @@ async function buildExportRows(me: Me, q: Record<string, unknown>): Promise<{
     .orderBy(desc(atelierExpenses.expenseDate));
   const rows: ExportRow[] = [];
   for (const ex of expenses) {
+    if (!isExpenseEconomicallyActive(ex)) continue;
     if (from && ex.expenseDate < from) continue;
     if (to && ex.expenseDate > to) continue;
     const markupPct = ex.markupPct ?? markupDefaultPct;

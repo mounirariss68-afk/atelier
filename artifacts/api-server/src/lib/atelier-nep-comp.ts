@@ -34,6 +34,7 @@ import {
   type NepEntitlementStatement,
   type NepEntitlementStatementLine,
 } from "@workspace/db";
+import { isExpenseEconomicallyActive } from "./atelier-expense-lifecycle.js";
 import { convertToUsd } from "./atelier-fx.js";
 
 export type NepPlan = typeof atelierNepCompPlans.$inferSelect;
@@ -319,7 +320,9 @@ export async function computeEngagementEconomics(
       inArray(atelierExpenses.status, ["approved", "reimbursed"]),
       isNull(atelierExpenses.deletedAt),
     ));
-  const expensesUsd = expRows.reduce((s, e) => s + (e.usdAmount ?? 0), 0);
+  const expensesUsd = expRows
+    .filter(isExpenseEconomicallyActive)
+    .reduce((s, e) => s + (e.usdAmount ?? 0), 0);
 
   const directCostsUsd = r2(contractorLabourUsd + ownTimeChargesUsd + partnerFirmUsd + expensesUsd);
   return {

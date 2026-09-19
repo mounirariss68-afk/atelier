@@ -170,6 +170,10 @@ export default function ExpenseDetailScreen() {
   const [date, setDate] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [businessPurpose, setBusinessPurpose] = useState("");
+  const [owedTo, setOwedTo] = useState("");
+  const [reimbursementTrigger, setReimbursementTrigger] = useState("not_applicable");
+  const [clientBillable, setClientBillable] = useState(false);
   // Task #757 — parity with the New Expense screen: taxonomy + funding are
   // editable on a draft too, not only at create time.
   const taxonomyQuery = useAtelierGetExpenseTaxonomy();
@@ -206,6 +210,10 @@ export default function ExpenseDetailScreen() {
     setDate(expense.expenseDate ?? "");
     setCategory(expense.category ?? "");
     setDescription(expense.description ?? "");
+    setBusinessPurpose((expense as AtelierSelfExpense & { businessPurpose?: string | null }).businessPurpose ?? "");
+    setOwedTo((expense as AtelierSelfExpense & { owedTo?: string | null }).owedTo ?? "");
+    setReimbursementTrigger((expense as AtelierSelfExpense & { reimbursementTrigger?: string | null }).reimbursementTrigger ?? "not_applicable");
+    setClientBillable(Boolean((expense as AtelierSelfExpense & { clientBillable?: boolean }).clientBillable));
     setContextType((expense.contextType as AtelierSelfExpenseCreateContextType) ?? "bd");
     setAccountId(expense.accountId ?? null);
     setEngagementId(expense.engagementId ?? null);
@@ -241,6 +249,10 @@ export default function ExpenseDetailScreen() {
       // (category falls back to "other", description becomes null).
       category: category.trim(),
       description: description.trim(),
+      businessPurpose: businessPurpose.trim(),
+      owedTo: owedTo.trim() || undefined,
+      reimbursementTrigger,
+      clientBillable,
       ...(categoryCode && subCategoryCode ? { categoryCode, subCategoryCode } : {}),
       ...(fundingSource
         ? {
@@ -256,7 +268,7 @@ export default function ExpenseDetailScreen() {
       engagementId: contextType === "engagement" ? engagementId ?? undefined : undefined,
       internalProjectLabel:
         contextType === "internal" ? internalLabel.trim() || undefined : undefined,
-    };
+    } as any;
   }, [
     merchant,
     amount,
@@ -272,6 +284,10 @@ export default function ExpenseDetailScreen() {
     accountId,
     engagementId,
     internalLabel,
+    businessPurpose,
+    owedTo,
+    reimbursementTrigger,
+    clientBillable,
   ]);
 
   const save = useCallback(async () => {
@@ -621,6 +637,25 @@ export default function ExpenseDetailScreen() {
                   multiline
                   style={{ minHeight: 72, textAlignVertical: "top" }}
                 />
+                <Card style={{ gap: 10, backgroundColor: c.tint08, borderColor: c.tint25 }}>
+                  <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
+                    Policy &amp; reimbursement
+                  </Text>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 }}>
+                    Keep a readable receipt and explain the business purpose. Over-cap claims may need partner approval.
+                  </Text>
+                  <Field label="Business purpose *" value={businessPurpose} onChangeText={setBusinessPurpose} multiline style={{ minHeight: 64, textAlignVertical: "top" }} />
+                  <Field label="Owed to / beneficiary" value={owedTo} onChangeText={setOwedTo} />
+                  <PickerRow
+                    label="Reimbursement timing"
+                    value={reimbursementTrigger.replace(/_/g, " ")}
+                    onPress={() => setReimbursementTrigger((v) => v === "not_applicable" ? "immediate" : v === "immediate" ? "project_win" : v === "project_win" ? "project_start" : "not_applicable")}
+                  />
+                  <Pressable onPress={() => setClientBillable((v) => !v)} style={{ flexDirection: rtl.row, alignItems: "center", gap: 10 }}>
+                    <Feather name={clientBillable ? "check-square" : "square"} size={18} color={c.primary} />
+                    <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>Client-billable recovery</Text>
+                  </Pressable>
+                </Card>
 
                 <View style={{ gap: 6 }}>
                   <Text
@@ -696,6 +731,9 @@ export default function ExpenseDetailScreen() {
                   <ReadRow label={t("exp.summary")} value={expense.summary} />
                 ) : null}
                 <ReadRow label={t("exp.context")} value={t(`exp.contextType.${expense.contextType}`)} />
+                {(expense as AtelierSelfExpense & { businessPurpose?: string | null }).businessPurpose ? <ReadRow label="Business purpose" value={(expense as AtelierSelfExpense & { businessPurpose?: string | null }).businessPurpose!} /> : null}
+                {(expense as AtelierSelfExpense & { owedTo?: string | null }).owedTo ? <ReadRow label="Owed to" value={(expense as AtelierSelfExpense & { owedTo?: string | null }).owedTo!} /> : null}
+                <ReadRow label="Client recovery" value={(expense as AtelierSelfExpense & { clientBillable?: boolean }).clientBillable ? "Requested" : "Not requested"} />
               </Card>
             )}
 
