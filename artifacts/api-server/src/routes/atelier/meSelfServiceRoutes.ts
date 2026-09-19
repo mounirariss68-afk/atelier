@@ -1858,6 +1858,10 @@ router.put("/roster/reports-to", async (req, res, next) => {
       res.status(400).json({ error: "self-manager" });
       return;
     }
+    if (managerPersonIds.includes("emp_demo_reviewer")) {
+      res.status(400).json({ error: "protected-demo-cannot-be-manager" });
+      return;
+    }
     // Person must exist in the caller's org (employee or contractor).
     const personType = await resolveEmploymentType(me.orgId, personId);
     if (!personType) {

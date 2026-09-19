@@ -13,6 +13,7 @@
 
 import * as React from "react";
 import type { StageId } from "./peopleLifecycle";
+import { PEOPLE_MVP_SECTIONS } from "@/lib/peopleMeMvp";
 
 interface PeopleShellProps {
   /**
@@ -34,6 +35,9 @@ interface PeopleShellProps {
 export function PeopleShell({ stage: _stage, module: _module, children }: PeopleShellProps) {
   return (
     <div className="animate-in fade-in" data-testid="people-shell">
+      <span className="sr-only" data-testid="people-mvp-surface">
+        {PEOPLE_MVP_SECTIONS.map((section) => section.id).join(",")}
+      </span>
       {children}
     </div>
   );

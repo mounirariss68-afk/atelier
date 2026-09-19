@@ -735,36 +735,36 @@ function Router() {
         <Route path="/clients/reference">{() => <Redirect to="/clients/references" />}</Route>
         {/* Task #364 — People lens. Order matters: more specific routes
             first, then sub-section catch-alls, then the lens home. */}
-        <Route path="/people/attract" component={PeopleAttract} />
-        <Route path="/people/attract/:section" component={PeopleAttract} />
-        <Route path="/people/hire" component={PeopleHire} />
-        <Route path="/people/hire/:section" component={PeopleHire} />
-        <Route path="/people/onboard" component={PeopleOnboard} />
-        <Route path="/people/onboard/:section" component={PeopleOnboard} />
-        <Route path="/people/develop" component={PeopleDevelop} />
-        <Route path="/people/develop/:section" component={PeopleDevelop} />
-        <Route path="/people/perform" component={PeoplePerform} />
-        <Route path="/people/perform/:section" component={PeoplePerform} />
-        <Route path="/people/reward" component={PeopleReward} />
-        <Route path="/people/reward/:section" component={PeopleReward} />
+        <Route path="/people/attract">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/attract/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/hire">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/hire/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/onboard">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/onboard/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/develop">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/develop/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/perform">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/perform/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/reward">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/reward/:section">{() => <Redirect to="/people/people" />}</Route>
         {/* Task #509 — Retain and Org stubs removed; redirect stale links. */}
         <Route path="/people/retain/:section">{() => <Redirect to="/people" />}</Route>
         <Route path="/people/retain">{() => <Redirect to="/people" />}</Route>
-        <Route path="/people/offboard" component={PeopleOffboard} />
-        <Route path="/people/offboard/:section" component={PeopleOffboard} />
+        <Route path="/people/offboard">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/offboard/:section">{() => <Redirect to="/people/people" />}</Route>
         <Route path="/people/org/:section">{() => <Redirect to="/people/people" />}</Route>
         <Route path="/people/org">{() => <Redirect to="/people/people" />}</Route>
         <Route path="/people/approvals" component={PeopleApprovals} />
         <Route path="/people/people" component={PeoplePeople} />
         <Route path="/people/people/:id" component={PeoplePerson} />
         <Route path="/people/people/:id/:tab" component={PeoplePerson} />
-        <Route path="/people/access" component={PeopleAccess} />
-        <Route path="/people/skills" component={PeopleSkills} />
-        <Route path="/people/composition" component={PeopleComposition} />
-        <Route path="/people/compliance" component={PeopleCompliance} />
+        <Route path="/people/access">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/skills">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/composition">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/compliance">{() => <Redirect to="/people/people" />}</Route>
         <Route path="/people/time" component={PeopleTime} />
         <Route path="/people/time/:personId/:weekIso" component={PeopleTime} />
-        <Route path="/people" component={PeopleHome} />
+        <Route path="/people">{() => <Redirect to="/people/people" />}</Route>
         {/* Task #50 — Me lens: one page, section tabs. */}
         <Route path="/me" component={MeHome} />
         {/* Task #161 — read-only self-scope contract detail; must be

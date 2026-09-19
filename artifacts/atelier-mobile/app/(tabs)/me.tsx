@@ -1450,14 +1450,12 @@ export default function MeScreen() {
   const profile = useAtelierGetMyProfile();
   const docs = useAtelierListMyDocuments();
   const uploadPhoto = useAtelierUploadMyPhoto();
-  // Used only to derive workerType for the Pay tab label + PaySection props.
-  // The data is cached by useAtelierGetMyPay inside PaySection so this does
-  // not trigger an extra network request.
-  const payMeta = useAtelierGetMyPay();
-  const isContractor = payMeta.data?.person?.workerType === "contractor";
-  // Task #1303 — mirror the web lens gating: non-equity partners keep the
-  // Me lens but employees-only surfaces (official letters) are hidden.
-  const isNonEquityPartner = profile.data?.user.role === "non_equity_partner";
+  // Derive the Pay label from the self profile. PaySection owns its pay
+  // query, so Profile/Documents do not fetch pay data just to render tabs.
+  // Keep the tab shell aligned with the slim web Me lens. Worker type comes
+  // from the self profile, so merely opening Profile/Documents does not also
+  // fire the pay query just to decide which label to render.
+  const isContractor = profile.data?.person?.workerType === "contractor";
 
   // Task #828 — refetch the document list whenever the Me tab regains
   // focus, so out-of-band changes (chat writes, another device) surface
@@ -1466,7 +1464,11 @@ export default function MeScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   // Task #1036 — the page content below the QR business card is split
   // into three tabs. Selection survives while the screen stays mounted.
-  const [meTab, setMeTab] = useState<"tasks" | "documents" | "letters" | "pay">("tasks");
+  // MVP Me surface: Profile, personal documents, and Pay. Expenses remains
+  // the dedicated bottom tab; Time is not yet a mobile surface. Keep the
+  // profile card above this switcher so the complete profile/photo/contact
+  // experience stays available on every Me tab.
+  const [meTab, setMeTab] = useState<"profile" | "documents" | "pay">("profile");
 
   const refetchDocs = docs.refetch;
   const focusedOnceRef = React.useRef(false);
@@ -1936,14 +1938,8 @@ export default function MeScreen() {
         >
           {(
             [
-              { key: "tasks", label: t("me.tabTasks") },
+              { key: "profile", label: t("me.profile") },
               { key: "documents", label: t("me.tabDocuments") },
-              // Task #1303 — official letters are an employees-only surface
-              // (the server 403s non-employees). Hide the tab for
-              // non-equity partners instead of showing a dead-end section.
-              ...(isNonEquityPartner
-                ? []
-                : ([{ key: "letters", label: t("me.tabLetters") }] as const)),
               { key: "pay", label: isContractor ? t("me.tabPayContractor") : t("me.tabPay") },
             ] as const
           ).map((tab) => {
@@ -2130,28 +2126,15 @@ export default function MeScreen() {
         </>
         ) : null}
 
-        {meTab === "tasks" ? (
-          <>
-            {/* Task #1002 — personal tasks & reminders. */}
-            <MyTasksSection />
-          </>
-        ) : null}
-
-        {meTab === "letters" ? (
-          <>
-            {/* Task #850 — official letters: history + re-download + request. */}
-            <LettersSection />
-          </>
-        ) : null}
-
         {meTab === "pay" ? (
           <>
             {/* Task #1147 — payslips, pay documents and advance balance. */}
             <PaySection isContractor={isContractor} />
+            {/* Contractor remittances remain part of the retained Pay
+                experience; employees simply have no self-billing feed. */}
+            {isContractor ? <SelfBillingSection /> : null}
           </>
         ) : null}
-
-        <SelfBillingSection />
       </ScrollView>
 
       <Modal visible={qrOpen} animationType="slide" transparent onRequestClose={() => setQrOpen(false)}>

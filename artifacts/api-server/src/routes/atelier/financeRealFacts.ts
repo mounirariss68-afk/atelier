@@ -29,7 +29,7 @@
  * surfaces render honest zeros. Results are cached for a short TTL so a
  * page-load fan-out of finance endpoints hits the DB once.
  */
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray, ne, sql } from "drizzle-orm";
 import {
   db,
   atelierInvoice,
@@ -260,7 +260,14 @@ async function computeFacts(orgId: string): Promise<FinanceFacts> {
       // Task #1069 — pending (submitted) claims, reported separately.
       db.select().from(atelierExpenses)
         .where(and(eq(atelierExpenses.orgId, orgId), isNull(atelierExpenses.deletedAt), eq(atelierExpenses.status, "submitted"))),
-      db.select().from(atelierEmployees).where(and(eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt), eq(atelierEmployees.status, "active"))),
+      db.select().from(atelierEmployees).where(and(
+        eq(atelierEmployees.orgId, orgId),
+        isNull(atelierEmployees.deletedAt),
+        eq(atelierEmployees.status, "active"),
+        ne(atelierEmployees.id, "emp_demo_reviewer"),
+        ne(atelierEmployees.personId, "p_demo_reviewer"),
+        ne(sql`lower(coalesce(${atelierEmployees.email}, ''))`, "demo@cognirise.ai"),
+      )),
       db.select().from(atelierContractorPayments).where(and(eq(atelierContractorPayments.orgId, orgId), isNull(atelierContractorPayments.deletedAt))),
       db.select().from(atelierOpportunities).where(and(eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt), inArray(atelierOpportunities.salesStage, OPEN_STAGES))),
       db.select().from(atelierEngagements).where(and(eq(atelierEngagements.orgId, orgId), isNull(atelierEngagements.deletedAt))),

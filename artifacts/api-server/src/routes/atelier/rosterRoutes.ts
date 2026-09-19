@@ -93,6 +93,8 @@ export type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 export interface PersonWire {
   id: string;
   workerType: WorkerType;
+  /** Stable demo marker; clients must never offer mutation/approval actions. */
+  protectedDemo?: boolean;
   fullName: string;
   // Task #538 — unified person model. Structured name fields for form
   // prefill; displayName is server-recomputed and is what UIs render.
@@ -277,6 +279,7 @@ export function toBusinessWire(p: PersonWire): PersonWire {
   return {
     id: p.id,
     workerType: p.workerType,
+    protectedDemo: isProtectedDemoPerson(p),
     fullName: p.fullName,
     // Task #538 — structured name is business identity, safe for scoped viewers.
     personId: p.personId ?? null,
@@ -391,6 +394,12 @@ function ensurePersona(
     return null;
   }
   return req.atelierPersona;
+}
+
+function isProtectedDemoPerson(person: PersonWire): boolean {
+  return person.id === "emp_demo_reviewer" ||
+    person.personId === "p_demo_reviewer" ||
+    (person.email ?? "").toLowerCase() === "demo@cognirise.ai";
 }
 
 function rid(prefix: string): string {
@@ -603,6 +612,8 @@ function employeeToWire(
   const base: PersonWire = {
     id: r.id,
     workerType: "employee",
+    protectedDemo: r.id === "emp_demo_reviewer" || r.personId === "p_demo_reviewer" ||
+      (r.email ?? "").toLowerCase() === "demo@cognirise.ai",
     fullName: r.fullName,
     personId: r.personId ?? null,
     email: r.email,
@@ -661,6 +672,8 @@ function contractorToWire(
   const base: PersonWire = {
     id: r.id,
     workerType: "contractor",
+    protectedDemo: r.id === "emp_demo_reviewer" || r.personId === "p_demo_reviewer" ||
+      (r.email ?? "").toLowerCase() === "demo@cognirise.ai",
     fullName: r.fullName,
     personId: r.personId ?? null,
     email: r.email,
@@ -1171,6 +1184,10 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
+    if (isProtectedDemoPerson(person)) {
+      res.status(403).json({ error: "demo-person-protected" });
+      return;
+    }
     const body = req.body as { gender?: string; nationality?: string | null };
     const update: { gender?: string; nationality?: string | null } = {};
     if (typeof body.gender === "string") {
@@ -1237,6 +1254,10 @@ router.patch("/roster/people/:id/title", async (req, res, next) => {
     const person = await getPerson(req.params.id, true);
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (isProtectedDemoPerson(person)) {
+      res.status(403).json({ error: "demo-person-protected" });
       return;
     }
     if (person.workerType !== "employee") {
@@ -1341,6 +1362,10 @@ router.patch("/roster/people/:id/contact", async (req, res, next) => {
     const person = await getPerson(req.params.id, true);
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (isProtectedDemoPerson(person)) {
+      res.status(403).json({ error: "demo-person-protected" });
       return;
     }
     if (person.workerType !== "employee") {
@@ -1648,6 +1673,10 @@ router.patch("/roster/people/:id", async (req, res, next) => {
     const person = await getPerson(req.params.id, true);
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (isProtectedDemoPerson(person)) {
+      res.status(403).json({ error: "demo-person-protected" });
       return;
     }
     const rawBody = (req.body ?? {}) as Record<string, unknown>;
@@ -2211,6 +2240,10 @@ router.patch("/roster/people/:id/payroll", async (req, res, next) => {
     const person = await getPerson(req.params.id, true);
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (isProtectedDemoPerson(person)) {
+      res.status(403).json({ error: "demo-person-protected" });
       return;
     }
     if (person.workerType !== "employee") {

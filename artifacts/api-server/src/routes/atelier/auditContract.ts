@@ -31,6 +31,8 @@ export const V3_AUDIT_ACTIONS = {
   // Roster ----------------------------------------------------------------
   ROSTER_PERSON_CREATED: "roster.person.created",
   ROSTER_PERSON_UPDATED: "roster.person.updated",
+  ROSTER_PERSON_ARCHIVED: "roster.person.archived",
+  ROSTER_PERSON_REMOVED: "roster.person.removed",
   ROSTER_INVITATION_SENT: "invitation.sent",
   ROSTER_ONBOARDING_CREATED: "onboarding.created",
   ROSTER_ONBOARDING_STEP_DONE: "onboarding.step.done",

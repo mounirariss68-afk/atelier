@@ -9,6 +9,7 @@ import { EditPersonForm } from "./EditPersonForm";
 // Task #509 (T4) — full country-name display everywhere in HR.
 import { countryName } from "@/lib/countries";
 import { CountryCombobox } from "@/components/CountryCombobox";
+import { useAuth } from "@/lib/auth";
 // Task #744 — employee travel loyalty & preferences.
 import {
   TravelProfileCard,
@@ -22,6 +23,7 @@ interface Person {
   workerType: "employee" | "contractor" | "partner_firm_resource";
   fullName: string;
   email: string | null;
+  userId?: string | null;
   role: string | null;
   seniority: string | null;
   title: string | null;
@@ -61,17 +63,14 @@ interface Person {
   compDiffersFromContract?: boolean | null;
 }
 
+function isProtectedDemo(person: Pick<Person, "fullName" | "email" | "userId"> & { id?: string }): boolean {
+  return person.userId === "p_demo_reviewer" || person.email?.trim().toLowerCase() === "demo@cognirise.ai" ||
+    person.id === "p_demo_reviewer" || person.fullName.trim().toLowerCase() === "max headrom";
+}
+
 const TABS = [
   { id: "profile", label: "Profile" },
-  { id: "access", label: "Access" },
-  { id: "engagements", label: "Engagements" },
-  { id: "skills", label: "Skills" },
-  { id: "learning", label: "Learning" },
-  { id: "performance", label: "Performance" },
   { id: "timesheet", label: "Time" },
-  { id: "documents", label: "Documents" },
-  { id: "conflicts", label: "Conflicts" },
-  { id: "audit", label: "Audit" },
 ];
 
 export default function RosterPerson() {
@@ -88,6 +87,10 @@ export default function RosterPerson() {
   const underPeople = !!(pParams || pParamsTab);
   const dirHref = underPeople ? "/people/people" : "/roster/people";
   const tabBase = `${dirHref}/${personId}`;
+  // Keep every hook above loading/missing-person returns. In particular,
+  // useAuth must not move below the async dossier guard or route transitions
+  // can change hook order and crash the detail page.
+  const { user } = useAuth();
 
   const [person, setPerson] = React.useState<Person | null>(null);
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
@@ -115,12 +118,14 @@ export default function RosterPerson() {
   if (!personId) return null;
   if (!person)
     return <div className="px-8 py-12 text-text-mute">Loading…</div>;
+  const protectedDemo = isProtectedDemo(person);
 
-  // Task #1171 — partner contacts have no worker surfaces; direct deep
-  // links to those tabs normalize to Profile instead of rendering them.
-  const PFR_HIDDEN_TABS = ["timesheet", "skills", "learning", "performance", "conflicts"];
+  // Task #1341 — the roster MVP only exposes the retained profile and time
+  // tabs. Historical links normalize to the profile without mounting hidden
+  // feature queries.
+  const PFR_HIDDEN_TABS = ["access", "engagements", "skills", "learning", "performance", "conflicts", "documents", "audit"];
   const isPfr = person.workerType === "partner_firm_resource";
-  const effectiveTab = isPfr && PFR_HIDDEN_TABS.includes(activeTab) ? "profile" : activeTab;
+  const effectiveTab = PFR_HIDDEN_TABS.includes(activeTab) ? "profile" : activeTab;
 
   return (
     <div>
@@ -145,6 +150,7 @@ export default function RosterPerson() {
           {person.seniority && <MonoChip>{person.seniority}</MonoChip>}
           {person.country && <MonoChip>{countryName(person.country)}</MonoChip>}
           <MonoChip>{person.status}</MonoChip>
+          {protectedDemo && <MonoChip tone="gold">App Store demo · protected</MonoChip>}
         </div>
       </PageHero>
       <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
@@ -182,9 +188,15 @@ export default function RosterPerson() {
       </TabNav>
 
       <div className="mt-6">
-        {effectiveTab === "profile" && (
-          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEdit={viewerCanEdit} viewerCanEditTitle={viewerCanEditTitle} onUpdated={setPerson} />
+        {protectedDemo && (
+          <Card className="mb-4 border-gold/40 p-3 text-sm text-text-mute" data-testid="protected-demo-notice">
+            This is the protected App Store demo persona. Editing, archive, deactivation and deletion are unavailable.
+          </Card>
         )}
+        {effectiveTab === "profile" && (
+          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEdit={viewerCanEdit && !protectedDemo} viewerCanEditTitle={viewerCanEditTitle && !protectedDemo} onUpdated={setPerson} />
+        )}
+        {!protectedDemo && <SafeRemovalPanel role={user?.role} personId={personId} fullName={person.fullName} onRemoved={() => window.location.assign(dirHref)} />}
         {effectiveTab === "access" && <AccessTab personId={personId} />}
         {effectiveTab === "engagements" && <EngagementsTab personId={personId} />}
         {effectiveTab === "skills" && (
@@ -210,6 +222,58 @@ export default function RosterPerson() {
       </div>
       </div>
     </div>
+  );
+}
+
+function SafeRemovalPanel({ role, personId, fullName, onRemoved }: {
+  role?: string | null;
+  personId: string;
+  fullName: string;
+  onRemoved: () => void;
+}) {
+  const [check, setCheck] = React.useState<{ eligible?: boolean; dependencies?: Array<{ key: string; label: string; count: number }>; protected?: boolean } | null>(null);
+  const [confirmName, setConfirmName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!["founding_partner", "partner", "finance", "hr"].includes(role ?? "")) return;
+    fetch(`/api/atelier/roster/people/${personId}/removal-check`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setCheck(d))
+      .catch(() => undefined);
+  }, [personId, role]);
+  if (!["founding_partner", "partner", "finance", "hr"].includes(role ?? "")) return null;
+  if (!check || check.protected) return null;
+  const submit = async (action: "remove" | "archive") => {
+    if (confirmName !== fullName) { setMessage("Type the full name exactly to confirm."); return; }
+    setBusy(true); setMessage(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/people/${personId}${action === "remove" ? "" : "/archive"}`, {
+        method: action === "remove" ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ confirmName }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message ?? d.error ?? "Action failed.");
+      setMessage(action === "remove" ? "Person permanently removed." : "Person archived and access revoked.");
+      setTimeout(onRemoved, 700);
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Action failed."); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Card className="mt-6 border-warn/40 p-4 space-y-3" data-testid="safe-removal-panel">
+      <h3 className="text-sm font-semibold">Roster record safety</h3>
+      {check.dependencies?.length ? (
+        <p className="text-xs text-text-mute">Permanent removal is unavailable because this record has history: {check.dependencies.map((d) => `${d.label} (${d.count})`).join(" · ")}.</p>
+      ) : <p className="text-xs text-text-mute">No payroll, timesheet, expense, contract, document, engagement or audit history was found. Permanent removal is available.</p>}
+      <input className="glass-surface border border-border-soft rounded px-2 py-1 text-xs w-full" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={`Type “${fullName}” to confirm`} data-testid="removal-confirm-name" />
+      <div className="flex gap-2 flex-wrap">
+        {check.eligible && <button disabled={busy} onClick={() => submit("remove")} className="rounded bg-red-600 px-3 py-1 text-xs text-white" data-testid="permanent-remove">Permanently remove</button>}
+        <button disabled={busy} onClick={() => submit("archive")} className="rounded border border-border px-3 py-1 text-xs" data-testid="archive-person">Archive and revoke access</button>
+      </div>
+      {message && <p className="text-xs text-text-mute" role="status">{message}</p>}
+    </Card>
   );
 }
 

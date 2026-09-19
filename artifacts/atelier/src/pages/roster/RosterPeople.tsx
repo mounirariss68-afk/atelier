@@ -21,6 +21,7 @@ interface PersonRow {
   workerType: WorkerType;
   fullName: string;
   email: string | null;
+  userId?: string | null;
   role: string | null;
   seniority: string | null;
   title: string | null;
@@ -32,6 +33,11 @@ interface PersonRow {
   // composition deep-link narrows the listing (e.g. `?nationality=EG`).
   gender?: string | null;
   nationality?: string | null;
+}
+
+function isProtectedDemo(person: Pick<PersonRow, "fullName" | "email" | "userId"> & { id?: string }): boolean {
+  return person.userId === "p_demo_reviewer" || person.email?.trim().toLowerCase() === "demo@cognirise.ai" ||
+    person.id === "p_demo_reviewer" || person.fullName.trim().toLowerCase() === "max headrom";
 }
 
 const WORKER_LABEL: Record<WorkerType, string> = {
@@ -138,6 +144,7 @@ export default function RosterPeople() {
   const counts = React.useMemo(() => {
     const c = { all: 0, employee: 0, contractor: 0, partner_firm_resource: 0 };
     (people ?? []).forEach((p) => {
+      if (isProtectedDemo(p)) return;
       c.all++;
       c[p.workerType]++;
     });
@@ -302,11 +309,12 @@ export default function RosterPeople() {
               key={p.id}
               href={`/roster/people/${p.id}`}
               accentClass={WORKER_COLOR[p.workerType]}
-              title={p.fullName}
+               title={p.fullName}
               subtitle={p.title}
               data-testid={`person-row-${p.id}`}
-              chips={
+               chips={
                 <>
+                  {isProtectedDemo(p) && <MonoChip tone="gold">App Store demo · protected</MonoChip>}
                   {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
                   {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
                   {p.partnerFirmName && <MonoChip>{p.partnerFirmName}</MonoChip>}
@@ -335,8 +343,9 @@ export default function RosterPeople() {
             title={p.fullName}
             subtitle={p.title}
             trailing={<MonoChip>{WORKER_LABEL[p.workerType]}</MonoChip>}
-            chips={
+             chips={
               <>
+                {isProtectedDemo(p) && <MonoChip tone="gold">App Store demo · protected</MonoChip>}
                 {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
                 {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
                 {p.nationality && <MonoChip>nat · {countryName(p.nationality)}</MonoChip>}

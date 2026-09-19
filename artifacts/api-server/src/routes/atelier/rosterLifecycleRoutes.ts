@@ -46,11 +46,25 @@ import {
   atelierComplianceRecords,
   atelierPartnerFirmDocuments,
   atelierPaneAItems,
-  atelierRosterReportsTo,
   atelierStudioCandidates,
   atelierStudioOffers,
   atelierAuthCredentials,
+  atelierAuthSessions,
   atelierLoginActivationTokens,
+  atelierPersonDocuments,
+  atelierDependents,
+  atelierEmergencyContacts,
+  atelierPersons,
+  atelierRosterReportsTo,
+  atelierTimesheetWeeks,
+  atelierTimesheetEntries,
+  atelierLeaveRequests,
+  atelierExpenses,
+  atelierContractRecords,
+  atelierCompChanges,
+  atelierPayrollLines,
+  atelierEosbSettlements,
+  atelierSalaryAdvances,
   atelierLegalEntities,
 } from "@workspace/db";
 import { runAccessSentinel } from "./rosterRoutes.js";
@@ -150,16 +164,17 @@ async function audit(args: {
 // Resolve a person id across the three roster tables.
 async function findPerson(
   id: string,
+  orgId?: string,
 ): Promise<{ id: string; workerType: WorkerType; fullName: string; email: string | null; personId: string | null } | null> {
   const [emp] = await db
     .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, email: atelierEmployees.email, personId: atelierEmployees.personId })
     .from(atelierEmployees)
-    .where(and(eq(atelierEmployees.id, id), isNull(atelierEmployees.deletedAt)));
+   .where(and(eq(atelierEmployees.id, id), ...(orgId ? [eq(atelierEmployees.orgId, orgId)] : []), isNull(atelierEmployees.deletedAt)));
   if (emp) return { ...emp, workerType: "employee" };
   const [ct] = await db
     .select({ id: atelierContractors.id, fullName: atelierContractors.fullName, email: atelierContractors.email, personId: atelierContractors.personId })
     .from(atelierContractors)
-    .where(and(eq(atelierContractors.id, id), isNull(atelierContractors.deletedAt)));
+   .where(and(eq(atelierContractors.id, id), ...(orgId ? [eq(atelierContractors.orgId, orgId)] : []), isNull(atelierContractors.deletedAt)));
   if (ct) return { ...ct, workerType: "contractor" };
   const [pr] = await db
     .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, email: atelierPartnerFirmResources.email, personId: atelierPartnerFirmResources.personId })
@@ -167,6 +182,7 @@ async function findPerson(
     .where(
       and(
         eq(atelierPartnerFirmResources.id, id),
+        ...(orgId ? [eq(atelierPartnerFirmResources.orgId, orgId)] : []),
         isNull(atelierPartnerFirmResources.deletedAt),
       ),
     );
@@ -187,20 +203,211 @@ async function findPerson(
  */
 async function resolveLinkedUserIdForPerson(
   person: { id: string; workerType: WorkerType; email: string | null },
+  source: Pick<typeof db, "select"> = db,
+  orgId?: string,
 ): Promise<string | null> {
   if (person.workerType === "employee") {
-    const [emp] = await db
+    const [emp] = await source
       .select({ userId: atelierEmployees.userId })
       .from(atelierEmployees)
-      .where(eq(atelierEmployees.id, person.id));
-    return emp?.userId ?? null;
+      .where(and(eq(atelierEmployees.id, person.id), ...(orgId ? [eq(atelierEmployees.orgId, orgId)] : [])));
+    if (!emp?.userId) return null;
+    const [user] = await source.select({ id: atelierUsers.id }).from(atelierUsers)
+      .where(and(eq(atelierUsers.id, emp.userId), ...(orgId ? [eq(atelierUsers.orgId, orgId)] : [])));
+    return user?.id ?? null;
   }
   if (!person.email) return null;
-  const [u] = await db
+  const [u] = await source
     .select({ id: atelierUsers.id })
     .from(atelierUsers)
-    .where(eq(atelierUsers.email, person.email));
+    .where(and(eq(atelierUsers.email, person.email), ...(orgId ? [eq(atelierUsers.orgId, orgId)] : [])));
   return u?.id ?? null;
+}
+
+const PROTECTED_DEMO_USER_ID = "p_demo_reviewer";
+const PROTECTED_DEMO_EMAIL = "demo@cognirise.ai";
+
+type RemovalDependency = { key: string; label: string; count: number };
+
+/**
+ * Removal is intentionally conservative. A row with anything beyond its
+ * creation/audit scaffolding is archived instead of destroyed. This helper
+ * is also used by the UI's preflight endpoint, so the decision shown to HR is
+ * the same decision enforced by DELETE.
+ */
+async function removalDependencies(
+  person: { id: string; workerType: WorkerType; email: string | null; personId: string | null },
+  orgId: string,
+  source: Pick<typeof db, "select"> = db,
+): Promise<RemovalDependency[]> {
+  const typed = person.workerType;
+  const checks: Array<Promise<RemovalDependency>> = [];
+  const linkedUserId = await resolveLinkedUserIdForPerson(person, source, orgId);
+  const add = (
+    key: string,
+    label: string,
+    query: Promise<Array<unknown>>,
+  ) => checks.push(query.then((rows) => ({ key, label, count: rows.length })));
+  add(
+    "reports",
+    "reporting-line assignments",
+    source.select({ id: atelierRosterReportsTo.id }).from(atelierRosterReportsTo).where(
+      or(eq(atelierRosterReportsTo.personId, person.id), eq(atelierRosterReportsTo.managerPersonId, person.id)),
+    ),
+  );
+  add(
+    "documents",
+    "personal or identity documents",
+    source.select({ id: atelierPersonDocuments.id }).from(atelierPersonDocuments).where(
+      and(eq(atelierPersonDocuments.orgId, orgId), eq(atelierPersonDocuments.personId, person.id)),
+    ),
+  );
+  add(
+    "conflicts",
+    "conflict disclosures",
+    source.select({ id: atelierConflictDisclosures.id }).from(atelierConflictDisclosures).where(
+      and(eq(atelierConflictDisclosures.orgId, orgId), eq(atelierConflictDisclosures.personId, person.id)),
+    ),
+  );
+  add(
+    "onboarding",
+    "onboarding history",
+    source.select({ id: atelierOnboardings.id }).from(atelierOnboardings).where(
+      and(eq(atelierOnboardings.orgId, orgId), eq(atelierOnboardings.personId, person.id)),
+    ),
+  );
+  add(
+    "offboarding",
+    "offboarding history",
+    source.select({ id: atelierOffboardings.id }).from(atelierOffboardings).where(
+      and(eq(atelierOffboardings.orgId, orgId), eq(atelierOffboardings.personId, person.id)),
+    ),
+  );
+  add(
+    "dependents",
+    "dependents",
+    source.select({ id: atelierDependents.id }).from(atelierDependents).where(
+      and(eq(atelierDependents.orgId, orgId), eq(atelierDependents.personId, person.id)),
+    ),
+  );
+  add(
+    "emergency_contacts",
+    "emergency contacts",
+    source.select({ id: atelierEmergencyContacts.id }).from(atelierEmergencyContacts).where(
+      and(eq(atelierEmergencyContacts.orgId, orgId), eq(atelierEmergencyContacts.personId, person.id)),
+    ),
+  );
+  add(
+    "timesheets",
+    "timesheets",
+    source.select({ id: atelierTimesheetWeeks.id }).from(atelierTimesheetWeeks).where(
+      and(eq(atelierTimesheetWeeks.orgId, orgId), eq(atelierTimesheetWeeks.personId, person.id)),
+    ),
+  );
+  add(
+    "timesheet_entries",
+    "timesheet entries",
+    source.select({ id: atelierTimesheetEntries.id }).from(atelierTimesheetEntries).where(
+      and(eq(atelierTimesheetEntries.orgId, orgId), eq(atelierTimesheetEntries.personId, person.id)),
+    ),
+  );
+  add(
+    "leave",
+    "leave requests",
+    source.select({ id: atelierLeaveRequests.id }).from(atelierLeaveRequests).where(
+      and(eq(atelierLeaveRequests.orgId, orgId), eq(atelierLeaveRequests.personId, person.id)),
+    ),
+  );
+  add(
+    "expenses",
+    "expense claims",
+    source.select({ id: atelierExpenses.id }).from(atelierExpenses).where(
+      and(
+        eq(atelierExpenses.orgId, orgId),
+        linkedUserId
+          ? or(eq(atelierExpenses.personId, person.id), eq(atelierExpenses.personId, linkedUserId))
+          : eq(atelierExpenses.personId, person.id),
+      ),
+    ),
+  );
+  add(
+    "contracts",
+    "contract records",
+    source.select({ id: atelierContractRecords.id }).from(atelierContractRecords).where(
+      and(eq(atelierContractRecords.orgId, orgId), eq(atelierContractRecords.personId, person.id)),
+    ),
+  );
+  if (typed === "employee") {
+    add(
+      "compensation",
+      "compensation history",
+      source.select({ id: atelierCompChanges.id }).from(atelierCompChanges).where(
+        and(eq(atelierCompChanges.orgId, orgId), eq(atelierCompChanges.employeeId, person.id)),
+      ),
+    );
+    add(
+      "payroll",
+      "payroll lines",
+      source.select({ id: atelierPayrollLines.id }).from(atelierPayrollLines).where(
+        and(eq(atelierPayrollLines.orgId, orgId), eq(atelierPayrollLines.employeeId, person.id)),
+      ),
+    );
+    add(
+      "eosb",
+      "end-of-service settlement",
+      source.select({ id: atelierEosbSettlements.id }).from(atelierEosbSettlements).where(
+        and(eq(atelierEosbSettlements.orgId, orgId), eq(atelierEosbSettlements.employeeId, person.id)),
+      ),
+    );
+    add(
+      "salary_advances",
+      "salary advances",
+      source.select({ id: atelierSalaryAdvances.id }).from(atelierSalaryAdvances).where(
+        and(eq(atelierSalaryAdvances.orgId, orgId), eq(atelierSalaryAdvances.employeeId, person.id)),
+      ),
+    );
+  }
+  if (linkedUserId) {
+    add(
+      "engagements",
+      "engagement access",
+      source.select({ id: atelierEngagementAccess.id }).from(atelierEngagementAccess).where(
+      eq(atelierEngagementAccess.userId, linkedUserId),
+      ),
+    );
+  }
+  // Audit rows are history, but the single creation row is expected. Any
+  // second audit event means the record has meaningful history.
+  add(
+    "audit",
+    "audit history",
+    source.select({ id: atelierAuditEvents.id }).from(atelierAuditEvents).where(
+      and(
+        eq(atelierAuditEvents.entityId, person.id),
+        sql`${atelierAuditEvents.action} <> 'roster.person.created'`,
+      ),
+    ),
+  );
+  return (await Promise.all(checks)).filter((d) => d.count > 0);
+}
+
+function isProtectedDemo(person: { email: string | null; id: string; personId: string | null }): boolean {
+  return (
+    person.id === "emp_demo_reviewer" ||
+    person.personId === PROTECTED_DEMO_USER_ID ||
+    (person.email ?? "").toLowerCase() === PROTECTED_DEMO_EMAIL
+  );
+}
+
+function rejectUnsupportedRemovalType(
+  person: { workerType: WorkerType },
+  res: Response,
+): boolean {
+  if (person.workerType === "partner_firm_resource") {
+    res.status(422).json({ error: "partner-firm-resource-removal-unsupported" });
+    return true;
+  }
+  return false;
 }
 
 // -----------------------------------------------------------------
@@ -1774,6 +1981,148 @@ router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
 });
 
 // -----------------------------------------------------------------
+function exactIdentityConfirmed(body: unknown, fullName: string): boolean {
+  return !!body && typeof body === "object" &&
+    (body as { confirmName?: unknown }).confirmName === fullName;
+}
+
+function removalResponse(
+  person: { id: string; workerType: WorkerType; fullName: string; email: string | null; personId: string | null },
+  dependencies: RemovalDependency[],
+) {
+  return {
+    person: { id: person.id, workerType: person.workerType, fullName: person.fullName },
+    protected: isProtectedDemo(person),
+    eligible: !isProtectedDemo(person) && dependencies.length === 0,
+    dependencies,
+  };
+}
+
+router.get("/roster/people/:id/removal-check", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isPartnerOrOps(me)) return res.status(403).json({ error: "partner-or-operations-only" });
+    const person = await findPerson(req.params.id, me.orgId);
+    if (!person) return res.status(404).json({ error: "person-not-found" });
+    if (rejectUnsupportedRemovalType(person, res)) return;
+    return res.json(removalResponse(person, await removalDependencies(person, me.orgId)));
+  } catch (err) { return next(err); }
+});
+
+router.post("/roster/people/:id/archive", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isPartnerOrOps(me)) return res.status(403).json({ error: "partner-or-operations-only" });
+    const person = await findPerson(req.params.id, me.orgId);
+    if (!person) return res.status(404).json({ error: "person-not-found" });
+    if (rejectUnsupportedRemovalType(person, res)) return;
+    if (isProtectedDemo(person)) return res.status(403).json({ error: "demo-person-protected" });
+    if (!exactIdentityConfirmed(req.body, person.fullName)) {
+      return res.status(400).json({ error: "identity-confirmation-required", expected: person.fullName });
+    }
+    const now = new Date();
+    const userId = await resolveLinkedUserIdForPerson(person, db, me.orgId);
+    await db.transaction(async (tx) => {
+      const endDate = (req.body as { endDate?: string }).endDate ?? null;
+      let affected;
+      if (person.workerType === "employee") {
+        affected = await tx.update(atelierEmployees).set({ status: "offboarded", employmentStatus: "terminated", endDate, updatedAt: now })
+          .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)));
+      } else {
+        affected = await tx.update(atelierContractors).set({ status: "offboarded", endDate, updatedAt: now })
+          .where(and(eq(atelierContractors.id, person.id), eq(atelierContractors.orgId, me.orgId)));
+      }
+      if (affected.rowCount !== 1) throw new Error("roster-row-not-affected");
+      if (userId) {
+        const [linkedUser] = await tx.select({ id: atelierUsers.id }).from(atelierUsers)
+          .where(and(eq(atelierUsers.id, userId), eq(atelierUsers.orgId, me.orgId)));
+        if (!linkedUser) throw new Error("linked-user-org-mismatch");
+        await tx.update(atelierEngagementAccess).set({ status: "revoked", deletedAt: now }).where(eq(atelierEngagementAccess.userId, userId));
+        await tx.update(atelierAuthCredentials).set({ disabled: true, mustChangePassword: false, updatedAt: now }).where(eq(atelierAuthCredentials.userId, userId));
+        await tx.delete(atelierLoginActivationTokens).where(eq(atelierLoginActivationTokens.userId, userId));
+        await tx.delete(atelierAuthSessions).where(eq(atelierAuthSessions.userId, userId));
+      }
+      assertAuditAction("roster.person.archived");
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"), orgId: me.orgId, entityType: "person", entityId: person.id,
+        actorType: "human", actorId: me.id, actorLabel: me.name,
+        action: "roster.person.archived",
+        payload: { workerType: person.workerType, userId, reason: (req.body as { reason?: string }).reason ?? null },
+        payloadSummary: `${me.name} archived ${person.fullName}; access and sessions revoked.`,
+      });
+    });
+    return res.json({ ok: true, action: "archived", personId: person.id, accessRevoked: !!userId });
+  } catch (err) { return next(err); }
+});
+
+router.delete("/roster/people/:id", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isPartnerOrOps(me)) return res.status(403).json({ error: "partner-or-operations-only" });
+    const person = await findPerson(req.params.id, me.orgId);
+    if (!person) return res.status(404).json({ error: "person-not-found" });
+    if (rejectUnsupportedRemovalType(person, res)) return;
+    if (isProtectedDemo(person)) return res.status(403).json({ error: "demo-person-protected" });
+    if (!exactIdentityConfirmed(req.body, person.fullName)) {
+      return res.status(400).json({ error: "identity-confirmation-required", expected: person.fullName });
+    }
+    const dependencies = await removalDependencies(person, me.orgId);
+    if (dependencies.length > 0) {
+      return res.status(409).json({ error: "person-has-history", message: "This person must be archived/offboarded.", ...removalResponse(person, dependencies) });
+    }
+    const userId = await resolveLinkedUserIdForPerson(person, db, me.orgId);
+    let dependenciesInsideTransaction: RemovalDependency[] = [];
+    await db.transaction(async (tx) => {
+      // Serialize removal attempts for this roster id, then perform the
+      // eligibility read through the transaction handle. This closes the
+      // preflight/delete TOCTOU window when another actor adds history.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`${me.orgId}:roster:${person.id}`}))`);
+      dependenciesInsideTransaction = await removalDependencies(person, me.orgId, tx);
+      if (dependenciesInsideTransaction.length > 0) return;
+      await tx.delete(atelierRosterReportsTo).where(or(eq(atelierRosterReportsTo.personId, person.id), eq(atelierRosterReportsTo.managerPersonId, person.id)));
+      await tx.delete(atelierConflictDisclosures).where(eq(atelierConflictDisclosures.personId, person.id));
+      await tx.delete(atelierPersonDocuments).where(eq(atelierPersonDocuments.personId, person.id));
+      await tx.delete(atelierDependents).where(eq(atelierDependents.personId, person.id));
+      await tx.delete(atelierEmergencyContacts).where(eq(atelierEmergencyContacts.personId, person.id));
+      let affected;
+      if (person.workerType === "employee") {
+        affected = await tx.delete(atelierEmployees).where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)));
+      } else {
+        affected = await tx.delete(atelierContractors).where(and(eq(atelierContractors.id, person.id), eq(atelierContractors.orgId, me.orgId)));
+      }
+      if (affected.rowCount !== 1) throw new Error("roster-row-not-affected");
+      if (userId) {
+        const [linkedUser] = await tx.select({ id: atelierUsers.id }).from(atelierUsers)
+          .where(and(eq(atelierUsers.id, userId), eq(atelierUsers.orgId, me.orgId)));
+        if (!linkedUser) throw new Error("linked-user-org-mismatch");
+        await tx.delete(atelierEngagementAccess).where(eq(atelierEngagementAccess.userId, userId));
+        await tx.delete(atelierLoginActivationTokens).where(eq(atelierLoginActivationTokens.userId, userId));
+        await tx.delete(atelierAuthSessions).where(eq(atelierAuthSessions.userId, userId));
+        await tx.delete(atelierAuthCredentials).where(eq(atelierAuthCredentials.userId, userId));
+      }
+      if (person.personId) await tx.delete(atelierPersons).where(and(eq(atelierPersons.id, person.personId), eq(atelierPersons.orgId, me.orgId)));
+      assertAuditAction("roster.person.removed");
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"), orgId: me.orgId, entityType: "person", entityId: person.id,
+        actorType: "human", actorId: me.id, actorLabel: me.name, action: "roster.person.removed",
+        payload: { workerType: person.workerType, userId, confirmedName: person.fullName },
+        payloadSummary: `${me.name} permanently removed pristine ${person.workerType} ${person.fullName}.`,
+      });
+    });
+    if (dependenciesInsideTransaction.length > 0) {
+      return res.status(409).json({
+        error: "person-has-history",
+        message: "History was added while this removal was being confirmed; archive/offboard instead.",
+        ...removalResponse(person, dependenciesInsideTransaction),
+      });
+    }
+    return res.json({ ok: true, action: "removed", personId: person.id, accessRevoked: !!userId });
+  } catch (err) { return next(err); }
+});
+
 // /roster/people — quick add (Task #759)
 //
 // Streamlined direct create for people who are ALREADY hired (or
@@ -1885,6 +2234,10 @@ router.post("/roster/people", async (req, res, next) => {
     // Optional manager — must be an existing (non-deleted) employee.
     const managerPersonId = (body.managerPersonId ?? "").trim() || null;
     if (managerPersonId) {
+      if (managerPersonId === "emp_demo_reviewer") {
+        res.status(400).json({ error: "protected-demo-cannot-be-manager" });
+        return;
+      }
       const [mgr] = await db
         .select({ id: atelierEmployees.id })
         .from(atelierEmployees)

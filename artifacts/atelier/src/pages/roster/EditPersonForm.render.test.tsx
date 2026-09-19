@@ -9,6 +9,9 @@ import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { EditPersonForm, type EditablePerson } from "./EditPersonForm";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 const person: EditablePerson = {
   id: "emp_test_ada",
@@ -61,6 +64,7 @@ function check(name: string, ok: boolean) {
 const createHtml = renderForm(null);
 const contractorCreateHtml = renderForm(null, false, "contractor");
 const editHtml = renderForm(person, true);
+const formSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "EditPersonForm.tsx"), "utf8");
 
 check("create mode renders the unified roster form", createHtml.includes("Add person to the roster"));
 check(
@@ -98,6 +102,25 @@ check(
     editHtml.includes(">Female<") &&
     editHtml.includes(">Male<") &&
     !editHtml.includes("unspecified"),
+);
+check(
+  "quick-add has an essentials then review staged contract",
+  formSource.indexOf('createStep === "essentials"') < formSource.indexOf('createStep === "review"') &&
+    formSource.includes('setCreateStep("review")') &&
+    formSource.includes('data-testid="quick-add-review"'),
+);
+check(
+  "quick-add duplicate warning checks normalized email and names",
+  formSource.includes("emailResponse") &&
+    formSource.includes("nameResponse") &&
+    formSource.includes("quick-add-duplicate-warning"),
+);
+check(
+  "quick-add exposes activation and profile completion outcomes",
+  createHtml.includes("quick-add-run-onboarding") &&
+    createHtml.includes("quick-add-create-login") &&
+    formSource.includes("quick-add-complete-profile") &&
+    formSource.includes("quick-add-activation-link"),
 );
 
 if (failures > 0) {

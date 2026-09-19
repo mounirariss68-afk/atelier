@@ -12,7 +12,7 @@
  * to render or reason about the picker should import from here.
  */
 
-import { STAGES as PEOPLE_STAGES } from "@/pages/people/peopleLifecycle";
+import { PEOPLE_MVP_SECTIONS, ME_MVP_SECTIONS } from "./peopleMeMvp";
 import {
   Archive,
   Banknote,
@@ -69,16 +69,6 @@ import {
  * generated from `peopleLifecycle.STAGES`, so icons are keyed by stage id
  * here (nav concerns stay in lens.ts; peopleLifecycle stays icon-free).
  */
-const PEOPLE_STAGE_ICONS: Record<string, LucideIcon> = {
-  attract: Magnet,
-  hire: UserPlus,
-  onboard: DoorOpen,
-  develop: GraduationCap,
-  perform: Gauge,
-  reward: Gift,
-  offboard: UserMinus,
-};
-
 export type LensId =
   | "clients"
   | "people"
@@ -151,23 +141,10 @@ export const LENSES: readonly LensDef[] = [
     // Nav defined once (Task #509): the lifecycle strip derives from
     // peopleLifecycle.STAGES so the two nav configs can't drift.
     sections: [
-      { id: "overview", label: "Overview", href: "/people", icon: LayoutDashboard },
-      { id: "roster", label: "Roster", href: "/people/people", icon: Users },
-      ...PEOPLE_STAGES.map((s) => ({
-        id: s.id,
-        label: s.label,
-        href: s.href,
-        icon: PEOPLE_STAGE_ICONS[s.id] ?? Users,
+      ...PEOPLE_MVP_SECTIONS.map((s) => ({
+        ...s,
+        icon: s.id === "roster" ? Users : s.id === "time" ? Clock : ClipboardCheck,
       })),
-    ],
-    // Cross-cutting People modules — reachable but out of the primary
-    // lifecycle strip so it doesn't overcrowd.
-    more: [
-      { id: "access", label: "Access", href: "/people/access", icon: KeyRound },
-      { id: "skills", label: "Skills", href: "/people/skills", icon: Network },
-      { id: "time", label: "Time", href: "/people/time", icon: Clock },
-      { id: "compliance", label: "Compliance", href: "/people/compliance", icon: ShieldCheck },
-      { id: "approvals", label: "Approvals", href: "/people/approvals", icon: ClipboardCheck },
     ],
   },
   {
@@ -263,21 +240,14 @@ export const LENSES: readonly LensDef[] = [
     description: "Your profile, time, expenses, pay, performance, learning.",
     shortcut: "⌘7",
     shortcutKey: "7",
-    sections: [
-      { id: "overview", label: "Overview", href: "/me", icon: LayoutDashboard },
-      // Task #1002 — personal tasks & reminders (self-scope, every role).
-      { id: "tasks", label: "Tasks", href: "/me/tasks", icon: ClipboardCheck },
-      { id: "profile", label: "Profile", href: "/me/profile", icon: User },
-      { id: "time", label: "Time", href: "/me/time", icon: Clock },
-      { id: "expenses", label: "Expenses", href: "/me/expenses", icon: Receipt },
-      { id: "pay", label: "Pay & Benefits", href: "/me/pay", icon: Wallet },
-      { id: "performance", label: "Performance", href: "/me/performance", icon: Gauge },
-      { id: "learning", label: "Learning", href: "/me/learning", icon: GraduationCap },
-      // Task #386 — role-gated in LensSectionTabs: Delegates is
-      // partner-tier only; Assist is the EA workspace (self-only roles).
-      { id: "delegates", label: "Delegates", href: "/me/delegates", icon: Users },
-      { id: "assist", label: "Assist", href: "/me/assist", icon: Sparkles },
-    ],
+    sections: ME_MVP_SECTIONS.map((s) => ({
+      ...s,
+      icon:
+        s.id === "overview" ? LayoutDashboard :
+        s.id === "profile" ? User :
+        s.id === "time" ? Clock :
+        s.id === "expenses" ? Receipt : Wallet,
+    })),
   },
 ] as const;
 
@@ -297,18 +267,7 @@ export function meSectionVisibleForRole(
   sectionId: string,
   role: string | null | undefined,
 ): boolean {
-  if (sectionId === "performance") {
-    // Contractors AND non-equity partners (roster contractors, Task #1297)
-    // are 403'd on reviews/goals server-side.
-    return role !== "contractor" && role !== "non_equity_partner";
-  }
-  if (sectionId === "delegates") {
-    return role === "partner" || role === "founding_partner";
-  }
-  if (sectionId === "assist") {
-    return role === "employee" || role === "contractor";
-  }
-  return true;
+  return ME_MVP_SECTIONS.some((section) => section.id === sectionId);
 }
 
 /**

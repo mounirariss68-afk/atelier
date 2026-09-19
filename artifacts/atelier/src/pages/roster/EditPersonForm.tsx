@@ -235,6 +235,8 @@ export function EditPersonForm({
   const [error, setError] = React.useState<string | null>(null);
   const [runOnboarding, setRunOnboarding] = React.useState(false);
   const [createLogin, setCreateLogin] = React.useState(false);
+  const [createStep, setCreateStep] = React.useState<"essentials" | "review">("essentials");
+  const [duplicates, setDuplicates] = React.useState<Array<{ id: string; fullName: string; email: string | null }>>([]);
   const [managerPersonId, setManagerPersonId] = React.useState("");
   const [managers, setManagers] = React.useState<
     Array<{ id: string; fullName: string; title: string | null }>
@@ -300,9 +302,11 @@ export function EditPersonForm({
               id: string;
               fullName: string;
               title: string | null;
+              email?: string | null;
               status: string;
             }>)
               .filter((p) => p.status === "active")
+              .filter((p) => p.fullName.trim().toLowerCase() !== "max headrom" && p.email?.toLowerCase() !== "demo@cognirise.ai")
               .map((p) => ({ id: p.id, fullName: p.fullName, title: p.title })),
           ),
         )
@@ -476,6 +480,29 @@ export function EditPersonForm({
         setError(createBody.error);
         return;
       }
+      if (createStep === "essentials") {
+        try {
+          const fullName = `${draft.firstName} ${draft.lastName}`.trim();
+          const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const [emailResponse, nameResponse] = await Promise.all([
+            fetch(`/api/atelier/roster/people?q=${encodeURIComponent(draft.email.trim())}`, { credentials: "include" }),
+            fetch(`/api/atelier/roster/people?q=${encodeURIComponent(fullName)}`, { credentials: "include" }),
+          ]);
+          const emailData = emailResponse.ok ? await emailResponse.json() : { people: [] };
+          const nameData = nameResponse.ok ? await nameResponse.json() : { people: [] };
+          const byId = new Map<string, { id: string; fullName: string; email: string | null }>();
+          for (const p of [...(emailData.people ?? []), ...(nameData.people ?? [])]) {
+            const emailMatch = p.email?.trim().toLowerCase() === draft.email.trim().toLowerCase();
+            const nameMatch = normalize(p.fullName ?? "") === normalize(fullName) ||
+              normalize(p.fullName ?? "").includes(normalize(fullName)) ||
+              normalize(fullName).includes(normalize(p.fullName ?? ""));
+            if (emailMatch || nameMatch) byId.set(p.id, p);
+          }
+          setDuplicates(Array.from(byId.values()));
+        } catch { setDuplicates([]); }
+        setCreateStep("review");
+        return;
+      }
       try {
         const created = await quickAddMutation.mutateAsync({ data: createBody });
         onCreated?.({ id: created.id, fullName: created.fullName });
@@ -596,6 +623,16 @@ export function EditPersonForm({
         )}
         <div className="flex justify-end gap-2">
           <button
+            onClick={() => {
+              onClose();
+              navigate(`/roster/people/${success.id}`);
+            }}
+            className="text-[10px] font-mono uppercase tracking-widest border border-border px-3 py-1 rounded"
+            data-testid="quick-add-complete-profile"
+          >
+            Complete profile
+          </button>
+          <button
             onClick={onClose}
             className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-3 py-1"
             data-testid="quick-add-done"
@@ -653,6 +690,18 @@ export function EditPersonForm({
             ))}
           </div>
         </section>
+      )}
+      {isCreate && createStep === "review" && (
+        <Card className="border-gold/40 p-3 space-y-2" data-testid="quick-add-review">
+          <div className={label}>Review before creating</div>
+          <p className="text-sm">{draft.firstName} {draft.lastName} · {draft.email} · {workerType}</p>
+          {duplicates.length > 0 && (
+            <p className="text-xs text-warn" data-testid="quick-add-duplicate-warning">
+              Possible duplicate: {duplicates.map((p) => `${p.fullName} (${p.email ?? "no email"})`).join(", ")}. Confirm the details before continuing.
+            </p>
+          )}
+          <button type="button" onClick={() => setCreateStep("essentials")} className="text-xs text-gold hover:underline">Back to essentials</button>
+        </Card>
       )}
 
       {/* Identity */}
@@ -984,7 +1033,7 @@ export function EditPersonForm({
         </div>
       </section>
 
-      {isCreate && (
+      {isCreate && createStep === "essentials" && (
         <section className="border-t border-border-soft pt-3 space-y-3" data-testid="create-person-options">
           <FieldWrap label="Manager (optional)">
             <select
@@ -1066,7 +1115,7 @@ export function EditPersonForm({
               ? "Adding…"
               : "Saving…"
             : isCreate
-              ? "Add to roster"
+              ? createStep === "essentials" ? "Review details" : "Create person"
               : "Save changes"}
         </button>
       </div>

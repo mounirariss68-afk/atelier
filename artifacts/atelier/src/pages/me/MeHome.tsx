@@ -8,7 +8,7 @@
  * ONLY page the self-only personas (employee / contractor) can use.
  */
 import * as React from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMyProfile,
@@ -32,6 +32,7 @@ import {
   TabNavLink,
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
+import { ME_MVP_SECTIONS, HIDDEN_ME_DESTINATION } from "@/lib/peopleMeMvp";
 import MePay from "./MePay";
 // Task #53 — self-service Time (timesheet grid + leave) and Expenses tabs.
 import MeTime from "./MeTime";
@@ -50,53 +51,26 @@ import MeLetters from "./MeLetters";
 // Task #1002 — personal tasks & reminders panel.
 import MeTasks from "./MeTasks";
 
-const SECTIONS = [
-  { id: "overview", label: "Overview", href: "/me" },
-  { id: "tasks", label: "Tasks", href: "/me/tasks" },
-  { id: "profile", label: "Profile", href: "/me/profile" },
-  { id: "time", label: "Time", href: "/me/time" },
-  { id: "expenses", label: "Expenses", href: "/me/expenses" },
-  { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
-  { id: "letters", label: "Letters", href: "/me/letters" },
-  { id: "performance", label: "Performance", href: "/me/performance" },
-  { id: "learning", label: "Learning", href: "/me/learning" },
-  { id: "delegates", label: "Delegates", href: "/me/delegates" },
-  { id: "assist", label: "Assist", href: "/me/assist" },
-] as const;
+const SECTIONS = ME_MVP_SECTIONS;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 export default function MeHome() {
   const [, params] = useRoute("/me/:section");
+  const [, navigate] = useLocation();
   // Task #679 — chat cards historically linked to /me/documents, which is
   // not a tab; personal documents live inside Profile. Alias it so old
   // links (and any cached chat sessions) land on the right section.
   const rawSection = params?.section ?? "overview";
   const section = (rawSection === "documents" ? "profile" : rawSection) as SectionId;
+  const isMvpSection = SECTIONS.some((item) => item.id === section);
+  React.useEffect(() => {
+    if (rawSection !== "documents" && !isMvpSection) navigate(HIDDEN_ME_DESTINATION, { replace: true });
+  }, [rawSection, isMvpSection, navigate]);
   const { data: profile, isLoading } = useAtelierGetMyProfile();
 
   const firstName = profile?.user?.name?.split(/\s+/)[0] ?? "";
-  // Contractors have no performance section — reviews & goals are an
-  // employee-only surface (the server 403s them too).
-  const isContractor =
-    profile?.person?.workerType === "contractor" ||
-    profile?.user?.role === "contractor";
-  // Task #386 — Delegates is a partner-only surface (partners grant scoped
-  // delegations to EAs); Assist is the EA workspace, shown to the self-only
-  // personas (employees/contractors — the page explains itself when the
-  // caller isn't a designated EA).
-  const role = profile?.user?.role;
-  const isPartnerRole = role === "partner" || role === "founding_partner";
-  const isSelfOnlyRole = role === "employee" || role === "contractor";
-  const sections = SECTIONS.filter((s) => {
-    if (isContractor && s.id === "performance") return false;
-    // Task #850 — official letters are an employee-only surface (the
-    // server 403s contractors and non-roster personas too).
-    if (isContractor && s.id === "letters") return false;
-    if (s.id === "delegates") return isPartnerRole;
-    if (s.id === "assist") return isSelfOnlyRole;
-    return true;
-  });
+  const sections = SECTIONS;
 
   // Time tab: ONE header. The Timesheet grid reports its loaded week up
   // here so the page hero reads "Timesheet — 2026-W29" (instead of the
@@ -117,11 +91,6 @@ export default function MeHome() {
             ? `${weekMeta.personName} · week of ${weekMeta.weekStartDate}`
             : "Your hours this week, plus leave requests.",
         };
-      case "tasks":
-        return {
-          headline: "Tasks & reminders",
-          lede: "Your personal to-dos and timed reminders — only you can see these.",
-        };
       case "profile":
         return {
           headline: "Profile",
@@ -136,31 +105,6 @@ export default function MeHome() {
         return {
           headline: "Pay & Benefits",
           lede: "Your compensation, payslips and benefits at the firm.",
-        };
-      case "letters":
-        return {
-          headline: "Official letters",
-          lede: "Request salary certificates, employment verification and visa letters — and re-download issued ones.",
-        };
-      case "performance":
-        return {
-          headline: "Performance",
-          lede: "Your reviews, goals and feedback across cycles.",
-        };
-      case "learning":
-        return {
-          headline: "Learning",
-          lede: "Assigned training and your completion record.",
-        };
-      case "delegates":
-        return {
-          headline: "My delegates",
-          lede: "Delegate timesheets, expenses and meeting notes to an Executive Assistant — and review what they entered on your behalf.",
-        };
-      case "assist":
-        return {
-          headline: "Assist",
-          lede: "Enter timesheets, expenses and meeting notes on behalf of the partners who delegated to you.",
         };
       default:
         return {
@@ -188,30 +132,10 @@ export default function MeHome() {
         </div>
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
-          {section === "tasks" && <MeTasks />}
           {section === "profile" && <MeProfileSection loading={isLoading} profile={profile} />}
           {section === "time" && <MeTime onWeekMeta={onWeekMeta} />}
           {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
-          {section === "letters" &&
-            (isContractor ? (
-              <Card className="p-6 text-sm text-text-mute" data-testid="me-letters-restricted">
-                Official letters are an employee-only section.
-              </Card>
-            ) : (
-              <MeLetters />
-            ))}
-          {section === "performance" &&
-            (isContractor ? (
-              <Card className="p-6 text-sm text-text-mute" data-testid="me-performance-restricted">
-                Performance reviews are an employee-only section.
-              </Card>
-            ) : (
-              <PerformanceSection />
-            ))}
-          {section === "learning" && <LearningSection />}
-          {section === "delegates" && <MeDelegates />}
-          {section === "assist" && <MeAssist />}
         </div>
       </div>
     </div>

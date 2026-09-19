@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:roster-removal": "NODE_ENV=test tsx ./tests/crm/roster-removal-integration.ts",
     "test:agents": "tsx ./tests/agents/run-fixtures.ts",
     "test:exec-mapper-launch": "tsx ./tests/executive-mapper-launch/run.ts",
     "test:proposal-html": "tsx ./tests/proposal-html/run.ts",

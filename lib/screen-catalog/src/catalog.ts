@@ -1047,46 +1047,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "me.assist",
-    "title": "Assist",
-    "description": "Assist — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
-    "path": "/me/assist",
-    "breadcrumb": [
-      "Me",
-      "Assist"
-    ],
-    "keywords": [
-      "ea",
-      "workspace",
-      "acting"
-    ],
-    "roles": [
-      "contractor",
-      "employee"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "me.delegates",
-    "title": "Delegates",
-    "description": "Delegates — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
-    "path": "/me/delegates",
-    "breadcrumb": [
-      "Me",
-      "Delegates"
-    ],
-    "keywords": [
-      "assistant",
-      "ea",
-      "delegation"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner"
-    ],
-    "parameterized": false
-  },
-  {
     "id": "me.expenses",
     "title": "Expenses",
     "description": "Expenses — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
@@ -1102,37 +1062,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "claims",
       "reimbursement",
       "spend"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "contractor",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer",
-      "employee",
-      "non_equity_partner"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "me.learning",
-    "title": "Learning",
-    "description": "Learning — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
-    "path": "/me/learning",
-    "breadcrumb": [
-      "Me",
-      "Learning"
-    ],
-    "keywords": [
-      "training",
-      "courses",
-      "certifications"
     ],
     "roles": [
       "founding_partner",
@@ -1215,35 +1144,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "me.performance",
-    "title": "Performance",
-    "description": "Performance — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
-    "path": "/me/performance",
-    "breadcrumb": [
-      "Me",
-      "Performance"
-    ],
-    "keywords": [
-      "review",
-      "goals",
-      "feedback"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer",
-      "employee"
-    ],
-    "parameterized": false
-  },
-  {
     "id": "me.profile",
     "title": "Profile",
     "description": "Profile — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
@@ -1258,33 +1158,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "details",
       "preferences"
     ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "contractor",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer",
-      "employee",
-      "non_equity_partner"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "me.tasks",
-    "title": "Tasks",
-    "description": "Tasks — inside the Me area (Your profile, time, expenses, pay, performance, learning.)",
-    "path": "/me/tasks",
-    "breadcrumb": [
-      "Me",
-      "Tasks"
-    ],
-    "keywords": [],
     "roles": [
       "founding_partner",
       "partner",
@@ -1519,30 +1392,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "people.access",
-    "title": "Access",
-    "description": "Access — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/access",
-    "breadcrumb": [
-      "People",
-      "Access"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
     "id": "people.approvals",
     "title": "Approvals",
     "description": "Approvals — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
@@ -1555,237 +1404,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "approve",
       "pending",
       "requests"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.attract",
-    "title": "Attract",
-    "description": "Attract — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/attract",
-    "breadcrumb": [
-      "People",
-      "Attract"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.compliance",
-    "title": "Compliance",
-    "description": "Compliance — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/compliance",
-    "breadcrumb": [
-      "People",
-      "Compliance"
-    ],
-    "keywords": [
-      "passport",
-      "visa",
-      "documents",
-      "expiry"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.develop",
-    "title": "Develop",
-    "description": "Develop — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/develop",
-    "breadcrumb": [
-      "People",
-      "Develop"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.hire",
-    "title": "Hire",
-    "description": "Hire — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/hire",
-    "breadcrumb": [
-      "People",
-      "Hire"
-    ],
-    "keywords": [
-      "recruiting",
-      "candidates",
-      "interviews",
-      "offers"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.offboard",
-    "title": "Offboard",
-    "description": "Offboard — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/offboard",
-    "breadcrumb": [
-      "People",
-      "Offboard"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.onboard",
-    "title": "Onboard",
-    "description": "Onboard — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/onboard",
-    "breadcrumb": [
-      "People",
-      "Onboard"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.overview",
-    "title": "Overview",
-    "description": "Overview — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people",
-    "breadcrumb": [
-      "People",
-      "Overview"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.perform",
-    "title": "Perform",
-    "description": "Perform — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/perform",
-    "breadcrumb": [
-      "People",
-      "Perform"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.reward",
-    "title": "Reward",
-    "description": "Reward — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/reward",
-    "breadcrumb": [
-      "People",
-      "Reward"
-    ],
-    "keywords": [
-      "pay",
-      "salary",
-      "compensation",
-      "bank"
     ],
     "roles": [
       "founding_partner",
@@ -1816,30 +1434,6 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
       "staff",
       "employees"
     ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "people.skills",
-    "title": "Skills",
-    "description": "Skills — inside the People area (Studio, roster, timesheets — hire, run, develop, off-board.)",
-    "path": "/people/skills",
-    "breadcrumb": [
-      "People",
-      "Skills"
-    ],
-    "keywords": [],
     "roles": [
       "founding_partner",
       "partner",
