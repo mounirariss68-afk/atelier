@@ -29,6 +29,10 @@ function liftNavigateTo(v: unknown): ChatNavigateTo | null {
   const nav = v as { path?: unknown; when?: unknown };
   if (
     typeof nav.path === "string" &&
+    nav.path.startsWith("/") &&
+    !nav.path.startsWith("//") &&
+    !nav.path.includes("\\") &&
+    nav.path.length <= 1_000 &&
     (nav.when === "on_propose" || nav.when === "on_commit")
   ) {
     return { path: nav.path, when: nav.when };
@@ -506,5 +510,7 @@ export function resetForRestream<T extends ChatTurnCore>(turn: T): T {
     error: undefined,
     errorKind: undefined,
     reconnecting: false,
+    navigateTo: null,
+    proposedPlan: undefined,
   };
 }

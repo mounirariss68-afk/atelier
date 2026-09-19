@@ -3,6 +3,7 @@ import { z } from "zod";
 export const LegacyTurnStatusSchema = z.enum([
   "streaming",
   "awaiting_confirmation",
+  "awaiting_clarification",
   "partial",
   "success",
   "cancelled",
@@ -15,6 +16,7 @@ export const AssistantTurnStateV1Schema = z.enum([
   "received",
   "running",
   "awaiting_confirmation",
+  "awaiting_clarification",
   "partially_succeeded",
   "succeeded",
   "cancelled",
@@ -28,6 +30,7 @@ export type AssistantTurnStateV1 = z.infer<typeof AssistantTurnStateV1Schema>;
 const STATUS_UPCAST: Record<z.infer<typeof LegacyTurnStatusSchema>, AssistantTurnStateV1> = {
   streaming: "running",
   awaiting_confirmation: "awaiting_confirmation",
+  awaiting_clarification: "awaiting_clarification",
   partial: "partially_succeeded",
   success: "succeeded",
   cancelled: "cancelled",

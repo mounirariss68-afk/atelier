@@ -3,13 +3,17 @@ import { and, asc, eq } from "drizzle-orm";
 import {
   db,
   atelierWorkAttempts,
-  atelierWorkCheckpoints,
   atelierWorkItems,
   atelierWorkSteps,
 } from "@workspace/db";
 import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
 import { attachRls } from "./atelier/rls.js";
-import { createDurableWork } from "../lib/assistant/workflow-runtime.js";
+import {
+  cancelDurableWork,
+  createDurableWork,
+  decideWorkCheckpoint,
+} from "../lib/assistant/workflow-runtime.js";
+import { z } from "zod";
 
 const router: IRouter = Router();
 router.use(attachPersona);
@@ -20,6 +24,15 @@ function enabled(): boolean {
   return process.env.RISER_WORKFLOW_WRITES_ENABLED === "1";
 }
 
+const createWorkflowSchema = z
+  .object({
+    goal: z.string().min(1).max(2_000),
+    catalogVersion: z.string().min(1).max(100),
+    policyContext: z.record(z.string(), z.unknown()),
+    plan: z.unknown(),
+  })
+  .strict();
+
 router.post("/", async (req, res) => {
   const me = req.atelierPersona;
   if (!me) return void res.status(401).json({ code: "no_active_persona" });
@@ -27,13 +40,13 @@ router.post("/", async (req, res) => {
     return void res.status(503).json({ code: "workflow_writes_disabled" });
   }
   try {
-    const body = req.body as Record<string, unknown>;
+    const body = createWorkflowSchema.parse(req.body);
     const result = await createDurableWork({
       orgId: me.orgId,
       requesterId: me.id,
-      goal: String(body.goal ?? ""),
-      catalogVersion: String(body.catalogVersion ?? ""),
-      policyContext: body.policyContext ?? {},
+      goal: body.goal,
+      catalogVersion: body.catalogVersion,
+      policyContext: body.policyContext,
       plan: body.plan,
     });
     res.status(201).json(result);
@@ -83,17 +96,11 @@ router.get("/:id/events", async (req, res) => {
 router.post("/:id/cancel", async (req, res) => {
   const me = req.atelierPersona;
   if (!me) return void res.status(401).json({ code: "no_active_persona" });
-  const [updated] = await db
-    .update(atelierWorkItems)
-    .set({ status: "cancelling", cancellationRequestedAt: new Date(), updatedAt: new Date() })
-    .where(
-      and(
-        eq(atelierWorkItems.id, req.params.id),
-        eq(atelierWorkItems.orgId, me.orgId),
-        eq(atelierWorkItems.requesterId, me.id),
-      ),
-    )
-    .returning({ id: atelierWorkItems.id, status: atelierWorkItems.status });
+  const updated = await cancelDurableWork({
+    orgId: me.orgId,
+    requesterId: me.id,
+    workItemId: req.params.id,
+  });
   if (!updated) return void res.status(404).json({ code: "work_not_found" });
   res.json(updated);
 });
@@ -105,22 +112,14 @@ router.post("/:id/checkpoints/:checkpointId/decide", async (req, res) => {
   if (decision !== "approve" && decision !== "reject") {
     return void res.status(400).json({ code: "invalid_checkpoint_decision" });
   }
-  const [checkpoint] = await db
-    .update(atelierWorkCheckpoints)
-    .set({
-      decision,
-      evidence: req.body?.evidence ?? null,
-      decidedByUserId: me.id,
-      decidedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(atelierWorkCheckpoints.id, req.params.checkpointId),
-        eq(atelierWorkCheckpoints.workItemId, req.params.id),
-      ),
-    )
-    .returning();
+  const checkpoint = await decideWorkCheckpoint({
+    orgId: me.orgId,
+    requesterId: me.id,
+    workItemId: req.params.id,
+    checkpointId: req.params.checkpointId,
+    decision,
+    evidence: req.body?.evidence ?? null,
+  });
   if (!checkpoint) return void res.status(404).json({ code: "checkpoint_not_found" });
   res.json(checkpoint);
 });

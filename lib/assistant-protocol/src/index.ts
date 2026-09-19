@@ -304,7 +304,10 @@ export const WorkPlanV1Schema = z
             capabilityId: boundedId.optional(),
             delegateAgentId: boundedId.optional(),
             dependencies: z.array(boundedId).max(100),
+            input: z.unknown(),
             authorityGrant: z.record(z.string(), z.unknown()),
+            policyDecisionDigest: z.string().min(32).max(200),
+            resultSchemaHash: z.string().min(12).max(200),
             retryPolicy: z
               .object({
                 maxAttempts: z.number().int().min(1).max(10),
@@ -325,6 +328,9 @@ export const WorkPlanV1Schema = z
 export type WorkPlanV1 = z.infer<typeof WorkPlanV1Schema>;
 
 export function validateAcyclicWorkPlan(plan: WorkPlanV1): void {
+  if (new Set(plan.steps.map((step) => step.id)).size !== plan.steps.length) {
+    throw new Error("workflow-duplicate-step-id");
+  }
   const ids = new Set(plan.steps.map((step) => step.id));
   const visiting = new Set<string>();
   const visited = new Set<string>();

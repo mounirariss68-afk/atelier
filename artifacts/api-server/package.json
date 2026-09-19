@@ -144,7 +144,8 @@
     "test:tone-multilingual": "tsx ./tests/crm/tone-probe-multilingual.ts",
     "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts",
     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
-    ,"test:riser-foundation": "tsx ./tests/riser-foundation/run.ts"
+    ,"test:riser-foundation": "tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts"
+    ,"test:riser-runtime": "tsx ./tests/riser-runtime/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -58,6 +58,46 @@ import {
 } from "@workspace/assistant-protocol";
 import { randomUUID } from "node:crypto";
 
+const SUPPORTED_ASSISTANT_ATTACHMENT_MIMES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/csv",
+  "text/plain",
+  "text/markdown",
+  "application/json",
+  "message/rfc822",
+]);
+
+function isSupportedAssistantAttachmentMime(mime: string): boolean {
+  return SUPPORTED_ASSISTANT_ATTACHMENT_MIMES.has(mime) || mime.startsWith("image/");
+}
+
+function publicAssistantError(correlationId: string, code: string): {
+  protocolVersion: 1;
+  code: string;
+  message: string;
+  correlationId: string;
+} {
+  const messages: Record<string, string> = {
+    invalid_request: "The assistant request is invalid.",
+    prompt_required: "Enter a message to continue.",
+    prompt_too_long: "The message is too long.",
+    budget_exceeded: "This request exceeded its processing budget.",
+    concurrency: "Another assistant request is already in progress.",
+    invalid_confirmation: "The confirmation could not be completed.",
+    invalid_cancellation: "The cancellation could not be completed.",
+    internal: "The assistant could not complete the request.",
+  };
+  return {
+    protocolVersion: 1,
+    code,
+    message: messages[code] ?? messages.internal,
+    correlationId,
+  };
+}
+
 function ensurePersona(
   req: Request,
   res: Response,
@@ -120,12 +160,7 @@ router.post("/cli/turn", async (req, res) => {
       },
       "assistant request rejected",
     );
-    res.status(400).json({
-      protocolVersion: 1,
-      code: "invalid_request",
-      message: "The assistant request is invalid.",
-      correlationId,
-    });
+    res.status(400).json(publicAssistantError(correlationId, "invalid_request"));
     return;
   }
   const legacyBody: LegacyAssistantRequest = parsedLegacy.data;
@@ -192,13 +227,13 @@ router.post("/cli/turn", async (req, res) => {
     ? (body.prompt ?? "")
     : (body.prompt ?? "").trim();
   if (!promptRawWithPreamble.trim()) {
-    res.status(400).json({ error: "prompt-required" });
+    res.status(400).json(publicAssistantError(correlationId, "prompt_required"));
     return;
   }
   // Sensitive answers get a far larger sanity cap (DoS guard only — the
   // JSON body limit is the real bound); ordinary prompts keep 4000.
   if (promptRawWithPreamble.length > (sensitiveAnswer ? 16384 : 4000)) {
-    res.status(400).json({ error: "prompt-too-long" });
+    res.status(400).json(publicAssistantError(correlationId, "prompt_too_long"));
     return;
   }
   // Task #484 — strip the client's locale-instruction preamble at HTTP
@@ -213,7 +248,7 @@ router.post("/cli/turn", async (req, res) => {
   // alone with nothing else). Reject with the same shape as the
   // initial empty-prompt check so the client can render it identically.
   if (!promptRaw.trim()) {
-    res.status(400).json({ error: "prompt-required" });
+    res.status(400).json(publicAssistantError(correlationId, "prompt_required"));
     return;
   }
   // `/new` (or explicit reset:true) starts a fresh session before the
@@ -262,17 +297,20 @@ router.post("/cli/turn", async (req, res) => {
   let validatedAttachmentIds: string[] = [];
   if (rawAttachmentIds.length > 0) {
     const rows = await db
-      .select({ id: atelierCliAttachments.id })
+      .select({ id: atelierCliAttachments.id, mime: atelierCliAttachments.mime })
       .from(atelierCliAttachments)
       .where(
         and(
           inArray(atelierCliAttachments.id, rawAttachmentIds),
           eq(atelierCliAttachments.orgId, me.orgId),
+          eq(atelierCliAttachments.userId, me.id),
           eq(atelierCliAttachments.status, "extracted"),
           isNull(atelierCliAttachments.deletedAt),
         ),
       );
-    const validSet = new Set(rows.map((r) => r.id));
+    const validSet = new Set(
+      rows.filter((row) => isSupportedAssistantAttachmentMime(row.mime)).map((row) => row.id),
+    );
     validatedAttachmentIds = rawAttachmentIds.filter((id) => validSet.has(id));
     const droppedIds = rawAttachmentIds.filter((id) => !validSet.has(id));
     if (droppedIds.length > 0 && !closed) {
@@ -321,9 +359,13 @@ router.post("/cli/turn", async (req, res) => {
           ? "concurrency"
           : "internal";
     if (!closed) {
+      req.log?.error(
+        { correlationId, errorName: err instanceof Error ? err.name : "unknown" },
+        "assistant turn failed",
+      );
       emit({
         type: "error",
-        data: { code, message: err instanceof Error ? err.message : String(err) },
+        data: publicAssistantError(correlationId, code),
       });
     }
   } finally {
@@ -336,6 +378,7 @@ router.post("/cli/turn", async (req, res) => {
 router.post("/cli/turn/:id/confirm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const correlationId = randomUUID();
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
@@ -370,9 +413,13 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
       { persona, emit },
     );
   } catch (err) {
+    req.log?.error(
+      { correlationId, errorName: err instanceof Error ? err.name : "unknown" },
+      "assistant confirmation failed",
+    );
     emit({
       type: "error",
-      data: { message: err instanceof Error ? err.message : String(err) },
+      data: publicAssistantError(correlationId, "invalid_confirmation"),
     });
   } finally {
     stopHeartbeat();
@@ -384,14 +431,17 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
 router.post("/cli/turn/:id/cancel", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const correlationId = randomUUID();
   try {
     const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
     const out = await cancelPendingWrite(req.params.id, persona);
     res.json(out);
   } catch (err) {
-    res
-      .status(400)
-      .json({ error: err instanceof Error ? err.message : String(err) });
+    req.log?.warn(
+      { correlationId, errorName: err instanceof Error ? err.name : "unknown" },
+      "assistant cancellation rejected",
+    );
+    res.status(400).json(publicAssistantError(correlationId, "invalid_cancellation"));
   }
 });
 

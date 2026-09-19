@@ -73,13 +73,28 @@ router.get("/conversations/:id/events", async (req, res) => {
       and(
         eq(atelierAssistantEvents.orgId, me.orgId),
         eq(atelierAssistantEvents.conversationId, req.params.id),
-        gt(atelierAssistantEvents.sequence, Number.isSafeInteger(after) ? after : -1),
+        gt(atelierAssistantEvents.conversationSequence, Number.isSafeInteger(after) ? after : -1),
       ),
     )
-    .orderBy(asc(atelierAssistantEvents.sequence))
+    .orderBy(asc(atelierAssistantEvents.conversationSequence))
     .limit(1_000);
   if (durable.length > 0) {
-    res.json({ protocolVersion: 1, events: durable, source: "durable" });
+    res.json({
+      protocolVersion: 1,
+      events: durable.map((event) => ({
+        protocolVersion: event.protocolVersion,
+        conversationId: event.conversationId,
+        turnId: event.turnId,
+        eventId: event.id,
+        sequence: event.sequence,
+        cursor: event.conversationSequence,
+        occurredAt: event.occurredAt.toISOString(),
+        correlationId: event.correlationId,
+        type: event.type,
+        data: event.data,
+      })),
+      source: "durable",
+    });
     return;
   }
   const legacy = await db

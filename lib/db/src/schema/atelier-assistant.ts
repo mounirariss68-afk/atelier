@@ -68,6 +68,7 @@ export const atelierAssistantEvents = pgTable(
     conversationId: text("conversation_id").notNull(),
     turnId: text("turn_id").notNull(),
     sequence: integer("sequence").notNull(),
+    conversationSequence: integer("conversation_sequence").notNull(),
     correlationId: text("correlation_id").notNull(),
     type: text("type").notNull(),
     data: jsonb("data").$type<unknown>(),
@@ -76,6 +77,17 @@ export const atelierAssistantEvents = pgTable(
   },
   (t) => [
     uniqueIndex("uq_assistant_event_sequence").on(t.turnId, t.sequence),
+    uniqueIndex("uq_assistant_event_scoped_sequence").on(
+      t.orgId,
+      t.conversationId,
+      t.turnId,
+      t.sequence,
+    ),
+    uniqueIndex("uq_assistant_event_conversation_sequence").on(
+      t.orgId,
+      t.conversationId,
+      t.conversationSequence,
+    ),
     index("idx_assistant_events_conversation").on(t.orgId, t.conversationId, t.createdAt),
   ],
 );
@@ -130,6 +142,31 @@ export const atelierAssistantBudgetLedgers = pgTable(
   },
   (t) => [
     index("idx_assistant_budget_owner").on(t.orgId, t.ownerType, t.ownerId),
+  ],
+);
+
+export const atelierAssistantBudgetReservations = pgTable(
+  "atelier_assistant_budget_reservations",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    ledgerId: text("ledger_id")
+      .notNull()
+      .references(() => atelierAssistantBudgetLedgers.id, { onDelete: "cascade" }),
+    ledgerIds: jsonb("ledger_ids").$type<string[]>().notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    costMicros: integer("cost_micros").notNull(),
+    providerCalls: integer("provider_calls").notNull(),
+    toolCalls: integer("tool_calls").notNull(),
+    state: text("state").notNull().default("reserved"),
+    committedAt: timestamp("committed_at", { withTimezone: true }),
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("uq_assistant_budget_reservation_key").on(t.orgId, t.idempotencyKey),
+    index("idx_assistant_budget_reservation_state").on(t.orgId, t.state),
   ],
 );
 

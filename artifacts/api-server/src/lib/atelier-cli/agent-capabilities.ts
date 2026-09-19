@@ -141,6 +141,7 @@ export function registerAgentCapabilities(): CapabilityEntry[] {
       outboundChannel: null,
       resultCard: "agent_run",
       source: "agent",
+      executionStatus: "unsupported",
       async run(input, ctx) {
         // The CLI hand-off: we don't call runAgent here (see file-top
         // rationale). Instead we return a dispatch envelope the
@@ -151,38 +152,14 @@ export function registerAgentCapabilities(): CapabilityEntry[] {
         // (the run lives behind the agent route + a "View run" link in
         // the UI). All commit returns explicitly emit `navigateTo: null`
         // so the navigateTo contract test recognises them as wired.
-        if (input.confirm !== true) {
-          return {
-            ok: true,
-            data: { agentId: agent.id, agentName: agent.name, preview: input, navigateTo: null },
-            confirmation: {
-              summary: `Run ${agent.name}. ${agent.humanCheckpoints.length > 0 ? "Human checkpoint required after the run." : ""}`.trim(),
-              diff: {
-                agentRun: { agentId: agent.id, agentName: agent.name, input },
-                checkpoints: agent.humanCheckpoints.map((c) => c.label),
-              },
-              pending: {
-                tool: toolNameForAgent(agent.id),
-                input: { ...input, confirm: true },
-              },
-            },
-          };
-        }
-        // Commit phase — the orchestrator delegates to the existing
-        // agent dispatch endpoint. We return a `dispatch` payload the
-        // orchestrator + UI handle (it surfaces a "View run" link).
         return {
-          ok: true,
-          data: {
-            dispatched: true,
-            agentId: agent.id,
-            agentName: agent.name,
-            actor: ctx.persona.id,
-            sessionId: ctx.sessionId,
-            turnId: ctx.turnId,
-            note:
-              "Agent run was queued for the existing agent dispatch route — see atelier_agent_runs for status.",
-            navigateTo: null,
+          ok: false,
+          errorCode: "unsupported",
+          errorMessage: `${agent.name} is not available through the assistant yet.`,
+          refusal: {
+            reason: `${agent.name} must be started from its authorized workspace until a durable assistant adapter is available.`,
+            closestCapabilityId: null,
+            suggestion: "Open the agent workspace to start this run.",
           },
         };
       },

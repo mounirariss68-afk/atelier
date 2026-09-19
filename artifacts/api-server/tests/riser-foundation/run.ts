@@ -7,7 +7,13 @@ import {
   upcastLegacyFrame,
   upcastLegacyPendingWrite,
   upcastLegacyTurnStatus,
+  WorkPlanV1Schema,
+  validateAcyclicWorkPlan,
 } from "@workspace/assistant-protocol";
+import {
+  decryptAssistantValue,
+  encryptAssistantValue,
+} from "../../src/lib/assistant/action-runtime.js";
 
 const valid = {
   sessionId: "session-1",
@@ -42,7 +48,19 @@ assert.equal(
 );
 
 assert.equal(upcastLegacyTurnStatus("awaiting_confirmation"), "awaiting_confirmation");
+assert.equal(upcastLegacyTurnStatus("awaiting_clarification"), "awaiting_clarification");
 assert.equal(upcastLegacyTurnStatus("unknown"), "failed");
+for (const [legacy, expected] of [
+  ["streaming", "running"],
+  ["partial", "partially_succeeded"],
+  ["success", "succeeded"],
+  ["cancelled", "cancelled"],
+  ["error", "failed"],
+  ["read_only_no_op", "completed_without_effect"],
+  ["async_dispatched", "work_dispatched"],
+] as const) {
+  assert.equal(upcastLegacyTurnStatus(legacy), expected);
+}
 assert.deepEqual(upcastLegacyFrame({ type: "final", data: { status: "success" } }), {
   sourceProtocol: "legacy-cli-frame",
   original: { type: "final", data: { status: "success" } },
@@ -62,5 +80,45 @@ const redacted = JSON.stringify(
 assert.equal(redacted.includes("plant-me"), false);
 assert.equal(redacted.includes(canary), false);
 assert.equal(redacted.includes("person@example.com"), false);
+
+const step = {
+  id: "a",
+  capabilityId: "account.read",
+  dependencies: [] as string[],
+  input: { accountId: "acc_1" },
+  authorityGrant: {},
+  policyDecisionDigest: "d".repeat(64),
+  resultSchemaHash: "e".repeat(12),
+  retryPolicy: { maxAttempts: 2, maxWallMs: 1_000 },
+};
+const plan = WorkPlanV1Schema.parse({
+  workItemId: "new",
+  version: 1,
+  goal: "Read an account",
+  steps: [step],
+});
+validateAcyclicWorkPlan(plan);
+assert.throws(
+  () =>
+    validateAcyclicWorkPlan({
+      ...plan,
+      steps: [step, { ...step }],
+    }),
+  /workflow-duplicate-step-id/,
+);
+assert.throws(
+  () =>
+    validateAcyclicWorkPlan({
+      ...plan,
+      steps: [{ ...step, dependencies: ["missing"] }],
+    }),
+  /workflow-missing-dependency/,
+);
+
+process.env.SESSION_SECRET ??= "riser-foundation-test-session-secret-32-bytes";
+const encrypted = encryptAssistantValue({ secret: "value" });
+assert.deepEqual(decryptAssistantValue(encrypted), { secret: "value" });
+assert.throws(() => decryptAssistantValue(`${encrypted}tampered`));
+assert.throws(() => decryptAssistantValue(`v1.${"a".repeat(1_400_001)}`), /too-large/);
 
 console.log("riser foundation probes passed");

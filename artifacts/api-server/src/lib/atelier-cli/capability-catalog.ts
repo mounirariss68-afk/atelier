@@ -306,6 +306,11 @@ export interface CapabilityEntry {
    */
   source: "route" | "agent" | "cli-only";
   /**
+   * Unsupported entries remain in the reviewed manifest for compatibility,
+   * but are never advertised to or dispatched by the orchestrator.
+   */
+  executionStatus?: "executable" | "unsupported" | "legacy_compat";
+  /**
    * Implementation. Receives the validated `input` and a `ToolContext`,
    * returns the standard `ToolResult` shape (with optional
    * `confirmation` + `disambiguation` envelopes).
@@ -574,6 +579,7 @@ export function scrubKnownToolNames(text: string | null | undefined): string | n
 
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
+  const executableRegistry = REGISTRY.filter((entry) => entry.executionStatus !== "unsupported");
   // Task #873 — external alliance-partner logins get EXACTLY the
   // partnerportal.* read capabilities (their granted opportunities +
   // redacted account overview). No me.* tools (they have no roster
@@ -586,7 +592,7 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
     // tool (partnerportal.request_change): partners may PROPOSE a
     // review-gated change to their own firm profile. Every OTHER write
     // stays excluded (no me.*, no CRM, no entity writes — ever).
-    return REGISTRY.filter(
+    return executableRegistry.filter(
       (e) =>
         (!e.isWrite &&
           (e.id.startsWith("partnerportal.") || e.id === "meta.find_screen")) ||
@@ -608,7 +614,7 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
     // Task #939 — meta.find_screen is a second deliberate widening: the
     // screen catalog is role-sliced, so self-only personas only ever get
     // answers about Me-lens screens (plus chat itself).
-    return REGISTRY.filter(
+    return executableRegistry.filter(
       (e) =>
         e.id.startsWith("me.") ||
         e.id === "entity.detail" ||
@@ -621,7 +627,7 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
     "recruiter",
   ]);
   const isRestricted = restrictedSet.has(role);
-  return REGISTRY.filter((e) => {
+  return executableRegistry.filter((e) => {
     if (role === "board_observer") {
       // Strict read-only perimeter — writes are denied regardless of
       // module so a future module classification mistake (e.g. an
@@ -659,12 +665,14 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
 
 /** Used by orchestrator to look up a capability by toolName. */
 export function findByToolName(toolName: string): CapabilityEntry | undefined {
-  return REGISTRY.find((e) => e.toolName === toolName);
+  return REGISTRY.find(
+    (e) => e.toolName === toolName && e.executionStatus !== "unsupported",
+  );
 }
 
 /** Task #335 — id-keyed lookup (used by undo + admin metrics). */
 export function findById(id: string): CapabilityEntry | undefined {
-  return REGISTRY.find((e) => e.id === id);
+  return REGISTRY.find((e) => e.id === id && e.executionStatus !== "unsupported");
 }
 
 // Task #340 — conversation depth: per-session ephemeral draft store.

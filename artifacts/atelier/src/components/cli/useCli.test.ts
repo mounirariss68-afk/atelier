@@ -11,6 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { applyFrame, tryFireNavigation, confirmGate, abortOutcome } from "./useCli";
+import { resetForRestream } from "@workspace/chat-core";
 import type { CliFrame, CliTurn } from "./types";
 
 let pass = 0;
@@ -126,6 +127,31 @@ test("applyFrame preserves an already-lifted navigateTo across noisy frames", ()
     data: { text: "thinking…" },
   });
   assert.deepEqual(next.navigateTo, { path: "/accounts/acc_1", when: "on_propose" });
+});
+
+test("applyFrame rejects external and protocol-relative navigateTo paths", () => {
+  for (const path of ["https://evil.example", "//evil.example/x", "javascript:alert(1)", "/safe\\escape"]) {
+    const next = applyFrame(seedTurn(), {
+      type: "tool_result",
+      receivedAt: 2,
+      data: {
+        tool: "list_accounts",
+        ok: true,
+        data: { navigateTo: { path, when: "on_commit" } },
+      },
+    });
+    assert.equal(next.navigateTo ?? null, null);
+  }
+});
+
+test("resetForRestream clears stale navigation and proposed plan", () => {
+  const next = resetForRestream({
+    ...seedTurn(),
+    navigateTo: { path: "/accounts/a", when: "on_propose" },
+    proposedPlan: [{ label: "Create account", isWrite: true }],
+  });
+  assert.equal(next.navigateTo ?? null, null);
+  assert.equal(next.proposedPlan, undefined);
 });
 
 console.log("\napplyFrame — progress sources");

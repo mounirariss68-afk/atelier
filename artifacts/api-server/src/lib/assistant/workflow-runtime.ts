@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import {
   db,
   atelierWorkAttempts,
+  atelierWorkCheckpoints,
   atelierWorkItems,
   atelierWorkPlans,
   atelierWorkSteps,
@@ -28,6 +29,7 @@ export async function createDurableWork(args: {
   }
   const workItemId = `work_${randomUUID()}`;
   const planId = `plan_${randomUUID()}`;
+  const stepIds = new Map(plan.steps.map((step) => [step.id, `step_${randomUUID()}`]));
   await db.transaction(async (tx) => {
     await tx.insert(atelierWorkItems).values({
       id: workItemId,
@@ -48,19 +50,19 @@ export async function createDurableWork(args: {
     });
     await tx.insert(atelierWorkSteps).values(
       plan.steps.map((step) => ({
-        id: step.id.startsWith("step_") ? step.id : `step_${randomUUID()}`,
+        id: stepIds.get(step.id)!,
         workItemId,
         planId,
         capabilityId: step.capabilityId,
         delegateAgentId: step.delegateAgentId,
-        dependencies: step.dependencies,
-        inputEncrypted: encryptAssistantValue({}),
+        dependencies: step.dependencies.map((id) => stepIds.get(id)!),
+        inputEncrypted: encryptAssistantValue(step.input),
         authorityGrant: step.authorityGrant,
-        policyDecisionDigest: String(step.authorityGrant.policyDecisionDigest ?? ""),
+        policyDecisionDigest: step.policyDecisionDigest,
         catalogVersion: args.catalogVersion,
         inputSchemaVersion: 1,
         retryPolicy: step.retryPolicy,
-        resultSchemaHash: String(step.authorityGrant.resultSchemaHash ?? ""),
+        resultSchemaHash: step.resultSchemaHash,
         status: step.dependencies.length === 0 ? "ready" : "blocked",
       })),
     );
@@ -69,17 +71,40 @@ export async function createDurableWork(args: {
 }
 
 export async function claimWorkAttempt(args: {
+  orgId: string;
   stepId: string;
   workerId: string;
   leaseMs: number;
 }): Promise<{ attemptId: string; fencingToken: number } | null> {
   return db.transaction(async (tx) => {
-    const [step] = await tx
-      .select()
+    const [record] = await tx
+      .select({ step: atelierWorkSteps, work: atelierWorkItems })
       .from(atelierWorkSteps)
-      .where(and(eq(atelierWorkSteps.id, args.stepId), eq(atelierWorkSteps.status, "ready")))
+      .innerJoin(atelierWorkItems, eq(atelierWorkSteps.workItemId, atelierWorkItems.id))
+      .where(
+        and(
+          eq(atelierWorkSteps.id, args.stepId),
+          eq(atelierWorkSteps.status, "ready"),
+          eq(atelierWorkItems.orgId, args.orgId),
+          eq(atelierWorkItems.status, "planned"),
+          isNull(atelierWorkItems.cancellationRequestedAt),
+        ),
+      )
       .for("update");
+    const step = record?.step;
     if (!step) return null;
+    const [pendingCheckpoint] = await tx
+      .select({ id: atelierWorkCheckpoints.id })
+      .from(atelierWorkCheckpoints)
+      .where(
+        and(
+          eq(atelierWorkCheckpoints.stepId, step.id),
+          isNull(atelierWorkCheckpoints.decision),
+          gt(atelierWorkCheckpoints.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    if (pendingCheckpoint) return null;
     const [{ count }] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(atelierWorkAttempts)
@@ -99,6 +124,190 @@ export async function claimWorkAttempt(args: {
     });
     await tx.update(atelierWorkSteps).set({ status: "running", updatedAt: new Date() }).where(eq(atelierWorkSteps.id, step.id));
     return { attemptId, fencingToken };
+  });
+}
+
+export async function completeWorkAttempt(args: {
+  orgId: string;
+  attemptId: string;
+  workerId: string;
+  fencingToken: number;
+  result: unknown;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [record] = await tx
+      .select({ attempt: atelierWorkAttempts, step: atelierWorkSteps, work: atelierWorkItems })
+      .from(atelierWorkAttempts)
+      .innerJoin(atelierWorkSteps, eq(atelierWorkAttempts.stepId, atelierWorkSteps.id))
+      .innerJoin(atelierWorkItems, eq(atelierWorkSteps.workItemId, atelierWorkItems.id))
+      .where(
+        and(
+          eq(atelierWorkAttempts.id, args.attemptId),
+          eq(atelierWorkAttempts.status, "running"),
+          eq(atelierWorkAttempts.leaseOwner, args.workerId),
+          eq(atelierWorkAttempts.fencingToken, args.fencingToken),
+          gt(atelierWorkAttempts.leaseExpiresAt, new Date()),
+          eq(atelierWorkItems.orgId, args.orgId),
+          eq(atelierWorkItems.status, "planned"),
+          isNull(atelierWorkItems.cancellationRequestedAt),
+        ),
+      )
+      .for("update");
+    if (!record) return false;
+    const [completed] = await tx
+      .update(atelierWorkAttempts)
+      .set({ status: "succeeded", result: args.result, endedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierWorkAttempts.id, args.attemptId),
+          eq(atelierWorkAttempts.status, "running"),
+          eq(atelierWorkAttempts.fencingToken, args.fencingToken),
+        ),
+      )
+      .returning({ id: atelierWorkAttempts.id });
+    if (!completed) return false;
+    await tx
+      .update(atelierWorkSteps)
+      .set({ status: "succeeded", updatedAt: new Date() })
+      .where(and(eq(atelierWorkSteps.id, record.step.id), eq(atelierWorkSteps.status, "running")));
+    const allSteps = await tx
+      .select()
+      .from(atelierWorkSteps)
+      .where(eq(atelierWorkSteps.workItemId, record.step.workItemId));
+    const succeeded = new Set(
+      allSteps
+        .filter((step) => step.id === record.step.id || step.status === "succeeded")
+        .map((step) => step.id),
+    );
+    for (const dependent of allSteps) {
+      if (
+        dependent.status === "blocked" &&
+        dependent.dependencies.every((dependencyId) => succeeded.has(dependencyId))
+      ) {
+        await tx
+          .update(atelierWorkSteps)
+          .set({ status: "ready", updatedAt: new Date() })
+          .where(
+            and(
+              eq(atelierWorkSteps.id, dependent.id),
+              eq(atelierWorkSteps.status, "blocked"),
+            ),
+          );
+      }
+    }
+    if (allSteps.every((step) => step.id === record.step.id || step.status === "succeeded")) {
+      await tx
+        .update(atelierWorkItems)
+        .set({ status: "succeeded", completedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(atelierWorkItems.id, record.work.id),
+            eq(atelierWorkItems.status, "planned"),
+          ),
+        );
+    }
+    return true;
+  });
+}
+
+export async function cancelDurableWork(args: {
+  orgId: string;
+  requesterId: string;
+  workItemId: string;
+}): Promise<{ status: string } | null> {
+  return db.transaction(async (tx) => {
+    const [work] = await tx
+      .select()
+      .from(atelierWorkItems)
+      .where(
+        and(
+          eq(atelierWorkItems.id, args.workItemId),
+          eq(atelierWorkItems.orgId, args.orgId),
+          eq(atelierWorkItems.requesterId, args.requesterId),
+        ),
+      )
+      .for("update");
+    if (!work) return null;
+    if (["succeeded", "failed", "cancelled"].includes(work.status)) {
+      return { status: work.status };
+    }
+    const now = new Date();
+    await tx
+      .update(atelierWorkAttempts)
+      .set({ status: "cancelled", endedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(atelierWorkAttempts.status, "running"),
+          sql`${atelierWorkAttempts.stepId} in (
+            select ${atelierWorkSteps.id} from ${atelierWorkSteps}
+            where ${atelierWorkSteps.workItemId} = ${work.id}
+          )`,
+        ),
+      );
+    await tx
+      .update(atelierWorkSteps)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(
+        and(
+          eq(atelierWorkSteps.workItemId, work.id),
+          sql`${atelierWorkSteps.status} <> 'succeeded'`,
+        ),
+      );
+    await tx
+      .update(atelierWorkItems)
+      .set({
+        status: "cancelled",
+        cancellationRequestedAt: now,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(atelierWorkItems.id, work.id));
+    return { status: "cancelled" };
+  });
+}
+
+export async function decideWorkCheckpoint(args: {
+  orgId: string;
+  requesterId: string;
+  workItemId: string;
+  checkpointId: string;
+  decision: "approve" | "reject";
+  evidence: unknown;
+}): Promise<typeof atelierWorkCheckpoints.$inferSelect | null> {
+  return db.transaction(async (tx) => {
+    const [record] = await tx
+      .select({ checkpoint: atelierWorkCheckpoints })
+      .from(atelierWorkCheckpoints)
+      .innerJoin(atelierWorkItems, eq(atelierWorkCheckpoints.workItemId, atelierWorkItems.id))
+      .where(
+        and(
+          eq(atelierWorkCheckpoints.id, args.checkpointId),
+          eq(atelierWorkCheckpoints.workItemId, args.workItemId),
+          eq(atelierWorkItems.orgId, args.orgId),
+          eq(atelierWorkItems.requesterId, args.requesterId),
+          isNull(atelierWorkCheckpoints.decision),
+          gt(atelierWorkCheckpoints.expiresAt, new Date()),
+        ),
+      )
+      .for("update");
+    if (!record) return null;
+    const [updated] = await tx
+      .update(atelierWorkCheckpoints)
+      .set({
+        decision: args.decision,
+        evidence: args.evidence,
+        decidedByUserId: args.requesterId,
+        decidedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierWorkCheckpoints.id, args.checkpointId),
+          isNull(atelierWorkCheckpoints.decision),
+        ),
+      )
+      .returning();
+    return updated ?? null;
   });
 }
 
