@@ -28,8 +28,13 @@ import {
   atelierCliSessions,
   atelierAuditEvents,
   atelierAssistantObservations,
+  atelierAssistantControls,
 } from "@workspace/db";
-import { RiserObservationV1Schema } from "@workspace/assistant-protocol";
+import {
+  AssistantControlRequestV1Schema,
+  AssistantManualRecoveryV1Schema,
+  RiserObservationV1Schema,
+} from "@workspace/assistant-protocol";
 import {
   helpForPersona,
   suggestionsForSurface,
@@ -46,6 +51,13 @@ import {
   reconstructRiserTraces,
   riserDashboardRollup,
 } from "../../lib/assistant/observability-runtime.js";
+import {
+  createAssistantControl,
+  disableAssistantControl,
+  listAssistantDeadLetters,
+  retryAssistantControlReconciliation,
+} from "../../lib/assistant/control-runtime.js";
+import { decideWorkCheckpoint } from "../../lib/assistant/workflow-runtime.js";
 
 function ensurePersona(
   req: Request,
@@ -374,6 +386,146 @@ router.get("/cli/admin/riser-observability/traces/:id", async (req, res) => {
     traces: reconstructRiserTraces(rows.map(toRiserObservation)),
   });
 });
+
+// @cli-skip: founder-only assistant control plane
+router.get("/cli/admin/riser-controls", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const controls = await db
+    .select()
+    .from(atelierAssistantControls)
+    .where(eq(atelierAssistantControls.orgId, me.orgId))
+    .orderBy(
+      desc(atelierAssistantControls.createdAt),
+      desc(atelierAssistantControls.version),
+    )
+    .limit(500);
+  res.json({
+    version: "assistant-operator-control/v1",
+    bounded: controls.length === 500,
+    controls,
+  });
+});
+
+// @cli-skip: founder-only assistant control plane
+router.post("/cli/admin/riser-controls", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const parsed = AssistantControlRequestV1Schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_assistant_control",
+      issues: parsed.error.issues.map((issue) => issue.code),
+    });
+    return;
+  }
+  try {
+    const control = await createAssistantControl({
+      orgId: me.orgId,
+      actorId: me.id,
+      actorLabel: me.name,
+      request: parsed.data,
+    });
+    res.status(201).json(control);
+  } catch (error) {
+    req.log?.error?.(
+      {
+        errorClass: error instanceof Error ? error.name : "unknown",
+      },
+      "assistant control create failed",
+    );
+    res.status(503).json({ error: "assistant_control_unavailable" });
+  }
+});
+
+// @cli-skip: founder-only assistant control plane
+router.post("/cli/admin/riser-controls/:id/disable", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const reason =
+    typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  try {
+    const control = await disableAssistantControl({
+      orgId: me.orgId,
+      controlId: req.params.id,
+      actorId: me.id,
+      actorLabel: me.name,
+      reason,
+    });
+    if (!control) {
+      res.status(404).json({ error: "assistant_control_not_found" });
+      return;
+    }
+    res.json(control);
+  } catch (error) {
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "assistant_control_disable_failed",
+    });
+  }
+});
+
+// @cli-skip: founder-only assistant control reconciliation retry
+router.post("/cli/admin/riser-controls/:id/reconcile", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const outcome = await retryAssistantControlReconciliation({
+    orgId: me.orgId,
+    controlId: req.params.id,
+    actorId: me.id,
+    actorLabel: me.name,
+  });
+  if (!outcome) {
+    res.status(404).json({ error: "assistant_control_not_found" });
+    return;
+  }
+  res.json(outcome);
+});
+
+// @cli-skip: founder-only assistant incident recovery
+router.get("/cli/admin/riser-controls/dead-letters", async (req, res) => {
+  const me = ensureFoundingPartner(req, res);
+  if (!me) return;
+  const limit = Number(req.query.limit ?? 100);
+  res.json(await listAssistantDeadLetters({ orgId: me.orgId, limit }));
+});
+
+// @cli-skip: founder-only assistant incident recovery
+router.post(
+  "/cli/admin/riser-controls/work/:workId/recover",
+  async (req, res) => {
+    const me = ensureFoundingPartner(req, res);
+    if (!me) return;
+    const parsed = AssistantManualRecoveryV1Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "invalid_assistant_recovery",
+        issues: parsed.error.issues.map((issue) => issue.code),
+      });
+      return;
+    }
+    const recovery = parsed.data;
+    const checkpoint = await decideWorkCheckpoint({
+      orgId: me.orgId,
+      requesterId: me.id,
+      workItemId: req.params.workId,
+      checkpointId: recovery.checkpointId,
+      decision: recovery.decision,
+      evidence: {
+        reason: recovery.reason,
+        evidence: recovery.evidence ?? null,
+      },
+      deciderRoles: [me.role],
+    });
+    if (!checkpoint) {
+      res.status(409).json({ error: "assistant_recovery_not_authorized" });
+      return;
+    }
+    res.json({ checkpoint });
+  },
+);
 
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/admin/turns", async (req, res) => {

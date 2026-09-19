@@ -36,6 +36,7 @@ async function authoritativePolicy(
   capabilityId: string,
   proposed: PolicyDecisionV1,
   executor: Pick<typeof db, "select"> = db,
+  catalogVersion?: string,
 ): Promise<PolicyDecisionV1> {
   const candidate = PolicyDecisionV1Schema.parse(proposed);
   return evaluateAssistantPolicy({
@@ -44,6 +45,7 @@ async function authoritativePolicy(
     baseAllowed: candidate.effect === "allow",
     obligations: candidate.effect === "allow" ? candidate.obligations : [],
     policyVersion: candidate.policyVersion,
+    catalogVersion,
   }, executor);
 }
 
@@ -283,6 +285,7 @@ export async function createDurableActionPreviewTx(
     args.capabilityId,
     args.policyDecision,
     tx,
+    catalogVersion,
   );
   if (policy.effect !== "allow") throw new Error("action-policy-not-allowed");
   if (args.expiresAt.getTime() <= Date.now()) throw new Error("action-expiry-invalid");
@@ -465,6 +468,7 @@ export async function confirmDurableAction(args: {
       row.capabilityId,
       await args.recheckPolicy(row),
       tx,
+      row.catalogVersion,
     );
     if (
       policy.effect !== "allow" ||
@@ -599,6 +603,7 @@ export async function claimDurableAction(args: {
       row.capabilityId,
       await args.recheckPolicy(row),
       tx,
+      row.catalogVersion,
     );
     const targetsCurrent = await args.recheckTargets(row.targetRefsAndRevisions);
     if (

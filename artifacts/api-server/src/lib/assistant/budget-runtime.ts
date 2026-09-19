@@ -256,8 +256,12 @@ export function commitAssistantBudget(
   return settleReservation({ orgId, reservationId, state: "committed", actual, tx });
 }
 
-export function refundAssistantBudget(orgId: string, reservationId: string) {
-  return settleReservation({ orgId, reservationId, state: "refunded" });
+export function refundAssistantBudget(
+  orgId: string,
+  reservationId: string,
+  tx?: BudgetTransaction,
+) {
+  return settleReservation({ orgId, reservationId, state: "refunded", tx });
 }
 
 export async function reserveRequiredAssistantBudget(

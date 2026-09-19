@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1169,
+  "routeCount": 1175,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -10984,6 +10984,34 @@
       }
     },
     {
+      "routeId": "59f482944926587b",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "post",
+      "path": "/cli/admin/riser-controls/:id/disable",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant control plane",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "59f645d4660d8fe0",
       "file": "artifacts/api-server/src/routes/atelier/revrecRoutes.ts",
       "method": "get",
@@ -16416,6 +16444,34 @@
       }
     },
     {
+      "routeId": "83a6be06f1059621",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "get",
+      "path": "/cli/admin/riser-controls",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant control plane",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "83b83077af917d49",
       "file": "artifacts/api-server/src/routes/atelier/revrecRoutes.ts",
       "method": "get",
@@ -19636,6 +19692,34 @@
       }
     },
     {
+      "routeId": "9b44cf0083a7cc47",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "post",
+      "path": "/cli/admin/riser-controls/work/:workId/recover",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant incident recovery",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "9b525f1f8c79fed4",
       "file": "artifacts/api-server/src/routes/atelier/v5Routes.ts",
       "method": "get",
@@ -20560,6 +20644,34 @@
       }
     },
     {
+      "routeId": "a3bce9ab0fe90452",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "post",
+      "path": "/cli/admin/riser-controls/:id/reconcile",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant control reconciliation retry",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "a3f11ef5431a87c8",
       "file": "artifacts/api-server/src/routes/salon/index.ts",
       "method": "get",
@@ -20585,6 +20697,34 @@
         "reason": "External client-portal surface with token/persona authority distinct from the internal Atelier assistant.",
         "reviewBy": "2027-03-31",
         "rollback": "Disable Salon routes without widening internal assistant authority."
+      }
+    },
+    {
+      "routeId": "a4084769daac8c82",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "get",
+      "path": "/cli/admin/riser-controls/dead-letters",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant incident recovery",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
     },
     {
@@ -21451,6 +21591,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "self-scope emergency contact create; no CLI shape (Task #51)",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "abba6a040c469797",
+      "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
+      "method": "post",
+      "path": "/cli/admin/riser-controls",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "founder-only assistant control plane",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -35718,5 +35886,5 @@
       ]
     }
   ],
-  "conformanceVersion": "dcc93eac71798a25996c7c5d42a329ee80a6e5822b8a6c47f90fec9f580cf9dc"
+  "conformanceVersion": "ca3848fb0d2df0749360d2ad966bbae331a5d76952960d8daddab5b8e54a2df3"
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import {
   db,
+  atelierAuditEvents,
   atelierWorkAttempts,
   atelierWorkCheckpoints,
   atelierWorkItems,
@@ -98,6 +99,7 @@ export async function createDurableWork(args: {
       baseAllowed: true,
       obligations: args.authorization.obligations,
       policyVersion: args.authorization.policyVersion,
+      catalogVersion,
     });
     if (policy.effect !== "allow") {
       throw new Error(`workflow-policy-denied:${entry.capabilityId}`);
@@ -337,6 +339,7 @@ export async function claimWorkAttempt(args: {
       baseAllowed: true,
       obligations: step.policyObligations,
       policyVersion: step.policyVersion,
+      catalogVersion,
     }, tx);
     if (
       policy.effect !== "allow" ||
@@ -1729,6 +1732,29 @@ export async function decideWorkCheckpoint(args: {
           securityEvent: true,
         });
       }
+    }
+    if (updated && requiredDecider.kind === "operator") {
+      await tx.insert(atelierAuditEvents).values({
+        id: `aud_${randomUUID()}`,
+        orgId: args.orgId,
+        entityType: "assistant_work",
+        entityId: args.workItemId,
+        actorType: "human",
+        actorId: args.requesterId,
+        actorLabel: args.requesterId,
+        action: "assistant.recovery.decided",
+        payload: {
+          checkpointId: updated.id,
+          decision: args.decision,
+          reason:
+            args.evidence &&
+            typeof args.evidence === "object" &&
+            typeof (args.evidence as { reason?: unknown }).reason === "string"
+              ? (args.evidence as { reason: string }).reason
+              : null,
+        },
+        payloadSummary: `Assistant recovery ${args.decision}: ${updated.id}`,
+      });
     }
     return updated ?? null;
   });
