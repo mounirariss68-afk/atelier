@@ -4,6 +4,9 @@
   "files": [],
   "references": [
     {
+      "path": "./lib/assistant-protocol"
+    },
+    {
       "path": "./lib/db"
     },
     {

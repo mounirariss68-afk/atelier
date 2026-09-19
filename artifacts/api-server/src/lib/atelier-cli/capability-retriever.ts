@@ -439,19 +439,10 @@ export async function retrieveCapabilities(args: {
     selected.add(name);
   }
 
-  // 3. Cold-start fallback — when we have no embeddings for the
-  // eligible pool, fill the remaining budget alphabetically by tool
-  // name so the model has *something* to work with. Still capped.
-  if (selected.size < cap && scored.length === 0) {
-    const fillers = eligible
-      .filter((t) => !selected.has(t.name))
-      .map((t) => t.name)
-      .sort();
-    for (const n of fillers) {
-      if (selected.size >= cap) break;
-      selected.add(n);
-    }
-  }
+  // No arbitrary cold-start filler. If embeddings are unavailable or no
+  // eligible capability scores, the caller receives only the explicit
+  // persona-safe control/floor tools and must clarify, abstain, or report a
+  // provider/catalog outage. Alphabetical selection is unrelated to intent.
 
   const byName = new Map(allTools.map((t) => [t.name, t]));
   const tools = Array.from(selected)

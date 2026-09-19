@@ -51,6 +51,12 @@ import {
   capabilitiesForPersona,
   CATALOG_SCHEMA_VERSION,
 } from "../../lib/atelier-cli/capability-catalog.js";
+import {
+  LegacyAssistantRequestSchema,
+  upcastLegacyAssistantRequest,
+  type LegacyAssistantRequest,
+} from "@workspace/assistant-protocol";
+import { randomUUID } from "node:crypto";
 
 function ensurePersona(
   req: Request,
@@ -104,21 +110,37 @@ router.post("/cli/turn", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
 
-  const body = req.body as {
-    sessionId?: string | null;
-    prompt?: string;
-    attachmentIds?: string[];
-    pageContext?: Record<string, unknown> | null;
-    dryRun?: boolean;
-    cancelInflight?: boolean;
-    intent?: string | null;
-    clientTurnKey?: string | null;
-    async?: boolean;
-    reset?: boolean;
-    continuesTurnId?: string | null;
-    clarificationValues?: Record<string, unknown> | null;
-    disambigOptionId?: string | null;
-    timezone?: string | null;
+  const correlationId = randomUUID();
+  const parsedLegacy = LegacyAssistantRequestSchema.safeParse(req.body);
+  if (!parsedLegacy.success) {
+    req.log?.warn(
+      {
+        correlationId,
+        issueCodes: parsedLegacy.error.issues.map((issue) => issue.code),
+      },
+      "assistant request rejected",
+    );
+    res.status(400).json({
+      protocolVersion: 1,
+      code: "invalid_request",
+      message: "The assistant request is invalid.",
+      correlationId,
+    });
+    return;
+  }
+  const legacyBody: LegacyAssistantRequest = parsedLegacy.data;
+  if (legacyBody.intent !== undefined) {
+    req.log?.info(
+      { correlationId, callerIntentPresent: true },
+      "ignored legacy caller intent",
+    );
+  }
+  const v1Body = upcastLegacyAssistantRequest(legacyBody);
+  const body = {
+    ...legacyBody,
+    sessionId: v1Body.conversationId,
+    // Never pass the legacy caller-supplied intent into orchestration.
+    intent: null,
   };
   // Task #581 — device IANA timezone (validated downstream; bounded here).
   const timezone =

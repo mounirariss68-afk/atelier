@@ -12,6 +12,8 @@ import { msMobileOauthRouter } from "./atelier/msAuthRoutes";
 import msCalendarWebhookRouter from "./msCalendarWebhook";
 import { requireAuthSession } from "../lib/auth/session";
 import { demoReadOnlyGuard } from "../lib/auth/demoReadOnly";
+import assistantRouter from "./assistantRoutes";
+import workflowRouter from "./workflowRoutes";
 
 const router: IRouter = Router();
 
@@ -46,6 +48,8 @@ router.use("/chat", chatRouter);
 router.use("/arcelik", arcelikRouter);
 router.use("/tasama", tasamaRouter);
 router.use("/atelier", atelierRouter);
+router.use("/assistant", assistantRouter);
+router.use("/workflows", workflowRouter);
 router.use("/salon", salonRouter);
 
 export default router;

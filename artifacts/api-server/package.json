@@ -141,6 +141,7 @@
     "test:tone-multilingual": "tsx ./tests/crm/tone-probe-multilingual.ts",
     "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts",
     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
+    ,"test:riser-foundation": "tsx ./tests/riser-foundation/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -150,6 +151,7 @@
     "@types/multer": "^2.1.0",
     "@types/qrcode": "1.5.5",
     "@workspace/agents": "workspace:*",
+    "@workspace/assistant-protocol": "workspace:*",
     "@workspace/api-zod": "workspace:*",
     "@workspace/assessments": "workspace:*",
     "@workspace/cognirise-content": "workspace:*",

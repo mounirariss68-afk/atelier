@@ -18,6 +18,8 @@
  * filter — the loop never lets a "read" intent surface a write tool.
  */
 
+import { z } from "zod";
+
 const HAIKU_MODEL = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
 
 export type IntentVerb =
@@ -185,6 +187,49 @@ const ROUTER_SYSTEM = [
   "Keep entityHints to fuzzy fragments the user typed (e.g. names, ids).",
 ].join("\n");
 
+const RouterOutputSchema = z
+  .object({
+    verb: z.enum([
+      "read",
+      "create",
+      "update",
+      "link",
+      "transition",
+      "delete",
+      "reset",
+      "trivial",
+      "other",
+    ]),
+    kind: z.enum([
+      "account",
+      "opportunity",
+      "contact",
+      "engagement",
+      "partner_link",
+      "deliverable",
+      "expense",
+      "meeting",
+      "raid_item",
+      "proposal",
+      "pov",
+      "change_order",
+      "timesheet_entry",
+      "invoice",
+      "contract",
+      "rate_card",
+      "renewal",
+      "partner_firm",
+      "win_theme",
+      "win_loss_debrief",
+      "brief",
+      "agent_design",
+      "unknown",
+    ]),
+    entityHints: z.array(z.string().min(1).max(200)).max(5),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
 export async function classifyIntentTyped(
   prompt: string,
   surface: string = "global",
@@ -251,17 +296,10 @@ export async function classifyIntentTyped(
           `intent-router: classifier model ${resp.model ?? HAIKU_MODEL} returned no parseable JSON object.`,
         );
       }
-      const parsed = JSON.parse(m[0]) as Partial<{
-        verb: IntentVerb;
-        kind: IntentKind;
-        entityHints: string[];
-        confidence: number;
-      }>;
-      const verb = (parsed.verb ?? det.verb) as IntentVerb;
-      const kind = (parsed.kind ?? det.kind) as IntentKind;
-      const hints = Array.isArray(parsed.entityHints) && parsed.entityHints.length > 0
-        ? parsed.entityHints.map(String).slice(0, 5)
-        : det.hints;
+      const parsed = RouterOutputSchema.parse(JSON.parse(m[0]));
+      const verb = parsed.verb;
+      const kind = parsed.kind;
+      const hints = parsed.entityHints.length > 0 ? parsed.entityHints : det.hints;
       const tokensIn = resp.usage.input_tokens;
       const tokensOut = resp.usage.output_tokens;
       const costUsd = (tokensIn * 1 + tokensOut * 5) / 1_000_000;
@@ -271,7 +309,7 @@ export async function classifyIntentTyped(
         entityHints: hints,
         surface,
         tier: tierForVerb(verb),
-        confidence: typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7,
+        confidence: parsed.confidence,
         label: labelForVerb(verb),
         model: resp.model ?? HAIKU_MODEL,
         tokensIn,
