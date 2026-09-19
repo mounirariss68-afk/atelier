@@ -21,6 +21,16 @@ export function isDemoUser(opts: { userId?: string | null; email?: string | null
   return opts.userId === DEMO_USER_ID || (opts.email ?? "").toLowerCase() === DEMO_EMAIL;
 }
 
+export function demoChatExceptionAllowed(opts: {
+  method: string;
+  path: string;
+  requestedPersonaId?: string | null;
+}): boolean {
+  return opts.method === "POST" &&
+    (opts.path === "/atelier/cli/turn" || opts.path === "/assistant/turns") &&
+    (!opts.requestedPersonaId || opts.requestedPersonaId === DEMO_USER_ID);
+}
+
 export function demoReadOnlyGuard(
   req: Request,
   res: Response,
@@ -40,7 +50,14 @@ export function demoReadOnlyGuard(
   // route short-circuits demo turns into a canned, read-only capability
   // showcase (see runDemoShowcaseTurn) — the orchestrator/LLM and every
   // write tool are never invoked for this user.
-  if (req.method === "POST" && req.path === "/atelier/cli/turn") {
+  if (demoChatExceptionAllowed({
+    method: req.method,
+    path: req.path,
+    requestedPersonaId:
+      typeof req.cookies?.atelier_persona === "string"
+        ? req.cookies.atelier_persona
+        : null,
+  })) {
     next();
     return;
   }

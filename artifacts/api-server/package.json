@@ -153,6 +153,7 @@
     ,"test:riser-http": "CRM_TEST_DB_NAME=crm_test_riser_http tsx ./tests/riser-http/run.ts"
     ,"test:riser-legacy-replay": "tsx ./tests/chat/legacy-replay-probe.ts && tsx ./tests/chat/legacy-event-reader-probe.ts && tsx ./tests/chat/legacy-turn-migration-probe.ts"
     ,"test:riser-budget": "tsx ./tests/riser-budget/run.ts"
+    ,"test:riser-compat": "CRM_TEST_DB_NAME=crm_test_riser_compat tsx ./tests/riser-compat/run.ts"
     ,"riser:legacy-turn-migration": "tsx ./scripts/riser-legacy-turn-migration.ts"
   },
   "dependencies": {

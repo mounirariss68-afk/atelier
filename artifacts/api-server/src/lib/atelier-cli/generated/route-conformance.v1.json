@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1166,
+  "routeCount": 1167,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -27280,6 +27280,34 @@
       }
     },
     {
+      "routeId": "d447fe422efcf29e",
+      "file": "artifacts/api-server/src/routes/assistantRoutes.ts",
+      "method": "get",
+      "path": "/protocol",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Agent Platform",
+        "reason": "Versioned assistant transport and durable-action control plane; it orchestrates capabilities rather than representing one.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the assistant transport without changing route-authoritative business APIs."
+      }
+    },
+    {
       "routeId": "d48eae4dc44c9e92",
       "file": "artifacts/api-server/src/routes/salon/index.ts",
       "method": "post",
@@ -35634,5 +35662,5 @@
       ]
     }
   ],
-  "conformanceVersion": "2bce0b4c297e64306e07d37a6ef530da56ffbf6da970d34538b20169ad63a88d"
+  "conformanceVersion": "7397a2162776d9bb5164f71ac6d324b40c599b82235ea1702a5e96ff1c5603f7"
 }

@@ -60,6 +60,7 @@ import {
   type LegacyAssistantRequest,
 } from "@workspace/assistant-protocol";
 import { randomUUID } from "node:crypto";
+import { compileAssistantSlashIntent } from "../../lib/assistant/compatibility.js";
 
 const SUPPORTED_ASSISTANT_ATTACHMENT_MIMES = new Set([
   "application/pdf",
@@ -143,8 +144,24 @@ function assistantWireMode(req: Request): AssistantWireMode {
   return "semantic";
 }
 
-function frameForWireMode(frame: CliFrame, mode: Exclude<AssistantWireMode, "unsupported">): CliFrame {
-  if (mode === "semantic") return frame;
+function frameForWireMode(
+  frame: CliFrame,
+  mode: Exclude<AssistantWireMode, "unsupported">,
+  fallback?: { turnId: string; sequence: number },
+): CliFrame {
+  if (mode === "semantic") {
+    if (frame.protocolVersion === ASSISTANT_PROTOCOL_VERSION) return frame;
+    if (!fallback) throw new Error("semantic-frame-envelope-required");
+    return {
+      ...frame,
+      protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+      presentationDataVersion: PRESENTATION_MINIMUM_DATA_VERSION,
+      mode: "semantic",
+      turnId: fallback.turnId,
+      sequence: fallback.sequence,
+      terminal: frame.type === "final" || frame.type === "error",
+    };
+  }
   const {
     protocolVersion: _protocolVersion,
     presentationDataVersion: _presentationDataVersion,
@@ -298,9 +315,11 @@ router.post("/cli/turn", async (req, res) => {
   // turn runs. Strip the slash command from the prompt sent to the model.
   // A sensitive answer is never a command — a password may legitimately
   // start with "/new", and resetting here would discard the pending ask.
-  const isNewCmd = !sensitiveAnswer && /^\/new\b/i.test(promptRaw);
-  const prompt = isNewCmd ? promptRaw.replace(/^\/new\b\s*/i, "").trim() || "(new session)" : promptRaw;
-  const reset = body.reset === true || isNewCmd;
+  const slash = sensitiveAnswer
+    ? { prompt: promptRaw, reset: false, command: null }
+    : compileAssistantSlashIntent(promptRaw);
+  const prompt = slash.prompt;
+  const reset = body.reset === true || slash.reset;
   const sessionId = reset ? null : (body.sessionId ?? null);
 
   // Per user request (2026-07-23): the read-only App Store demo persona
@@ -309,8 +328,12 @@ router.post("/cli/turn", async (req, res) => {
   // this POST for the demo user; every other mutating route stays 403.
   if (isDemoUser({ userId: me.id, email: me.email })) {
     openSse(res);
+    let demoSequence = 0;
     runDemoShowcaseTurn(prompt, (frame) =>
-      writeSseFrame(res, frameForWireMode(frame, wireMode)),
+      writeSseFrame(res, frameForWireMode(frame, wireMode, {
+        turnId: `demo_${correlationId}`,
+        sequence: demoSequence++,
+      })),
     );
     res.end();
     return;
@@ -319,7 +342,21 @@ router.post("/cli/turn", async (req, res) => {
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
-  const emit = (frame: CliFrame) => writeSseFrame(res, frameForWireMode(frame, wireMode));
+  let transportSequence = 0;
+  let semanticFrameSeen = false;
+  const emit = (frame: CliFrame) => {
+    if (wireMode === "semantic") {
+      if (frame.protocolVersion === ASSISTANT_PROTOCOL_VERSION) {
+        semanticFrameSeen = true;
+      } else if (semanticFrameSeen || frame.type !== "error") {
+        return;
+      }
+    }
+    writeSseFrame(res, frameForWireMode(frame, wireMode, {
+      turnId: `transport_${correlationId}`,
+      sequence: transportSequence++,
+    }));
+  };
 
   let closed = false;
   req.on("close", () => {
@@ -329,7 +366,9 @@ router.post("/cli/turn", async (req, res) => {
 
   // Task #24 — emit a progress frame immediately so the user sees
   // feedback before the (potentially queued + LLM-bound) turn starts.
-  emit({ type: "progress", data: { pct: 2, message: "Working on it…" } });
+  if (wireMode === "legacy") {
+    emit({ type: "progress", data: { pct: 2, message: "Working on it…" } });
+  }
 
   // Task #1197 — validate submitted attachmentIds before handing them to
   // the orchestrator. Filter to org-scoped rows with status="extracted" so
@@ -359,12 +398,14 @@ router.post("/cli/turn", async (req, res) => {
     validatedAttachmentIds = rawAttachmentIds.filter((id) => validSet.has(id));
     const droppedIds = rawAttachmentIds.filter((id) => !validSet.has(id));
     if (droppedIds.length > 0 && !closed) {
-      emit({
-        type: "narration",
-        data: {
-          text: `Note: ${droppedIds.length} attachment${droppedIds.length === 1 ? "" : "s"} could not be loaded and ${droppedIds.length === 1 ? "was" : "were"} skipped.`,
-        },
-      });
+      if (wireMode === "legacy") {
+        emit({
+          type: "narration",
+          data: {
+            text: `Note: ${droppedIds.length} attachment${droppedIds.length === 1 ? "" : "s"} could not be loaded and ${droppedIds.length === 1 ? "was" : "were"} skipped.`,
+          },
+        });
+      }
     }
   }
 
@@ -441,11 +482,27 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
     closed = true;
     stopHeartbeat();
   });
-  const emit = (frame: CliFrame) =>
-    closed ? undefined : writeSseFrame(res, frameForWireMode(frame, wireMode));
+  let semanticFrameSeen = false;
+  let transportSequence = 0;
+  const emit = (frame: CliFrame) => {
+    if (closed) return;
+    if (wireMode === "semantic") {
+      if (frame.protocolVersion === ASSISTANT_PROTOCOL_VERSION) {
+        semanticFrameSeen = true;
+      } else if (semanticFrameSeen || frame.type !== "error") {
+        return;
+      }
+    }
+    writeSseFrame(res, frameForWireMode(frame, wireMode, {
+      turnId: `transport_${correlationId}`,
+      sequence: transportSequence++,
+    }));
+  };
   // Task #24 — immediate feedback while the confirm serializes through
   // the per-user queue and commits.
-  emit({ type: "progress", data: { pct: 2, message: "Confirming…" } });
+  if (wireMode === "legacy") {
+    emit({ type: "progress", data: { pct: 2, message: "Confirming…" } });
+  }
   // Task #332 — irreversible ops require the client to retype the
   // entity name; we forward it to the orchestrator which checks it
   // against the saved pendingWrite hint before the run callback fires.

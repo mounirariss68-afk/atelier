@@ -41,6 +41,7 @@ import {
 import { and, desc, eq, gte, ilike, isNull, ne, or, inArray } from "drizzle-orm";
 import {
   ASSISTANT_FRAME_ENVELOPE_KEY,
+  AssistantFrameOutcomeV1Schema,
   ASSISTANT_PROTOCOL_VERSION,
   PRESENTATION_MINIMUM_DATA_VERSION,
   upcastPersistedTurnV1,
@@ -3715,19 +3716,66 @@ export async function runTurn(
         // Replay all prev frames except its own `final` (which would
         // mask the replay marker). Then emit a fresh final tagged
         // replay:true so the client knows this was a dedupe.
-        for (const f of (prev.frames as CliFrame[]) ?? []) {
+        const persistedFrames = ((prev.frames as CliFrame[]) ?? []).slice();
+        const persistedFinal = [...persistedFrames]
+          .reverse()
+          .find((frame) => frame.type === "final");
+        const persistedOutcome = AssistantFrameOutcomeV1Schema.safeParse(
+          persistedFinal?.outcome,
+        );
+        const conservativeLegacyOutcome: NonNullable<CliFrame["outcome"]> =
+          prev.status === "awaiting_confirmation"
+            ? { kind: "proposed", committed: false }
+            : prev.status === "error" ||
+                prev.status === "cancelled" ||
+                prev.status === "partial"
+              ? { kind: "failed", committed: false }
+              : { kind: "read", committed: false };
+        const replayOutcome: NonNullable<CliFrame["outcome"]> = {
+          ...(persistedOutcome.success
+            ? persistedOutcome.data
+            : conservativeLegacyOutcome),
+          replayedIdempotent: true,
+        };
+        let replaySequence = persistedFrames.reduce(
+          (max, frame, index) =>
+            Math.max(
+              max,
+              typeof frame.sequence === "number" && Number.isInteger(frame.sequence)
+                ? frame.sequence
+                : index,
+            ),
+          -1,
+        ) + 1;
+        for (let index = 0; index < persistedFrames.length; index += 1) {
+          const f = persistedFrames[index];
           if (f.type === "final" || !isClientVisibleCliFrameType(f.type)) continue;
-          emit(f);
+          emit(
+            f.protocolVersion === ASSISTANT_PROTOCOL_VERSION
+              ? f
+              : semanticCliFrame({
+                  frame: f,
+                  turnId: prev.id,
+                  sequence: index,
+                  terminal: false,
+                }),
+          );
         }
-        emit({
-          type: "final",
-          data: {
-            replay: true,
-            status: prev.status,
-            turnId: prev.id,
-            sessionId: session.id,
+        emit(semanticCliFrame({
+          frame: {
+            type: "final",
+            data: {
+              replay: true,
+              status: prev.status,
+              turnId: prev.id,
+              sessionId: session.id,
+            },
           },
-        });
+          turnId: prev.id,
+          sequence: replaySequence++,
+          terminal: true,
+          outcome: replayOutcome,
+        }));
         return {
           turnId: prev.id,
           sessionId: session.id,

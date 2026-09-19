@@ -14,11 +14,48 @@ import { cancelDurableAction } from "../lib/assistant/action-runtime.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../lib/assistant/durable-account-update-confirmation.js";
 import { durableAccountUpdateEnabled } from "../lib/assistant/durable-account-update-canary.js";
 import { mergeAssistantReplayEvents } from "../lib/assistant/legacy-event-reader.js";
+import {
+  assistantProtocolMetadata,
+  CANONICAL_ASSISTANT_HEADERS,
+  canonicalToLegacyTurnRequest,
+} from "../lib/assistant/compatibility.js";
 
 const router: IRouter = Router();
 router.use(attachPersona);
 router.use(rejectClientRealm);
 router.use(attachRls);
+
+router.get("/protocol", (_req, res) => {
+  res.json(assistantProtocolMetadata());
+});
+
+function negotiateCanonicalProtocol(
+  req: Parameters<RequestHandler>[0],
+  res: Parameters<RequestHandler>[1],
+): boolean {
+  const offeredVersion = req.header("X-Assistant-Protocol-Version");
+  const offeredMode = req.header("X-Assistant-Protocol-Mode");
+  const offeredPresentations = req.header("X-Assistant-Presentation-Versions");
+  const supported =
+    offeredVersion === CANONICAL_ASSISTANT_HEADERS["x-assistant-protocol-version"] &&
+    offeredMode === CANONICAL_ASSISTANT_HEADERS["x-assistant-protocol-mode"] &&
+    offeredPresentations !== undefined &&
+      offeredPresentations.split(",").map((value) => value.trim()).includes(
+        CANONICAL_ASSISTANT_HEADERS["x-assistant-presentation-versions"],
+      );
+  if (!supported) {
+    res.status(426).json({
+      code: "unsupported_assistant_protocol",
+      supported: assistantProtocolMetadata(),
+    });
+    return false;
+  }
+  for (const [name, value] of Object.entries(CANONICAL_ASSISTANT_HEADERS)) {
+    req.headers[name] = value;
+    res.setHeader(name, value);
+  }
+  return true;
+}
 
 function ensurePersona(req: Parameters<RequestHandler>[0], res: Parameters<RequestHandler>[1]) {
   if (!req.atelierPersona) {
@@ -43,26 +80,14 @@ router.post("/turns", (req, res, next) => {
     res.status(400).json({ code: "invalid_request", issues: parsed.error.issues.map((i) => i.code) });
     return;
   }
+  if (!negotiateCanonicalProtocol(req, res)) return;
   const body = parsed.data;
-  req.body = {
-    sessionId: body.conversationId,
-    prompt: body.prompt,
-    attachmentIds: body.attachmentIds,
-    pageContext: body.pageContext ?? null,
-    dryRun: body.dryRun,
-    cancelInflight: body.cancelInflight,
-    clientTurnKey: body.clientTurnKey,
-    async: body.async,
-    reset: body.reset,
-    continuesTurnId: body.continuesTurnId,
-    clarificationValues: body.clarificationValues,
-    disambigOptionId: body.disambigOptionId,
-    timezone: body.timezone,
-  };
+  req.body = canonicalToLegacyTurnRequest(body);
   delegateToLegacy(req, res, next, "/cli/turn");
 });
 
 router.get("/conversations/:id/events", async (req, res) => {
+  if (!negotiateCanonicalProtocol(req, res)) return;
   const me = ensurePersona(req, res);
   if (!me) return;
   const after =
@@ -116,6 +141,7 @@ router.get("/conversations/:id/events", async (req, res) => {
 });
 
 router.post("/actions/:id/confirm", async (req, res, next) => {
+  if (!negotiateCanonicalProtocol(req, res)) return;
   const me = ensurePersona(req, res);
   if (!me) return;
   const [action] = await withRls(req, (tx) => tx
@@ -169,10 +195,31 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
     });
     return;
   }
-  delegateToLegacy(req, res, next, `/cli/turn/${encodeURIComponent(req.params.id)}/confirm`);
+  const [legacyTurn] = await withRls(req, (tx) => tx
+    .select({ id: atelierCliTurns.id })
+    .from(atelierCliTurns)
+    .where(and(
+      eq(atelierCliTurns.id, req.params.id),
+      eq(atelierCliTurns.orgId, me.orgId),
+      eq(atelierCliTurns.userId, me.id),
+    ))
+    .limit(1));
+  if (!legacyTurn) {
+    res.status(404).json({ code: "action_not_found" });
+    return;
+  }
+  req.body = {
+    ...(req.body && typeof req.body === "object" ? req.body : {}),
+    typedName:
+      typeof req.body?.typedEvidence === "string"
+        ? req.body.typedEvidence
+        : undefined,
+  };
+  delegateToLegacy(req, res, next, `/cli/turn/${encodeURIComponent(legacyTurn.id)}/confirm`);
 });
 
 router.post("/actions/:id/cancel", async (req, res, next) => {
+  if (!negotiateCanonicalProtocol(req, res)) return;
   const me = ensurePersona(req, res);
   if (!me) return;
   const [action] = await withRls(req, (tx) => tx
@@ -187,7 +234,20 @@ router.post("/actions/:id/cancel", async (req, res, next) => {
     )
     .limit(1));
   if (!action) {
-    delegateToLegacy(req, res, next, `/cli/turn/${encodeURIComponent(req.params.id)}/cancel`);
+    const [legacyTurn] = await withRls(req, (tx) => tx
+      .select({ id: atelierCliTurns.id })
+      .from(atelierCliTurns)
+      .where(and(
+        eq(atelierCliTurns.id, req.params.id),
+        eq(atelierCliTurns.orgId, me.orgId),
+        eq(atelierCliTurns.userId, me.id),
+      ))
+      .limit(1));
+    if (!legacyTurn) {
+      res.status(404).json({ code: "action_not_found" });
+      return;
+    }
+    delegateToLegacy(req, res, next, `/cli/turn/${encodeURIComponent(legacyTurn.id)}/cancel`);
     return;
   }
   try {
