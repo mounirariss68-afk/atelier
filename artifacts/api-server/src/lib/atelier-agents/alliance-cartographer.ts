@@ -19,7 +19,7 @@
 
 import { db, atelierPartnerFirms, atelierAuditEvents } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { loadPrompt } from "./loader.js";
+import { loadEffectivePrompt } from "./loader.js";
 import {
   startRun,
   progressRun,
@@ -193,7 +193,7 @@ export async function runAllianceCartographer(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = loadPrompt("alliance_cartographer", 1);
+    const system = await loadEffectivePrompt("alliance_cartographer", 1);
     await progressRun(runId, 15, "Researching the partner firm");
     const { value, costUsd, citationUrls, potentiallyStale: allianceStale } =
       await callResearchJson<Record<string, unknown>>(
@@ -673,7 +673,7 @@ export async function runAllianceExecutiveMapper(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = loadPrompt("alliance_executive_mapper", 1);
+    const system = await loadEffectivePrompt("alliance_executive_mapper", 1);
     await progressRun(runId, 20, "Sweeping the partner-firm leadership");
     const { value, costUsd, citationUrls } =
       await callResearchJson<AllianceExecutiveMapperOutput>(

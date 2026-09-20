@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { db, atelierPrompts } from "@workspace/db";
+import { getAgent } from "@workspace/agents";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { requireAssistantProviderContext } from "../assistant/provider-context.js";
 
 // In dev (`tsx`-like) and production (esbuild bundle) we must locate the
 // `prompts/` directory relative to the package root. It is shipped beside
@@ -107,4 +112,68 @@ export function loadPrompt(
   const filename = mode ? `v${version}_${mode}_mode.md` : `v${version}.md`;
   const path = resolve(PROMPT_DIR, agentId, filename);
   return readFileSync(path, "utf8");
+}
+
+/** Resolve an org override, falling back to the immutable filesystem prompt. */
+export async function resolveEffectiveAgentPrompt(args: {
+  orgId?: string | null;
+  agentId: AtelierAgentId | string;
+  version?: number;
+  mode?: string;
+}): Promise<{ body: string; source: "override" | "filesystem"; version: number; baseRef: string; updatedAt: Date }> {
+  const version = args.version ?? 1;
+  const runtime = getAgent(args.agentId);
+  const canonicalAgentId = runtime?.id ?? (args.agentId.startsWith("ag_") ? args.agentId : `ag_${args.agentId}`);
+  if (args.orgId) {
+    const [override] = await db.select().from(atelierPrompts).where(and(
+      eq(atelierPrompts.orgId, args.orgId),
+      eq(atelierPrompts.agentId, canonicalAgentId),
+      eq(atelierPrompts.status, "active"),
+      isNull(atelierPrompts.deletedAt),
+    )).orderBy(desc(atelierPrompts.version)).limit(1);
+    if (override) {
+      return { body: override.body, source: "override", version: override.version, baseRef: `v${version}`, updatedAt: override.updatedAt };
+    }
+  }
+  const logicalId = runtime?.id.replace(/^ag_/, "") ?? args.agentId.replace(/^ag_/, "");
+  const requestedRef = args.mode
+    ? `prompts/${logicalId}/v${version}_${args.mode}_mode.md`
+    : args.version !== undefined
+      ? `prompts/${logicalId}/v${version}.md`
+      : runtime?.systemPromptRef;
+  const safeRef = requestedRef?.startsWith("prompts/") && !requestedRef.includes("..")
+    ? requestedRef.slice("prompts/".length)
+    : undefined;
+  const fallbackRef = runtime?.systemPromptRef?.startsWith("prompts/") && !runtime.systemPromptRef.includes("..")
+    ? runtime.systemPromptRef.slice("prompts/".length)
+    : undefined;
+  let body: string;
+  let baseRef: string;
+  try {
+    if (!safeRef) throw new Error("missing prompt reference");
+    body = readFileSync(resolve(PROMPT_DIR, safeRef), "utf8");
+    baseRef = requestedRef!;
+  } catch (error) {
+    if (!fallbackRef || fallbackRef === safeRef) throw error;
+    body = readFileSync(resolve(PROMPT_DIR, fallbackRef), "utf8");
+    baseRef = runtime!.systemPromptRef;
+  }
+  return { body, source: "filesystem", version, baseRef, updatedAt: new Date() };
+}
+
+export async function loadEffectivePrompt(
+  agentId: AtelierAgentId,
+  version?: number,
+  mode?: string,
+  orgId?: string | null,
+): Promise<string> {
+  let effectiveOrg = orgId;
+  if (!effectiveOrg) {
+    try { effectiveOrg = requireAssistantProviderContext().orgId; } catch { /* legacy callers use filesystem */ }
+  }
+  return (await resolveEffectiveAgentPrompt({ orgId: effectiveOrg, agentId, version, mode })).body;
+}
+
+export function promptSha256(body: string): string {
+  return createHash("sha256").update(body).digest("hex");
 }

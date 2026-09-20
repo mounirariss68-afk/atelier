@@ -6550,6 +6550,41 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/AtelierPromptEntry" }
 
+  /atelier/agents/{agentId}/prompt:
+    get:
+      operationId: atelierGetAgentPrompt
+      tags: [atelier]
+      summary: Get the effective full agent prompt
+      parameters:
+        - { name: agentId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective prompt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAgentPrompt" }
+        "404": { description: Prompt unavailable }
+    put:
+      operationId: atelierUpdateAgentPrompt
+      tags: [atelier]
+      summary: Create an immutable org-scoped agent prompt override
+      parameters:
+        - { name: agentId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierAgentPromptInput" }
+      responses:
+        "200":
+          description: Updated prompt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAgentPrompt" }
+        "400": { description: Invalid prompt }
+        "403": { description: Role not permitted }
+        "404": { description: Prompt unavailable }
+
   /atelier/concierge/search:
     post:
       operationId: atelierConciergeSearch
@@ -12015,6 +12050,22 @@ components:
           items: { type: object }
         promptRef: { type: string }
         executable: { type: boolean }
+
+    AtelierAgentPrompt:
+      type: object
+      required: [agentId, body, source, baseRef, version, updatedAt]
+      properties:
+        agentId: { type: string }
+        body: { type: string }
+        source: { type: string, enum: [filesystem, override] }
+        baseRef: { type: string }
+        version: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    AtelierAgentPromptInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 100000 }
 
     AgentActivityItem:
       type: object

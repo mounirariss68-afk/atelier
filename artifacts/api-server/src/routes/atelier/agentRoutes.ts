@@ -11,6 +11,7 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull, inArray, ilike, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { agentRunIsFresh, effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import {
   db,
@@ -30,6 +31,7 @@ import {
   atelierPaneAItems,
   atelierDeliverables,
   atelierWinLossDebriefs,
+  atelierPrompts,
 } from "@workspace/db";
 import {
   SALES_TO_PLM,
@@ -96,6 +98,7 @@ import {
   briefAge,
 } from "../../lib/atelier-agents/brief-quality.js";
 import { getAgent } from "@workspace/agents";
+import { resolveEffectiveAgentPrompt } from "../../lib/atelier-agents/loader.js";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
 import {
   auditPovCitations,
@@ -296,6 +299,79 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect, showPar
 }
 
 const router: IRouter = Router();
+
+function promptHash(body: string): string {
+  return createHash("sha256").update(body).digest("hex");
+}
+
+function promptAgent(agentId: string) {
+  const agent = getAgent(agentId);
+  if (!agent || agent.status === "stub") return null;
+  return agent;
+}
+
+router.get("/agents/:agentId/prompt", async (req, res): Promise<void> => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const agentId = String(req.params.agentId);
+  if (!promptAgent(agentId)) {
+    res.status(404).json({ error: "agent-prompt-not-found", message: "Agent is not executable or is not registered." });
+    return;
+  }
+  try {
+    const effective = await resolveEffectiveAgentPrompt({ orgId: me.orgId, agentId });
+    res.json({ agentId, ...effective, updatedAt: effective.updatedAt.toISOString() });
+  } catch {
+    res.status(404).json({ error: "agent-prompt-not-found", message: "Agent prompt file is missing." });
+  }
+});
+
+router.put("/agents/:agentId/prompt", async (req, res): Promise<void> => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && me.role !== "founding_partner") {
+    res.status(403).json({ error: "agent-prompt-edit-forbidden", message: "Only partners and founding partners may edit prompts." });
+    return;
+  }
+  const agentId = String(req.params.agentId);
+  if (!promptAgent(agentId)) {
+    res.status(404).json({ error: "agent-prompt-not-found", message: "Agent is not executable or is not registered." });
+    return;
+  }
+  const body = typeof req.body?.body === "string" ? req.body.body : "";
+  if (!body.trim() || body.length > 100_000) {
+    res.status(400).json({ error: "invalid-agent-prompt", message: "Prompt body must be nonempty and no more than 100000 characters." });
+    return;
+  }
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`atelier-prompt:${me.orgId}:${agentId}`}))`);
+      const [prior] = await tx.select({ version: atelierPrompts.version })
+        .from(atelierPrompts)
+        .where(and(eq(atelierPrompts.orgId, me.orgId), eq(atelierPrompts.agentId, agentId)))
+        .orderBy(desc(atelierPrompts.version)).limit(1);
+      const version = (prior?.version ?? 0) + 1;
+      await tx.update(atelierPrompts).set({ status: "deprecated", updatedAt: new Date() })
+        .where(and(eq(atelierPrompts.orgId, me.orgId), eq(atelierPrompts.agentId, agentId), eq(atelierPrompts.status, "active")));
+      const [row] = await tx.insert(atelierPrompts).values({
+        id: `prompt_${me.orgId}_${agentId}_${version}_${Date.now().toString(36)}`,
+        orgId: me.orgId, agentId, version, body, status: "active",
+        author: me.name, createdByUserId: me.id,
+      }).returning();
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"), orgId: me.orgId, entityType: "agent_prompt", entityId: agentId,
+        actorType: "human", actorId: me.id, actorLabel: me.name, action: "agent_prompt.update",
+        payload: { version, priorVersion: prior?.version ?? null, bodySha256: promptHash(body) },
+        payloadSummary: `${me.name} updated ${agentId} prompt to version ${version}.`,
+      });
+      return row;
+    });
+    res.json({ agentId, body: result.body, source: "override", baseRef: "v1", version: result.version, updatedAt: result.updatedAt.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "agent prompt update failed");
+    res.status(500).json({ error: "agent-prompt-update-failed" });
+  }
+});
 
 // -------------------------------------------------------------------
 // Live duplicate-opportunity hint (Task #37)

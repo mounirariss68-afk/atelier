@@ -156,3 +156,4 @@
 - [Won-deal commercial baseline](atelier-commercial-baseline.md) — Contract entry atomically freezes saved pricing basis/provenance and materializes the signed SOW plus billing handoff.
 - [Engagement mobilization safety](atelier-mobilization-safety.md) — activation and staffing writes share locks; only mobilization-derived access may be revoked by assignment lifecycle.
 - [Finance MVP operating record](finance-mvp-operating-record.md) — funding is append-only; summaries separate currencies; bank exceptions must be approved before close.
+- [Agent prompt overrides](atelier-agent-prompt-overrides.md) — canonical IDs unify profile edits with runner loads; prompt files affect generated CRM manifest hashes.

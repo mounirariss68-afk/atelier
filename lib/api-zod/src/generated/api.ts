@@ -37452,6 +37452,44 @@ export const AtelierListPromptsResponse = zod.array(
 );
 
 /**
+ * @summary Get the effective full agent prompt
+ */
+export const AtelierGetAgentPromptParams = zod.object({
+  agentId: zod.coerce.string(),
+});
+
+export const AtelierGetAgentPromptResponse = zod.object({
+  agentId: zod.string(),
+  body: zod.string(),
+  source: zod.enum(["filesystem", "override"]),
+  baseRef: zod.string(),
+  version: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Create an immutable org-scoped agent prompt override
+ */
+export const AtelierUpdateAgentPromptParams = zod.object({
+  agentId: zod.coerce.string(),
+});
+
+export const atelierUpdateAgentPromptBodyBodyMax = 100000;
+
+export const AtelierUpdateAgentPromptBody = zod.object({
+  body: zod.string().min(1).max(atelierUpdateAgentPromptBodyBodyMax),
+});
+
+export const AtelierUpdateAgentPromptResponse = zod.object({
+  agentId: zod.string(),
+  body: zod.string(),
+  source: zod.enum(["filesystem", "override"]),
+  baseRef: zod.string(),
+  version: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
  * @summary Knowledge Concierge — keyword search over Atelier assets
  */
 

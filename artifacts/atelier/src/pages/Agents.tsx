@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Link } from "wouter";
 import { useAtelierListAgents } from "@workspace/api-client-react";
 import { PageHero, SectionHead, Card, MonoChip, SectionLabel } from "@/components/ui/primitives";

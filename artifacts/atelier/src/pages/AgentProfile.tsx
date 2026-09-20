@@ -1,8 +1,24 @@
 import { Link, useRoute } from "wouter";
-import { Activity, ArrowUpRight, Cpu, FileText, Link2, ShieldCheck, UserCheck, Wrench } from "lucide-react";
-import { useAtelierListAgents, useAtelierListAgentRuns, getAtelierListAgentRunsQueryKey, type AgentCatalogEntry, type AtelierAgentSchemaField } from "@workspace/api-client-react";
+import * as React from "react";
+import { Activity, ArrowUpRight, Cpu, FileText, Link2, Pencil, ShieldCheck, UserCheck, Wrench } from "lucide-react";
+import {
+  useAtelierGetAgentPrompt,
+  useAtelierGetMe,
+  useAtelierListAgents,
+  useAtelierListAgentRuns,
+  useAtelierUpdateAgentPrompt,
+  getAtelierGetAgentPromptQueryKey,
+  getAtelierListAgentRunsQueryKey,
+  type AgentCatalogEntry,
+  type AgentCatalogEntryHumanCheckpointsItem,
+  type AtelierAgentPrompt,
+  type AtelierAgentSchemaField,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { BackLink, Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AgentProfile() {
   const [, params] = useRoute("/agents/:agentId");
@@ -29,6 +45,7 @@ export default function AgentProfile() {
       <div className="container-atelier py-10 space-y-8">
         {!available && <Card className="p-5 border-dashed text-text-mute">This registry entry is not executable. No run controls are available.</Card>}
         <OperationalMetadata agent={agent} />
+        {available && <PromptEditor agentId={agent.id} promptRef={agent.promptRef} />}
         {(agent.inputs?.length || agent.outputs?.length) ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {agent.inputs && agent.inputs.length > 0 && <SchemaCard title="Inputs" fields={agent.inputs} />}
@@ -46,6 +63,25 @@ export default function AgentProfile() {
   );
 }
 
+function checkpointText(checkpoint: AgentCatalogEntryHumanCheckpointsItem): {
+  label: string;
+  decider?: string;
+  blocking?: boolean;
+} {
+  const label = typeof checkpoint.label === "string"
+    ? checkpoint.label
+    : typeof checkpoint.id === "string"
+      ? checkpoint.id.replace(/^cp_/, "").replaceAll("_", " ")
+      : "Human review";
+  return {
+    label,
+    decider: typeof checkpoint.decider === "string"
+      ? checkpoint.decider.replaceAll("_", " ")
+      : undefined,
+    blocking: typeof checkpoint.blocking === "boolean" ? checkpoint.blocking : undefined,
+  };
+}
+
 function OperationalMetadata({ agent }: { agent: AgentCatalogEntry }) {
   const metadata = [
     agent.tools?.length ? {
@@ -61,7 +97,14 @@ function OperationalMetadata({ agent }: { agent: AgentCatalogEntry }) {
     agent.humanCheckpoints?.length ? {
       label: "Human checkpoints",
       icon: <UserCheck className="w-4 h-4" />,
-      content: <ul className="space-y-1 text-sm text-text-mute list-disc list-inside">{agent.humanCheckpoints.map((checkpoint, index) => <li key={index}>{typeof checkpoint === "string" ? checkpoint : JSON.stringify(checkpoint)}</li>)}</ul>,
+      content: <ul className="space-y-3">{agent.humanCheckpoints.map((checkpoint, index) => {
+        const display = checkpointText(checkpoint);
+        return <li key={typeof checkpoint.id === "string" ? checkpoint.id : index} className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-text">{display.label}</span>
+          {display.decider && <MonoChip>{display.decider}</MonoChip>}
+          {display.blocking !== undefined && <MonoChip tone={display.blocking ? "gold" : "default"}>{display.blocking ? "blocking" : "advisory"}</MonoChip>}
+        </li>;
+      })}</ul>,
     } : null,
     agent.promptRef ? {
       label: "Prompt reference",
@@ -74,6 +117,83 @@ function OperationalMetadata({ agent }: { agent: AgentCatalogEntry }) {
   // infer one from lifecycle tables or expose a misleading placeholder.
   if (metadata.length === 0) return null;
   return <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="agent-operational-metadata">{metadata.map((item) => <Card key={item.label} className="p-5 space-y-3"><h2 className="font-mono text-sm uppercase tracking-widest text-text-mute flex items-center gap-2">{item.icon}{item.label}</h2>{item.content}</Card>)}</div>;
+}
+
+function PromptEditor({ agentId, promptRef }: { agentId: string; promptRef?: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: me } = useAtelierGetMe();
+  const prompt = useAtelierGetAgentPrompt(agentId, {
+    query: { queryKey: getAtelierGetAgentPromptQueryKey(agentId) },
+  });
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const canEdit = me?.role === "founding_partner" || me?.role === "partner";
+
+  React.useEffect(() => {
+    if (!editing && prompt.data?.body !== undefined) setDraft(prompt.data.body);
+  }, [editing, prompt.data?.body]);
+
+  const update = useAtelierUpdateAgentPrompt({
+    mutation: {
+      onSuccess: (saved: AtelierAgentPrompt) => {
+        queryClient.setQueryData(getAtelierGetAgentPromptQueryKey(agentId), saved);
+        setDraft(saved.body);
+        setEditing(false);
+        toast({ title: "Prompt updated", description: `Version ${saved.version} is now active for your organisation.` });
+      },
+      onError: (error) => {
+        toast({
+          title: "Prompt update failed",
+          description: error instanceof Error ? error.message : "Try again.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  return <Card className="p-6 space-y-4" data-testid="agent-prompt-editor">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 className="font-mono text-sm uppercase tracking-widest text-text-mute flex items-center gap-2">
+          <FileText className="w-4 h-4" />Full prompt
+        </h2>
+        {prompt.data && <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-faint">
+          <MonoChip tone={prompt.data.source === "override" ? "gold" : "default"}>{prompt.data.source === "override" ? "organisation override" : "platform default"}</MonoChip>
+          <span>Version {prompt.data.version}</span>
+          {promptRef && <code className="break-all">{promptRef}</code>}
+        </div>}
+      </div>
+      {canEdit && prompt.data && !editing && <Button variant="outline" size="sm" onClick={() => {
+        setDraft(prompt.data.body);
+        setEditing(true);
+      }}><Pencil className="w-4 h-4 mr-2" />Edit prompt</Button>}
+    </div>
+    {prompt.isLoading ? <Skeleton className="h-48 bg-bg-elevate" /> : prompt.isError ? (
+      <p className="text-sm text-danger">The full prompt is unavailable. Its referenced prompt file may be missing.</p>
+    ) : editing ? (
+      <div className="space-y-3">
+        <textarea
+          aria-label="Full agent prompt"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          rows={24}
+          className="w-full rounded-md border border-border-soft bg-bg-elevate/40 p-4 font-mono text-sm leading-relaxed text-text focus:outline-none focus:ring-2 focus:ring-gold/40"
+        />
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={() => {
+            setDraft(prompt.data?.body ?? "");
+            setEditing(false);
+          }} disabled={update.isPending}>Cancel</Button>
+          <Button onClick={() => update.mutate({ agentId, data: { body: draft } })} disabled={update.isPending || !draft.trim() || draft === prompt.data?.body}>
+            {update.isPending ? "Saving…" : "Save as new active version"}
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <pre className="max-h-[42rem] overflow-auto whitespace-pre-wrap rounded-md border border-border-soft bg-bg-elevate/35 p-4 font-mono text-sm leading-relaxed text-text">{prompt.data?.body}</pre>
+    )}
+  </Card>;
 }
 
 function SchemaCard({ title, fields }: { title: string; fields: AtelierAgentSchemaField[] | undefined }) {

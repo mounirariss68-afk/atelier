@@ -20,7 +20,7 @@ function check(name: string, ok: boolean, detail?: unknown) {
 
 async function main() {
   const D = await import("@workspace/db");
-  const { db, pool, atelierUsers, atelierAccounts, atelierAgents, atelierAgentRuns, atelierAuditEvents } = D;
+  const { db, pool, atelierUsers, atelierAccounts, atelierAgents, atelierAgentRuns, atelierAuditEvents, atelierPrompts } = D;
   const { and, eq, ilike, inArray } = await import("drizzle-orm");
   const { default: app } = await import("../../src/app.js");
   const tag = `agent_ops_${Date.now()}`;
@@ -140,6 +140,42 @@ async function main() {
     check("registry agent appears without a catalogue row", registryBacked?.executable === true, catalogue.body);
     check("registry run count is org scoped", registryBacked?.runsLast30d === 1, registryBacked);
 
+    const basePrompt = await api("GET", "/agents/ag_pov_author/prompt", userA);
+    check("full filesystem prompt is readable", basePrompt.status === 200 &&
+      basePrompt.body?.source === "filesystem" &&
+      typeof basePrompt.body?.body === "string" &&
+      basePrompt.body.body.length > 20, basePrompt);
+    const deniedPromptEdit = await api("PUT", "/agents/ag_pov_author/prompt", userC, {
+      body: "Consultants must not be able to replace agent prompts.",
+    });
+    check("non-partner prompt edit is denied", deniedPromptEdit.status === 403, deniedPromptEdit);
+    const firstPromptEdit = await api("PUT", "/agents/ag_pov_author/prompt", userA, {
+      body: "Organisation A prompt override version one.",
+    });
+    check("partner can create an active prompt override", firstPromptEdit.status === 200 &&
+      firstPromptEdit.body?.source === "override" &&
+      firstPromptEdit.body?.version === 1, firstPromptEdit);
+    const foreignPrompt = await api("GET", "/agents/ag_pov_author/prompt", userB);
+    check("prompt overrides are isolated by organisation", foreignPrompt.status === 200 &&
+      foreignPrompt.body?.source === "filesystem" &&
+      foreignPrompt.body?.body !== firstPromptEdit.body?.body, foreignPrompt);
+    const secondPromptEdit = await api("PUT", "/agents/ag_pov_author/prompt", userA, {
+      body: "Organisation A prompt override version two.",
+    });
+    check("prompt edits create immutable versions", secondPromptEdit.status === 200 &&
+      secondPromptEdit.body?.version === 2, secondPromptEdit);
+    const promptVersions = await db.select().from(atelierPrompts).where(and(
+      eq(atelierPrompts.orgId, orgA),
+      eq(atelierPrompts.agentId, "ag_pov_author"),
+    ));
+    check("only the latest prompt version is active", promptVersions.length === 2 &&
+      promptVersions.filter((row) => row.status === "active").length === 1 &&
+      promptVersions.some((row) => row.status === "deprecated"), promptVersions);
+    const { resolveEffectiveAgentPrompt } = await import("../../src/lib/atelier-agents/loader.js");
+    const runtimePrompt = await resolveEffectiveAgentPrompt({ orgId: orgA, agentId: "pov_author" });
+    check("bare runner id resolves the canonical org override", runtimePrompt.source === "override" &&
+      runtimePrompt.body === secondPromptEdit.body?.body, runtimePrompt);
+
     const first = await api("GET", `/agent-runs/${runA}`, userA);
     const second = await api("GET", `/agent-runs/${runA}`, userA);
     check("same-org run detail is readable", first.status === 200);
@@ -183,7 +219,8 @@ async function main() {
       (saved.humanDecisions as any[]).some((d) => d.decision === "approve"));
     check("decision audit is attributed to org A", audits.length > 0 && audits.every((a) => a.orgId === orgA), audits);
   } finally {
-    await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, [runA, runB]));
+    await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, [runA, runB, "ag_pov_author"]));
+    await db.delete(atelierPrompts).where(inArray(atelierPrompts.orgId, [orgA, orgB]));
     await db.delete(atelierAgentRuns).where(inArray(atelierAgentRuns.id, [runA, runB, runC, runUnknown, runRegistryA, runRegistryB]));
     await db.delete(atelierAccounts).where(eq(atelierAccounts.id, accountC));
     await db.delete(atelierAgents).where(inArray(atelierAgents.id, [`ag_missing_${tag}`, `ag_stub_${tag}`, `ag_pursuit_scout`]));

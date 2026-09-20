@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import {
   getAtelierGetAgentRunQueryKey,
+  getAtelierGetAgentPromptQueryKey,
+  getAtelierGetMeQueryKey,
   getAtelierListAgentRunsQueryKey,
   getAtelierListAgentsQueryKey,
 } from "@workspace/api-client-react";
@@ -25,7 +27,7 @@ const agent = {
   executable: true,
   tools: ["lookup"],
   guardrails: ["cite sources"],
-  humanCheckpoints: ["approve"],
+  humanCheckpoints: [{ id: "cp_partner", label: "Partner approves the output", decider: "partner", blocking: true }],
   promptRef: "agent_operations_probe",
   inputs: [],
   outputs: [],
@@ -72,13 +74,27 @@ assert.match(catalogueHtml, /href="\/agents\/ag_operations_probe"/);
 const profileHtml = render(`/agents/${agent.id}`, AgentProfile, (client) => {
   client.setQueryData(getAtelierListAgentsQueryKey(), [agent]);
   client.setQueryData(getAtelierListAgentRunsQueryKey(agent.id), [run]);
+  client.setQueryData(getAtelierGetMeQueryKey(), { id: "partner", role: "founding_partner" });
+  client.setQueryData(getAtelierGetAgentPromptQueryKey(agent.id), {
+    agentId: agent.id,
+    body: "You are the operations probe.\nReturn grounded evidence.",
+    source: "filesystem",
+    baseRef: "prompts/agent_operations_probe/v1.md",
+    version: 1,
+    updatedAt: "2026-09-20T00:00:00.000Z",
+  });
 });
 assert.match(profileHtml, /Tools/);
 assert.match(profileHtml, /Guardrails/);
 assert.match(profileHtml, /Human checkpoints/);
+assert.match(profileHtml, /Partner approves the output/);
+assert.match(profileHtml, /blocking/);
+assert.doesNotMatch(profileHtml, /&quot;blocking&quot;/);
 assert.match(profileHtml, /agent_operations_probe/);
+assert.match(profileHtml, /You are the operations probe/);
+assert.match(profileHtml, /Edit prompt/);
 assert.match(profileHtml, /href="\/agents\/runs\/run_operations_probe"/);
-assert.doesNotMatch(profileHtml, /version/i, "no version is rendered without an authoritative server field");
+assert.match(profileHtml, /Version.*1/, "the authoritative prompt version is rendered");
 
 const failedRunHtml = render(`/agents/runs/${run.id}`, AgentRun, (client) => {
   client.setQueryData(getAtelierListAgentsQueryKey(), [agent]);

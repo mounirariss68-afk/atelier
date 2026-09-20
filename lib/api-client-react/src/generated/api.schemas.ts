@@ -6071,6 +6071,31 @@ export interface AgentCatalogEntry {
   executable?: boolean;
 }
 
+export type AtelierAgentPromptSource =
+  (typeof AtelierAgentPromptSource)[keyof typeof AtelierAgentPromptSource];
+
+export const AtelierAgentPromptSource = {
+  filesystem: "filesystem",
+  override: "override",
+} as const;
+
+export interface AtelierAgentPrompt {
+  agentId: string;
+  body: string;
+  source: AtelierAgentPromptSource;
+  baseRef: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface AtelierAgentPromptInput {
+  /**
+   * @minLength 1
+   * @maxLength 100000
+   */
+  body: string;
+}
+
 export type AgentActivityItemStatus =
   (typeof AgentActivityItemStatus)[keyof typeof AgentActivityItemStatus];
 

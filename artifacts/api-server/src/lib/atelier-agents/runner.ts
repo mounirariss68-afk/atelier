@@ -26,7 +26,7 @@
 import { db, atelierAgentRuns, atelierAgentRunSnapshots, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities, atelierUsers } from "@workspace/db";
 import { eq, and, gte, isNull, inArray, desc } from "drizzle-orm";
 import { getAgent } from "@workspace/agents";
-import { loadPrompt, type AtelierAgentId } from "./loader.js";
+import { loadEffectivePrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
@@ -1121,7 +1121,7 @@ export async function runPursuitScout(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("pursuit_scout");
+      const system = await loadEffectivePrompt("pursuit_scout");
       // Task #872 — alliance-partner capability context (advisory, capped).
       // Org resolved from the opportunity row; built at run time from ACTIVE
       // agreed partners only. Failure degrades to no partner context — it
@@ -1261,7 +1261,7 @@ export async function runPovOutline(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("pov_author");
+      const system = await loadEffectivePrompt("pov_author");
       await ctx.progress(30, args.revisionFeedback ? "Revising outline" : "Drafting outline");
       const directive =
         (args.revisionFeedback
@@ -1352,7 +1352,7 @@ export async function runPovDraft(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("pov_author");
+      const system = await loadEffectivePrompt("pov_author");
       const totalBudgetMs = Number(process.env.ATELIER_POV_TIMEOUT_MS ?? 480000);
       const t0 = Date.now();
       // Per-pass budgets sized against the total (sum 0.95, headroom for IO).
@@ -1638,7 +1638,7 @@ export async function runMeetingScribe(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("meeting_scribe");
+      const system = await loadEffectivePrompt("meeting_scribe");
       await ctx.progress(35, "Normalising speakers");
       const { value, costUsd } = await callClaudeJson<MeetingScribeOutput>(
         "claude-haiku-4-5",
@@ -1772,7 +1772,7 @@ export async function runCharterArchitect(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("charter_architect");
+      const system = await loadEffectivePrompt("charter_architect");
       await ctx.progress(15, "Objective Distiller — extracting 3–5 outcome-shaped objectives");
       await ctx.progress(35, "Scope Boundarist — drawing IN/OUT scope sets (MECE)");
       await ctx.progress(60, "Hypothesis Tree Builder — building tree (max depth 3)");
@@ -1859,7 +1859,7 @@ export async function runSynthesisCritic(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("synthesis_critic");
+      const system = await loadEffectivePrompt("synthesis_critic");
       await ctx.progress(25, "Walking sections + checking pyramid structure");
       await ctx.progress(60, "Auditing citations + hypothesis coverage");
       const { value, costUsd } = await callClaudeJson<SynthesisCriticOutput>(
@@ -2016,7 +2016,7 @@ export async function runAgentArchitect(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("agent_architect");
+      const system = await loadEffectivePrompt("agent_architect");
       await ctx.progress(15, "Process Reader — normalizing input into ordered steps");
       await ctx.progress(35, "Step Classifier — assigning category per step");
       await ctx.progress(60, "Agentifiability Judge — yes/partial/no with rationale");
@@ -2137,7 +2137,7 @@ export async function runPrototypeForge(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("prototype_forge");
+      const system = await loadEffectivePrompt("prototype_forge");
       await ctx.progress(20, "Architecture Drafter — sketching surfaces + agent topology");
       await ctx.progress(45, "Demo Storyboarder — choosing demo moments");
       await ctx.progress(70, "Brand Translator — applying brand defaults/overrides");
@@ -2238,7 +2238,7 @@ export async function runProposalComposer(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = loadPrompt("proposal_composer");
+    const system = await loadEffectivePrompt("proposal_composer");
     await progressRun(runId, 10, "Context Writer — framing situation");
     await progressRun(runId, 22, "Approach Writer — MECE workstreams");
     await progressRun(runId, 35, "Workplan Writer — phasing deliverables");
@@ -2342,7 +2342,7 @@ export async function runBrandProfileWriter(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = loadPrompt("brand_profile_writer");
+    const system = await loadEffectivePrompt("brand_profile_writer");
     await progressRun(runId, 20, "Loading evidence corpus");
     await progressRun(runId, 50, "Drafting voice + boilerplate");
     await progressRun(runId, 80, "Drafting differentiators + proof points");
@@ -3603,7 +3603,7 @@ export async function runAccountCartographer(args: {
         })
       : null;
   try {
-    const system = loadPrompt("account_cartographer");
+    const system = await loadEffectivePrompt("account_cartographer");
     // Task #872 — alliance-partner capability context (advisory, capped).
     // Built at run time from ACTIVE agreed partners only, so archived firms
     // drop out of all future evaluations automatically. Failure to build the
@@ -3946,7 +3946,7 @@ export async function runExecutiveMapper(args: {
     name: args.accountName,
   });
   try {
-    const system = loadPrompt("executive_mapper", 2);
+    const system = await loadEffectivePrompt("executive_mapper", 2);
     await progressRun(runId, 20, "Sweeping the leadership roster");
     const { value, costUsd, citationUrls } =
       await callResearchJson<ExecutiveMapperOutput>(
@@ -4794,7 +4794,7 @@ export async function runPricingStrategist(args: {
     }
     let systemPrompt: string;
     try {
-      systemPrompt = loadPrompt("pricing_strategist" as AtelierAgentId);
+      systemPrompt = await loadEffectivePrompt("pricing_strategist" as AtelierAgentId);
     } catch {
       systemPrompt =
         "You are Cognirise's Pricing Strategist. Numbers are precomputed and authoritative — never invent or alter them. Author the Partner-facing narrative.";
@@ -5109,7 +5109,7 @@ export async function runPricingAnalyst(args: {
     );
     let systemPrompt: string;
     try {
-      systemPrompt = loadPrompt("pricing_analyst", 2);
+      systemPrompt = await loadEffectivePrompt("pricing_analyst", 2);
     } catch {
       systemPrompt =
         "You are Cognirise's Pricing Analyst. All numbers are precomputed and authoritative — never invent or alter them. Recommend one structure and explain tradeoffs.";
@@ -5299,7 +5299,7 @@ export async function runPricingResearcher(args: {
     await progressRun(runId, 10, "Preparing pricing research brief");
     let systemPrompt: string;
     try {
-      systemPrompt = loadPrompt("pricing_researcher", 1);
+      systemPrompt = await loadEffectivePrompt("pricing_researcher", 1);
     } catch {
       systemPrompt =
         "You are Cognirise's Pricing Researcher, an AI-consultancy pricing specialist. " +
@@ -5446,7 +5446,7 @@ export async function runWinLossInterviewer(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("win_loss_interviewer");
+      const system = await loadEffectivePrompt("win_loss_interviewer");
       await ctx.progress(30, "Reading buyer transcript");
       const { value, costUsd } = await callClaudeJson<WinLossInterviewerOutput>(
         "claude-sonnet-4-5",
@@ -5522,7 +5522,7 @@ export async function runThemeCurator(args: {
       actorLabel: args.actorLabel,
     },
     async (ctx) => {
-      const system = loadPrompt("theme_curator");
+      const system = await loadEffectivePrompt("theme_curator");
       await ctx.progress(40, "Clustering themes");
       const { value, costUsd } = await callClaudeJson<ThemeCuratorOutput>(
         "claude-sonnet-4-5",
@@ -6529,7 +6529,7 @@ export async function runUtilizationAnalyst(args: {
           confidence: "red",
         };
       }
-      const promptBody = loadPrompt("utilization_analyst");
+      const promptBody = await loadEffectivePrompt("utilization_analyst");
       const userPrompt = JSON.stringify({
         view: args.view,
         targetId: args.targetId,
@@ -6631,7 +6631,7 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
       actorLabel: "Expense Auditor",
     },
     async (_ctx) => {
-      const promptBody = loadPrompt("expense_auditor");
+      const promptBody = await loadEffectivePrompt("expense_auditor");
       const userPrompt = JSON.stringify({
         ocr: input.ocr,
         contractDigest: input.contractDigest,
@@ -6716,7 +6716,7 @@ async function runV5GenericAgent(args: {
       // resolves to the right `vN_<mode>_mode.md` file (e.g. press,
       // partner, recruiting). Falling back to the base prompt would
       // silently regress those agents.
-      const promptBody = loadPrompt(
+      const promptBody = await loadEffectivePrompt(
         args.promptId as AtelierAgentId,
         args.promptVersion ?? 1,
         args.promptMode,
@@ -7269,7 +7269,7 @@ export async function runNextBestAction(
     },
     async (c) => {
       await c.progress(35, "Reading account signals");
-      const promptBody = loadPrompt("next_best_action", 1);
+      const promptBody = await loadEffectivePrompt("next_best_action", 1);
       const userPrompt = JSON.stringify({
         horizonDays: input.horizonDays ?? 30,
         focus: input.focus ?? null,
@@ -7307,7 +7307,7 @@ export async function runRelationshipHealth(
     },
     async (c) => {
       await c.progress(35, "Reading engagement signals");
-      const promptBody = loadPrompt("relationship_health", 1);
+      const promptBody = await loadEffectivePrompt("relationship_health", 1);
       const userPrompt = JSON.stringify(ctx);
       await c.progress(65, "Scoring relationship health");
       const { value, costUsd } = await callClaudeJson<{ overall?: "green" | "amber" | "red" }>(
@@ -7353,7 +7353,7 @@ export async function runPreMeetingBriefing(
     },
     async (c) => {
       await c.progress(35, "Assembling meeting context");
-      const promptBody = loadPrompt("pre_meeting_briefing", 1);
+      const promptBody = await loadEffectivePrompt("pre_meeting_briefing", 1);
       const userPrompt = JSON.stringify({
         meeting: selectedMeeting,
         meetingPurpose: input.meetingPurpose ?? null,
@@ -7519,7 +7519,7 @@ export async function runStrategyDeveloper(
         );
       }
       await c.progress(45, "Retrieving exemplar strategies from other accounts");
-      const promptBody = loadPrompt("strategy_developer", 1);
+      const promptBody = await loadEffectivePrompt("strategy_developer", 1);
       const userPrompt = JSON.stringify({
         partnerGuidance: guidance,
         currentStrategy,
@@ -7714,7 +7714,7 @@ export async function runProcurementNavigator(
         hqCity: account.hqCity ?? null,
       });
       await c.progress(20, "Researching the procurement channel");
-      const system = loadPrompt("procurement_navigator", 1);
+    const system = await loadEffectivePrompt("procurement_navigator", 1);
       const userPrompt = JSON.stringify({
         account: {
           name: account.name,
@@ -7949,7 +7949,7 @@ export async function runContractComposer(
     actorLabel: input.actorLabel,
   });
   try {
-    const system = loadPrompt("contract_composer");
+    const system = await loadEffectivePrompt("contract_composer");
     await progressRun(runId, 15, "Selecting clauses from library");
     await progressRun(runId, 40, "Honouring acceptance history");
     await progressRun(runId, 65, "Rendering body + flagging risks");
@@ -8057,7 +8057,7 @@ export async function runRedlineAnalyst(
     actorLabel: input.actorLabel,
   });
   try {
-    const system = loadPrompt("redline_analyst");
+    const system = await loadEffectivePrompt("redline_analyst");
     await progressRun(runId, 20, "Diffing inbound vs. last version");
     await progressRun(runId, 55, "Binding to clauses + classifying risk");
     await progressRun(runId, 85, "Composing reviewer commentary");
@@ -8185,7 +8185,7 @@ export async function runEsignOrchestrator(
     actorLabel: input.actorLabel,
   });
   try {
-    const system = loadPrompt("esign_orchestrator");
+    const system = await loadEffectivePrompt("esign_orchestrator");
     await progressRun(runId, 25, "Validating two-partner countersign gate");
     await progressRun(runId, 55, "Composing routing order + provider pick");
     await progressRun(runId, 85, "Reconciling party states");
@@ -8313,7 +8313,7 @@ export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
     actorLabel: input.actorLabel,
   });
   try {
-    const system = loadPrompt("dpa_sentinel");
+    const system = await loadEffectivePrompt("dpa_sentinel");
     await progressRun(runId, 30, "Scanning data signals");
     await progressRun(runId, 65, "Classifying data classes");
     await progressRun(runId, 90, "Composing recommendations + alerts");
@@ -8437,7 +8437,7 @@ export async function runRenewalWatchdog(
     actorLabel: input.actorLabel,
   });
   try {
-    const system = loadPrompt("renewal_watchdog");
+    const system = await loadEffectivePrompt("renewal_watchdog");
     await progressRun(runId, 35, "Walking active contracts");
     await progressRun(runId, 70, "Walking active DPAs");
     await progressRun(runId, 90, "Composing partner summary");
