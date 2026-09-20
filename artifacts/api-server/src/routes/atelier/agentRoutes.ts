@@ -23,6 +23,7 @@ import {
   atelierResearchFacts,
   atelierPovs,
   atelierPovVersions,
+  atelierWorkCheckpoints,
   atelierMeetings,
   atelierTranscripts,
   atelierOpportunityStageTransitions,
@@ -102,6 +103,8 @@ import {
   findNearDuplicateFacts,
 } from "../../lib/atelier-agents/pov-quality.js";
 import { buildPovBackgroundContext } from "../../lib/atelier-agents/pov-grounding.js";
+import { executeDurablePovWork } from "../../lib/atelier-agents/pov-durable-executor.js";
+import { createServerOwnedCrmWorkflow, decideWorkCheckpoint } from "../../lib/assistant/workflow-runtime.js";
 import { perplexitySearch } from "../../lib/atelier-agents/perplexity.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 import { canSeeAccount } from "./accountRoutes.js";
@@ -1762,14 +1765,14 @@ router.post("/opportunities/:oppId/pov-research", async (req, res) => {
           })),
         );
       }
-      await completeBackgroundJob(jobId, {
+      await completeBackgroundJob(jobId!, {
         result: { factCount: fresh.length, skippedDuplicates: facts.length - fresh.length, runId },
         notifyTitle: `POV research ready — "${oppName}"`,
         notifyBody: `${fresh.length} candidate fact${fresh.length === 1 ? "" : "s"} to review.`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      await failBackgroundJob(jobId, msg, { notifyTitle: `POV research failed — "${oppName}"` });
+      await failBackgroundJob(jobId!, msg, { notifyTitle: `POV research failed — "${oppName}"` });
     }
   })();
   res.status(202).json({ started: true });
@@ -1981,83 +1984,66 @@ router.post("/povs/:povId/draft", async (req, res) => {
     res.status(409).json({ error: "pov-run-in-progress", reason: "A draft is already being generated for this POV." });
     return;
   }
-  const povId = pov.id;
-  const povTitleForNotify = pov.title;
-  const meId = me.id;
   const persona = { id: me.id, role: me.role, orgId: me.orgId };
-  void (async () => {
-    try {
-      // Task #1022 — labeled NON-CITABLE background context (fail-soft).
-      // Task #1051 — it now includes the published firm profile as the
-      // positioning source; absence degrades gracefully and is noted below.
-      const grounding = await buildPovBackgroundContext({
-        povId,
-        opportunityId: opp.id,
-        orgId: persona.orgId,
-        persona,
-        audience: pov.audience ?? "",
-        objective: pov.objective ?? "",
-      }).catch(() => ({ context: "", firmProfileIncluded: false }));
-      const { runId, draft } = await runPovDraft({
-        opportunityId: opp.id,
-        opportunityName: opp.name,
-        outline,
-        promotedFacts: promoted,
-        triggeredByUserId: meId,
-        actorLabel: "POV Author · Sections+Critic+Stylist",
-        backgroundContext: grounding.context || undefined,
+  let durablePovWork: Awaited<ReturnType<typeof createServerOwnedCrmWorkflow>>;
+  try {
+    durablePovWork = await createServerOwnedCrmWorkflow({
+    orgId: me.orgId,
+    requesterId: me.id,
+    goal: `Draft POV ${pov.id}`,
+    domainLink: `pov:${pov.id}`,
+    correlationId: jobId,
+    steps: [{
+      id: "pov_draft",
+      capabilityId: "opportunity.draft_pov",
+      input: {
+        povId: pov.id, kind: "draft", opportunityName: opp.name, outline,
+        promotedFacts: promoted, requesterName: me.name, requesterRole: me.role,
         depth: pov.depth === "memo" ? "memo" : "full",
+      },
+      dataClasses: ["opportunity", "pov", "research_facts"],
+      budget: { maxCostMicros: 1_000_000, maxToolCalls: 20, maxProviderCalls: 20, maxWallMs: 30 * 60_000, maxConcurrentSlots: 1 },
+      retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+      checkpoint: {
+        type: "human_approval",
+        evidenceSchema: {
+          type: "object",
+          properties: { outlineRunId: {}, factSnapshotAt: {} },
+          required: ["outlineRunId", "factSnapshotAt"],
+          additionalProperties: false,
+        },
+        expiresInMs: 24 * 60 * 60_000,
+      },
+    }],
+    });
+    const [draftCheckpoint] = await db.select({ id: atelierWorkCheckpoints.id })
+      .from(atelierWorkCheckpoints).where(eq(atelierWorkCheckpoints.workItemId, durablePovWork.workItemId));
+    if (draftCheckpoint) {
+      const approved = await decideWorkCheckpoint({
+        orgId: me.orgId, requesterId: me.id, workItemId: durablePovWork.workItemId,
+        checkpointId: draftCheckpoint.id, decision: "approve",
+        evidence: { outlineRunId: pov.runId, factSnapshotAt: pov.factSnapshotAt },
       });
-      // Task #1022 — deterministic citation gate on the FINAL stylist HTML.
-      // The server parses every citation marker / data-fact attribute itself,
-      // validates ids against the snapshotted fact set, and computes coverage;
-      // the model's self-report is ignored. Malformed/unknown citation markup
-      // is stripped before persistence.
-      const audit = auditPovCitations({
-        html: draft.html,
-        sections: draft.sections ?? [],
-        validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
-        // Task #1051 — section types come from the APPROVED outline, never
-        // the model-returned draft sections.
-        outlineTypes: outline.sections.map((s) => ({ id: s.id, type: s.type, heading: s.heading })),
-      });
-      if (!audit.passes) {
-        await failBackgroundJob(jobId, describeCitationFailure(audit), {
-          notifyTitle: `POV draft needs more evidence — "${povTitleForNotify}"`,
-        });
-        return;
-      }
-      const notes = [
-        draft.voiceFlags?.join(" · ") || null,
-        grounding.firmProfileIncluded
-          ? null
-          : "Firm profile unavailable — positioning sections use generic firm framing.",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
-        povId,
-        body: audit.sanitizedHtml,
-        sections: audit.sanitizedSections,
-        citations: promoted,
-        citationCoverage: audit.coverage,
-        notes: notes || null,
-        createdByUserId: meId,
-      });
-      await db
-        .update(atelierPovs)
-        .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
-        .where(eq(atelierPovs.id, povId));
-      await completeBackgroundJob(jobId, {
-        result: { versionId, versionNumber: next },
-        notifyTitle: `POV draft ready — "${povTitleForNotify}"`,
-        notifyBody: `Version ${next} is ready to review.`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await failBackgroundJob(jobId, msg, { notifyTitle: `POV draft failed — "${povTitleForNotify}"` });
+      if (!approved) throw new Error("pov-checkpoint-decision-failed");
+    } else {
+      throw new Error("pov-checkpoint-missing");
     }
-  })();
+  } catch (error) {
+    await failBackgroundJob(
+      jobId,
+      error instanceof Error ? error.message : "pov-workflow-setup-failed",
+    );
+    res.status(503).json({ error: "pov-checkpoint-unavailable" });
+    return;
+  }
+  void executeDurablePovWork({
+    orgId: me.orgId, workItemId: durablePovWork.workItemId,
+    workerId: `pov-worker:${me.id}`, jobId: jobId!,
+    povId: pov.id, opportunityName: opp.name, outline,
+    promotedFacts: promoted, requesterId: me.id, requesterName: me.name, persona,
+    title: pov.title, revision: false,
+    depth: pov.depth === "memo" ? "memo" : "full",
+  });
   res.status(202).json({ started: true });
 });
 
@@ -2354,90 +2340,69 @@ router.post("/povs/:povId/revise", async (req, res) => {
     res.status(409).json({ error: "pov-run-in-progress", reason: "A revision is already being generated for this POV." });
     return;
   }
-  const povId = pov.id;
-  const povTitle = pov.title;
-  const meId = me.id;
-  const meName = me.name;
   const persona = { id: me.id, role: me.role, orgId: me.orgId };
-  void (async () => {
-    try {
-      const grounding = await buildPovBackgroundContext({
-        povId,
-        opportunityId: opp.id,
-        orgId: persona.orgId,
-        persona,
-        audience: pov.audience ?? "",
-        objective: pov.objective ?? "",
-      }).catch(() => ({ context: "", firmProfileIncluded: false }));
-      const { runId, draft } = await runPovDraft({
-        opportunityId: opp.id,
-        opportunityName: opp.name,
-        outline,
-        promotedFacts: promoted,
-        triggeredByUserId: meId,
-        actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
-        revisionFeedback: feedback,
-        priorDraftHtml: base.body ?? "",
-        backgroundContext: grounding.context || undefined,
-        depth: pov.depth === "memo" ? "memo" : "full",
+  let durablePovWork: Awaited<ReturnType<typeof createServerOwnedCrmWorkflow>>;
+  try {
+    durablePovWork = await createServerOwnedCrmWorkflow({
+    orgId: me.orgId,
+    requesterId: me.id,
+    goal: `Revise POV ${pov.id}`,
+    domainLink: `pov:${pov.id}`,
+    correlationId: jobId,
+    steps: [{
+      id: "pov_revision",
+      capabilityId: "opportunity.draft_pov",
+      input: {
+        povId: pov.id, kind: "revision", opportunityName: opp.name, outline,
+        promotedFacts: promoted, requesterName: me.name, requesterRole: me.role,
+        revision: true, revisionFeedback: feedback, priorDraftHtml: base.body ?? "",
+        baseVersionNumber: base.versionNumber, depth: pov.depth === "memo" ? "memo" : "full",
+      },
+      dataClasses: ["opportunity", "pov", "research_facts"],
+      budget: { maxCostMicros: 1_000_000, maxToolCalls: 20, maxProviderCalls: 20, maxWallMs: 30 * 60_000, maxConcurrentSlots: 1 },
+      retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+      checkpoint: {
+        type: "human_approval",
+        evidenceSchema: {
+          type: "object",
+          properties: { outlineRunId: {}, factSnapshotAt: {} },
+          required: ["outlineRunId", "factSnapshotAt"],
+          additionalProperties: false,
+        },
+        expiresInMs: 24 * 60 * 60_000,
+      },
+    }],
+    });
+    const [revisionCheckpoint] = await db.select({ id: atelierWorkCheckpoints.id })
+      .from(atelierWorkCheckpoints).where(eq(atelierWorkCheckpoints.workItemId, durablePovWork.workItemId));
+    if (revisionCheckpoint) {
+      const approved = await decideWorkCheckpoint({
+        orgId: me.orgId, requesterId: me.id, workItemId: durablePovWork.workItemId,
+        checkpointId: revisionCheckpoint.id, decision: "approve",
+        evidence: { outlineRunId: pov.runId, factSnapshotAt: pov.factSnapshotAt },
       });
-      // Task #1022 — deterministic citation gate on the final stylist HTML
-      // (see the /draft route for the contract; same single threshold).
-      const audit = auditPovCitations({
-        html: draft.html,
-        sections: draft.sections ?? [],
-        validFactIds: promoted.map((f) => f.id ?? "").filter(Boolean),
-        outlineTypes: outline.sections.map((s) => ({ id: s.id, type: s.type, heading: s.heading })),
-      });
-      if (!audit.passes) {
-        await failBackgroundJob(jobId, describeCitationFailure(audit), {
-          notifyTitle: `POV revision needs more evidence — "${povTitle}"`,
-        });
-        return;
-      }
-      const notes = [
-        draft.voiceFlags?.join(" · ") || null,
-        grounding.firmProfileIncluded
-          ? null
-          : "Firm profile unavailable — positioning sections use generic firm framing.",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      const { versionId, versionNumber: next } = await insertPovVersionRaceSafe({
-        povId,
-        body: audit.sanitizedHtml,
-        sections: audit.sanitizedSections,
-        citations: promoted,
-        citationCoverage: audit.coverage,
-        notes: notes || null,
-        createdByUserId: meId,
-      });
-      // A new revision resets the POV to "drafted" so it must be re-approved.
-      await db
-        .update(atelierPovs)
-        .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
-        .where(eq(atelierPovs.id, povId));
-      await db.insert(atelierAuditEvents).values({
-        id: rid("aud"),
-        entityType: "pov",
-        entityId: povId,
-        actorType: "human",
-        actorId: meId,
-        actorLabel: meName,
-        action: "pov.revise",
-        payload: { feedback, baseVersionNumber: base.versionNumber, newVersionNumber: next } as never,
-        payloadSummary: `${meName} revised POV "${povTitle}" → v${next}.`,
-      });
-      await completeBackgroundJob(jobId, {
-        result: { versionId, versionNumber: next },
-        notifyTitle: `POV revision ready — "${povTitle}"`,
-        notifyBody: `Version ${next} is ready to review.`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await failBackgroundJob(jobId, msg, { notifyTitle: `POV revision failed — "${povTitle}"` });
+      if (!approved) throw new Error("pov-checkpoint-decision-failed");
+    } else {
+      throw new Error("pov-checkpoint-missing");
     }
-  })();
+  } catch (error) {
+    await failBackgroundJob(
+      jobId,
+      error instanceof Error ? error.message : "pov-workflow-setup-failed",
+    );
+    res.status(503).json({ error: "pov-checkpoint-unavailable" });
+    return;
+  }
+  void executeDurablePovWork({
+    orgId: me.orgId, workItemId: durablePovWork.workItemId,
+    workerId: `pov-worker:${me.id}`, jobId: jobId!,
+    povId: pov.id, opportunityName: opp.name, outline,
+    promotedFacts: promoted, requesterId: me.id, requesterName: me.name, persona,
+    title: pov.title, revision: true,
+    revisionFeedback: feedback, priorDraftHtml: base.body ?? "",
+    baseVersionNumber: base.versionNumber,
+    depth: pov.depth === "memo" ? "memo" : "full",
+  });
   res.status(202).json({ started: true });
 });
 

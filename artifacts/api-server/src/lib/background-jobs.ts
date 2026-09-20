@@ -28,8 +28,9 @@ import {
   atelierBackgroundJobs,
   atelierSelfNotifications,
   atelierPushTokens,
+  atelierWorkItems,
 } from "@workspace/db";
-import { and, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import { mirrorSelfNotificationPush } from "./expoPush.js";
 
 function rid(prefix: string): string {
@@ -324,6 +325,23 @@ export async function sweepInterruptedBackgroundJobs(bootTime: Date): Promise<nu
       and(
         eq(atelierBackgroundJobs.status, "running"),
         lt(atelierBackgroundJobs.createdAt, bootTime),
+        // POV draft/revision jobs are now only a compatibility projection of
+        // Riser-owned durable work. Keep them running while their linked work
+        // can still recover; the Riser worker will settle the row.
+        sql`not exists (
+          select 1
+          from ${atelierWorkItems}
+          where ${atelierWorkItems.orgId} = ${atelierBackgroundJobs.orgId}
+            and ${atelierWorkItems.status} in (
+              'planned',
+              'awaiting_aggregation',
+              'recovery_settling',
+              'compensation_required',
+              'cancellation_settling'
+            )
+            and ${atelierWorkItems.conversationLinks} @>
+              jsonb_build_array('correlation:' || ${atelierBackgroundJobs.id})
+        )`,
       ),
     )
     .returning();

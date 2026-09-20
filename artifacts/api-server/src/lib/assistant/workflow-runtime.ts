@@ -8,6 +8,7 @@ import {
   atelierWorkItems,
   atelierWorkPlans,
   atelierWorkSteps,
+  atelierAssistantBudgetLedgers,
 } from "@workspace/db";
 import {
   WorkPlanV1Schema,
@@ -42,10 +43,243 @@ export interface WorkflowTransactionRunner {
   transaction<T>(fn: (tx: WorkflowTransaction) => Promise<T>): Promise<T>;
 }
 
+/**
+ * Server-owned CRM entry point. Unlike the generic workflow surface, callers
+ * can only select reviewed CRM capabilities and the plan is assembled here.
+ */
+export async function createServerOwnedCrmWork(args: {
+  orgId: string;
+  requesterId: string;
+  goal: string;
+  correlationId?: string;
+  domainLink: string;
+  authorization: {
+    capabilityIds: string[];
+    toolIds: string[];
+    dataClasses: string[];
+    policyVersion: string;
+    obligations: string[];
+    budgetLedgerId: string;
+  };
+  steps: Array<{
+    id: string;
+    capabilityId: "account.refresh_cartographer" | "opportunity.draft_pov";
+    input: unknown;
+    dependencies?: string[];
+    parentStepId?: string;
+    dataClasses: string[];
+    budget: {
+      maxCostMicros: number;
+      maxToolCalls: number;
+      maxProviderCalls: number;
+      maxWallMs: number;
+      maxConcurrentSlots: number;
+    };
+    retryPolicy: { maxAttempts: number; maxWallMs: number };
+    checkpoint?: {
+      type: "human_approval" | "operator_review";
+      evidenceSchema: Record<string, unknown>;
+      expiresInMs: number;
+    };
+  }>;
+}): Promise<{ workItemId: string; planId: string; correlationId: string }> {
+  if (!args.domainLink || !args.domainLink.includes(":")) {
+    throw new Error("crm-work-domain-link-required");
+  }
+  if (!args.steps.length) throw new Error("crm-work-steps-required");
+  const correlationId = args.correlationId ?? `crm_${randomUUID()}`;
+  const plan = {
+    workItemId: "new",
+    version: 1,
+    goal: args.goal,
+    steps: args.steps.map((step) => {
+      const entry = reviewedCapabilityManifestEntry(step.capabilityId);
+      if (!entry || entry.executionStatus !== "executable") {
+        throw new Error(`crm-work-capability-not-executable:${step.capabilityId}`);
+      }
+      return {
+        id: step.id,
+        capabilityId: step.capabilityId,
+        dependencies: step.dependencies ?? [],
+        ...(step.parentStepId ? { parentStepId: step.parentStepId } : {}),
+        input: step.input,
+        authorityGrant: { kind: "server-owned-crm", domainLink: args.domainLink, correlationId },
+        // createDurableWork re-evaluates policy and persists the authoritative
+        // digest; the plan schema still requires a non-trivial placeholder.
+        policyDecisionDigest: "server-owned-policy-resolution-v1".padEnd(64, "0"),
+        toolsDataPerimeter: { toolIds: [entry.toolName], dataClasses: step.dataClasses },
+        budget: step.budget,
+        resultSchemaHash: entry.resultSchemaHash,
+        ...(step.checkpoint ? { checkpoint: step.checkpoint } : {}),
+        retryPolicy: step.retryPolicy,
+      };
+    }),
+  };
+  const created = await createDurableWork({
+    orgId: args.orgId,
+    requesterId: args.requesterId,
+    goal: args.goal,
+    authorization: args.authorization,
+    plan,
+    conversationLinks: [`crm:${args.domainLink}`, `correlation:${correlationId}`],
+  });
+  return { ...created, correlationId };
+}
+
+/** Allocate the bounded server ledger and create the CRM plan atomically from
+ * the caller's domain context. The ledger is intentionally not client
+ * addressable and expires with the work's wall-clock budget. */
+export async function createServerOwnedCrmWorkflow(args: Omit<
+  Parameters<typeof createServerOwnedCrmWork>[0],
+  "authorization"
+> & {
+  policyVersion?: string;
+  maxCostMicros?: number;
+  maxProviderCalls?: number;
+  maxToolCalls?: number;
+}): Promise<{
+  workItemId: string;
+  planId: string;
+  correlationId: string;
+  budgetLedgerId: string;
+}> {
+  const capabilityIds = [...new Set(args.steps.map((step) => step.capabilityId))];
+  const toolIds = capabilityIds.map((capabilityId) =>
+    capabilityId === "account.refresh_cartographer"
+      ? "account_refresh_cartographer"
+      : "opportunity_draft_pov",
+  );
+  const dataClasses = [...new Set(args.steps.flatMap((step) => step.dataClasses))];
+  const policyVersion = args.policyVersion ?? "riser-policy-v1";
+  const budgetLedgerId = `budget_crm_${randomUUID()}`;
+  // A retryable failed attempt settles its reservation before the next claim.
+  // Size the workflow ledger for every reviewed attempt, not just one pass.
+  const maxCostMicros = args.maxCostMicros ?? args.steps.reduce(
+    (total, step) => total + step.budget.maxCostMicros * step.retryPolicy.maxAttempts,
+    0,
+  );
+  const maxProviderCalls = args.maxProviderCalls ?? args.steps.reduce(
+    (total, step) => total + step.budget.maxProviderCalls * step.retryPolicy.maxAttempts,
+    0,
+  );
+  const maxToolCalls = args.maxToolCalls ?? args.steps.reduce(
+    (total, step) => total + step.budget.maxToolCalls * step.retryPolicy.maxAttempts,
+    0,
+  );
+  await db.insert(atelierAssistantBudgetLedgers).values({
+    id: budgetLedgerId,
+    orgId: args.orgId,
+    ownerType: "workflow",
+    ownerId: args.correlationId ?? args.domainLink,
+    policyVersion,
+    maxCostMicros,
+    maxProviderCalls,
+    maxToolCalls,
+    maxWallMs: args.steps.reduce((total, step) => total + step.retryPolicy.maxWallMs, 0),
+    maxConcurrentSlots: 1,
+    expiresAt: new Date(Date.now() + args.steps.reduce(
+      (total, step) => total + step.retryPolicy.maxWallMs,
+      0,
+    )),
+  });
+  const created = await createServerOwnedCrmWork({
+    ...args,
+    authorization: {
+      capabilityIds,
+      toolIds,
+      dataClasses,
+      policyVersion,
+      obligations: [],
+      budgetLedgerId,
+    },
+  });
+  return { ...created, budgetLedgerId };
+}
+
+/**
+ * Execute one server-owned CRM work item through the normal fenced attempt
+ * path. Domain code supplies the narrowly-scoped executor; no client can
+ * provide one through an HTTP request. Keeping this helper here makes the
+ * Cartographer and POV adapters use identical lease/retry/budget semantics.
+ */
+export async function executeServerOwnedCrmWork(args: {
+  orgId: string;
+  workItemId: string;
+  workerId: string;
+  authorization: Parameters<typeof claimWorkAttempt>[0]["resolveAuthorization"];
+  execute: Parameters<typeof executeClaimedWorkAttempt>[0]["execute"];
+}): Promise<boolean> {
+  const steps = await db
+    .select({ id: atelierWorkSteps.id })
+    .from(atelierWorkSteps)
+    .where(and(
+      eq(atelierWorkSteps.workItemId, args.workItemId),
+      eq(atelierWorkSteps.status, "ready"),
+    ));
+  let completed = false;
+  for (const step of steps) {
+    const leaseMs = 15 * 60_000;
+    const claim = await claimWorkAttempt({
+      orgId: args.orgId,
+      stepId: step.id,
+      workerId: args.workerId,
+      leaseMs,
+      resolveAuthorization: args.authorization,
+    });
+    if (!claim) continue;
+    let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
+    let heartbeatStopped = false;
+    const scheduleHeartbeat = () => {
+      heartbeatTimer = setTimeout(() => {
+        void heartbeatWorkAttempt({
+          orgId: args.orgId,
+          attemptId: claim.attemptId,
+          workerId: args.workerId,
+          fencingToken: claim.fencingToken,
+          leaseMs,
+        }).then((renewed) => {
+          if (renewed && !heartbeatStopped) scheduleHeartbeat();
+        }).catch((error) => {
+          console.warn(
+            `[atelier] CRM work heartbeat failed for attempt ${claim.attemptId}`,
+            error instanceof Error ? error.message : String(error),
+          );
+          if (!heartbeatStopped) scheduleHeartbeat();
+        });
+      }, 60_000);
+      heartbeatTimer.unref();
+    };
+    scheduleHeartbeat();
+    try {
+      completed = await executeClaimedWorkAttempt({
+        orgId: args.orgId,
+        attemptId: claim.attemptId,
+        workerId: args.workerId,
+        fencingToken: claim.fencingToken,
+        execute: args.execute,
+      }) || completed;
+    } catch (error) {
+      await failWorkAttempt({
+        orgId: args.orgId,
+        attemptId: claim.attemptId,
+        workerId: args.workerId,
+        fencingToken: claim.fencingToken,
+        outcome: "retryable",
+        errorClass: error instanceof Error ? error.message : "crm-work-execution-failed",
+      });
+    } finally {
+      heartbeatStopped = true;
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    }
+  }
+  return completed;
+}
+
 export async function createDurableWork(args: {
   orgId: string;
   requesterId: string;
   goal: string;
+  conversationLinks?: string[];
   authorization: {
     capabilityIds: string[];
     toolIds: string[];
@@ -114,6 +348,7 @@ export async function createDurableWork(args: {
       goal: "<encrypted>",
       goalEncrypted: encryptAssistantValue(args.goal),
       status: "planned",
+      conversationLinks: args.conversationLinks ?? [],
       budgetLedgerId: args.authorization.budgetLedgerId,
       policyContext: {
         policyVersion: args.authorization.policyVersion,
@@ -587,7 +822,10 @@ export async function heartbeatWorkAttempt(args: {
     .where(
       and(
         eq(atelierWorkAttempts.id, args.attemptId),
-        eq(atelierWorkAttempts.status, "running"),
+        or(
+          eq(atelierWorkAttempts.status, "running"),
+          eq(atelierWorkAttempts.status, "committing"),
+        ),
         eq(atelierWorkAttempts.leaseOwner, args.workerId),
         eq(atelierWorkAttempts.fencingToken, args.fencingToken),
         gt(atelierWorkAttempts.leaseExpiresAt, now),
@@ -951,20 +1189,33 @@ export async function executeClaimedWorkAttempt(args: {
     ? compensation?.inputEncrypted
     : record.step.inputEncrypted;
   if (typeof capabilityId !== "string" || typeof inputEncrypted !== "string") return false;
-  const output = await args.execute({
-    capabilityId,
-    mode,
-    input: await decryptAssistantValueAudited({
-      ciphertext: inputEncrypted,
-      orgId: record.work.orgId,
-      requesterId: record.work.requesterId,
-      actorId: args.workerId,
-      resourceType: "work_step",
-      resourceId: record.step.id,
-      purpose: mode === "compensate" ? "execute_compensation" : "execute_work_step",
-    }),
-    idempotencyKey: `workflow-effect:${args.attemptId}:${args.fencingToken}`,
-  });
+  let output: Awaited<ReturnType<typeof args.execute>>;
+  try {
+    output = await args.execute({
+      capabilityId,
+      mode,
+      input: await decryptAssistantValueAudited({
+        ciphertext: inputEncrypted,
+        orgId: record.work.orgId,
+        requesterId: record.work.requesterId,
+        actorId: args.workerId,
+        resourceType: "work_step",
+        resourceId: record.step.id,
+        purpose: mode === "compensate" ? "execute_compensation" : "execute_work_step",
+      }),
+      idempotencyKey: `workflow-effect:${args.attemptId}:${args.fencingToken}`,
+    });
+  } catch (error) {
+    await failWorkAttempt({
+      orgId: args.orgId,
+      attemptId: args.attemptId,
+      workerId: args.workerId,
+      fencingToken: args.fencingToken,
+      outcome: "retryable",
+      errorClass: error instanceof Error ? error.message : "workflow-executor-failed",
+    });
+    return false;
+  }
   return completeWorkAttempt({
     orgId: args.orgId,
     attemptId: args.attemptId,

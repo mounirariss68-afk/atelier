@@ -187,6 +187,9 @@ import {
   getExecutiveMapperLaunch,
 } from "../../lib/atelier-agents/executive-mapper-chain.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createServerOwnedCrmWorkflow,
+} from "../../lib/assistant/workflow-runtime.js";
 import multer from "multer";
 import {
   storeAccountLogoBytes,
@@ -221,6 +224,7 @@ import {
   type WhitespaceOutput,
   type QbrOutput,
 } from "../../lib/atelier-agents/runner.js";
+import { executeAccountCrmWork } from "../../lib/atelier-agents/account-crm-workflow.js";
 import { indexAccountStrategyExemplar } from "../../lib/atelier-agents/strategy-exemplars.js";
 import {
   runProcurementRenewalScan,
@@ -862,7 +866,7 @@ async function persistReviewedResearch(args: {
   });
 }
 
-async function queueCartographerResearch(args: {
+export async function queueCartographerResearch(args: {
   accountId: string;
   output: CartographerOutput;
   runId: string | null;
@@ -4762,6 +4766,46 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     startedAt: Date.now(),
   });
   const triggeredByUserId = me.id;
+  const crmPolicyVersion = "riser-policy-v1";
+  const crmAuthorization = {
+    capabilityIds: ["account.refresh_cartographer"],
+    toolIds: ["account_refresh_cartographer"],
+    dataClasses: ["account", "account_research", "contacts"],
+    policyVersion: crmPolicyVersion,
+    obligations: [] as string[],
+  };
+  let crmWork: Awaited<ReturnType<typeof createServerOwnedCrmWorkflow>>;
+  try {
+    crmWork = await createServerOwnedCrmWorkflow({
+      orgId: me.orgId,
+      requesterId: me.id,
+      goal: `Refresh Cartographer and Executive Mapper for account ${a.id}`,
+      domainLink: `account:${a.id}`,
+      steps: [
+        {
+          id: "cartographer",
+          capabilityId: "account.refresh_cartographer",
+          input: { accountId: a.id, focusOpportunityId },
+          dataClasses: ["account", "account_research"],
+          budget: { maxCostMicros: 1_000_000, maxToolCalls: 20, maxProviderCalls: 20, maxWallMs: 30 * 60_000, maxConcurrentSlots: 1 },
+          retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+        },
+        {
+          id: "executive_mapper",
+          capabilityId: "account.refresh_cartographer",
+          input: { accountId: a.id, operation: "executive_mapper" },
+          dependencies: ["cartographer"],
+          parentStepId: "cartographer",
+          dataClasses: ["account", "contacts"],
+          budget: { maxCostMicros: 1_000_000, maxToolCalls: 20, maxProviderCalls: 20, maxWallMs: 30 * 60_000, maxConcurrentSlots: 1 },
+          retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+        },
+      ],
+    });
+  } catch (error) {
+    res.status(503).json({ error: "crm-workflow-unavailable" });
+    return;
+  }
   // Task #1193 — Background Work bell visibility during the pre-run-row window.
   noteAgentLaunch({
     agentId: "account_cartographer",
@@ -4771,45 +4815,33 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   });
   void (async () => {
     try {
-      const { runId, output } = await runAccountCartographer({
-        accountId: a.id,
-        accountName: a.name,
-        accountSector: a.sector,
-        accountCountry: a.country,
-        accountHqCity: a.hqCity ?? null,
-        triggeredByUserId,
-        actorLabel: "Account Cartographer",
-        focusOpportunityId,
+      const succeeded = await executeAccountCrmWork({
+        orgId: me.orgId,
+        workItemId: crmWork.workItemId,
+        requesterId: triggeredByUserId,
+        workerId: `crm-account-worker:${crmWork.workItemId}`,
+        authorization: {
+          capabilityIds: crmAuthorization.capabilityIds,
+          toolIds: crmAuthorization.toolIds,
+          dataClasses: crmAuthorization.dataClasses,
+          policyVersion: crmAuthorization.policyVersion,
+          obligations: crmAuthorization.obligations,
+          budgetLedgerId: crmWork.budgetLedgerId,
+        },
       });
-
-      // Task #568 — GOVERNED AI POPULATION. A manual refresh no longer
-      // direct-writes the account. The Cartographer PROPOSES; a partner then
-      // edits / approves / rejects each delta (see the decision + bulk-decision
-      // endpoints). This keeps AI population uniformly governed and prevents the
-      // agent from clobbering partner-curated fields (notes, hypothesis, etc.).
-      // Auto-on-create and manual refresh both use the same queue writer.
-      const proposedCount = await queueCartographerResearch({
-        accountId: a.id,
-        output,
-        runId,
-        trigger: "manual_refresh",
-      });
+      if (!succeeded) throw new Error("crm-account-workflow-did-not-succeed");
 
       settleLaunch(cartLaunchKey, cartToken, {
         status: "succeeded",
         error: null,
-        runId,
-        proposedCount,
+        runId: null,
+        proposedCount: null,
         openQuestions: [],
         startedAt: Date.now(),
       });
 
       clearAgentLaunch("account_cartographer", a.id);
 
-      // Cartographer refresh finished and its proposals are queued — chain the
-      // Executive Mapper (fire-and-forget), same as the account-creation flow.
-      // A failed / empty / already-running sweep never breaks the refresh.
-      chainExecutiveMapperAfterCartographer(a.id, triggeredByUserId, a.brandName ?? a.name);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       settleLaunch(cartLaunchKey, cartToken, {

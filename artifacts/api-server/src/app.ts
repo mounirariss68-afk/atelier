@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
+import "./lib/atelier-cli/bootstrap-capabilities.js";
 import router from "./routes";
 import { logger } from "./lib/logger";
 

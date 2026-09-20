@@ -63,6 +63,35 @@ app.listen(port, (err) => {
   // strictly one after another; each still logs its own failure and never
   // blocks the next.
   void (async () => {
+    // Durable CRM work must be reconciled before the legacy background-job
+    // sweep. Those rows are compatibility projections for Riser-owned work,
+    // so a restart resumes them rather than marking them interrupted.
+    await (async () => {
+      const { reapExpiredWorkLeases } = await import("./lib/assistant/workflow-runtime");
+      const { recoverAccountCrmWorkflows } = await import(
+        "./lib/atelier-agents/account-crm-workflow"
+      );
+      const { resumeIncompletePovWork } = await import(
+        "./lib/atelier-agents/pov-durable-executor"
+      );
+      const reconcile = async () => {
+        const reaped = await reapExpiredWorkLeases();
+        if (reaped > 0) logger.info({ reaped }, "Reconciled expired durable workflow leases");
+        const recovered = await recoverAccountCrmWorkflows();
+        if (recovered > 0) logger.info({ recovered }, "Resumed durable CRM account workflows");
+        const resumedPov = await resumeIncompletePovWork();
+        if (resumedPov > 0) logger.info({ workItems: resumedPov }, "Resumed incomplete durable POV work");
+      };
+      await reconcile();
+      const timer = setInterval(() => {
+        void reconcile().catch((err) =>
+          logger.error({ err }, "Periodic durable CRM workflow reconciliation failed"),
+        );
+      }, 30_000);
+      timer.unref();
+    })().catch((err) => {
+      logger.error({ err }, "Durable CRM workflow reconciliation failed");
+    });
     // Task #1020 — the previous process may have died mid-background-job.
     // Mark orphaned "running" jobs failed so pollers and the global
     // indicator resolve ("interrupted — try again") instead of spinning.
@@ -95,19 +124,6 @@ app.listen(port, (err) => {
       if (n > 0) logger.info({ swept: n }, "Marked orphaned agent runs as interrupted");
     })().catch((err) => {
       logger.error({ err }, "Agent-run boot sweep failed");
-    });
-    await (async () => {
-      const { reapExpiredWorkLeases } = await import("./lib/assistant/workflow-runtime");
-      const n = await reapExpiredWorkLeases(PROCESS_BOOT_TIME);
-      if (n > 0) logger.info({ reaped: n }, "Reconciled expired durable workflow leases");
-      const timer = setInterval(() => {
-        void reapExpiredWorkLeases().then((reaped) => {
-          if (reaped > 0) logger.info({ reaped }, "Reconciled expired durable workflow leases");
-        }).catch((err) => logger.error({ err }, "Periodic workflow lease reconciliation failed"));
-      }, 30_000);
-      timer.unref();
-    })().catch((err) => {
-      logger.error({ err }, "Durable workflow lease reconciliation failed");
     });
     await ensureAtelierAuthSeed().catch((err) => {
       logger.error(
