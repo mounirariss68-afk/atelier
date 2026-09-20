@@ -97,6 +97,36 @@ interface PnlResp {
     action: string;
     detail: string;
   }>;
+  realization: {
+    sold: {
+      priceUsd: number;
+      hours: number;
+      effectiveRateUsd: number;
+      marginPct: number;
+    } | null;
+    delivered: {
+      revenueRecognised: number;
+      hoursBillable: number;
+      effectiveRateUsd: number;
+      directCost: number;
+      grossMarginPct: number;
+    };
+    realizationRate: number | null;
+    leakage: {
+      totalUsd: number;
+      rateVarianceUsd: number;
+      hoursOverrunUsd: number;
+      scopeWriteOffsUsd: number;
+      expenseNonRecoveryUsd: number;
+    } | null;
+    currentBaseline: {
+      contractValueUsd: number;
+      budgetAtCompletionUsd: number;
+      baselinedAt: string;
+      postedChangeOrderCount: number;
+      postedChangeOrderValueUsd: number;
+    } | null;
+  } | null;
 }
 
 interface AuditEntry {
@@ -261,6 +291,47 @@ export default function EngagementPnl(): React.ReactElement {
           {fmtPct(eac.pctComplete)} complete · {fmtPct(eac.pctBilled)} billed
         </span>
       </div>
+
+      {data.realization && (
+        <Card className="mt-6 p-6" data-testid="engagement-realization-card">
+          <SectionHead
+            eyebrow="Commercial realization"
+            headline="Sold versus delivered"
+            lede="The original signed position stays fixed. Posted change orders update the current operating baseline without rewriting it."
+          />
+          <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiTile
+              label="Original sold"
+              value={fmtUsd(data.realization.sold?.priceUsd ?? 0)}
+              sub={`${(data.realization.sold?.hours ?? 0).toLocaleString()}h · ${fmtUsd(data.realization.sold?.effectiveRateUsd ?? 0)}/h`}
+            />
+            <KpiTile
+              label="Current baseline"
+              value={fmtUsd(data.realization.currentBaseline?.contractValueUsd ?? data.budget.contractValueUsd)}
+              sub={`${data.realization.currentBaseline?.postedChangeOrderCount ?? 0} posted changes · ${fmtUsd(data.realization.currentBaseline?.postedChangeOrderValueUsd ?? 0)}`}
+            />
+            <KpiTile
+              label="Realization"
+              value={data.realization.realizationRate == null ? "—" : fmtPct(data.realization.realizationRate)}
+              sub={`${fmtUsd(data.realization.delivered.revenueRecognised)} recognized`}
+            />
+            <KpiTile
+              label="Total leakage"
+              value={fmtUsd(data.realization.leakage?.totalUsd ?? 0)}
+              tone={(data.realization.leakage?.totalUsd ?? 0) > 0 ? "red" : "green"}
+              sub="rate · hours · write-offs · expenses"
+            />
+          </div>
+          {data.realization.leakage && (
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <LeakageItem label="Rate variance" value={data.realization.leakage.rateVarianceUsd} />
+              <LeakageItem label="Hours overrun" value={data.realization.leakage.hoursOverrunUsd} />
+              <LeakageItem label="Scope write-offs" value={data.realization.leakage.scopeWriteOffsUsd} />
+              <LeakageItem label="Expense non-recovery" value={data.realization.leakage.expenseNonRecoveryUsd} />
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Revenue / cash / lockup tiles */}
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -468,6 +539,17 @@ function KpiTile({
       <div className={`mt-1 text-xl font-semibold ${toneClass}`}>{value}</div>
       {sub && <div className="mt-1 text-[11px] font-mono text-text-faint">{sub}</div>}
     </Card>
+  );
+}
+
+function LeakageItem({ label, value }: { label: string; value: number }): React.ReactElement {
+  return (
+    <div className="rounded-lg border border-border-soft px-3 py-2">
+      <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">{label}</div>
+      <div className={value > 0 ? "mt-1 font-semibold text-danger" : "mt-1 font-semibold text-text"}>
+        {fmtUsd(value)}
+      </div>
+    </div>
   );
 }
 

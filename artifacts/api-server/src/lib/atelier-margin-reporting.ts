@@ -43,6 +43,12 @@ import {
   atelierGlAccount,
   atelierGlJournalEntry,
   atelierGlJournalLine,
+  atelierEngagementBudget,
+  atelierEngagementCostToDate,
+  atelierChangeOrder,
+  atelierRevenuePeriodPosting,
+  atelierRevenuePeriodPostingLine,
+  atelierCashApplication,
 } from "@workspace/db";
 import { isExpenseEconomicallyActive } from "./atelier-expense-lifecycle.js";
 
@@ -646,6 +652,20 @@ export interface RealizationRow {
     scopeWriteOffsUsd: number;
     expenseNonRecoveryUsd: number;
   } | null;
+  financials: {
+    invoicedUsd: number;
+    cashCollectedUsd: number;
+    wipUsd: number;
+    arUsd: number;
+    lockupUsd: number;
+  };
+  currentBaseline: {
+    contractValueUsd: number;
+    budgetAtCompletionUsd: number;
+    baselinedAt: string;
+    postedChangeOrderCount: number;
+    postedChangeOrderValueUsd: number;
+  } | null;
 }
 
 export async function computeRealizationReport(filters: {
@@ -665,8 +685,132 @@ export async function computeRealizationReport(filters: {
     cur.hours += Number(s.hoursBillable || 0);
     perEng.set(s.engagementId, cur);
   }
+  // The engagement-specific view is current-to-date and must still work
+  // before the periodic margin refresh has captured its first snapshot.
+  // Its durable CTD row is also the authoritative source used by P&L.
+  const currentCosts = await db
+    .select()
+    .from(atelierEngagementCostToDate)
+    .where(
+      and(
+        eq(atelierEngagementCostToDate.orgId, filters.orgId),
+        ...(filters.engagementId
+          ? [eq(atelierEngagementCostToDate.engagementId, filters.engagementId)]
+          : []),
+        isNull(atelierEngagementCostToDate.deletedAt),
+      ),
+    );
+  if (filters.engagementId && !filters.periodFrom && !filters.periodTo) {
+    const cost = currentCosts.find((row) => row.engagementId === filters.engagementId);
+    if (cost) {
+      perEng.set(cost.engagementId, {
+        revenue: Number(cost.revenueRecognisedToDateUsd || 0),
+        cost: Number(cost.costToDateUsd || 0),
+        hours: Number(cost.labourHoursToDate || 0),
+      });
+    }
+  }
   const engIds = Array.from(perEng.keys());
   if (!engIds.length) return { rows: [], note: "No margin snapshots in range — run POST /margin/refresh first." };
+
+  // Authoritative accounting rollup. Posting lines are immutable and count
+  // only when their parent period is posted; invoices exclude drafts/voids;
+  // cash applications are append-only and reversals carry their own signed
+  // amount. These values therefore replay without creating parallel ledgers.
+  const [postingLines, postingHeaders, liveInvoices] = await Promise.all([
+    db
+      .select()
+      .from(atelierRevenuePeriodPostingLine)
+      .where(
+        and(
+          eq(atelierRevenuePeriodPostingLine.orgId, filters.orgId),
+          inArray(atelierRevenuePeriodPostingLine.engagementId, engIds),
+          isNull(atelierRevenuePeriodPostingLine.deletedAt),
+        ),
+      ),
+    db
+      .select({ id: atelierRevenuePeriodPosting.id, postedAt: atelierRevenuePeriodPosting.postedAt })
+      .from(atelierRevenuePeriodPosting)
+      .where(
+        and(
+          eq(atelierRevenuePeriodPosting.orgId, filters.orgId),
+          isNull(atelierRevenuePeriodPosting.deletedAt),
+        ),
+      ),
+    db
+      .select()
+      .from(atelierInvoice)
+      .where(
+        and(
+          eq(atelierInvoice.orgId, filters.orgId),
+          inArray(atelierInvoice.engagementId, engIds),
+          isNull(atelierInvoice.deletedAt),
+          isNull(atelierInvoice.voidedAt),
+        ),
+      ),
+  ]);
+  const postedIds = new Set(postingHeaders.filter((row) => row.postedAt).map((row) => row.id));
+  const recognisedByEng = new Map<string, number>();
+  for (const line of postingLines) {
+    if (!postedIds.has(line.postingId)) continue;
+    recognisedByEng.set(
+      line.engagementId,
+      (recognisedByEng.get(line.engagementId) ?? 0) + Number(line.recognisedAmount || 0),
+    );
+  }
+  const inRequestedPeriod = (date: Date | string | null | undefined): boolean => {
+    if (!date) return !filters.periodFrom && !filters.periodTo;
+    const month = date instanceof Date ? date.toISOString().slice(0, 7) : String(date).slice(0, 7);
+    return (!filters.periodFrom || month >= filters.periodFrom) && (!filters.periodTo || month <= filters.periodTo);
+  };
+  const periodInvoices = liveInvoices.filter(
+    (row) => row.status !== "draft" && inRequestedPeriod(row.issuedAt),
+  );
+  const invoiceIds = liveInvoices
+    .filter((row) => row.status !== "draft")
+    .map((row) => row.id);
+  const cashApplications = invoiceIds.length
+    ? await db
+        .select()
+        .from(atelierCashApplication)
+        .where(
+          and(
+            eq(atelierCashApplication.orgId, filters.orgId),
+            inArray(atelierCashApplication.invoiceId, invoiceIds),
+            isNull(atelierCashApplication.deletedAt),
+          ),
+        )
+    : [];
+  const invoicedByEng = new Map<string, number>();
+  const invoiceEngagement = new Map<string, string>();
+  for (const invoice of liveInvoices) {
+    if (invoice.engagementId && invoice.status !== "draft") {
+      invoiceEngagement.set(invoice.id, invoice.engagementId);
+    }
+  }
+  for (const invoice of periodInvoices) {
+    if (!invoice.engagementId) continue;
+    invoicedByEng.set(
+      invoice.engagementId,
+      (invoicedByEng.get(invoice.engagementId) ?? 0) + Number(invoice.subtotal || 0),
+    );
+  }
+  const cashByEng = new Map<string, number>();
+  for (const application of cashApplications) {
+    if (!inRequestedPeriod(application.appliedAt)) continue;
+    const engagementId = invoiceEngagement.get(application.invoiceId);
+    if (!engagementId) continue;
+    cashByEng.set(
+      engagementId,
+      (cashByEng.get(engagementId) ?? 0) + Number(application.appliedAmount || 0),
+    );
+  }
+  if (filters.engagementId && !filters.periodFrom && !filters.periodTo) {
+    const current = perEng.get(filters.engagementId);
+    if (current && recognisedByEng.has(filters.engagementId)) {
+      current.revenue = recognisedByEng.get(filters.engagementId) ?? 0;
+    }
+  }
 
   const engs = await db
     .select({
@@ -679,7 +823,7 @@ export async function computeRealizationReport(filters: {
     .from(atelierEngagements)
     .where(and(eq(atelierEngagements.orgId, filters.orgId), inArray(atelierEngagements.id, engIds)));
   const acctIds = Array.from(new Set(engs.map((e) => e.accountId)));
-  const [accts, soldSnaps, adjustments, billableExpenses] = await Promise.all([
+  const [accts, soldSnaps, adjustments, billableExpenses, budgets, changeOrders] = await Promise.all([
     acctIds.length
       ? db
           .select({ id: atelierAccounts.id, name: atelierAccounts.name })
@@ -712,10 +856,43 @@ export async function computeRealizationReport(filters: {
           isNull(atelierExpenses.deletedAt),
         ),
       ),
+    db
+      .select()
+      .from(atelierEngagementBudget)
+      .where(
+        and(
+          eq(atelierEngagementBudget.orgId, filters.orgId),
+          inArray(atelierEngagementBudget.engagementId, engIds),
+          isNull(atelierEngagementBudget.deletedAt),
+        ),
+      ),
+    db
+      .select({
+        engagementId: atelierChangeOrder.engagementId,
+        valueDeltaUsd: atelierChangeOrder.valueDeltaUsd,
+      })
+      .from(atelierChangeOrder)
+      .where(
+        and(
+          eq(atelierChangeOrder.orgId, filters.orgId),
+          inArray(atelierChangeOrder.engagementId, engIds),
+          eq(atelierChangeOrder.status, "posted"),
+          isNull(atelierChangeOrder.deletedAt),
+        ),
+      ),
   ]);
   const acctNameById = new Map(accts.map((a) => [a.id, a.name]));
   const soldByOpp = new Map(soldSnaps.map((s) => [s.opportunityId, s]));
   const soldByEng = new Map(soldSnaps.filter((s) => s.engagementId).map((s) => [s.engagementId as string, s]));
+  const costByEng = new Map(currentCosts.map((row) => [row.engagementId, row]));
+  const budgetByEng = new Map(budgets.map((row) => [row.engagementId, row]));
+  const postedByEng = new Map<string, { count: number; value: number }>();
+  for (const row of changeOrders) {
+    const cur = postedByEng.get(row.engagementId) ?? { count: 0, value: 0 };
+    cur.count += 1;
+    cur.value += Number(row.valueDeltaUsd || 0);
+    postedByEng.set(row.engagementId, cur);
+  }
 
   // Expense recovery: a billable expense counts as recovered when some
   // invoice line references it (sourceKind expense, sourceRef = expense id).
@@ -745,6 +922,20 @@ export async function computeRealizationReport(filters: {
     const agg = perEng.get(eng.id)!;
     const sold = soldByEng.get(eng.id) ?? (eng.opportunityId ? soldByOpp.get(eng.opportunityId) : undefined) ?? null;
     const deliveredRate = agg.hours > 0 ? agg.revenue / agg.hours : 0;
+    const currentCost = costByEng.get(eng.id);
+    const isPeriodReport = Boolean(filters.periodFrom || filters.periodTo);
+    const invoiced = invoicedByEng.has(eng.id)
+      ? invoicedByEng.get(eng.id)!
+      : isPeriodReport
+        ? 0
+        : Number(currentCost?.invoicedToDateUsd || 0);
+    const cash = cashByEng.has(eng.id)
+      ? cashByEng.get(eng.id)!
+      : isPeriodReport
+        ? 0
+        : Number(currentCost?.cashCollectedToDateUsd || 0);
+    const budget = budgetByEng.get(eng.id);
+    const posted = postedByEng.get(eng.id) ?? { count: 0, value: 0 };
     let leakage: RealizationRow["leakage"] = null;
     let realizationRate: number | null = null;
     if (sold && sold.soldPriceUsd > 0) {
@@ -752,7 +943,15 @@ export async function computeRealizationReport(filters: {
       const soldRate = Number(sold.soldEffectiveRateUsd || 0);
       const soldHours = Number(sold.soldHours || 0);
       // Rate variance: delivered effective rate below sold rate, over hours actually worked.
-      const rateVarianceUsd = soldRate > 0 ? Math.max(0, (soldRate - deliveredRate) * agg.hours) : 0;
+      const soldTrancheHours = Math.min(agg.hours, soldHours || agg.hours);
+      const soldTrancheRevenue = Math.min(
+        agg.revenue,
+        soldRate * soldTrancheHours,
+      );
+      const rateVarianceUsd =
+        soldRate > 0
+          ? Math.max(0, soldRate * soldTrancheHours - soldTrancheRevenue)
+          : 0;
       // Hours overrun: hours beyond the sold plan, valued at sold rate (unbilled effort).
       const hoursOverrunUsd = soldHours > 0 && agg.hours > soldHours ? (agg.hours - soldHours) * soldRate : 0;
       const scopeWriteOffsUsd = writeOffByEng.get(eng.id) ?? 0;
@@ -792,6 +991,22 @@ export async function computeRealizationReport(filters: {
       },
       realizationRate,
       leakage,
+      financials: {
+        invoicedUsd: invoiced,
+        cashCollectedUsd: cash,
+        wipUsd: agg.revenue - invoiced,
+        arUsd: invoiced - cash,
+        lockupUsd: agg.revenue - cash,
+      },
+      currentBaseline: budget
+        ? {
+            contractValueUsd: Number(budget.contractValueUsd || 0),
+            budgetAtCompletionUsd: Number(budget.budgetAtCompletionUsd || 0),
+            baselinedAt: budget.baselinedAt,
+            postedChangeOrderCount: posted.count,
+            postedChangeOrderValueUsd: posted.value,
+          }
+        : null,
     });
   }
   rows.sort((a, b) => (a.realizationRate ?? 2) - (b.realizationRate ?? 2));

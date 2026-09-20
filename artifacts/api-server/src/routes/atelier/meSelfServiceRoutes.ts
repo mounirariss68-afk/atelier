@@ -384,7 +384,7 @@ router.post("/me/timesheets/:weekId/entries", async (req, res, next) => {
       }
     }
     await recomputeWeekTotals(week.id);
-    if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { actorUserId: me.id }).catch(() => {});
+    if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -456,7 +456,7 @@ router.delete("/me/timesheets/entries/:entryId", async (req, res, next) => {
       .set({ deletedAt: new Date() })
       .where(eq(atelierTimesheetEntries.id, entry.id));
     await recomputeWeekTotals(week.id);
-    if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { actorUserId: me.id }).catch(() => {});
+    if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -20,7 +20,7 @@
  * engagement budget gets re-baselined and the EAC engine recomputes.
  */
 
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, like, sql } from "drizzle-orm";
 import {
   db,
   atelierEngagementBudget,
@@ -216,56 +216,57 @@ export async function getChangeOrder(id: string): Promise<ChangeOrder | null> {
 // ============================================================
 // Read accessors (drizzle-backed; async)
 // ============================================================
-export async function listBudgets(): Promise<EngagementBudget[]> {
+export async function listBudgets(orgId: string): Promise<EngagementBudget[]> {
   const rows = await db
     .select()
     .from(atelierEngagementBudget)
-    .where(isNull(atelierEngagementBudget.deletedAt));
+    .where(and(eq(atelierEngagementBudget.orgId, orgId), isNull(atelierEngagementBudget.deletedAt)));
   return rows.map(budgetFromRow);
 }
-export async function getBudget(engagementId: string): Promise<EngagementBudget | null> {
+export async function getBudget(orgId: string, engagementId: string): Promise<EngagementBudget | null> {
   const [row] = await db
     .select()
     .from(atelierEngagementBudget)
-    .where(eq(atelierEngagementBudget.engagementId, engagementId))
+    .where(and(eq(atelierEngagementBudget.orgId, orgId), eq(atelierEngagementBudget.engagementId, engagementId), isNull(atelierEngagementBudget.deletedAt)))
     .limit(1);
   return row ? budgetFromRow(row) : null;
 }
-export async function listCosts(): Promise<EngagementCostToDate[]> {
+export async function listCosts(orgId: string): Promise<EngagementCostToDate[]> {
   const rows = await db
     .select()
     .from(atelierEngagementCostToDate)
-    .where(isNull(atelierEngagementCostToDate.deletedAt));
+    .where(and(eq(atelierEngagementCostToDate.orgId, orgId), isNull(atelierEngagementCostToDate.deletedAt)));
   return rows.map(costFromRow);
 }
-export async function getCost(engagementId: string): Promise<EngagementCostToDate | null> {
+export async function getCost(orgId: string, engagementId: string): Promise<EngagementCostToDate | null> {
   const [row] = await db
     .select()
     .from(atelierEngagementCostToDate)
-    .where(eq(atelierEngagementCostToDate.engagementId, engagementId))
+    .where(and(eq(atelierEngagementCostToDate.orgId, orgId), eq(atelierEngagementCostToDate.engagementId, engagementId), isNull(atelierEngagementCostToDate.deletedAt)))
     .limit(1);
   return row ? costFromRow(row) : null;
 }
-export async function listEtcs(): Promise<EngagementEtc[]> {
+export async function listEtcs(orgId: string): Promise<EngagementEtc[]> {
   const rows = await db
     .select()
     .from(atelierEngagementEtc)
-    .where(isNull(atelierEngagementEtc.deletedAt));
+    .where(and(eq(atelierEngagementEtc.orgId, orgId), isNull(atelierEngagementEtc.deletedAt)));
   return rows.map(etcFromRow);
 }
-export async function getEtc(engagementId: string): Promise<EngagementEtc | null> {
+export async function getEtc(orgId: string, engagementId: string): Promise<EngagementEtc | null> {
   const [row] = await db
     .select()
     .from(atelierEngagementEtc)
-    .where(eq(atelierEngagementEtc.engagementId, engagementId))
+    .where(and(eq(atelierEngagementEtc.orgId, orgId), eq(atelierEngagementEtc.engagementId, engagementId), isNull(atelierEngagementEtc.deletedAt)))
     .limit(1);
   return row ? etcFromRow(row) : null;
 }
-export async function listAudit(engagementId?: string, limit = 100): Promise<AuditEntry[]> {
+export async function listAudit(orgId: string, engagementId?: string, limit = 100): Promise<AuditEntry[]> {
   const base = db.select().from(atelierEngagementPnlAudit);
-  const rows = await (engagementId
-    ? base.where(eq(atelierEngagementPnlAudit.engagementId, engagementId))
-    : base
+  const rows = await base.where(
+    engagementId
+      ? and(eq(atelierEngagementPnlAudit.orgId, orgId), eq(atelierEngagementPnlAudit.engagementId, engagementId))
+      : eq(atelierEngagementPnlAudit.orgId, orgId),
   )
     .orderBy(desc(atelierEngagementPnlAudit.atIso), desc(atelierEngagementPnlAudit.createdAt))
     .limit(limit);
@@ -279,23 +280,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-/**
- * Idempotency guard for `applyPostedChangeOrder`. Tracks the set of
- * change-order IDs whose deltas have already been folded into the
- * in-memory baseline. Prevents double-counting when:
- *   - the seed reconciliation pass replays already-posted demo COs at
- *     boot, AND
- *   - the runtime workflow posts a brand-new CO from the UI
- * Both call paths converge on this function, and both are safe.
- */
-const APPLIED_POSTED_COS = new Set<string>();
-
 async function insertAudit(
-  entry: Omit<AuditEntry, "id" | "at"> & { id?: string; at?: string },
+  entry: Omit<AuditEntry, "id" | "at"> & { id?: string; at?: string; orgId?: string },
   executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
 ): Promise<void> {
   await executor.insert(atelierEngagementPnlAudit).values({
     id: entry.id ?? rid("aud"),
+    orgId: entry.orgId,
     engagementId: entry.engagementId,
     atIso: entry.at ?? nowIso(),
     actorUserId: entry.actorUserId,
@@ -322,6 +313,7 @@ export type ApplyPostedChangeOrderResult =
   | { status: "engagement_unknown" };
 
 export async function applyPostedChangeOrder(args: {
+  orgId: string;
   engagementId: string;
   changeOrderId: string;
   valueDeltaUsd: number;
@@ -337,14 +329,75 @@ export async function applyPostedChangeOrder(args: {
    * engagement as "re-baselined just now".
    */
   baselinedAtIso?: string;
-}): Promise<ApplyPostedChangeOrderResult> {
-  if (APPLIED_POSTED_COS.has(args.changeOrderId)) {
-    return { status: "already_applied" };
-  }
+}, executor?: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]): Promise<ApplyPostedChangeOrderResult> {
+  const run = async (
+    tx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ): Promise<ApplyPostedChangeOrderResult> => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`engagement-budget:${args.orgId}:${args.engagementId}`}))`);
+    const [budgetRow] = await tx
+      .select()
+      .from(atelierEngagementBudget)
+      .where(
+        and(
+          eq(atelierEngagementBudget.engagementId, args.engagementId),
+          eq(atelierEngagementBudget.orgId, args.orgId),
+          isNull(atelierEngagementBudget.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!budgetRow) return { status: "engagement_unknown" };
+    const budget = budgetFromRow(budgetRow);
 
-  return await db.transaction(async (tx) => {
-    const budget = await getBudget(args.engagementId);
-    if (!budget) return { status: "engagement_unknown" };
+    // The deterministic audit id is also the durable application receipt.
+    // It is inserted in the same transaction as the budget update, so a
+    // restart, retry or concurrent poster can never apply the delta twice.
+    const applicationId = `coapply_${args.changeOrderId}`;
+    // Upgrade compatibility: older successful postings wrote the human-readable
+    // `change_order.posted` audit but predate deterministic application receipts.
+    // Treat that durable audit as proof the budget delta already landed, and
+    // backfill only the receipt. Failed old side effects have no such P&L audit,
+    // so a posted→posted repair still applies them exactly once.
+    const [legacyApplied] = await tx
+      .select({ id: atelierEngagementPnlAudit.id })
+      .from(atelierEngagementPnlAudit)
+      .where(
+        and(
+          eq(atelierEngagementPnlAudit.orgId, args.orgId),
+          eq(atelierEngagementPnlAudit.engagementId, args.engagementId),
+          eq(atelierEngagementPnlAudit.action, "change_order.posted"),
+          like(atelierEngagementPnlAudit.detail, `${args.changeOrderId} posted —%`),
+        ),
+      )
+      .limit(1);
+    if (legacyApplied) {
+      await tx
+        .insert(atelierEngagementPnlAudit)
+        .values({
+          id: applicationId,
+          orgId: args.orgId,
+          engagementId: args.engagementId,
+          atIso: args.baselinedAtIso ?? nowIso(),
+          actorUserId: args.actorUserId,
+          action: "change_order.application_claimed",
+          detail: `${args.changeOrderId} legacy rebaseline application receipt backfilled.`,
+        })
+        .onConflictDoNothing({ target: atelierEngagementPnlAudit.id });
+      return { status: "already_applied" };
+    }
+    const claimed = await tx
+      .insert(atelierEngagementPnlAudit)
+      .values({
+        id: applicationId,
+        orgId: args.orgId,
+        engagementId: args.engagementId,
+        atIso: args.baselinedAtIso ?? nowIso(),
+        actorUserId: args.actorUserId,
+        action: "change_order.application_claimed",
+        detail: `${args.changeOrderId} rebaseline application receipt.`,
+      })
+      .onConflictDoNothing({ target: atelierEngagementPnlAudit.id })
+      .returning({ id: atelierEngagementPnlAudit.id });
+    if (!claimed.length) return { status: "already_applied" };
 
     const num = (n: number | undefined): number =>
       typeof n === "number" && Number.isFinite(n) ? n : 0;
@@ -374,9 +427,7 @@ export async function applyPostedChangeOrder(args: {
         baselinedAt,
         updatedAt: new Date(),
       })
-      .where(eq(atelierEngagementBudget.engagementId, args.engagementId));
-
-    APPLIED_POSTED_COS.add(args.changeOrderId);
+      .where(and(eq(atelierEngagementBudget.engagementId, args.engagementId), eq(atelierEngagementBudget.orgId, args.orgId), isNull(atelierEngagementBudget.deletedAt)));
 
     const fmtUsd = (n: number) =>
       `${n >= 0 ? "+" : ""}$${Math.round(n).toLocaleString()}`;
@@ -390,11 +441,12 @@ export async function applyPostedChangeOrder(args: {
     ];
     await insertAudit(
       {
+        orgId: args.orgId,
         engagementId: args.engagementId,
         at: baselinedAt,
         actorUserId: args.actorUserId,
         action: "change_order.posted",
-        detail: `${args.changeOrderId} posted — engagement re-baselined: ${detailParts.join("; ")}.`,
+        detail: `${args.changeOrderId} posted — engagement re-baselined from contract ${fmtUsd(budget.contractValueUsd)} / BAC ${fmtUsd(budget.budgetAtCompletionUsd)} to contract ${fmtUsd(newContractValue)} / BAC ${fmtUsd(newBac)}: ${detailParts.join("; ")}.`,
       },
       tx,
     );
@@ -412,17 +464,19 @@ export async function applyPostedChangeOrder(args: {
         baselinedAt,
       },
     };
-  });
+  };
+  return executor ? run(executor) : db.transaction(run);
 }
 
 export async function setEtc(input: {
+  orgId: string;
   engagementId: string;
   method: EtcMethod;
   manualEtcUsd: number | null;
   rationale: string;
   actorUserId: string;
 }): Promise<EngagementEtc | null> {
-  const existing = await getEtc(input.engagementId);
+  const existing = await getEtc(input.orgId, input.engagementId);
   if (!existing) return null;
   const updatedAt = nowIso();
   const manual = input.method === "manual" ? input.manualEtcUsd ?? 0 : null;
@@ -436,8 +490,9 @@ export async function setEtc(input: {
       updatedByUserId: input.actorUserId,
       updatedAt: new Date(),
     })
-    .where(eq(atelierEngagementEtc.engagementId, input.engagementId));
+    .where(and(eq(atelierEngagementEtc.engagementId, input.engagementId), eq(atelierEngagementEtc.orgId, input.orgId)));
   await insertAudit({
+    orgId: input.orgId,
     id: rid("aud"),
     engagementId: input.engagementId,
     at: updatedAt,

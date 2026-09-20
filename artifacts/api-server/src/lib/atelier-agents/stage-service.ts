@@ -30,6 +30,8 @@ import {
   atelierContract,
   atelierBillingRule,
   atelierSoldPositionSnapshot,
+  atelierEngagementBudget,
+  atelierEngagementEtc,
 } from "@workspace/db";
 import {
   SALES_TO_PLM,
@@ -731,6 +733,69 @@ export async function handoffCommercialBaseline(
       ) {
         throw new HandoffAbort(409, "existing-snapshot-does-not-match-commercial-baseline");
       }
+
+      // The sold snapshot is the immutable original position; the engagement
+      // budget is the mutable operational baseline that later posted change
+      // orders rebaseline. Create both in the same commercial handoff so a won
+      // deal cannot be mobilized without an EAC/P&L starting point.
+      const baselineAt = snapshot.capturedAt.toISOString();
+      const budgetSubsUsd = sim.costStack.lines
+        .filter((line) => !line.passThrough && line.type === "alliance_partner_quote")
+        .reduce((sum, line) => sum + Number(line.totalUsd || 0), 0);
+      const budgetExpensesUsd = Math.max(
+        0,
+        Number(sim.costStack.absorbedNonLaborUsd || 0) - budgetSubsUsd,
+      );
+      const [insertedBudget] = await tx
+        .insert(atelierEngagementBudget)
+        .values({
+          engagementId: eng.id,
+          orgId: opp.orgId,
+          contractValueUsd: Number(snapshot.soldPriceUsd),
+          budgetLabourHours: Number(snapshot.soldHours),
+          budgetLabourCostUsd: Number(sim.costStack.laborCostUsd || 0),
+          budgetExpensesUsd,
+          budgetSubsUsd,
+          budgetAtCompletionUsd: Number(snapshot.soldCostUsd),
+          baselinedAt: baselineAt,
+          partnerOwnerId: opp.partnerOwnerId ?? "",
+          engagementLeadId: opp.engagementLeadId ?? "",
+          sector: "",
+        })
+        .onConflictDoNothing({ target: atelierEngagementBudget.engagementId })
+        .returning();
+      const [budget] = insertedBudget
+        ? [insertedBudget]
+        : await tx
+            .select()
+            .from(atelierEngagementBudget)
+            .where(
+              and(
+                eq(atelierEngagementBudget.engagementId, eng.id),
+                eq(atelierEngagementBudget.orgId, opp.orgId),
+              ),
+            )
+            .limit(1);
+      if (
+        !budget ||
+        budget.contractValueUsd !== Number(snapshot.soldPriceUsd) ||
+        budget.budgetLabourHours !== Number(snapshot.soldHours) ||
+        budget.budgetAtCompletionUsd !== Number(snapshot.soldCostUsd)
+      ) {
+        throw new HandoffAbort(409, "existing-engagement-budget-does-not-match-commercial-baseline");
+      }
+      await tx
+        .insert(atelierEngagementEtc)
+        .values({
+          engagementId: eng.id,
+          orgId: opp.orgId,
+          method: "extrapolation",
+          manualEtcUsd: null,
+          rationale: "Initial estimate from the signed commercial baseline.",
+          updatedAtIso: baselineAt,
+          updatedByUserId: actor.id,
+        })
+        .onConflictDoNothing({ target: atelierEngagementEtc.engagementId });
 
       await tx.update(atelierDealPricings).set({ billingRuleId, billingHandoffAt: new Date() })
         .where(eq(atelierDealPricings.id, pricing.id));

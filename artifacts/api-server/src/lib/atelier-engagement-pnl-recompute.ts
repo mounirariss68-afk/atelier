@@ -38,7 +38,7 @@ import { resolveContractorRate, contractorRatePerHour } from "./atelier-contract
 
 const LIVE_TIMESHEET_STATUSES = ["lead_approved", "approved", "partner_approved"] as const;
 
-const LIVE_EXPENSE_STATUSES = ["submitted", "approved"] as const;
+const LIVE_EXPENSE_STATUSES = ["approved", "reimbursed"] as const;
 
 // employee.seniority → rate-card seniority label (mirrors ledgerRoutes mapping).
 const SENIORITY_TO_CARD: Record<string, string> = {
@@ -82,11 +82,11 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function loadActiveRateMap(): Promise<Map<string, number>> {
+async function loadActiveRateMap(orgId: string): Promise<Map<string, number>> {
   const [activeCard] = await db
     .select()
     .from(atelierRateCards)
-    .where(isNull(atelierRateCards.deletedAt))
+    .where(and(eq(atelierRateCards.orgId, orgId), isNull(atelierRateCards.deletedAt)))
     .orderBy(desc(atelierRateCards.createdAt))
     .limit(1);
   if (!activeCard) return new Map();
@@ -96,6 +96,7 @@ async function loadActiveRateMap(): Promise<Map<string, number>> {
     .where(
       and(
         eq(atelierRateCardRows.rateCardId, activeCard.id),
+        eq(atelierRateCardRows.orgId, orgId),
         isNull(atelierRateCardRows.deletedAt),
       ),
     );
@@ -103,6 +104,7 @@ async function loadActiveRateMap(): Promise<Map<string, number>> {
 }
 
 async function rollupLabour(
+  orgId: string,
   engagementId: string,
   rateBySeniority: Map<string, number>,
 ): Promise<{ hours: number; costUsd: number }> {
@@ -117,6 +119,7 @@ async function rollupLabour(
     .where(
       and(
         eq(atelierTimesheetEntries.engagementId, engagementId),
+        eq(atelierTimesheetEntries.orgId, orgId),
         inArray(
           atelierTimesheetEntries.status,
           LIVE_TIMESHEET_STATUSES as unknown as string[],
@@ -133,6 +136,7 @@ async function rollupLabour(
     .where(
       and(
         inArray(atelierEmployees.id, personIds),
+        eq(atelierEmployees.orgId, orgId),
         isNull(atelierEmployees.deletedAt),
       ),
     );
@@ -147,7 +151,7 @@ async function rollupLabour(
     let dayRateCurrency = "USD";
     if (e.personType === "contractor") {
       const [c] = await db.select({ orgId: atelierContractors.orgId }).from(atelierContractors).where(and(
-        eq(atelierContractors.id, e.personId), isNull(atelierContractors.deletedAt),
+        eq(atelierContractors.id, e.personId), eq(atelierContractors.orgId, orgId), isNull(atelierContractors.deletedAt),
       ));
       const resolved = c?.orgId ? await resolveContractorRate({
         orgId: c.orgId, contractorId: e.personId, engagementId, workDate: e.workDate,
@@ -172,13 +176,14 @@ async function rollupLabour(
   return { hours, costUsd };
 }
 
-async function rollupExpenses(engagementId: string): Promise<number> {
+async function rollupExpenses(orgId: string, engagementId: string): Promise<number> {
   const rows = await db
     .select({ usdAmount: atelierExpenses.usdAmount })
     .from(atelierExpenses)
     .where(
       and(
         eq(atelierExpenses.engagementId, engagementId),
+        eq(atelierExpenses.orgId, orgId),
         inArray(
           atelierExpenses.status,
           LIVE_EXPENSE_STATUSES as unknown as string[],
@@ -191,7 +196,7 @@ async function rollupExpenses(engagementId: string): Promise<number> {
   return total;
 }
 
-async function rollupSubs(engagementId: string): Promise<number> {
+async function rollupSubs(orgId: string, engagementId: string): Promise<number> {
   const rows = await db
     .select({
       costAmount: atelierPartnerFirmHours.costAmount,
@@ -203,6 +208,7 @@ async function rollupSubs(engagementId: string): Promise<number> {
     .where(
       and(
         eq(atelierPartnerFirmHours.engagementId, engagementId),
+        eq(atelierPartnerFirmHours.orgId, orgId),
         isNull(atelierPartnerFirmHours.deletedAt),
       ),
     );
@@ -217,12 +223,8 @@ async function rollupSubs(engagementId: string): Promise<number> {
     }
     const dateForFx =
       r.workDate ?? (r.uploadedAt ? new Date(r.uploadedAt).toISOString().slice(0, 10) : todayIso());
-    try {
-      const conv = await convertToUsd(amount, cur, dateForFx);
-      total += conv.usdAmount;
-    } catch {
-      total += amount; // last-resort identity; we never silently drop spend
-    }
+    const conv = await convertToUsd(amount, cur, dateForFx);
+    total += conv.usdAmount;
   }
 
   // Task #1251 — tooling costs (approved vendor cost splits mapped to this
@@ -236,6 +238,7 @@ async function rollupSubs(engagementId: string): Promise<number> {
       and(
         eq(atelierVendorCostSplits.bucketType, "engagement"),
         eq(atelierVendorCostSplits.bucketRef, engagementId),
+        eq(atelierVendorCostSplits.orgId, orgId),
         eq(atelierVendorCostSplits.status, "approved"),
         isNull(atelierVendorCostSplits.deletedAt),
       ),
@@ -261,12 +264,12 @@ function isMaterial(
 
 export async function recomputeEngagementCostToDate(
   engagementId: string,
-  opts: { actorUserId?: string | null } = {},
+  opts: { orgId: string; actorUserId?: string | null },
 ): Promise<RecomputeResult> {
   const [budgetRow] = await db
     .select({ engagementId: atelierEngagementBudget.engagementId })
     .from(atelierEngagementBudget)
-    .where(eq(atelierEngagementBudget.engagementId, engagementId))
+    .where(and(eq(atelierEngagementBudget.engagementId, engagementId), eq(atelierEngagementBudget.orgId, opts.orgId)))
     .limit(1);
   if (!budgetRow) {
     return {
@@ -281,7 +284,7 @@ export async function recomputeEngagementCostToDate(
   let [costRow] = await db
     .select()
     .from(atelierEngagementCostToDate)
-    .where(eq(atelierEngagementCostToDate.engagementId, engagementId))
+    .where(and(eq(atelierEngagementCostToDate.engagementId, engagementId), eq(atelierEngagementCostToDate.orgId, opts.orgId)))
     .limit(1);
   if (!costRow) {
     // Self-heal: a new engagement without a seeded cost-to-date row
@@ -289,6 +292,7 @@ export async function recomputeEngagementCostToDate(
     // live numbers instead of returning null forever.
     await db.insert(atelierEngagementCostToDate).values({
       engagementId,
+      orgId: opts.orgId,
       asOf: todayIso(),
       labourHoursToDate: 0,
       labourCostToDateUsd: 0,
@@ -299,11 +303,11 @@ export async function recomputeEngagementCostToDate(
       invoicedToDateUsd: 0,
       cashCollectedToDateUsd: 0,
       pctComplete: 0,
-    });
+    }).onConflictDoNothing({ target: atelierEngagementCostToDate.engagementId });
     [costRow] = await db
       .select()
       .from(atelierEngagementCostToDate)
-      .where(eq(atelierEngagementCostToDate.engagementId, engagementId))
+      .where(and(eq(atelierEngagementCostToDate.engagementId, engagementId), eq(atelierEngagementCostToDate.orgId, opts.orgId)))
       .limit(1);
     if (!costRow) {
       return {
@@ -316,11 +320,11 @@ export async function recomputeEngagementCostToDate(
     }
   }
 
-  const rateBySeniority = await loadActiveRateMap();
+  const rateBySeniority = await loadActiveRateMap(opts.orgId);
   const [labour, expenses, subs] = await Promise.all([
-    rollupLabour(engagementId, rateBySeniority),
-    rollupExpenses(engagementId),
-    rollupSubs(engagementId),
+    rollupLabour(opts.orgId, engagementId, rateBySeniority),
+    rollupExpenses(opts.orgId, engagementId),
+    rollupSubs(opts.orgId, engagementId),
   ]);
 
   const before = {
@@ -365,7 +369,7 @@ export async function recomputeEngagementCostToDate(
       asOf: todayIso(),
       updatedAt: new Date(),
     })
-    .where(eq(atelierEngagementCostToDate.engagementId, engagementId));
+    .where(and(eq(atelierEngagementCostToDate.engagementId, engagementId), eq(atelierEngagementCostToDate.orgId, opts.orgId)));
 
   let audited = false;
   if (isMaterial(before, after)) {
@@ -379,6 +383,7 @@ export async function recomputeEngagementCostToDate(
       `subs ${fmtUsd(before.subsToDateUsd)}→${fmtUsd(after.subsToDateUsd)}.`;
     await db.insert(atelierEngagementPnlAudit).values({
       id: rid("aud"),
+      orgId: opts.orgId,
       engagementId,
       atIso: new Date().toISOString(),
       actorUserId: opts.actorUserId ?? null,
@@ -392,12 +397,12 @@ export async function recomputeEngagementCostToDate(
 }
 
 export async function recomputeAllEngagementCostsToDate(
-  opts: { actorUserId?: string | null } = {},
+  opts: { orgId: string; actorUserId?: string | null },
 ): Promise<RecomputeResult[]> {
   const budgets = await db
     .select({ engagementId: atelierEngagementBudget.engagementId })
     .from(atelierEngagementBudget)
-    .where(isNull(atelierEngagementBudget.deletedAt));
+    .where(and(eq(atelierEngagementBudget.orgId, opts.orgId), isNull(atelierEngagementBudget.deletedAt)));
   const out: RecomputeResult[] = [];
   for (const b of budgets) {
     out.push(await recomputeEngagementCostToDate(b.engagementId, opts));

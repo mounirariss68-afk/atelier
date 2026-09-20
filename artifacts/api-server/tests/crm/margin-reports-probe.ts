@@ -55,6 +55,7 @@ async function main() {
     atelierExpenses,
     atelierInvoice,
     atelierInvoiceLine,
+    atelierCashApplication,
     atelierAuditEvents,
     atelierPaneAItems,
     atelierNotifications,
@@ -264,7 +265,17 @@ async function main() {
       jurisdiction: "AE",
       status: "sent",
       currency: "USD",
+      issuedAt: new Date("2026-05-15T00:00:00Z"),
       createdByUserId: fpId,
+    } as any);
+    await db.insert(atelierCashApplication).values({
+      id: `cashapp_${T}`,
+      orgId: "aico",
+      cashReceiptId: `cashreceipt_${T}`,
+      invoiceId: `inv_${T}`,
+      appliedAmount: 1234,
+      currency: "USD",
+      appliedAt: new Date("2026-06-15T00:00:00Z"),
     } as any);
     await db.insert(atelierInvoiceLine).values({
       id: `invl_${T}`,
@@ -451,6 +462,11 @@ async function main() {
       rA?.realizationRate,
     );
     check(
+      "period cash includes collections against prior-period invoices",
+      !!rA && close(rA.financials.cashCollectedUsd, 1234) && close(rA.financials.invoicedUsd, 0),
+      rA?.financials,
+    );
+    check(
       "leakage decomposition (rate var 15k, overrun 0, write-off 2k, non-recovery 700)",
       !!rA?.leakage &&
         close(rA.leakage.rateVarianceUsd, 15000) &&
@@ -578,6 +594,7 @@ async function main() {
       await db.delete(atelierGlAccount).where(like(atelierGlAccount.id, `gla_${T}%`));
       await db.delete(atelierRevenueAdjustment).where(like(atelierRevenueAdjustment.id, `radj_${T}%`));
       await db.delete(atelierExpenses).where(like(atelierExpenses.id, `exp_${T}%`));
+      await db.delete(atelierCashApplication).where(eq(atelierCashApplication.id, `cashapp_${T}`));
       await db.delete(atelierInvoiceLine).where(eq(atelierInvoiceLine.id, `invl_${T}`));
       await db.delete(atelierInvoice).where(eq(atelierInvoice.id, `inv_${T}`));
       await db.delete(atelierEngagementMarginSnapshot).where(like(atelierEngagementMarginSnapshot.id, `ems_${T}%`));

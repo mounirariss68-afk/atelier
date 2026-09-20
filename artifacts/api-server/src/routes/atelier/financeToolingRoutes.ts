@@ -749,7 +749,7 @@ router.post("/finance/tooling/invoices/:id/approve", async (req, res) => {
 
   // Engagement-bucket splits now count toward cost-to-date (subs bucket).
   for (const engId of affectedEngagements) {
-    await recomputeEngagementCostToDate(engId, { actorUserId: me.id }).catch(() => {});
+    await recomputeEngagementCostToDate(engId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
   }
 
   return res.json({ ok: true, data: { approvedCount: proposed.length } });

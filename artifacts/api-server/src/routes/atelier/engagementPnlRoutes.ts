@@ -48,6 +48,7 @@ import {
   recomputeAllEngagementCostsToDate,
   recomputeEngagementCostToDate,
 } from "../../lib/atelier-engagement-pnl-recompute.js";
+import { computeRealizationReport } from "../../lib/atelier-margin-reporting.js";
 
 const router: IRouter = Router();
 
@@ -78,12 +79,12 @@ function canSeeValueDelta(role: string | null | undefined): boolean {
   return canViewEngagementCosting(role);
 }
 
-async function loadEngagementNames(ids: string[]): Promise<Map<string, string>> {
+async function loadEngagementNames(orgId: string, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
   const rows = await db
     .select({ id: atelierEngagements.id, name: atelierEngagements.name })
     .from(atelierEngagements)
-    .where(and(inArray(atelierEngagements.id, ids), isNull(atelierEngagements.deletedAt)));
+    .where(and(eq(atelierEngagements.orgId, orgId), inArray(atelierEngagements.id, ids), isNull(atelierEngagements.deletedAt)));
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
@@ -199,14 +200,14 @@ function buildHealthRow(
 router.get("/finance/engagement-pnl", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
-  const budgets = await listBudgets();
+  await recomputeAllEngagementCostsToDate({ orgId: me.orgId, actorUserId: me.id });
+  const budgets = await listBudgets(me.orgId);
   const ids = budgets.map((b) => b.engagementId);
   const [names, allCoRows, allCosts, allEtcs] = await Promise.all([
-    loadEngagementNames(ids),
+    loadEngagementNames(me.orgId, ids),
     loadChangeOrders(req, ids),
-    listCosts(),
-    listEtcs(),
+    listCosts(me.orgId),
+    listEtcs(me.orgId),
   ]);
   const costByEng = new Map(allCosts.map((c) => [c.engagementId, c]));
   const etcByEng = new Map(allEtcs.map((e) => [e.engagementId, e]));
@@ -247,11 +248,11 @@ router.get("/finance/engagement-pnl", async (req, res) => {
 router.get("/finance/engagement-pnl/summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
+  await recomputeAllEngagementCostsToDate({ orgId: me.orgId, actorUserId: me.id });
   const [budgets, allCosts, allEtcs, allCoRows] = await Promise.all([
-    listBudgets(),
-    listCosts(),
-    listEtcs(),
+    listBudgets(me.orgId),
+    listCosts(me.orgId),
+    listEtcs(me.orgId),
     loadChangeOrders(req),
   ]);
   const costByEng = new Map(allCosts.map((c) => [c.engagementId, c]));
@@ -299,34 +300,49 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const id = req.params.engagementId;
-  await recomputeEngagementCostToDate(id, { actorUserId: me.id });
-  const [budget, cost, etcRow, coRows, audit, names] = await Promise.all([
-    getBudget(id),
-    getCost(id),
-    getEtc(id),
+  await recomputeEngagementCostToDate(id, { orgId: me.orgId, actorUserId: me.id });
+  const [budget, cost, etcRow, coRows, audit, names, realizationReport] = await Promise.all([
+    getBudget(me.orgId, id),
+    getCost(me.orgId, id),
+    getEtc(me.orgId, id),
     loadChangeOrders(req, [id]),
-    listAudit(id, 50),
-    loadEngagementNames([id]),
+    listAudit(me.orgId, id, 50),
+    loadEngagementNames(me.orgId, [id]),
+    computeRealizationReport({ orgId: me.orgId, engagementId: id }),
   ]);
   if (!budget || !cost || !etcRow) {
     res.status(404).json({ error: "engagement-pnl-not-found" });
     return;
   }
   const eac = computeEac({ budget, cost, etc: etcRow });
-  const wip = cost.revenueRecognisedToDateUsd - cost.invoicedToDateUsd;
-  const ar = cost.invoicedToDateUsd - cost.cashCollectedToDateUsd;
+  const realization = realizationReport.rows[0] ?? null;
+  const revenueRecognised = realization?.delivered.revenueRecognised ?? cost.revenueRecognisedToDateUsd;
+  const invoiced = realization?.financials.invoicedUsd ?? cost.invoicedToDateUsd;
+  const cashCollected = realization?.financials.cashCollectedUsd ?? cost.cashCollectedToDateUsd;
+  const reconciledCost = {
+    ...cost,
+    revenueRecognisedToDateUsd: revenueRecognised,
+    invoicedToDateUsd: invoiced,
+    cashCollectedToDateUsd: cashCollected,
+  };
+  const reconciledEac = {
+    ...eac,
+    pctBilled: budget.contractValueUsd > 0 ? invoiced / budget.contractValueUsd : 0,
+  };
+  const wip = revenueRecognised - invoiced;
+  const ar = invoiced - cashCollected;
   const grossMarginToDatePct =
-    cost.revenueRecognisedToDateUsd > 0
-      ? (cost.revenueRecognisedToDateUsd - cost.costToDateUsd) /
-        cost.revenueRecognisedToDateUsd
+    revenueRecognised > 0
+      ? (revenueRecognised - cost.costToDateUsd) /
+        revenueRecognised
       : 0;
   res.json({
     engagementId: id,
     engagementName: names.get(id) ?? id,
     budget,
-    cost,
+    cost: reconciledCost,
     etc: etcRow,
-    eac,
+    eac: reconciledEac,
     derived: {
       grossMarginToDatePct,
       wipUsd: wip,
@@ -341,6 +357,7 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
     },
     changeOrders: coRows.map((r) => projectChangeOrder(r, me.role)),
     audit,
+    realization,
   });
 });
 
@@ -360,7 +377,7 @@ router.get("/finance/engagement-pnl/:engagementId/audit", async (req, res) => {
     Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 500
       ? Math.floor(limitRaw)
       : 100;
-  const audit = await listAudit(id, limit);
+  const audit = await listAudit(me.orgId, id, limit);
   // listAudit already orders by atIso desc, but be defensive in case
   // callers ever reuse this with a different source.
   const items = audit
@@ -394,6 +411,7 @@ router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
   }
   const rationale = String(body.rationale ?? "").trim();
   const updated = await setEtc({
+    orgId: me.orgId,
     engagementId: id,
     method,
     manualEtcUsd,
@@ -404,7 +422,7 @@ router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
     res.status(404).json({ error: "engagement-etc-not-found" });
     return;
   }
-  const [budget, cost] = await Promise.all([getBudget(id), getCost(id)]);
+  const [budget, cost] = await Promise.all([getBudget(me.orgId, id), getCost(me.orgId, id)]);
   const eac = budget && cost ? computeEac({ budget, cost, etc: updated }) : null;
   res.json({ etc: updated, eac });
 });
@@ -422,7 +440,7 @@ router.post("/finance/engagement-pnl/recompute", async (req, res) => {
     res.status(403).json({ error: "recompute-denied" });
     return;
   }
-  const results = await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
+  const results = await recomputeAllEngagementCostsToDate({ orgId: me.orgId, actorUserId: me.id });
   res.json({ results });
 });
 
@@ -435,6 +453,7 @@ router.post("/finance/engagement-pnl/:engagementId/recompute", async (req, res) 
     return;
   }
   const result = await recomputeEngagementCostToDate(req.params.engagementId, {
+    orgId: me.orgId,
     actorUserId: me.id,
   });
   if (result.status === "engagement_unknown" || result.status === "no_cost_row") {
@@ -451,7 +470,7 @@ router.post("/finance/engagement-pnl/:engagementId/recompute", async (req, res) 
 router.get("/finance/engagement-pnl-debug/budgets", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [items, costs, etcs] = await Promise.all([listBudgets(), listCosts(), listEtcs()]);
+  const [items, costs, etcs] = await Promise.all([listBudgets(me.orgId), listCosts(me.orgId), listEtcs(me.orgId)]);
   res.json({ items, costs, etcs });
 });
 

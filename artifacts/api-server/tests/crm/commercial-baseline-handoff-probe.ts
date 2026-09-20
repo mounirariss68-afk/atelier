@@ -28,6 +28,7 @@ async function main() {
     atelierMarginPolicies, atelierOpportunities, atelierDealPricings,
     atelierEngagements, atelierCounterparty, atelierContract,
     atelierSoldPositionSnapshot, atelierBillingRule, atelierOpportunityStageTransitions,
+     atelierEngagementBudget, atelierEngagementEtc, atelierEngagementCostToDate,
   } = D as any;
   const { applyStageTransition } =
     await import("../../src/lib/atelier-agents/stage-service.js");
@@ -194,12 +195,14 @@ async function main() {
       { firstSignedAt, retriedSignedAt: retriedOpp.contractSignedAt?.getTime() },
     );
 
-    const [engagements, contracts, snapshots, rules, transitions] = await Promise.all([
+    const [engagements, contracts, snapshots, rules, transitions, budgets, etcs] = await Promise.all([
       db.select().from(atelierEngagements).where(eq(atelierEngagements.opportunityId, oppId)),
       db.select().from(atelierContract).where(eq(atelierContract.opportunityId, oppId)),
       db.select().from(atelierSoldPositionSnapshot).where(eq(atelierSoldPositionSnapshot.opportunityId, oppId)),
       db.select().from(atelierBillingRule).where(eq(atelierBillingRule.engagementId, `eng_${oppId}`)),
       db.select().from(atelierOpportunityStageTransitions).where(eq(atelierOpportunityStageTransitions.opportunityId, oppId)),
+      db.select().from(atelierEngagementBudget).where(eq(atelierEngagementBudget.engagementId, `eng_${oppId}`)),
+      db.select().from(atelierEngagementEtc).where(eq(atelierEngagementEtc.engagementId, `eng_${oppId}`)),
     ]);
     check("stage is contract", retryOpp.salesStage === "contract");
     check("exactly one engagement/contract/snapshot/billing rule", engagements.length === 1 && contracts.length === 1 && snapshots.length === 1 && rules.length === 1, { engagements: engagements.length, contracts: contracts.length, snapshots: snapshots.length, rules: rules.length });
@@ -213,6 +216,19 @@ async function main() {
       snap.pricingProvenance.billingRuleId === rules[0].id &&
       snap.pricingProvenance.signedInstrumentFileId === input.signedInstrumentFileId);
     check("signed evidence activates SOW", contracts[0].status === "active" && !!contracts[0].fullyExecutedAt);
+    check(
+      "handoff creates one reconciled engagement budget and ETC baseline",
+      budgets.length === 1 &&
+        etcs.length === 1 &&
+        budgets[0].contractValueUsd === snap.soldPriceUsd &&
+        budgets[0].budgetLabourHours === snap.soldHours &&
+        budgets[0].budgetLabourCostUsd === 5_000 &&
+        budgets[0].budgetExpensesUsd === 400 &&
+        budgets[0].budgetSubsUsd === 0 &&
+        budgets[0].budgetAtCompletionUsd === snap.soldCostUsd &&
+        etcs[0].method === "extrapolation",
+      { budget: budgets[0], etc: etcs[0], sold: snap },
+    );
     check("retry transition rows are bounded", transitions.length >= 1 && transitions.length <= 3);
     check("tenant scope does not leak", (await db.select().from(atelierEngagements).where(eq(atelierEngagements.orgId, otherOrg))).length === 0);
 
@@ -251,6 +267,9 @@ async function main() {
     check("red countersign gate enforced", !red.ok && red.error === "contract-countersign-required");
   } finally {
     // Child-first cleanup keeps this safe on both scratch schemas.
+    await db.delete(atelierEngagementCostToDate).where(inArray(atelierEngagementCostToDate.engagementId, ids.map((id) => `eng_${id}`)));
+    await db.delete(atelierEngagementEtc).where(inArray(atelierEngagementEtc.engagementId, ids.map((id) => `eng_${id}`)));
+    await db.delete(atelierEngagementBudget).where(inArray(atelierEngagementBudget.engagementId, ids.map((id) => `eng_${id}`)));
     await db.delete(atelierSoldPositionSnapshot).where(inArray(atelierSoldPositionSnapshot.opportunityId, ids));
     await db.delete(atelierBillingRule).where(eq(atelierBillingRule.engagementId, `eng_${oppId}`));
     await db.delete(atelierContract).where(inArray(atelierContract.opportunityId, ids));

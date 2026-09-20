@@ -357,6 +357,7 @@ async function transitionChangeOrder(
     auditAction: string;
     auditSummary: (row: ChangeOrderRow) => string;
     afterCommit?: (row: ChangeOrderRow) => void | Promise<void>;
+    withinTransaction?: (tx: any, row: ChangeOrderRow) => void | Promise<void>;
   },
 ) {
   const me = ensurePersona(req, res);
@@ -396,18 +397,24 @@ async function transitionChangeOrder(
     }
     if (!allowed) return { error: "role-denied" as const };
     const allowedTargets = ALLOWED_TRANSITIONS[existing.status] ?? [];
-    if (!allowedTargets.includes(args.target)) {
+    const isPostedRepair = existing.status === "posted" && args.target === "posted";
+    if (!allowedTargets.includes(args.target) && !isPostedRepair) {
       return {
         error: "illegal-transition" as const,
         from: existing.status,
         to: args.target,
       };
     }
+    if (isPostedRepair) {
+      if (args.withinTransaction) await args.withinTransaction(tx, existing);
+      return { row: existing };
+    }
     const [updated] = await tx
       .update(atelierChangeOrder)
       .set({ status: args.target, ...(args.extraPatch ?? {}) })
       .where(eq(atelierChangeOrder.id, String(args.id)))
       .returning();
+    if (args.withinTransaction) await args.withinTransaction(tx, updated);
     return { row: updated };
   });
   if ("error" in result) {
@@ -628,8 +635,9 @@ router.post(
       // unexpected outcomes (e.g. unknown engagementId) so the
       // surrounding `afterCommit` machinery surfaces a `sideEffectError`
       // and writes a system audit entry.
-      afterCommit: (r) => {
-        const result = applyPostedChangeOrder({
+      withinTransaction: async (tx, r) => {
+        const result = await applyPostedChangeOrder({
+          orgId: req.atelierPersona?.orgId ?? "",
           engagementId: r.engagementId,
           changeOrderId: r.id,
           valueDeltaUsd: Number(r.valueDeltaUsd ?? 0),
@@ -638,10 +646,10 @@ router.post(
           expensesDeltaUsd: Number(r.expensesDeltaUsd ?? 0),
           subsDeltaUsd: Number(r.subsDeltaUsd ?? 0),
           actorUserId: req.atelierPersona?.id ?? null,
-        });
+        }, tx);
         if (result.status === "engagement_unknown") {
           throw new Error(
-            `Cannot rebaseline: engagement ${r.engagementId} has no in-memory P&L baseline.`,
+            `Cannot rebaseline: engagement ${r.engagementId} has no P&L baseline.`,
           );
         }
       },

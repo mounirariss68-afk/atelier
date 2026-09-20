@@ -695,7 +695,7 @@ router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
     }
   }
   await recomputeWeekTotals(week.id);
-  if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { actorUserId: me.id }).catch(() => {});
+  if (values.engagementId) await recomputeEngagementCostToDate(values.engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -783,7 +783,7 @@ router.delete("/ledger/timesheets/entries/:entryId", async (req, res) => {
     .set({ deletedAt: new Date() })
     .where(eq(atelierTimesheetEntries.id, entry.id));
   await recomputeWeekTotals(week.id);
-  if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { actorUserId: me.id }).catch(() => {});
+  if (entry.engagementId) await recomputeEngagementCostToDate(entry.engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -1106,7 +1106,7 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
     payload: { role, engagementId, entriesAdvanced: updated.length },
     summary: `${me.name} ${role}-approved ${updated.length} entr${updated.length === 1 ? "y" : "ies"} on week ${week.weekIso} (eng=${engagementId ?? "internal"})`,
   });
-  if (engagementId) await recomputeEngagementCostToDate(engagementId, { actorUserId: me.id }).catch(() => {});
+  if (engagementId) await recomputeEngagementCostToDate(engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
 
   // Task #53 — drop a card on the week owner's Me home.
   if (ownerUserId && ownerUserId !== me.id) {
@@ -1164,7 +1164,7 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
     .set({ status: "draft", updatedAt: new Date() })
     .where(eq(atelierTimesheetEntries.weekId, week.id));
   for (const engagementId of new Set(entriesBeforeReject.map((e) => e.engagementId).filter((id): id is string => !!id))) {
-    await recomputeEngagementCostToDate(engagementId, { actorUserId: me.id }).catch(() => {});
+    await recomputeEngagementCostToDate(engagementId, { orgId: me.orgId, actorUserId: me.id }).catch(() => {});
   }
   await audit({
     entityType: "timesheet_week",

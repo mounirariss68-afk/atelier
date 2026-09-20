@@ -299,7 +299,7 @@ export async function autoDraftOnClientSign(args: {
           isNull(atelierInvoice.deletedAt),
         ),
       ),
-    getBudget(eng.id),
+    getBudget(actor.orgId, eng.id),
   ]);
   const linked = new Set<string>();
   for (const inv of allInvs) {
@@ -345,7 +345,7 @@ router.get("/finance/engagement-financials/:engId", async (req, res) => {
     return;
   }
 
-  await recomputeEngagementCostToDate(engId, { actorUserId: me.id });
+  await recomputeEngagementCostToDate(engId, { orgId: me.orgId, actorUserId: me.id });
 
   // Task #442 — derive pricing model from the same opportunity → deal
   // pricing path used for Steward eligibility (atelierEngagements has
@@ -356,9 +356,9 @@ router.get("/finance/engagement-financials/:engId", async (req, res) => {
   );
 
   const [budget, cost, etcRow, account] = await Promise.all([
-    getBudget(engId),
-    getCost(engId),
-    getEtc(engId),
+    getBudget(me.orgId, engId),
+    getCost(me.orgId, engId),
+    getEtc(me.orgId, engId),
     eng.accountId
       ? db
           .select()
@@ -795,7 +795,7 @@ router.post(
             isNull(atelierInvoice.deletedAt),
           ),
         ),
-      getBudget(engId),
+      getBudget(me.orgId, engId),
     ]);
 
     const linked = new Set<string>();
