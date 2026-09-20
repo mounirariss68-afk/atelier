@@ -36,7 +36,12 @@ import {
   atelierExpenses,
   atelierAuditEvents,
 } from "@workspace/db";
-import { runPursuitScout } from "../atelier-agents/runner.js";
+import {
+  runCharterArchitect,
+  runPursuitScout,
+} from "../atelier-agents/runner.js";
+import { createServerOwnedCrmWorkflow } from "../assistant/workflow-runtime.js";
+import { executeAccountCrmWork } from "../atelier-agents/account-crm-workflow.js";
 import { proposeExpenseAllocation } from "../atelier-entity-allocation.js";
 import { persistBriefAndFacts } from "../atelier-agents/scout-persist.js";
 import {
@@ -53,6 +58,7 @@ import {
 import { checkAndRecord } from "./outbound-rate-limit.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
+import { canSeeAccount } from "../../routes/atelier/accountRoutes.js";
 import { applyStageTransition } from "../atelier-agents/stage-service.js";
 import { deriveSalesStage, SALES_TO_PLM } from "../atelier-agents/pipeline.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../atelier-dedupe.js";
@@ -101,6 +107,7 @@ async function recordAudit(
 ): Promise<void> {
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
+    orgId: ctx.persona.orgId,
     entityType,
     entityId,
     actorType: "human",
@@ -403,13 +410,100 @@ defineCapability({
         },
       };
     }
-    await recordAudit(ctx, "account", accountId, "cartographer.refresh.cli", { accountId }, `${ctx.persona.name} requested Cartographer refresh.`);
+    const [account] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.id, accountId),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!account) {
+      return { ok: false, errorCode: "not_found", errorMessage: "account not found" };
+    }
+    const routePersona = ctx.persona as Parameters<typeof accessibleEngagementIds>[0];
+    const access = await accessibleEngagementIds(routePersona);
+    if (!(await canSeeAccount(access, routePersona, account.id))) {
+      return denyForbidden("account outside your access");
+    }
+    const work = await createServerOwnedCrmWorkflow({
+      orgId: ctx.persona.orgId,
+      requesterId: ctx.persona.id,
+      goal: `Refresh Cartographer and Executive Mapper for account ${account.id}`,
+      domainLink: `account:${account.id}`,
+      steps: [
+        {
+          id: "cartographer",
+          capabilityId: "account.refresh_cartographer",
+          input: { accountId: account.id, focusOpportunityId: null },
+          dataClasses: ["account", "account_research"],
+          budget: {
+            maxCostMicros: 1_000_000,
+            maxToolCalls: 20,
+            maxProviderCalls: 20,
+            maxWallMs: 30 * 60_000,
+            maxConcurrentSlots: 1,
+          },
+          retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+        },
+        {
+          id: "executive_mapper",
+          capabilityId: "account.refresh_cartographer",
+          input: { accountId: account.id, operation: "executive_mapper" },
+          dependencies: ["cartographer"],
+          parentStepId: "cartographer",
+          dataClasses: ["account", "contacts"],
+          budget: {
+            maxCostMicros: 1_000_000,
+            maxToolCalls: 20,
+            maxProviderCalls: 20,
+            maxWallMs: 30 * 60_000,
+            maxConcurrentSlots: 1,
+          },
+          retryPolicy: { maxAttempts: 3, maxWallMs: 2 * 60 * 60_000 },
+        },
+      ],
+    });
+    void executeAccountCrmWork({
+      orgId: ctx.persona.orgId,
+      workItemId: work.workItemId,
+      requesterId: ctx.persona.id,
+      workerId: `crm-account-worker:${work.workItemId}`,
+      authorization: {
+        capabilityIds: ["account.refresh_cartographer"],
+        toolIds: ["account_refresh_cartographer"],
+        dataClasses: ["account", "account_research", "contacts"],
+        policyVersion: "riser-policy-v1",
+        obligations: [],
+        budgetLedgerId: work.budgetLedgerId,
+      },
+    }).catch((error) => {
+      console.warn(
+        `[atelier] Riser Cartographer workflow ${work.workItemId} failed`,
+        error instanceof Error ? error.message : String(error),
+      );
+    });
     // Task #511 — refreshing Cartographer lands on the account workspace.
     return {
       ok: true,
       data: {
-        dispatched: true,
         accountId,
+        workItemId: work.workItemId,
+        planId: work.planId,
+        status: "queued",
+        agentRun: {
+          id: work.workItemId,
+          status: "queued",
+          kind: "workflow",
+        },
+        execution: {
+          kind: "work_item",
+          id: work.workItemId,
+          status: "queued",
+        },
         navigateTo: { path: `/accounts/${accountId}`, when: "on_commit" as const },
       },
     };
@@ -1659,17 +1753,95 @@ defineCapability({
   async run(input, ctx) {
     const engagementId = String(input.engagementId ?? "");
     if (!engagementId) return denyInvalid("engagementId required");
-    if (!(await engAclOk(ctx.persona, engagementId))) return denyForbidden("engagement outside your access");
     if (input.confirm !== true) {
       return { ok: true, data: { preview: { engagementId } }, confirmation: { summary: `Redraft charter for engagement ${engagementId}.`, diff: { create: { table: "atelier_charter_versions", engagementId } }, pending: { tool: "engagement_redraft_charter", input: { ...input, confirm: true } } } };
     }
-    await recordAudit(ctx, "engagement", engagementId, "charter.redraft.cli", { engagementId }, `${ctx.persona.name} requested charter redraft.`);
+    const [engagement] = await db
+      .select({
+        id: atelierEngagements.id,
+        orgId: atelierEngagements.orgId,
+        name: atelierEngagements.name,
+        accountId: atelierEngagements.accountId,
+      })
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.id, engagementId),
+          eq(atelierEngagements.orgId, ctx.persona.orgId),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!engagement) {
+      return { ok: false, errorCode: "not_found", errorMessage: "engagement not found" };
+    }
+    if (!(await engAclOk(ctx.persona, engagementId))) {
+      return denyForbidden("engagement outside your access");
+    }
+    const wonProposalSummary =
+      String(input.wonProposalSummary ?? "").trim() ||
+      `${engagement.name} — re-derive from engagement charter and seeded context`;
+    const result = await runCharterArchitect({
+      engagementId,
+      engagementName: engagement.name,
+      accountName: engagement.accountId,
+      wonProposalSummary,
+      kickoffTranscriptExcerpt: input.kickoffTranscriptExcerpt
+        ? String(input.kickoffTranscriptExcerpt)
+        : null,
+      triggeredByUserId: ctx.persona.id,
+      actorLabel: ctx.persona.name,
+    });
+    const existing = await db
+      .select({ versionNumber: atelierCharterVersions.versionNumber })
+      .from(atelierCharterVersions)
+      .where(
+        and(
+          eq(atelierCharterVersions.engagementId, engagementId),
+          isNull(atelierCharterVersions.deletedAt),
+        ),
+      );
+    const versionNumber =
+      existing.reduce((max, row) => Math.max(max, row.versionNumber), 0) + 1;
+    const versionId = rid("chrtv");
+    const [version] = await db
+      .insert(atelierCharterVersions)
+      .values({
+        id: versionId,
+        orgId: ctx.persona.orgId,
+        engagementId,
+        versionNumber,
+        runId: result.runId,
+        body: result.output.charter as never,
+        hypothesisTree: result.output.hypothesisTree as never,
+        raidBaseline: result.output.raidBaseline as never,
+        proposedWorkstreams: result.output.proposedWorkstreams as never,
+        meceFlags: result.output.meceFlags as never,
+        status: "draft",
+        createdByUserId: ctx.persona.id,
+      })
+      .returning();
+    await recordAudit(
+      ctx,
+      "engagement",
+      engagementId,
+      "charter.redraft",
+      { runId: result.runId, versionId, versionNumber },
+      `Charter v${versionNumber} drafted by Charter Architect.`,
+    );
     // Task #509 — charter redrafts land on the engagement workspace.
     return {
       ok: true,
       data: {
         engagementId,
-        dispatched: true,
+        runId: result.runId,
+        status: "completed",
+        version,
+        execution: {
+          kind: "agent_run",
+          id: result.runId,
+          status: "completed",
+        },
         navigateTo: {
           path: `/clients/deliver/engagements/${engagementId}`,
           when: "on_commit" as const,

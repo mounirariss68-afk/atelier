@@ -16,7 +16,8 @@
     "web_production_bundle": "pass",
     "mobile_typecheck": "pass",
     "mobile_ios_android_production_bundle": "pass",
-    "documentation_structure_links": "pass"
+    "documentation_structure_links": "pass",
+    "execution_truthfulness_no_synthetic_success": "pass"
   },
   "productionSecretReadiness": {
     "status": "pass",

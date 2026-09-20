@@ -1,7 +1,7 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "8f03b0dce262145af766ddf7618f7e7abf0317fec098df8cbda4e189f47dcba1",
+  "manifestVersion": "3f51de532e32fcdde9ecd4cb28ed0cc659f730f16e7aeeb843a1b84f98a1e61e",
   "entryCount": 326,
   "entries": [
     {
@@ -4150,19 +4150,15 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "executable",
+      "executionStatus": "unsupported",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [
-        "finance",
-        "founding_partner",
-        "partner"
-      ],
-      "policyClass": "confirmed_write",
-      "implementationVersion": "5ce167460c3d",
+      "effectiveRoles": [],
+      "policyClass": "unsupported",
+      "implementationVersion": "6157dee8fe14",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4180,7 +4176,8 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -4193,17 +4190,14 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "outbound_write",
-      "executionStatus": "executable",
+      "executionStatus": "unsupported",
       "roles": [
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [
-        "founding_partner",
-        "partner"
-      ],
-      "policyClass": "outbound_write",
-      "implementationVersion": "b93e23535921",
+      "effectiveRoles": [],
+      "policyClass": "unsupported",
+      "implementationVersion": "371f81c2349d",
       "approverRoles": [
         "founding_partner",
         "partner"
@@ -4220,7 +4214,8 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -4312,19 +4307,15 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "executable",
+      "executionStatus": "unsupported",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [
-        "finance",
-        "founding_partner",
-        "partner"
-      ],
-      "policyClass": "confirmed_write",
-      "implementationVersion": "4d353bbed3e3",
+      "effectiveRoles": [],
+      "policyClass": "unsupported",
+      "implementationVersion": "284e86f5af98",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4342,7 +4333,8 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -4517,21 +4509,16 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "legacy_compat",
+      "executionStatus": "unsupported",
       "roles": [
         "compliance_officer",
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [
-        "compliance_officer",
-        "finance",
-        "founding_partner",
-        "partner"
-      ],
-      "policyClass": "legacy_write",
-      "implementationVersion": "04b01b564311",
+      "effectiveRoles": [],
+      "policyClass": "unsupported",
+      "implementationVersion": "a8f9d114c3d9",
       "approverRoles": [
         "compliance_officer",
         "finance",
@@ -4551,7 +4538,7 @@
       },
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -4564,19 +4551,15 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "legacy_compat",
+      "executionStatus": "unsupported",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [
-        "finance",
-        "founding_partner",
-        "partner"
-      ],
-      "policyClass": "legacy_write",
-      "implementationVersion": "9a6e76d862bf",
+      "effectiveRoles": [],
+      "policyClass": "unsupported",
+      "implementationVersion": "a3bc52548ef0",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4595,7 +4578,7 @@
       },
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {

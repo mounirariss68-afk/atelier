@@ -23,11 +23,10 @@
  *      ids so a bypass via tool-call injection is rejected with a
  *      clean errorCode rather than an unhandled exception.
  *
- * Agent-backed verbs (`contract_compose`, `contract_record_redline`,
- * `dpa_review`, `renewal_watchdog_run`) call the runner functions
- * declared in `lib/atelier-agents/runner.ts`. The runner fans out to
- * Claude with the matching `prompts/atelier/<id>.v1.md`. There is no
- * mock fallback — see runner.ts for the live dispatch.
+ * Specialist verbs without complete Riser adapters remain represented for
+ * governance, but are marked unsupported and excluded from retrieval. Their
+ * Atelier screens continue to own the complete domain-input and persistence
+ * workflows.
  */
 
 import { eq } from "drizzle-orm";
@@ -259,32 +258,23 @@ defineCapability({
 });
 
 // -------------------------------------------------------------------------
-// Agent-backed verbs (compose, redline, dpa). Their `run` enqueues an
-// agent run via the runner, which dispatches to Claude.
+// Specialist verbs without authorized Riser adapters. These entries remain in
+// the reviewed manifest but are excluded from executable retrieval.
 // -------------------------------------------------------------------------
 
-async function enqueueAgent(
+async function notIntegratedWithRiser(
   ctx: ToolContext,
   args: { agentId: string; entityType: string; entityId: string; payload: Record<string, unknown>; summary: string },
 ): Promise<ToolResult> {
-  const runId = rid("run");
-  await audit(ctx, {
-    entityType: args.entityType,
-    entityId: args.entityId,
-    action: `${args.agentId}_enqueued`,
-    payload: { runId, ...args.payload },
-    summary: args.summary,
-  });
   return {
-    ok: true,
-    data: {
-      agentRun: {
-        id: runId,
-        agentId: args.agentId,
-        status: "queued",
-        entityType: args.entityType,
-        entityId: args.entityId,
-      },
+    ok: false,
+    errorCode: "unsupported",
+    errorMessage: `${args.agentId} is available in Atelier but is not integrated with Riser.`,
+    refusal: {
+      reason:
+        "This workflow must be started from its authorized Atelier screen until a durable Riser adapter is available.",
+      closestCapabilityId: null,
+      suggestion: "Open the linked Atelier workspace to run it.",
     },
   };
 }
@@ -310,11 +300,13 @@ defineCapability({
   requiredRoles: ROLE_LEADERSHIP_FINANCE,
   surfaceOn: ["global"],
   representativePrompts: { en: ["Compose the SOW draft for the DEWA engagement"] },
+  executionStatus: "unsupported",
+  divergenceIds: ["riser-adapter-not-integrated-v1"],
   async run(input, ctx) {
     const contractId = String(input.contractId);
     const [c] = await db.select().from(atelierContract).where(eq(atelierContract.id, contractId)).limit(1);
     if (!c) return { ok: false, errorCode: "not_found" };
-    const result = await enqueueAgent(ctx, {
+    const result = await notIntegratedWithRiser(ctx, {
       agentId: "contract_composer",
       entityType: "contract",
       entityId: contractId,
@@ -347,6 +339,8 @@ defineCapability({
   requiredRoles: ROLE_LEADERSHIP,
   surfaceOn: ["global"],
   representativePrompts: { en: ["Dispatch the DEWA SOW to procurement for signature"] },
+  executionStatus: "unsupported",
+  divergenceIds: ["riser-adapter-not-integrated-v1"],
   async run(input, ctx) {
     const contractId = String(input.contractId);
     const [c] = await db.select().from(atelierContract).where(eq(atelierContract.id, contractId)).limit(1);
@@ -358,7 +352,7 @@ defineCapability({
         errorMessage: `contract status is ${c.status}; dispatch requires two_partner_countersigned`,
       };
     }
-    const result = await enqueueAgent(ctx, {
+    const result = await notIntegratedWithRiser(ctx, {
       agentId: "esign_orchestrator",
       entityType: "contract",
       entityId: contractId,
@@ -395,11 +389,13 @@ defineCapability({
   requiredRoles: ROLE_LEADERSHIP_FINANCE,
   surfaceOn: ["global"],
   representativePrompts: { en: ["Record the counterparty redline on the DEWA SOW"] },
+  executionStatus: "unsupported",
+  divergenceIds: ["riser-adapter-not-integrated-v1"],
   async run(input, ctx) {
     const contractId = String(input.contractId);
     const [c] = await db.select().from(atelierContract).where(eq(atelierContract.id, contractId)).limit(1);
     if (!c) return { ok: false, errorCode: "not_found" };
-    const result = await enqueueAgent(ctx, {
+    const result = await notIntegratedWithRiser(ctx, {
       agentId: "redline_analyst",
       entityType: "contract",
       entityId: contractId,
@@ -432,11 +428,13 @@ defineCapability({
   requiredRoles: ROLE_LEADERSHIP_FINANCE_COMPLIANCE,
   surfaceOn: ["global"],
   representativePrompts: { en: ["Review the DEWA DPA for GDPR risks"] },
+  executionStatus: "unsupported",
+  divergenceIds: ["riser-adapter-not-integrated-v1"],
   async run(input, ctx) {
     const dpaId = String(input.dpaId);
     const [d] = await db.select().from(atelierDpa).where(eq(atelierDpa.id, dpaId)).limit(1);
     if (!d) return { ok: false, errorCode: "not_found" };
-    const result = await enqueueAgent(ctx, {
+    const result = await notIntegratedWithRiser(ctx, {
       agentId: "dpa_sentinel",
       entityType: "dpa",
       entityId: dpaId,
@@ -470,8 +468,10 @@ defineCapability({
   requiredRoles: ROLE_LEADERSHIP_FINANCE,
   surfaceOn: ["global"],
   representativePrompts: { en: ["Show contracts expiring in the next 60 days"] },
+  executionStatus: "unsupported",
+  divergenceIds: ["riser-adapter-not-integrated-v1"],
   async run(input, ctx) {
-    const result = await enqueueAgent(ctx, {
+    const result = await notIntegratedWithRiser(ctx, {
       agentId: "renewal_watchdog",
       entityType: "firm",
       entityId: "firm",

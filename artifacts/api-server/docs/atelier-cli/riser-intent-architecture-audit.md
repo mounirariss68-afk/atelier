@@ -21,7 +21,8 @@ Riser is not one system.
 3. The specialist-agent platform is a registry plus several execution styles.
    Some agents have real bespoke runners and routes; some use the shared
    `runAgent` lifecycle; some are stubs; and the generic Riser agent
-   capabilities return a dispatch hint without actually dispatching a run
+   capabilities without durable adapters are explicitly unsupported and
+   excluded from executable retrieval
    (`src/lib/atelier-cli/agent-capabilities.ts:1-24,119-188`). An agent label,
    run row, or progress table is therefore not proof of a durable agentic
    workflow.

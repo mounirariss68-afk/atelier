@@ -31,6 +31,8 @@
 
 import { createHash } from "node:crypto";
 import Ajv from "ajv";
+import { and, eq } from "drizzle-orm";
+import { db, atelierAgentRuns, atelierWorkItems } from "@workspace/db";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 import type { AtelierRole } from "../../routes/atelier/personaRoles.js";
 import { assertCapabilityDivergences } from "./capability-divergences.js";
@@ -550,6 +552,60 @@ export function assertNavigateToContract(id: string, result: ToolResult): void {
 }
 
 /**
+ * A generated id, audit row, or optimistic "dispatched" flag is not execution.
+ * Real queued/running work must identify a persisted job explicitly; completed
+ * synchronous work should return its durable run/record result instead.
+ */
+export async function assertExecutionProofContract(
+  id: string,
+  executionStatus: CapabilityEntry["executionStatus"],
+  result: ToolResult,
+  orgId?: string,
+): Promise<void> {
+  if (executionStatus !== "executable" || !isCommitSuccess(result as ToolResultLike)) return;
+  const data = result.data as Record<string, unknown>;
+  if (data.dispatched === true) {
+    throw new Error(`capability-synthetic-dispatch:${id}`);
+  }
+  const status = typeof data.status === "string" ? data.status : null;
+  const claimsDurableExecution =
+    status === "queued" ||
+    status === "running" ||
+    data.agentRun !== undefined ||
+    (status === "completed" && typeof data.runId === "string");
+  if (!claimsDurableExecution) return;
+
+  const execution =
+    data.execution && typeof data.execution === "object"
+      ? (data.execution as Record<string, unknown>)
+      : null;
+  if (
+    !execution ||
+    (execution.kind !== "work_item" && execution.kind !== "agent_run") ||
+    typeof execution.id !== "string" ||
+    !execution.id ||
+    !orgId
+  ) {
+    throw new Error(`capability-unverified-execution:${id}`);
+  }
+  if (execution.kind === "work_item") {
+    const [row] = await db
+      .select({ id: atelierWorkItems.id })
+      .from(atelierWorkItems)
+      .where(and(eq(atelierWorkItems.id, execution.id), eq(atelierWorkItems.orgId, orgId)))
+      .limit(1);
+    if (!row) throw new Error(`capability-unverified-work-item:${id}`);
+  } else {
+    const [row] = await db
+      .select({ id: atelierAgentRuns.id })
+      .from(atelierAgentRuns)
+      .where(and(eq(atelierAgentRuns.id, execution.id), eq(atelierAgentRuns.orgId, orgId)))
+      .limit(1);
+    if (!row) throw new Error(`capability-unverified-agent-run:${id}`);
+  }
+}
+
+/**
  * Register a capability. Throws on duplicate `id`/`toolName` so a typo
  * can't silently clobber an entry. Auto-computes `schemaHash` if the
  * caller didn't pin one. For `isWrite: true` capabilities, wraps
@@ -614,6 +670,12 @@ export function defineCapability(entry: CapabilityInput): CapabilityEntry {
       ctx: ToolContext,
     ): Promise<ToolResult> => {
       const result = await inner(input, ctx);
+      await assertExecutionProofContract(
+        finalised.id,
+        finalised.executionStatus,
+        result,
+        ctx.persona.orgId,
+      );
       assertNavigateToContract(finalised.id, result);
       return result;
     };

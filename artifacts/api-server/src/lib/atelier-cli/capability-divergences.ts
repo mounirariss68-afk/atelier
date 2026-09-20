@@ -33,6 +33,18 @@ export const CAPABILITY_DIVERGENCES: readonly CapabilityDivergenceRecord[] = [
     compensatingGate: "all agent entries return unsupported and are excluded from dispatch lookup",
   },
   {
+    id: "riser-adapter-not-integrated-v1",
+    category: "unsupported_executor",
+    status: "approved",
+    reason:
+      "The Atelier workflow exists, but Riser has no authorized adapter that can assemble its required domain inputs and persist its result.",
+    owner: "Agent Platform",
+    approvedAt: "2026-09-20",
+    reviewBy: "2027-03-31",
+    compensatingGate:
+      "entries are marked unsupported, excluded from persona retrieval, and return an explicit not-integrated refusal",
+  },
+  {
     id: "legacy-confirmation-compat-v1",
     category: "confirmation_compat",
     status: "approved",

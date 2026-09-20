@@ -34979,19 +34979,21 @@
     {
       "capabilityId": "codex.contract_compose",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "5ce167460c3d",
+      "executionStatus": "unsupported",
+      "implementationVersion": "6157dee8fe14",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
       "capabilityId": "codex.contract_dispatch",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "b93e23535921",
+      "executionStatus": "unsupported",
+      "implementationVersion": "371f81c2349d",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -35015,10 +35017,11 @@
     {
       "capabilityId": "codex.contract_record_redline",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "4d353bbed3e3",
+      "executionStatus": "unsupported",
+      "implementationVersion": "284e86f5af98",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -35060,21 +35063,21 @@
     {
       "capabilityId": "codex.dpa_review",
       "source": "cli-only",
-      "executionStatus": "legacy_compat",
-      "implementationVersion": "04b01b564311",
+      "executionStatus": "unsupported",
+      "implementationVersion": "a8f9d114c3d9",
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
       "capabilityId": "codex.renewal_watchdog_run",
       "source": "cli-only",
-      "executionStatus": "legacy_compat",
-      "implementationVersion": "9a6e76d862bf",
+      "executionStatus": "unsupported",
+      "implementationVersion": "a3bc52548ef0",
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -37062,5 +37065,5 @@
       ]
     }
   ],
-  "conformanceVersion": "8e80c7d450e65e931e7d77ae508d024ce0d65ebd49255e9ea18223509e6686fa"
+  "conformanceVersion": "a84e70f3ffa190c0b641254ec1390e3b821ddb23802575f1ca8f326412c630db"
 }
