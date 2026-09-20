@@ -8,8 +8,13 @@ export const AssistantControlScopeV1Schema = z.enum([
   "capability",
   "provider",
   "model",
+  "protocol_version",
+  "router_version",
   "catalog_version",
   "policy_version",
+  "action_executor",
+  "workflow_family",
+  "client_cohort",
 ]);
 
 export const AssistantControlModeV1Schema = z.enum(["deny", "quarantine"]);

@@ -1,0 +1,37 @@
+{
+  "version": "riser-ownership-signoff/v1",
+  "status": "pending",
+  "owners": {
+    "assistant_schemas_compatibility": null,
+    "interpretation_retrieval_evaluation": null,
+    "resolver_policy": null,
+    "action_execution_idempotency": null,
+    "catalog_all_entry_parity": null,
+    "web_mobile_chat_core": null,
+    "workflow_specialist_adapters": null,
+    "security_privacy": null,
+    "data_migrations": null,
+    "sre_telemetry_incident_response": null
+  },
+  "stageSignoffs": {
+    "S0": { "status": "pending", "approvedBy": null, "evidence": null },
+    "S1": { "status": "pending", "approvedBy": null, "evidence": null },
+    "S2": { "status": "pending", "approvedBy": null, "evidence": null },
+    "S3": { "status": "pending", "approvedBy": null, "evidence": null },
+    "S4": { "status": "pending", "approvedBy": null, "evidence": null }
+  },
+  "finalApprovals": {
+    "security": { "status": "pending", "approvedBy": null, "evidence": null },
+    "data_migration": { "status": "pending", "approvedBy": null, "evidence": null },
+    "mobile_web": { "status": "pending", "approvedBy": null, "evidence": null },
+    "workflow": { "status": "pending", "approvedBy": null, "evidence": null },
+    "sre": { "status": "pending", "approvedBy": null, "evidence": null },
+    "release_program": { "status": "pending", "approvedBy": null, "evidence": null }
+  },
+  "sunset": {
+    "approvedThreshold": null,
+    "measuredAdoption": null,
+    "supportedLegacyWriters": null,
+    "evidence": null
+  }
+}

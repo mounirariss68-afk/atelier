@@ -44,8 +44,13 @@ const request = (
     | "capability"
     | "provider"
     | "model"
+    | "protocol_version"
+    | "router_version"
     | "catalog_version"
-    | "policy_version" = "capability",
+    | "policy_version"
+    | "action_executor"
+    | "workflow_family"
+    | "client_cohort" = "capability",
 ) => ({
   version: ASSISTANT_OPERATOR_CONTROL_VERSION,
   scope,

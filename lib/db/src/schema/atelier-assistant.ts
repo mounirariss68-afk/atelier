@@ -62,6 +62,28 @@ export const atelierAssistantActions = pgTable(
   ],
 );
 
+export const atelierAssistantProviderResults = pgTable(
+  "atelier_assistant_provider_results",
+  {
+    providerResultId: text("provider_result_id").primaryKey(),
+    actionId: text("action_id")
+      .notNull()
+      .references(() => atelierAssistantActions.id, { onDelete: "restrict" }),
+    orgId: text("org_id").notNull(),
+    outcome: text("outcome").notNull(),
+    reconciledByUserId: text("reconciled_by_user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("uq_assistant_provider_result_action").on(t.actionId),
+    index("idx_assistant_provider_results_org").on(t.orgId, t.createdAt),
+    check(
+      "chk_assistant_provider_result_outcome",
+      sql`${t.outcome} in ('succeeded','failed')`,
+    ),
+  ],
+);
+
 export const atelierAssistantEvents = pgTable(
   "atelier_assistant_events",
   {
@@ -270,6 +292,62 @@ export const atelierAssistantControls = pgTable(
   (t) => [
     uniqueIndex("uq_assistant_control_scope").on(t.orgId, t.scope, t.scopeKey, t.version),
     index("idx_assistant_controls_enabled").on(t.orgId, t.enabled),
+  ],
+);
+
+export const atelierAssistantRollouts = pgTable(
+  "atelier_assistant_rollouts",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id"),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("expand"),
+    dimensions: jsonb("dimensions").$type<Record<string, string>>().notNull(),
+    versions: jsonb("versions").$type<Record<string, string>>().notNull(),
+    exitCriteria: jsonb("exit_criteria").$type<Record<string, number>>().notNull(),
+    measurements: jsonb("measurements").$type<Record<string, number>>().notNull().default({}),
+    alarmThresholds: jsonb("alarm_thresholds").$type<Record<string, number>>().notNull(),
+    rollbackSteps: jsonb("rollback_steps").$type<string[]>().notNull().default([]),
+    controlIds: jsonb("control_ids").$type<string[]>().notNull().default([]),
+    rollbackLineage: jsonb("rollback_lineage")
+      .$type<{
+        executingActionIds: string[];
+        outboxIds: string[];
+        blockedAttemptIds: string[];
+      }>()
+      .notNull()
+      .default({ executingActionIds: [], outboxIds: [], blockedAttemptIds: [] }),
+    workerFence: integer("worker_fence").notNull().default(0),
+    auditContinuityVerified: boolean("audit_continuity_verified").notNull().default(false),
+    haltedReason: text("halted_reason"),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("idx_assistant_rollouts_status").on(t.orgId, t.status),
+    check(
+      "chk_assistant_rollout_status",
+      sql`${t.status} in ('expand','shadow','backfill_verify','cohort_canary','cutover','compatibility_retention','cleanup','rollback','halted','rolled_back')`,
+    ),
+  ],
+);
+
+export const atelierAssistantRolloutEvents = pgTable(
+  "atelier_assistant_rollout_events",
+  {
+    id: text("id").primaryKey(),
+    rolloutId: text("rollout_id")
+      .notNull()
+      .references(() => atelierAssistantRollouts.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    type: text("type").notNull(),
+    evidence: jsonb("evidence").$type<unknown>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("uq_assistant_rollout_event_sequence").on(t.rolloutId, t.sequence),
+    index("idx_assistant_rollout_events").on(t.rolloutId, t.createdAt),
   ],
 );
 

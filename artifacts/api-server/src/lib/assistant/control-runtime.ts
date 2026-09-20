@@ -28,8 +28,13 @@ export interface AssistantControlContext {
   capabilityId?: string | null;
   provider?: string | null;
   model?: string | null;
+  protocolVersion?: string | null;
+  routerVersion?: string | null;
   catalogVersion?: string | null;
   policyVersion?: string | null;
+  actionExecutor?: string | null;
+  workflowFamily?: string | null;
+  clientCohort?: string | null;
 }
 
 export interface AssistantControlDecision {
@@ -41,9 +46,14 @@ export interface AssistantControlDecision {
 
 const SCOPE_PRIORITY: Record<string, number> = {
   capability: 6,
-  model: 5,
-  provider: 4,
-  catalog_version: 3,
+  action_executor: 5,
+  workflow_family: 5,
+  client_cohort: 5,
+  protocol_version: 4,
+  router_version: 4,
+  model: 4,
+  provider: 3,
+  catalog_version: 2,
   policy_version: 2,
   org: 1,
 };
@@ -61,11 +71,26 @@ function controlMatches(
     return key === "*" || key === context.provider;
   }
   if (control.scope === "model") return key === "*" || key === context.model;
+  if (control.scope === "protocol_version") {
+    return key === "*" || key === context.protocolVersion;
+  }
+  if (control.scope === "router_version") {
+    return key === "*" || key === context.routerVersion;
+  }
   if (control.scope === "catalog_version") {
     return key === "*" || key === context.catalogVersion;
   }
   if (control.scope === "policy_version") {
     return key === "*" || key === context.policyVersion;
+  }
+  if (control.scope === "action_executor") {
+    return key === "*" || key === context.actionExecutor;
+  }
+  if (control.scope === "workflow_family") {
+    return key === "*" || key === context.workflowFamily;
+  }
+  if (control.scope === "client_cohort") {
+    return key === "*" || key === context.clientCohort;
   }
   return false;
 }
@@ -341,6 +366,9 @@ export async function createAssistantControl(args: {
         if (request.scope === "policy_version") {
           return request.scopeKey === "*" || request.scopeKey === action.policyVersion;
         }
+        if (request.scope === "action_executor") {
+          return request.scopeKey === "*" || request.scopeKey === "durable-action-v1";
+        }
         return false;
       });
       if (incompatible) {
@@ -482,7 +510,17 @@ function controlAppliesToCapability(
   if (control.scope === "policy_version") {
     return control.scopeKey === "*" || control.scopeKey === policyVersion;
   }
+  if (control.scope === "action_executor") {
+    return control.scopeKey === "*" || control.scopeKey === "durable-action-v1";
+  }
   return false;
+}
+
+function controlAppliesToWorkflow(control: ControlRow): boolean {
+  if (control.scope === "workflow_family") {
+    return control.scopeKey === "*" || control.scopeKey === "durable-work-v1";
+  }
+  return true;
 }
 
 export async function reconcileAssistantControl(args: {
@@ -524,7 +562,13 @@ export async function reconcileAssistantControl(args: {
     )
     .returning();
   if (!claimed) return summary;
-  if (control.scope === "provider" || control.scope === "model") {
+  if (
+    control.scope === "provider" ||
+    control.scope === "model" ||
+    control.scope === "protocol_version" ||
+    control.scope === "router_version" ||
+    control.scope === "client_cohort"
+  ) {
     await db
       .update(atelierAssistantControls)
       .set({
@@ -631,12 +675,14 @@ export async function reconcileAssistantControl(args: {
   const workIds = new Set(
     workRows
       .filter(({ work, step }) =>
-        controlAppliesToCapability(
-          control,
-          step.capabilityId,
-          work.catalogVersion,
-          step.policyVersion,
-        ),
+        controlAppliesToWorkflow(control) &&
+        (control.scope === "workflow_family" ||
+          controlAppliesToCapability(
+            control,
+            step.capabilityId,
+            work.catalogVersion,
+            step.policyVersion,
+          )),
       )
       .map(({ work }) => work.id),
   );
@@ -676,10 +722,78 @@ export async function reconcileAssistantControl(args: {
         control.inflightBehavior === "pause" ||
         control.inflightBehavior === "finish"
       ) {
+        if (control.inflightBehavior === "pause") {
+          for (const attempt of runningAttempts) {
+            if (attempt.budgetReservationId) {
+              await refundAssistantBudget(
+                control.orgId!,
+                attempt.budgetReservationId,
+                tx,
+              );
+            }
+            await tx
+              .update(atelierWorkAttempts)
+              .set({
+                status: "blocked",
+                leaseOwner: null,
+                leaseExpiresAt: null,
+                fencingToken: attempt.fencingToken + 1,
+                errorClass: "operator_control",
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(atelierWorkAttempts.id, attempt.id),
+                  eq(atelierWorkAttempts.fencingToken, attempt.fencingToken),
+                  eq(atelierWorkAttempts.status, "running"),
+                ),
+              );
+            await tx.insert(atelierAuditEvents).values({
+              id: `aud_${randomUUID()}`,
+              orgId: control.orgId!,
+              entityType: "work_attempt",
+              entityId: attempt.id,
+              actorType: "human",
+              actorId: args.actorId,
+              actorLabel: args.actorLabel,
+              action: "assistant.work_attempt.fenced",
+              payload: {
+                controlId: control.id,
+                priorFencingToken: attempt.fencingToken,
+                fencingToken: attempt.fencingToken + 1,
+              },
+              payloadSummary: `Work attempt fenced by assistant control ${control.id}`,
+            });
+          }
+          if (runningAttempts.length > 0) {
+            await tx
+              .update(atelierWorkSteps)
+              .set({ status: "blocked", updatedAt: now })
+              .where(
+                inArray(
+                  atelierWorkSteps.id,
+                  runningAttempts.map((attempt) => attempt.stepId),
+                ),
+              );
+          }
+          summary.executingPreserved += committingAttempts.length;
+        }
         await tx
           .update(atelierWorkItems)
           .set({ status: "blocked", updatedAt: now })
           .where(eq(atelierWorkItems.id, work.id));
+        await tx.insert(atelierAuditEvents).values({
+          id: `aud_${randomUUID()}`,
+          orgId: control.orgId!,
+          entityType: "work_item",
+          entityId: work.id,
+          actorType: "human",
+          actorId: args.actorId,
+          actorLabel: args.actorLabel,
+          action: "assistant.work.paused",
+          payload: { controlId: control.id, inflightBehavior: control.inflightBehavior },
+          payloadSummary: `Work paused by assistant control ${control.id}`,
+        });
         const [existingCheckpoint] = await tx
           .select({ id: atelierWorkCheckpoints.id })
           .from(atelierWorkCheckpoints)
