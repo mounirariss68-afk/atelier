@@ -940,7 +940,7 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
       rationaleText: rationale ?? "",
       source: "legacy-patch",
     },
-    { id: me.id, name: me.name, orgId: me.orgId },
+    { id: me.id, name: me.name, orgId: me.orgId, role: me.role },
   );
   if (!result.ok) {
     const code = result.gate?.gate === "suspect_to_prospect_5c" ? "qualifier-required" : result.error;
@@ -2923,7 +2923,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
       reasonCode,
       source: "rest",
     },
-    { id: me.id, name: me.name, orgId: me.orgId },
+    { id: me.id, name: me.name, orgId: me.orgId, role: me.role },
   );
   if (!result.ok) {
     res.status(result.status).json({ error: result.error, ...(result.gate ?? {}) });

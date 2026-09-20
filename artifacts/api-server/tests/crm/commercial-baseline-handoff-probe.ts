@@ -42,7 +42,12 @@ async function main() {
   const cardId = `card_${tag}`;
   const oppId = `opp_${tag}`;
   const ids = [oppId];
-  const actor = { id: userId, name: "Commercial handoff probe", orgId };
+  const actor = {
+    id: userId,
+    name: "Commercial handoff probe",
+    orgId,
+    role: "founding_partner",
+  };
   const mix = [{ seniority: "Analyst", role: "delivery", ftePct: 1 }];
   const params = { feeUsd: 10000, paymentTermsDays: 15, installments: [
     { label: "Start", pctOfFee: 1, offsetWeeks: 0 },
@@ -134,6 +139,28 @@ async function main() {
     }, actor);
     check("missing pricing fails closed", !blocked.ok && blocked.error === "contract-pricing-required");
 
+    const unsigned = `opp_unsigned_${tag}`;
+    ids.push(unsigned);
+    await insertOpp(unsigned, orgId, true);
+    const unsignedRow = (await db.select().from(atelierOpportunities).where(eq(atelierOpportunities.id, unsigned)))[0];
+    const unsignedOverride = await applyStageTransition(
+      unsignedRow,
+      {
+        toStage: "contract",
+        rationaleText: "probe unsigned override",
+        evidenceArtifactIds: [],
+        partnerOverride: true,
+        source: "probe",
+      },
+      actor,
+    );
+    check(
+      "partner override cannot create an unsigned baseline",
+      !unsignedOverride.ok &&
+        unsignedOverride.error === "contract-signed-instrument-required",
+      unsignedOverride,
+    );
+
     await insertOpp(oppId, orgId, true);
     const opp = (await db.select().from(atelierOpportunities).where(eq(atelierOpportunities.id, oppId)))[0];
     const input = {
@@ -157,8 +184,15 @@ async function main() {
     ]);
     check("concurrent transition has a success", first.ok || second.ok, [first, second]);
     const retryOpp = (await db.select().from(atelierOpportunities).where(eq(atelierOpportunities.id, oppId)))[0];
+    const firstSignedAt = retryOpp.contractSignedAt?.getTime();
     const retry = await applyStageTransition(retryOpp, input, actor);
     check("retry does not fail handoff", retry.ok, retry);
+    const retriedOpp = (await db.select().from(atelierOpportunities).where(eq(atelierOpportunities.id, oppId)))[0];
+    check(
+      "retry preserves the original signed timestamp",
+      !!firstSignedAt && retriedOpp.contractSignedAt?.getTime() === firstSignedAt,
+      { firstSignedAt, retriedSignedAt: retriedOpp.contractSignedAt?.getTime() },
+    );
 
     const [engagements, contracts, snapshots, rules, transitions] = await Promise.all([
       db.select().from(atelierEngagements).where(eq(atelierEngagements.opportunityId, oppId)),

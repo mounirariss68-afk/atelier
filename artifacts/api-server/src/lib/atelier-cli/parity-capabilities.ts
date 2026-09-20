@@ -833,7 +833,12 @@ defineCapability({
     const result = await applyStageTransition(
       opp,
       { toStage, rationaleText: String(input.rationale ?? ""), source: "cli" },
-      { id: ctx.persona.id, name: ctx.persona.name, orgId: ctx.persona.orgId },
+      {
+        id: ctx.persona.id,
+        name: ctx.persona.name,
+        orgId: ctx.persona.orgId,
+        role: ctx.persona.role,
+      },
     );
     if (!result.ok) {
       return {

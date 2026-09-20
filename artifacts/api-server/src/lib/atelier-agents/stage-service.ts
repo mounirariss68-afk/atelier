@@ -76,6 +76,7 @@ export interface StageActor {
   id: string;
   name: string;
   orgId: string;
+  role?: string;
 }
 
 export interface ApplyStageTransitionInput {
@@ -157,6 +158,20 @@ export async function applyStageTransition(
 ): Promise<ApplyStageTransitionResult> {
   const { fromStage, legacyStageLabel } = canonicalFromStage(opp);
   const to = input.toStage;
+  if (
+    input.partnerOverride &&
+    actor.role !== "partner" &&
+    actor.role !== "founding_partner"
+  ) {
+    return { ok: false, status: 403, error: "partner-override-forbidden" };
+  }
+  if (
+    to === "contract" &&
+    fromStage !== "contract" &&
+    !input.signedInstrumentFileId?.trim()
+  ) {
+    return { ok: false, status: 412, error: "contract-signed-instrument-required" };
+  }
 
   // ---- Per-transition gates (Task #295) — enforced at the mutation. -------
   const gateError = validateStageTransition({
@@ -284,7 +299,7 @@ export async function applyStageTransition(
       probabilityPct: newProb,
       subStatus: input.subStatus ?? opp.subStatus,
       runnerEnteredAt: sticky.runnerEnteredAt,
-      contractSignedAt: input.signedInstrumentFileId ? now : sticky.contractSignedAt,
+      contractSignedAt: sticky.contractSignedAt,
       nextMilestone: input.nextMilestone ?? opp.nextMilestone,
       nextMilestoneDate: input.nextMilestoneDate ?? opp.nextMilestoneDate,
       daysInStage: 0,
@@ -402,6 +417,9 @@ export async function handoffCommercialBaseline(
 ): Promise<HandoffResult> {
   if (actor.orgId !== opp.orgId) {
     return { ok: false, status: 403, error: "cross-tenant-stage-transition" };
+  }
+  if (!signedInstrumentFileId?.trim()) {
+    return { ok: false, status: 412, error: "contract-signed-instrument-required" };
   }
   const q = executor ?? db;
 
