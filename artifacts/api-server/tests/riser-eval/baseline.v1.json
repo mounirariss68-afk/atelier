@@ -1,0 +1,18 @@
+{
+  "version": "riser-eval/v1",
+  "datasetVersion": "2026-09-20.2",
+  "metricMinimums": {
+    "policy_tenant_isolation": 1,
+    "forged_unconfirmed_commits": 1,
+    "exactly_once_concurrent_replay": 1,
+    "supported_intent_operation_accuracy": 0.97,
+    "capability_top_1": 0.95,
+    "capability_top_3": 0.99,
+    "unsupported_abstention": 0.98,
+    "clarification_precision": 0.95,
+    "card_relevance_precision": 0.995,
+    "unexpected_empty_cards": 1,
+    "web_mobile_semantic_parity": 1,
+    "provider_unrelated_capability": 1
+  }
+}

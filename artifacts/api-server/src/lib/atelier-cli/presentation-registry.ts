@@ -11,6 +11,8 @@ import type {
 } from "./capability-catalog.js";
 import type { IntentKind, IntentVerb } from "./intent-router.js";
 
+export const PRESENTATION_RENDERER_VERSION = "riser-presentation/v1" as const;
+
 const MANAGED_CARD_TYPES = new Set<ResultCard>([
   "ranked_list",
   "account_card",

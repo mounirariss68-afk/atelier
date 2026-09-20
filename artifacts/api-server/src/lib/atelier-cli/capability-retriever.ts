@@ -49,6 +49,10 @@ const ALWAYS_INCLUDE = new Set([
   "find_screen",
 ]);
 
+export function isAlwaysIncludedTool(toolName: string): boolean {
+  return ALWAYS_INCLUDE.has(toolName);
+}
+
 /**
  * Task #741 — adaptive tool budget replacing the fixed 12-tool cap.
  * The BASE cap keeps the surface small for typical turns; when the
@@ -225,19 +229,43 @@ const COVERED_WRITE_MODULES: ReadonlySet<string> = new Set([
 
 let bootstrapDone = false;
 
-function summaryTextFor(entry: CapabilityEntry): string {
+export function summaryTextFor(entry: CapabilityEntry): string {
   const phrases: string[] = [];
   if (entry.representativePrompts?.en) phrases.push(...entry.representativePrompts.en);
   return [
+    ...phrases,
+    ...phrases,
     entry.toolName.replace(/_/g, " "),
     entry.module,
     entry.description,
-    ...phrases,
     Array.isArray(entry.slashAliases.en) ? entry.slashAliases.en.join(" ") : "",
   ]
     .filter(Boolean)
     .join(". ")
     .slice(0, 1500);
+}
+
+export async function scoreCapabilityRows(args: {
+  query: string;
+  rows: ReadonlyArray<{ toolName: string; vec: number[] }>;
+  eligibleNames: ReadonlySet<string>;
+  alreadySelected?: ReadonlySet<string>;
+  embed?: typeof embedText;
+}): Promise<Array<{ tool: string; score: number }>> {
+  const queryEmb = await (args.embed ?? embedText)(args.query || "");
+  const alreadySelected = args.alreadySelected ?? new Set<string>();
+  return args.rows
+    .filter(
+      (row) =>
+        args.eligibleNames.has(row.toolName) &&
+        !alreadySelected.has(row.toolName) &&
+        row.vec.length === queryEmb.dim,
+    )
+    .map((row) => ({
+      tool: row.toolName,
+      score: cosine(queryEmb.vec, row.vec),
+    }))
+    .sort((a, b) => b.score - a.score);
 }
 
 /**
@@ -401,12 +429,10 @@ export async function retrieveCapabilities(args: {
     return !isLegacyChatWrite(cap, dispatchTargets);
   });
 
-  const queryEmb = await embedText(args.query || "");
   // Capability-embedding fetch failures must propagate — silent
   // fallbacks were deleted along with mock mode.
   const all = await db.select().from(atelierCapabilityEmbeddings);
   const rows: Array<{ toolName: string; vec: number[] }> = all
-    .filter((r) => r.dim === queryEmb.dim)
     .map((r) => ({ toolName: r.toolName, vec: r.vec as number[] }));
 
   const eligibleNames = new Set(eligible.map((t) => t.name));
@@ -438,10 +464,12 @@ export async function retrieveCapabilities(args: {
   // 2. Ranked selection by cosine over the eligible pool — adaptive:
   // base budget by rank, extended while scores are near-tied at the
   // cutoff (Task #741), never past the overall cap.
-  const scored = rows
-    .filter((r) => eligibleNames.has(r.toolName) && !selected.has(r.toolName))
-    .map((r) => ({ tool: r.toolName, score: cosine(queryEmb.vec, r.vec) }))
-    .sort((a, b) => b.score - a.score);
+  const scored = await scoreCapabilityRows({
+    query: args.query,
+    rows,
+    eligibleNames,
+    alreadySelected: selected,
+  });
   const rankedPick = selectRankedAdaptive(scored, {
     baseBudget: rankedBudget,
     maxBudget: Math.max(rankedBudget, cap - selected.size),

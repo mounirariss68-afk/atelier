@@ -1,4 +1,5 @@
 import "../crm/scratch-db.js";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -21,6 +22,7 @@ import {
 import {
   assistantValueContainsCanary,
   authorizeAssistantProviderPayload,
+  redactAssistantValue,
 } from "@workspace/assistant-protocol";
 import {
   ASSISTANT_PAYLOAD_RETENTION_DAYS,
@@ -336,6 +338,20 @@ try {
   assert.equal(assistantValueContainsCanary(publicFrame), false);
   assert.equal(assistantValueContainsCanary(persistedTrace), false);
   assert.equal(safeCliErrorMessage(new Error(canary)).includes(canary), false);
+  assert.deepEqual(
+    redactAssistantValue({
+      options: [{ id: "exp_probe742_1789886745379_harbor" }],
+    }),
+    { options: [{ id: "exp_probe742_1789886745379_harbor" }] },
+  );
+  assert.deepEqual(
+    redactAssistantValue({ rejected: "exp_probe742_1789886745379_not_an_option" }),
+    { rejected: "exp_probe742_1789886745379_not_an_option" },
+  );
+  assert.deepEqual(
+    redactAssistantValue({ id: canary }),
+    { id: "[REDACTED]" },
+  );
 
   const telemetryLines: string[] = [];
   const originalLog = console.log;

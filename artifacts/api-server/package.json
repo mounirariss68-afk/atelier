@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "pnpm run check:riser-manifest && node ./build.mjs",
+    "build:production": "pnpm run test:riser-eval:canary && pnpm run build",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:roster-removal": "NODE_ENV=test tsx ./tests/crm/roster-removal-integration.ts",
@@ -157,6 +158,8 @@
     ,"test:riser-privacy": "CRM_TEST_DB_NAME=crm_test_riser_privacy tsx ./tests/riser-privacy/run.ts"
     ,"test:riser-observability": "CRM_TEST_DB_NAME=crm_test_riser_observability tsx ./tests/riser-observability/run.ts"
     ,"test:riser-controls": "CRM_TEST_DB_NAME=crm_test_riser_controls tsx ./tests/riser-controls/run.ts"
+    ,"test:riser-eval": "tsx ./tests/riser-eval/run.ts"
+    ,"test:riser-eval:canary": "RISER_EVAL_MODE=canary tsx ./tests/riser-eval/run.ts"
     ,"riser:legacy-turn-migration": "tsx ./scripts/riser-legacy-turn-migration.ts"
   },
   "dependencies": {

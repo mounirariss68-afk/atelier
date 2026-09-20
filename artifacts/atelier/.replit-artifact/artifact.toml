@@ -18,7 +18,7 @@ localPort = 24797
 run = "pnpm --filter @workspace/atelier run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/atelier", "run", "build" ]
+build = [ "sh", "-c", "pnpm --filter @workspace/api-server run test:riser-eval:canary && pnpm --filter @workspace/atelier run build" ]
 publicDir = "artifacts/atelier/dist/public"
 serve = "static"
 

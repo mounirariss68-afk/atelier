@@ -66,6 +66,7 @@ const LONG_SECRET_VALUE = /\b[A-Za-z0-9+/=_-]{32,}\b/g;
 const PLANTED_CANARY_VALUE = /\bRISER_CANARY_SECRET_[A-Za-z0-9_-]+\b/g;
 const IBAN_VALUE = /\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/i;
 const LONG_NUMBER_VALUE = /\b\d{12,}\b/;
+const OPAQUE_ENTITY_ID = /^(?:[a-z][a-z0-9]*_)+[a-z0-9_-]+$/i;
 
 export function classifyAssistantField(key: string): AssistantDataClass {
   if (/password|passcode|secret|token|authorization|cookie/i.test(key)) {
@@ -101,16 +102,31 @@ function redactAssistantValueToClass(
     return "[REDACTED]";
   }
   if (typeof value === "string") {
+    // Structured entity ids are protocol selectors, not prose. Preserve the
+    // app's opaque id format so an option rendered to a client can be sent
+    // back on the next turn. This exemption deliberately does not cover
+    // canaries or bearer values, and it applies only to an exact `id` key.
+    const preserveOpaqueId =
+      (key === "id" || key === "rejected") &&
+      OPAQUE_ENTITY_ID.test(value) &&
+      !PLANTED_CANARY_VALUE.test(value) &&
+      !BEARER_VALUE.test(value);
+    PLANTED_CANARY_VALUE.lastIndex = 0;
+    BEARER_VALUE.lastIndex = 0;
     let redacted = value
       .replace(BEARER_VALUE, "[REDACTED]")
       .replace(PLANTED_CANARY_VALUE, "[REDACTED]")
-      .replace(LONG_SECRET_VALUE, "[REDACTED]");
+      .replace(
+        LONG_SECRET_VALUE,
+        preserveOpaqueId ? (match: string) => match : () => "[REDACTED]",
+      );
     if (CLASS_RANK[maxClass] < CLASS_RANK[AssistantDataClass.RESTRICTED]) {
       redacted = redacted.replace(IBAN_VALUE, "[REDACTED]");
     }
     if (CLASS_RANK[maxClass] < CLASS_RANK[AssistantDataClass.CONFIDENTIAL]) {
       redacted = redacted.replace(EMAIL_VALUE, "[REDACTED]");
     }
+    LONG_SECRET_VALUE.lastIndex = 0;
     return redacted;
   }
   if (Array.isArray(value)) {

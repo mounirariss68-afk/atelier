@@ -22,6 +22,9 @@ import { z } from "zod";
 import { getPrivacyAuthorizedAnthropic } from "../assistant/provider-runtime.js";
 
 const HAIKU_MODEL = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
+export const INTENT_ROUTER_VERSION = "typed-intent/v1" as const;
+export const INTENT_ROUTER_PROMPT_VERSION = "intent-router-prompt/v1" as const;
+export const INTENT_ROUTER_MODEL_VERSION = HAIKU_MODEL;
 
 export type IntentVerb =
   | "read"

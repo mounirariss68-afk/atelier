@@ -1874,7 +1874,6 @@ async function modelStep(args: {
     let toolCall: ClaudeToolCall | null = null;
     if (tool) {
       let input: Record<string, unknown> = {};
-      let turnPersisted = false;
       try {
         input = tool.json ? (JSON.parse(tool.json) as Record<string, unknown>) : {};
       } catch {
@@ -3467,6 +3466,7 @@ export async function runTurn(
   const turnTz = normalizeChatTz(input.timezone);
 
   let aborted = false;
+  let turnPersisted = false;
   await enterQueue(persona.id, {
     cancelInflight: input.cancelInflight === true,
     abort: () => {

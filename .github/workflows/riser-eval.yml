@@ -1,0 +1,61 @@
+name: Riser release evaluation
+
+on:
+  pull_request:
+    paths:
+      - "artifacts/api-server/src/lib/assistant/**"
+      - "artifacts/api-server/src/lib/atelier-cli/**"
+      - "artifacts/api-server/src/routes/assistantRoutes.ts"
+      - "artifacts/api-server/src/routes/atelier/cliRoutes.ts"
+      - "artifacts/api-server/prompts/**"
+      - "artifacts/api-server/tests/riser-eval/**"
+      - "artifacts/atelier/src/components/cli/**"
+      - "artifacts/atelier-mobile/lib/**"
+      - "artifacts/atelier-mobile/components/ResultCards.tsx"
+      - "lib/assistant-protocol/**"
+      - "lib/chat-core/**"
+      - ".github/workflows/riser-eval.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Gate mode; use canary immediately before production canary"
+        required: true
+        type: choice
+        default: canary
+        options:
+          - canary
+          - ci
+
+concurrency:
+  group: riser-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-evaluation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RISER_EVAL_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'ci' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SESSION_SECRET: riser-eval-ci-session-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate Riser manifest
+        run: pnpm --filter @workspace/api-server run check:riser-manifest
+      - name: Run release-blocking evaluation
+        run: pnpm --filter @workspace/api-server run test:riser-eval
+      - name: Publish evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riser-eval-${{ env.RISER_EVAL_MODE }}
+          path: artifacts/api-server/tests/riser-eval/report.v1.json
+          if-no-files-found: error
