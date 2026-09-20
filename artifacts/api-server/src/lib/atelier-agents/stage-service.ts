@@ -14,7 +14,7 @@
  * `evaluate_gate` stays a read-only preview; enforcement now lives at the
  * mutation, not in whether the model remembered to call the preview.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   atelierOpportunities,
@@ -25,6 +25,11 @@ import {
   atelierCharterVersions,
   atelierPaneAItems,
   atelierWinLossDebriefs,
+  atelierDealPricings,
+  atelierCounterparty,
+  atelierContract,
+  atelierBillingRule,
+  atelierSoldPositionSnapshot,
 } from "@workspace/db";
 import {
   SALES_TO_PLM,
@@ -41,11 +46,30 @@ import {
 import { runCharterArchitect } from "./runner.js";
 import { ensureAssignmentGrant } from "../atelier-access-autogrant.js";
 import { mirrorEntityEmbedding } from "../atelier-cli/entity-resolver.js";
+import {
+  simulateStructure,
+  buildBillingHandoff,
+  normalizeStructureKind,
+  normalizeCostLines,
+  type StructureSimulation,
+} from "../atelier-pricing-structures.js";
+import type { MarginPolicy, RateCardRowLite } from "../atelier-pricing.js";
 
 type OppRow = typeof atelierOpportunities.$inferSelect;
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export interface StageActor {
@@ -226,6 +250,9 @@ export async function applyStageTransition(
     }
   }
 
+  // Commercial handoff is deliberately before the stage write.  A Contract
+  // transition must never leave a won opportunity without its pricing
+  // baseline and downstream records.
   const priorProb = opp.probabilityPct;
   const newProb =
     typeof input.newProbabilityPct === "number" && input.newProbabilityPct !== null
@@ -241,25 +268,40 @@ export async function applyStageTransition(
       contractSignedAt: opp.contractSignedAt ?? null,
     },
   });
-  const [updated] = await db
-    .update(atelierOpportunities)
-    .set({
+  let updated: OppRow = opp;
+  let transitionId = "";
+  const evidence = (input.evidenceArtifactIds ?? []) as string[];
+  try {
+    await db.transaction(async (tx) => {
+      if (to === "contract" && fromStage !== "contract") {
+        const handoff = await handoffCommercialBaseline(opp, actor, tx, input.signedInstrumentFileId);
+        if (!handoff.ok) throw new HandoffAbort(handoff.status, handoff.error);
+      }
+      [updated] = await tx
+        .update(atelierOpportunities)
+        .set({
       salesStage: to,
       probabilityPct: newProb,
       subStatus: input.subStatus ?? opp.subStatus,
       runnerEnteredAt: sticky.runnerEnteredAt,
-      contractSignedAt: sticky.contractSignedAt,
+      contractSignedAt: input.signedInstrumentFileId ? now : sticky.contractSignedAt,
       nextMilestone: input.nextMilestone ?? opp.nextMilestone,
       nextMilestoneDate: input.nextMilestoneDate ?? opp.nextMilestoneDate,
       daysInStage: 0,
       updatedAt: now,
-    })
-    .where(eq(atelierOpportunities.id, opp.id))
-    .returning();
+        })
+        .where(
+          and(
+            eq(atelierOpportunities.id, opp.id),
+            eq(atelierOpportunities.orgId, actor.orgId),
+            eq(atelierOpportunities.salesStage, opp.salesStage),
+          ),
+        )
+        .returning();
+      if (!updated) throw new HandoffAbort(409, "concurrent-stage-transition");
 
-  const transitionId = rid("stxn");
-  const evidence = (input.evidenceArtifactIds ?? []) as string[];
-  await db.insert(atelierOpportunityStageTransitions).values({
+      transitionId = rid("stxn");
+      await tx.insert(atelierOpportunityStageTransitions).values({
     id: transitionId,
     opportunityId: opp.id,
     fromStage,
@@ -279,8 +321,8 @@ export async function applyStageTransition(
     signaturePath: input.signaturePath ?? null,
     signedInstrumentFileId: input.signedInstrumentFileId ?? null,
     reasonCode: input.reasonCode ?? null,
-  });
-  await db.insert(atelierAuditEvents).values({
+      });
+      await tx.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: "opportunity",
     entityId: opp.id,
@@ -298,7 +340,12 @@ export async function applyStageTransition(
       source: input.source ?? "rest",
     },
     payloadSummary: `${actor.name} moved "${opp.name}" ${fromStage} → ${to} (prob ${priorProb}% → ${newProb}%): ${input.rationaleText.slice(0, 120)}`,
-  });
+      });
+    });
+  } catch (error) {
+    if (error instanceof HandoffAbort) return { ok: false, status: error.status, error: error.message };
+    throw error;
+  }
 
   // Contract entry → ensure a linked engagement exists + charter it.
   let firedCharter = false;
@@ -307,15 +354,6 @@ export async function applyStageTransition(
     const hook = await ensureEngagementForContract(updated, actor);
     firedCharter = hook.firedCharter;
     engagementHookError = hook.error;
-    // Task #434 — capture the immutable sold-position snapshot at first
-    // contract entry. Best-effort: a failure never blocks the stage move
-    // (the backfill route can capture it later), but it is logged.
-    try {
-      const { captureSoldPositionSnapshot } = await import("../atelier-margin-reporting.js");
-      await captureSoldPositionSnapshot(updated, { id: actor.id, name: actor.name }, "contract_stage");
-    } catch (err) {
-      console.warn("[atelier] sold-position snapshot capture failed (non-blocking)", err);
-    }
   }
 
   // Closed-deal Win/Loss debrief enqueue (contract is the working "won").
@@ -347,6 +385,351 @@ export async function applyStageTransition(
       createdAt: now.toISOString(),
     },
   };
+}
+
+type HandoffResult = { ok: true } | { ok: false; status: number; error: string };
+
+/**
+ * Atomically materialise the commercial baseline. IDs and unique constraints
+ * make retries and concurrent stage writers converge on the same four rows.
+ * This intentionally does not touch staffing, realization, or delivery data.
+ */
+export async function handoffCommercialBaseline(
+  opp: OppRow,
+  actor: StageActor,
+  executor?: any,
+  signedInstrumentFileId?: string | null,
+): Promise<HandoffResult> {
+  if (actor.orgId !== opp.orgId) {
+    return { ok: false, status: 403, error: "cross-tenant-stage-transition" };
+  }
+  const q = executor ?? db;
+
+  try {
+    const run = async (tx: any) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`commercial:${opp.orgId}:${opp.id}`}))`);
+      const [pricing] = await tx
+        .select()
+        .from(atelierDealPricings)
+        .where(
+          and(
+            eq(atelierDealPricings.orgId, opp.orgId),
+            eq(atelierDealPricings.opportunityId, opp.id),
+            isNull(atelierDealPricings.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!pricing || !(Number(pricing.computedPriceUsd) > 0)) {
+        throw new HandoffAbort(412, "contract-pricing-required");
+      }
+      const target = Number(pricing.targetMarginPct);
+      const sim = pricing.structureSim as unknown as
+        | (StructureSimulation & {
+            pricingBasis?: {
+              rateCardId?: string;
+              currency?: string;
+              rateCardRows?: unknown[];
+              policy?: Record<string, number>;
+            };
+          })
+        | null;
+      if (
+        !sim ||
+        !sim.pricingBasis ||
+        sim.pricingBasis.rateCardId !== pricing.rateCardId ||
+        !Array.isArray(sim.pricingBasis.rateCardRows) ||
+        sim.pricingBasis.rateCardRows.length === 0 ||
+        !sim.pricingBasis.policy
+      ) {
+        throw new HandoffAbort(412, "contract-pricing-basis-required");
+      }
+      const recomputedSim = simulateStructure({
+        kind: normalizeStructureKind(pricing.pricingModel),
+        params: pricing.structureParams as Record<string, unknown> | null,
+        teamMix: pricing.teamMix ?? [],
+        durationWeeks: Number(pricing.durationWeeks),
+        rateCardRows: sim.pricingBasis.rateCardRows as RateCardRowLite[],
+        policy: sim.pricingBasis.policy as unknown as MarginPolicy,
+        costLines: normalizeCostLines(pricing.costLines ?? []),
+      });
+      if (
+        canonicalJson(recomputedSim.scenarios) !== canonicalJson(sim.scenarios) ||
+        recomputedSim.riskAdjustedMarginPct !== sim.riskAdjustedMarginPct ||
+        recomputedSim.marginLockStatus !== sim.marginLockStatus
+      ) {
+        throw new HandoffAbort(412, "contract-pricing-basis-mismatch");
+      }
+      if (!(sim.scenarios.expected.revenueUsd > 0)) {
+        throw new HandoffAbort(412, "contract-pricing-required");
+      }
+      const margin = sim.riskAdjustedMarginPct;
+      if (sim.partnerOverrideRequired && !pricing.partnerOverrideId) {
+        throw new HandoffAbort(412, "contract-margin-approval-required");
+      }
+      if (sim.twoPartnerRequired && !pricing.countersignPartnerId) {
+        throw new HandoffAbort(412, "contract-countersign-required");
+      }
+
+      const [account] = await tx.select({ name: atelierAccounts.name })
+        .from(atelierAccounts)
+        .where(and(eq(atelierAccounts.orgId, opp.orgId), eq(atelierAccounts.id, opp.accountId))).limit(1);
+      if (!account) throw new HandoffAbort(412, "contract-account-required");
+      let [counterparty] = await tx
+        .select()
+        .from(atelierCounterparty)
+        .where(
+          and(
+            eq(atelierCounterparty.orgId, opp.orgId),
+            eq(atelierCounterparty.accountId, opp.accountId),
+            isNull(atelierCounterparty.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!counterparty) {
+        const [created] = await tx
+          .insert(atelierCounterparty)
+          .values({
+            id: `cp_${opp.accountId}`,
+            orgId: opp.orgId,
+            kind: "client",
+            legalName: account.name,
+            displayName: account.name,
+            accountId: opp.accountId,
+            jurisdiction: "",
+          })
+          .onConflictDoNothing({ target: atelierCounterparty.id })
+          .returning();
+        counterparty = created;
+      }
+      if (!counterparty) throw new Error("commercial-counterparty-create-failed");
+
+      const engagements = await tx.select()
+        .from(atelierEngagements)
+        .where(and(eq(atelierEngagements.orgId, opp.orgId), eq(atelierEngagements.opportunityId, opp.id), isNull(atelierEngagements.deletedAt)))
+        .limit(2);
+      if (engagements.length > 1) throw new HandoffAbort(409, "multiple-live-engagements-for-opportunity");
+      let eng = engagements[0];
+      if (!eng) {
+        const startDate = new Date().toISOString().slice(0, 10);
+        const [created] = await tx
+          .insert(atelierEngagements)
+          .values({
+            id: `eng_${opp.id}`,
+            orgId: opp.orgId,
+            slug: `${opp.slug}-delivery`.slice(0, 60),
+            name: `${opp.name} — delivery`,
+            opportunityId: opp.id,
+            accountId: opp.accountId,
+            plmStage: "mobilize",
+            partnerOwnerId: opp.partnerOwnerId,
+            engagementLeadId: opp.engagementLeadId,
+            startDate,
+            plannedEndDate: new Date(Date.now() + Math.max(1, Number(pricing.durationWeeks)) * 7 * 86400000)
+              .toISOString()
+              .slice(0, 10),
+          })
+          .onConflictDoNothing({ target: atelierEngagements.id })
+          .returning();
+        eng = created;
+      }
+      if (!eng) throw new Error("commercial-engagement-create-failed");
+
+      const startDate = eng.startDate;
+      const billing = buildBillingHandoff({ kind: sim.kind, sim, startDate });
+      const billingConfig = JSON.parse(JSON.stringify(billing.config));
+      const currency = sim.pricingBasis.currency ?? "USD";
+
+      const contracts = await tx
+        .select()
+        .from(atelierContract)
+        .where(
+          and(
+            eq(atelierContract.orgId, opp.orgId),
+            eq(atelierContract.opportunityId, opp.id),
+            isNull(atelierContract.deletedAt),
+          ),
+        )
+        .limit(2);
+      if (contracts.length > 1) throw new HandoffAbort(409, "multiple-live-contracts-for-opportunity");
+      let contract = contracts[0];
+      if (!contract) {
+        const [created] = await tx
+          .insert(atelierContract)
+          .values({
+            id: `contract_${opp.id}`,
+            orgId: opp.orgId,
+            instrumentType: "sow",
+            counterpartyId: counterparty.id,
+            engagementId: eng.id,
+            opportunityId: opp.id,
+            title: `${opp.name} — statement of work`,
+            status: "active",
+            currency,
+            contractValue: sim.scenarios.expected.revenueUsd,
+            contractValueUsd: sim.scenarios.expected.revenueUsd,
+            termStart: startDate,
+            termEnd: eng.plannedEndDate,
+            paymentTermsDays: sim.assumptions.paymentTermsDays,
+            fullyExecutedAt: new Date(),
+            metadata: {
+              handoff: "commercial_baseline",
+              pricingId: pricing.id,
+              signedInstrumentFileId: signedInstrumentFileId ?? null,
+            },
+          })
+          .onConflictDoNothing({ target: atelierContract.id })
+          .returning();
+        contract = created;
+      }
+      if (!contract) throw new Error("commercial-contract-create-failed");
+      if (
+        contract.status !== "active" ||
+        contract.engagementId !== eng.id ||
+        contract.counterpartyId !== counterparty.id ||
+        contract.currency !== currency ||
+        contract.contractValue !== sim.scenarios.expected.revenueUsd ||
+        contract.paymentTermsDays !== sim.assumptions.paymentTermsDays ||
+        (contract.metadata as Record<string, unknown> | null)?.pricingId !== pricing.id ||
+        (contract.metadata as Record<string, unknown> | null)?.signedInstrumentFileId !==
+          (signedInstrumentFileId ?? null) ||
+        contract.instrumentType !== "sow" ||
+        !contract.fullyExecutedAt ||
+        contract.contractValueUsd !== sim.scenarios.expected.revenueUsd ||
+        contract.termStart !== eng.startDate ||
+        contract.termEnd !== eng.plannedEndDate
+      ) {
+        throw new HandoffAbort(409, "existing-contract-does-not-match-commercial-baseline");
+      }
+
+      const billingRuleId = `bill_${eng.id}_baseline`;
+      const [insertedRule] = await tx
+        .insert(atelierBillingRule)
+        .values({
+          id: billingRuleId,
+          orgId: opp.orgId,
+          engagementId: eng.id,
+          accountId: opp.accountId,
+          ruleType: billing.ruleType,
+          currency,
+          paymentTermsDays: sim.assumptions.paymentTermsDays,
+          legalEntityId: eng.legalEntityId,
+          config: billingConfig,
+          notes: `${billing.notes} (commercial baseline for ${opp.id})`,
+          createdByUserId: actor.id,
+        })
+        .onConflictDoNothing({ target: atelierBillingRule.id })
+        .returning();
+      const [billingRule] = insertedRule
+        ? [insertedRule]
+        : await tx
+            .select()
+            .from(atelierBillingRule)
+            .where(and(eq(atelierBillingRule.id, billingRuleId), eq(atelierBillingRule.orgId, opp.orgId)))
+            .limit(1);
+      if (
+        !billingRule ||
+        billingRule.engagementId !== eng.id ||
+        billingRule.accountId !== opp.accountId ||
+        billingRule.legalEntityId !== eng.legalEntityId ||
+        billingRule.ruleType !== billing.ruleType ||
+        billingRule.currency !== currency ||
+        billingRule.paymentTermsDays !== sim.assumptions.paymentTermsDays ||
+        canonicalJson(billingRule.config) !== canonicalJson(billingConfig)
+      ) {
+        throw new HandoffAbort(409, "existing-billing-rule-does-not-match-commercial-baseline");
+      }
+
+      const snapshotId = `sold_${opp.id}`;
+      const teamMix = (pricing.teamMix ?? []) as Array<{
+        seniority: string;
+        role?: string;
+        ftePct: number;
+      }>;
+      const durationWeeks = Number(pricing.durationWeeks);
+      const soldHours = teamMix.reduce(
+        (sum: number, row) => sum + Number(row.ftePct || 0) * durationWeeks * 40,
+        0,
+      );
+      const [insertedSnapshot] = await tx.insert(atelierSoldPositionSnapshot).values({
+        id: snapshotId, orgId: opp.orgId, opportunityId: opp.id,
+        engagementId: eng.id, accountId: opp.accountId,
+        partnerOwnerId: opp.partnerOwnerId, source: "contract_stage",
+        hasPricing: true, pricingModel: pricing.pricingModel,
+        rateCardId: pricing.rateCardId, durationWeeks, teamMix, soldHours,
+        soldPriceUsd: sim.scenarios.expected.revenueUsd,
+        soldCostUsd: sim.scenarios.expected.costUsd,
+        soldMarginAmountUsd: sim.scenarios.expected.revenueUsd - sim.scenarios.expected.costUsd,
+        soldMarginPct: sim.scenarios.expected.marginPct, targetMarginPct: target,
+        soldEffectiveRateUsd: soldHours > 0 ? sim.scenarios.expected.revenueUsd / soldHours : 0,
+        currency,
+        pricingInputs: {
+          rateCardId: pricing.rateCardId,
+          pricingModel: pricing.pricingModel,
+          durationWeeks,
+          teamMix,
+          structureParams: pricing.structureParams,
+          costLines: normalizeCostLines(pricing.costLines ?? []),
+        },
+        pricingResults: { computedCostUsd: sim.scenarios.expected.costUsd, computedPriceUsd: sim.scenarios.expected.revenueUsd, computedMarginPct: sim.scenarios.expected.marginPct, riskAdjustedMarginPct: sim.riskAdjustedMarginPct, marginLockStatus: sim.marginLockStatus, structureSim: sim },
+        pricingProvenance: {
+          pricingId: pricing.id,
+          capturedBy: actor.id,
+          capturedAt: new Date().toISOString(),
+          source: "saved_deal_pricing",
+          signedInstrumentFileId: signedInstrumentFileId ?? null,
+          contractId: contract.id,
+          engagementId: eng.id,
+          billingRuleId,
+          approvals: {
+            partnerOverrideId: pricing.partnerOverrideId,
+            partnerOverrideAt: pricing.partnerOverrideAt?.toISOString() ?? null,
+            partnerOverrideRationale: pricing.partnerOverrideRationale,
+            countersignPartnerId: pricing.countersignPartnerId,
+            countersignAt: pricing.countersignAt?.toISOString() ?? null,
+            countersignRationale: pricing.countersignRationale,
+          },
+        },
+        createdByUserId: actor.id,
+      }).onConflictDoNothing({ target: atelierSoldPositionSnapshot.id }).returning();
+      const [snapshot] = insertedSnapshot
+        ? [insertedSnapshot]
+        : await tx
+            .select()
+            .from(atelierSoldPositionSnapshot)
+            .where(
+              and(
+                eq(atelierSoldPositionSnapshot.id, snapshotId),
+                eq(atelierSoldPositionSnapshot.orgId, opp.orgId),
+              ),
+            )
+            .limit(1);
+      const provenance = snapshot?.pricingProvenance as Record<string, unknown> | null;
+      if (
+        !snapshot ||
+        provenance?.pricingId !== pricing.id ||
+        provenance?.contractId !== contract.id ||
+        provenance?.engagementId !== eng.id ||
+        provenance?.billingRuleId !== billingRuleId
+      ) {
+        throw new HandoffAbort(409, "existing-snapshot-does-not-match-commercial-baseline");
+      }
+
+      await tx.update(atelierDealPricings).set({ billingRuleId, billingHandoffAt: new Date() })
+        .where(eq(atelierDealPricings.id, pricing.id));
+    };
+    if (executor) await run(q);
+    else await db.transaction(run);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof HandoffAbort) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 409, error: error instanceof Error ? error.message : "commercial-handoff-failed" };
+  }
+}
+
+class HandoffAbort extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
 }
 
 /**

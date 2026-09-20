@@ -75,6 +75,10 @@ export const atelierSoldPositionSnapshot = pgTable(
     /** Effective sold rate = soldPriceUsd / soldHours (0 when hours unknown). */
     soldEffectiveRateUsd: doublePrecision("sold_effective_rate_usd").notNull().default(0),
     currency: text("currency").notNull().default("USD"),
+    /** Complete commercial input/output/provenance freeze at handoff. */
+    pricingInputs: jsonb("pricing_inputs").notNull().default({}),
+    pricingResults: jsonb("pricing_results").notNull().default({}),
+    pricingProvenance: jsonb("pricing_provenance").notNull().default({}),
     ...COMMON,
   },
   (t) => [

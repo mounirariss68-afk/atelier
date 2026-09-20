@@ -125,12 +125,14 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
           durationWeeks: draftWeeks,
           pricingModel: draftModel,
           rateCardId: data.pricing.rateCardId,
+          structureParams: draftParams,
+          costLines: draftCostLines,
         },
       });
     }, 350);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftMix, draftWeeks, draftModel, oppId, data?.pricing?.rateCardId]);
+  }, [draftMix, draftWeeks, draftModel, draftParams, draftCostLines, oppId, data?.pricing?.rateCardId]);
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   if (isError || !data) {
@@ -175,6 +177,8 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
         durationWeeks: draftWeeks,
         pricingModel: draftModel,
         rateCardId: pricing.rateCardId,
+        structureParams: draftParams,
+        costLines: draftCostLines,
       },
     });
   };

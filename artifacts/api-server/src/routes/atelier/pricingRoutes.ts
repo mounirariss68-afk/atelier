@@ -132,6 +132,15 @@ async function loadRateCardRows(rateCardId: string): Promise<RateCardRowLite[]> 
   }));
 }
 
+async function loadRateCardCurrency(rateCardId: string): Promise<string> {
+  const [card] = await db
+    .select({ currency: atelierRateCards.currency })
+    .from(atelierRateCards)
+    .where(eq(atelierRateCards.id, rateCardId))
+    .limit(1);
+  return card?.currency ?? "USD";
+}
+
 async function defaultRateCardId(): Promise<string | null> {
   const [card] = await db
     .select()
@@ -446,6 +455,24 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     res.status(409).json({ error: "no-active-rate-card" });
     return;
   }
+  const [opportunity] = await db
+    .select({ salesStage: atelierOpportunities.salesStage })
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.id, req.params.oppId),
+        eq(atelierOpportunities.orgId, me.orgId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (opportunity?.salesStage === "contract") {
+    res.status(409).json({
+      error: "signed-pricing-requires-change-order",
+      hint: "Signed commercial terms can only change through the audited change-order/rebaseline flow.",
+    });
+    return;
+  }
   const teamMix: TeamMixEntry[] = Array.isArray(req.body?.teamMix) ? req.body.teamMix : (existing.teamMix as TeamMixEntry[]);
   const durationWeeks: number = typeof req.body?.durationWeeks === "number" ? req.body.durationWeeks : existing.durationWeeks;
   const pricingModel: string = typeof req.body?.pricingModel === "string" ? req.body.pricingModel : existing.pricingModel;
@@ -460,6 +487,7 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     Array.isArray(req.body?.costLines) ? req.body.costLines : (existing.costLines ?? []),
   );
   const rateCardRows = await loadRateCardRows(rateCardId);
+  const rateCardCurrency = await loadRateCardCurrency(rateCardId);
   const compute = computePricing({ teamMix, durationWeeks, rateCardRows, policy });
 
   // Task #435 — structure simulation for the chosen pricing model. The
@@ -479,12 +507,9 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
   // Headline computed figures include absorbed non-labor cost (Task #663);
   // pass-through stays out of margin. With no cost lines this is identical
   // to the legacy labor-only compute.
-  const absorbedNonLabor = sim.costStack.absorbedNonLaborUsd;
-  const computedCostUsd = Math.round((compute.computedCostUsd + absorbedNonLabor) * 100) / 100;
-  const computedMarginPct =
-    compute.computedPriceUsd > 0
-      ? Math.round(((compute.computedPriceUsd - computedCostUsd) / compute.computedPriceUsd) * 10000) / 10000
-      : 0;
+  const computedCostUsd = sim.scenarios.expected.costUsd;
+  const computedPriceUsd = sim.scenarios.expected.revenueUsd;
+  const computedMarginPct = sim.scenarios.expected.marginPct;
 
   // Governance: if any economic input changed, invalidate prior
   // single-Partner override + two-Partner countersign so a stale approval
@@ -504,7 +529,7 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     pricingModel,
     rateCardId,
     computedCostUsd,
-    computedPriceUsd: compute.computedPriceUsd,
+    computedPriceUsd,
     computedMarginPct,
     costLines: costLines as unknown as Array<Record<string, unknown>>,
     // Margin lock gates on the risk-adjusted margin from the structure
@@ -513,7 +538,25 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     marginLockStatus: sim.marginLockStatus,
     targetMarginPct: policy.targetMarginPct,
     structureParams: structureParams ?? null,
-    structureSim: sim as unknown as Record<string, unknown>,
+    structureSim: {
+      ...sim,
+      pricingBasis: {
+        rateCardId,
+        currency: rateCardCurrency,
+        rateCardRows: rateCardRows.map((row) => ({
+          seniority: row.seniority,
+          dayRateInternalCost: row.dayRateInternalCost,
+          dayRateClientPrice: row.dayRateClientPrice,
+          overheadPct: row.overheadPct,
+        })),
+        policy: {
+          targetMarginPct: policy.targetMarginPct,
+          amberThresholdPct: policy.amberThresholdPct,
+          redThresholdPct: policy.redThresholdPct,
+          twoPartnerThresholdPct: policy.twoPartnerThresholdPct,
+        },
+      },
+    } as unknown as Record<string, unknown>,
     riskAdjustedMarginPct: sim.riskAdjustedMarginPct,
     updatedAt: new Date(),
   };
@@ -559,7 +602,7 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
       teamMix,
       durationWeeks,
       pricingModel,
-      computedMarginPct: compute.computedMarginPct,
+      computedMarginPct,
       riskAdjustedMarginPct: sim.riskAdjustedMarginPct,
       structureKind,
       marginLockStatus: sim.marginLockStatus,
@@ -585,7 +628,33 @@ router.post("/opportunities/:oppId/pricing/whatif", async (req, res) => {
   const rateCardId: string = typeof req.body?.rateCardId === "string" ? req.body.rateCardId : existing.rateCardId;
   const rateCardRows = await loadRateCardRows(rateCardId);
   const compute = computePricing({ teamMix, durationWeeks, rateCardRows, policy });
-  res.json({ ...compute, policy });
+  const costLines = normalizeCostLines(
+    Array.isArray(req.body?.costLines) ? req.body.costLines : (existing.costLines ?? []),
+  );
+  const model = typeof req.body?.pricingModel === "string"
+    ? req.body.pricingModel
+    : (existing.pricingModel as string);
+  const sim = simulateStructure({
+    kind: normalizeStructureKind(model),
+    params: req.body?.structureParams && typeof req.body.structureParams === "object"
+      ? (req.body.structureParams as StructureParams)
+      : ((existing.structureParams as StructureParams | null) ?? null),
+    teamMix,
+    durationWeeks,
+    rateCardRows,
+    policy,
+    costLines,
+  });
+  res.json({
+    ...compute,
+    computedCostUsd: sim.scenarios.expected.costUsd,
+    computedPriceUsd: sim.scenarios.expected.revenueUsd,
+    computedMarginPct: sim.scenarios.expected.marginPct,
+    riskAdjustedMarginPct: sim.riskAdjustedMarginPct,
+    marginLockStatus: sim.marginLockStatus,
+    structureSim: sim,
+    policy,
+  });
 });
 
 // =============================================================
@@ -809,6 +878,30 @@ router.post("/opportunities/:oppId/pricing/handoff-billing", async (req, res) =>
   const me = ensurePersona(req, res);
   if (!me) return;
   if (!requirePartner(me, res)) return;
+  res.status(409).json({
+    error: "billing-handoff-occurs-on-contract",
+    hint: "Move the opportunity to Contract to create the guarded commercial baseline and billing handoff atomically.",
+  });
+  return;
+  /*
+  const [wonOpportunity] = await db
+    .select({ salesStage: atelierOpportunities.salesStage })
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.id, req.params.oppId),
+        eq(atelierOpportunities.orgId, me.orgId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (wonOpportunity?.salesStage === "contract") {
+    res.status(409).json({
+      error: "signed-pricing-requires-change-order",
+      hint: "The won-deal billing baseline is immutable; use the audited change-order/rebaseline flow.",
+    });
+    return;
+  }
   const [pricing] = await db
     .select()
     .from(atelierDealPricings)
@@ -888,6 +981,7 @@ router.post("/opportunities/:oppId/pricing/handoff-billing", async (req, res) =>
     payloadSummary: `${me.name} handed off ${sim.label} pricing to billing rule ${ruleId} on ${eng.name}`,
   });
   res.status(201).json({ rule, plan, sim });
+  */
 });
 
 // =============================================================
