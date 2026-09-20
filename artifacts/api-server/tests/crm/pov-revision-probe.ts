@@ -483,7 +483,9 @@ async function main() {
       for (let i = 0; i < 240; i++) {
         await new Promise((r) => setTimeout(r, 250));
         const s = await call("GET", `/povs/${id}/draft-status`);
-        if (s.body?.status && s.body.status !== "running") return s.body;
+        if (s.body?.status === "done" || s.body?.status === "failed") {
+          return s.body;
+        }
       }
       return { status: "timeout" };
     }
