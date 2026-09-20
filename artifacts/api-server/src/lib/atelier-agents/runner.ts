@@ -646,137 +646,91 @@ export async function proposeProfileUpdatesFromScout(args: {
     .from(atelierOpportunities)
     .where(eq(atelierOpportunities.id, args.opportunityId));
   if (!opp?.accountId) return;
-  const [account] = await db
-    .select()
-    .from(atelierAccounts)
-    .where(and(eq(atelierAccounts.id, opp.accountId), isNull(atelierAccounts.deletedAt)));
-  if (!account) return;
-
-  const proposals: PendingProfileUpdate[] = [];
-
-  const now = new Date().toISOString();
   const facts = (args.output as {
     facts?: Array<{ statement?: string; sourceUrl?: string; sourceTitle?: string; topic?: string }>;
   }).facts ?? [];
+  await enqueueProfileUpdateProposals({
+    accountId: opp.accountId,
+    build: (account) => {
+      const proposals: PendingProfileUpdate[] = [];
+      const now = new Date().toISOString();
+      const expiresAt = profileUpdateExpiresAt();
+      const existingQueue = (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+      const blockedKeys = new Set(
+        existingQueue
+          .filter((u) => isLivePendingProfileUpdate(u) || u.status === "rejected")
+          .map(proposalKey),
+      );
+      const push = (field: string, fromValue: unknown, toValue: unknown, rationale: string) => {
+        if (materiallyEqual(toValue, fromValue)) return;
+        const key = proposalKey({ field, toValue });
+        if (blockedKeys.has(key)) return;
+        blockedKeys.add(key);
+        proposals.push({
+          id: `pp_${rid("x").slice(2)}`,
+          proposedBy: args.proposedBy,
+          proposedAt: now,
+          field,
+          fromValue,
+          toValue,
+          rationale,
+          oppId: args.opportunityId,
+          status: "pending",
+          expiresAt,
+        });
+      };
 
-  // Task #9 — proposal dedupe. Creating several opportunities on one account
-  // re-runs the Scout each time; without a guard the queue floods with
-  // repeated identical suggestions. Mirror buildCartographerProposals: skip
-  // any candidate whose field+value key matches an existing pending OR
-  // rejected proposal, and skip no-ops whose value is already live.
-  const existingQueue = (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
-  const blockedKeys = new Set<string>();
-  for (const u of existingQueue) {
-    if (u.status === "pending" || u.status === "rejected") {
-      blockedKeys.add(proposalKey(u));
-    }
-  }
-  const push = (
-    field: string,
-    fromValue: unknown,
-    toValue: unknown,
-    rationale: string,
-  ) => {
-    if (materiallyEqual(toValue, fromValue)) return;
-    const key = proposalKey({ field, toValue });
-    if (blockedKeys.has(key)) return;
-    blockedKeys.add(key);
-    proposals.push({
-      id: `pp_${rid("x").slice(2)}`,
-      proposedBy: args.proposedBy,
-      proposedAt: now,
-      field,
-      fromValue,
-      toValue,
-      rationale,
-      oppId: args.opportunityId,
-      status: "pending",
-    });
-  };
-
-  // 1) strategicPriorities deltas
-  const existingPriorities = (account.strategicPriorities as string[] | null) ?? [];
-  const priorityFacts = facts.filter((f) => /priorit|strateg|initiative/i.test(f.statement ?? ""));
-  for (const f of priorityFacts.slice(0, 3)) {
-    if (!f.statement) continue;
-    const candidate = f.statement.slice(0, 200);
-    // Already a live priority — nothing to propose.
-    if (existingPriorities.includes(candidate)) continue;
-    push(
-      "strategicPriorities",
-      existingPriorities,
-      [...existingPriorities, candidate],
-      `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`,
-    );
-  }
-
-  // 2) hqCity / sector enrichment
-  const hqMatch = facts.find((f) => /headquarter|HQ|based in|head office/i.test(f.statement ?? ""));
-  if (hqMatch?.statement && !account.hqCity) {
-    push(
-      "hqCity",
-      account.hqCity,
-      hqMatch.statement.slice(0, 100),
-      `Pursuit Scout HQ enrichment: ${hqMatch.sourceTitle ?? hqMatch.sourceUrl ?? "evidence pending"}`,
-    );
-  }
-  const sectorMatch = facts.find((f) => /sector|industry|vertical/i.test(f.statement ?? ""));
-  if (sectorMatch?.statement) {
-    push(
-      "sector",
-      account.sector,
-      sectorMatch.statement.slice(0, 100),
-      `Pursuit Scout sector signal: ${sectorMatch.sourceTitle ?? sectorMatch.sourceUrl ?? "evidence pending"}`,
-    );
-  }
-
-  // 3) sourceSignals enrichment — every fact with a URL becomes a candidate signal.
-  // Also skip URLs already sitting in a pending sourceSignals proposal so a
-  // repeat scout doesn't re-propose the same links with a different base array.
-  const existingSignals = (account.sourceSignals as Array<{ url: string }> | null) ?? [];
-  const knownUrls = new Set(existingSignals.map((s) => s.url));
-  for (const u of existingQueue) {
-    if (u.status !== "pending" || u.field !== "sourceSignals") continue;
-    for (const s of (u.toValue as Array<{ url?: string }> | null) ?? []) {
-      if (s?.url) knownUrls.add(s.url);
-    }
-  }
-  const newSignals = facts
-    .filter((f) => f.sourceUrl && !knownUrls.has(f.sourceUrl))
-    .slice(0, 5)
-    .map((f) => ({
-      kind: /linkedin/i.test(f.sourceUrl ?? "") ? "linkedin" : /press|news/i.test(f.sourceUrl ?? "") ? "news" : "press",
-      title: f.sourceTitle ?? f.statement?.slice(0, 80) ?? "Pursuit Scout finding",
-      url: f.sourceUrl as string,
-      summary: f.statement?.slice(0, 240),
-      publishedAt: now,
-      confidence: "amber" as const,
-    }));
-  if (newSignals.length > 0) {
-    push(
-      "sourceSignals",
-      existingSignals,
-      [...existingSignals, ...newSignals],
-      `Pursuit Scout surfaced ${newSignals.length} new signal(s) for review.`,
-    );
-  }
-
-  if (proposals.length === 0) return;
-  const queue = ((account.pendingProfileUpdates as typeof proposals | null) ?? []).concat(proposals);
-  await db
-    .update(atelierAccounts)
-    .set({ pendingProfileUpdates: queue, updatedAt: new Date() })
-    .where(eq(atelierAccounts.id, account.id));
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "account",
-    entityId: account.id,
-    actorType: "agent",
-    actorId: args.proposedBy,
-    actorLabel: "Pursuit Scout",
-    action: "account.profile.proposeUpdate",
-    payload: { count: proposals.length, oppId: args.opportunityId },
-    payloadSummary: `Pursuit Scout proposed ${proposals.length} profile update(s) for "${account.name}".`,
+      const existingPriorities = (account.strategicPriorities as string[] | null) ?? [];
+      for (const f of facts.filter((x) => /priorit|strateg|initiative/i.test(x.statement ?? "")).slice(0, 3)) {
+        if (!f.statement) continue;
+        const candidate = f.statement.slice(0, 200);
+        if (!existingPriorities.includes(candidate)) {
+          push("strategicPriorities", existingPriorities, [...existingPriorities, candidate],
+            `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`);
+        }
+      }
+      const hq = facts.find((f) => /headquarter|HQ|based in|head office/i.test(f.statement ?? ""));
+      if (hq?.statement && !account.hqCity) {
+        push("hqCity", account.hqCity, hq.statement.slice(0, 100),
+          `Pursuit Scout HQ enrichment: ${hq.sourceTitle ?? hq.sourceUrl ?? "evidence pending"}`);
+      }
+      const sector = facts.find((f) => /sector|industry|vertical/i.test(f.statement ?? ""));
+      if (sector?.statement) {
+        push("sector", account.sector, sector.statement.slice(0, 100),
+          `Pursuit Scout sector signal: ${sector.sourceTitle ?? sector.sourceUrl ?? "evidence pending"}`);
+      }
+      const existingSignals = (account.sourceSignals as Array<{ url: string }> | null) ?? [];
+      const knownUrls = new Set(existingSignals.map((s) => s.url));
+      for (const u of existingQueue) {
+        if (!isLivePendingProfileUpdate(u) || u.field !== "sourceSignals") continue;
+        for (const s of (u.toValue as Array<{ url?: string }> | null) ?? []) {
+          if (s?.url) knownUrls.add(s.url);
+        }
+      }
+      const newSignals = facts
+        .filter((f) => f.sourceUrl && !knownUrls.has(f.sourceUrl))
+        .slice(0, 5)
+        .map((f) => ({
+          kind: /linkedin/i.test(f.sourceUrl ?? "") ? "linkedin" : /press|news/i.test(f.sourceUrl ?? "") ? "news" : "press",
+          title: f.sourceTitle ?? f.statement?.slice(0, 80) ?? "Pursuit Scout finding",
+          url: f.sourceUrl as string,
+          summary: f.statement?.slice(0, 240),
+          publishedAt: now,
+          confidence: "amber" as const,
+        }));
+      if (newSignals.length > 0) {
+        push("sourceSignals", existingSignals, [...existingSignals, ...newSignals],
+          `Pursuit Scout surfaced ${newSignals.length} new signal(s) for review.`);
+      }
+      return proposals;
+    },
+    audit: {
+      actorId: args.proposedBy,
+      actorLabel: "Pursuit Scout",
+      payload: (accepted) => ({ count: accepted.length, oppId: args.opportunityId }),
+      summary: (lockedAccount, accepted) =>
+        `Pursuit Scout proposed ${accepted.length} profile update(s) for "${lockedAccount.name}".`,
+    },
   });
 }
 
@@ -807,6 +761,100 @@ export interface PendingProfileUpdate {
   originalToValue?: unknown;
   decidedAt?: string;
   decidedBy?: string;
+  expiresAt?: string;
+}
+
+export const PROFILE_UPDATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function profileUpdateExpiresAt(now = Date.now()): string {
+  return new Date(now + PROFILE_UPDATE_TTL_MS).toISOString();
+}
+
+export function isLivePendingProfileUpdate(
+  update: Pick<PendingProfileUpdate, "status" | "expiresAt">,
+  now = Date.now(),
+): boolean {
+  return (
+    update.status === "pending" &&
+    (!update.expiresAt || Date.parse(update.expiresAt) > now)
+  );
+}
+
+/**
+ * The sole JSON-queue append path for account enrichment producers.
+ * Rebuilds against a row-locked account snapshot so a producer can never
+ * overwrite an approval/rejection or another producer's append.
+ */
+export async function enqueueProfileUpdateProposals(args: {
+  accountId: string;
+  build: (
+    account: typeof atelierAccounts.$inferSelect,
+  ) => PendingProfileUpdate[] | Promise<PendingProfileUpdate[]>;
+  audit: {
+    actorId: string;
+    actorLabel: string;
+    payload: Record<string, unknown> | ((proposals: PendingProfileUpdate[]) => Record<string, unknown>);
+    summary: (
+      account: typeof atelierAccounts.$inferSelect,
+      proposals: PendingProfileUpdate[],
+    ) => string;
+    auditWhenEmpty?: boolean;
+  };
+}): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [account] = await tx
+      .select()
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, args.accountId), isNull(atelierAccounts.deletedAt)))
+      .for("update");
+    if (!account) return 0;
+
+    const now = Date.now();
+    const existing = (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+    const blocked = new Set(
+      existing
+        .filter((u) => isLivePendingProfileUpdate(u, now) || u.status === "rejected")
+        .map(proposalKey),
+    );
+    const proposals: PendingProfileUpdate[] = [];
+    for (const raw of await args.build(account)) {
+      const proposal = {
+        ...raw,
+        expiresAt: raw.expiresAt ?? profileUpdateExpiresAt(now),
+      };
+      const key = proposalKey(proposal);
+      if (blocked.has(key)) continue;
+      blocked.add(key);
+      proposals.push(proposal);
+    }
+
+    if (proposals.length > 0) {
+      await tx
+        .update(atelierAccounts)
+        .set({
+          pendingProfileUpdates: existing.concat(proposals),
+          updatedAt: new Date(now),
+        })
+        .where(eq(atelierAccounts.id, account.id));
+    }
+    if (proposals.length > 0 || args.audit.auditWhenEmpty) {
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "account",
+        entityId: account.id,
+        actorType: "agent",
+        actorId: args.audit.actorId,
+        actorLabel: args.audit.actorLabel,
+        action: "account.profile.proposeUpdate",
+        payload:
+          typeof args.audit.payload === "function"
+            ? args.audit.payload(proposals)
+            : args.audit.payload,
+        payloadSummary: args.audit.summary(account, proposals),
+      });
+    }
+    return proposals.length;
+  });
 }
 
 /** Deterministic JSON: object keys sorted recursively. */
@@ -849,13 +897,15 @@ export function buildCartographerProposals(args: {
 }): PendingProfileUpdate[] {
   const { output, account } = args;
   const now = new Date().toISOString();
+  const expiresAt = profileUpdateExpiresAt();
 
   // Keys already represented in the queue (pending or rejected). A candidate
   // matching one of these is dropped so we neither duplicate a live proposal
   // nor resurface a rejected one.
   const blockedKeys = new Set<string>();
   for (const u of (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[]) {
-    if (u.status === "pending" || u.status === "rejected") {
+    const pendingStillLive = isLivePendingProfileUpdate(u);
+    if (pendingStillLive || u.status === "rejected") {
       blockedKeys.add(proposalKey(u));
     }
   }
@@ -882,6 +932,7 @@ export function buildCartographerProposals(args: {
       toValue,
       rationale,
       status: "pending",
+      expiresAt,
       ...(meta ? { meta } : {}),
     });
   };
@@ -4135,6 +4186,7 @@ export function buildExecutiveMapperProposals(args: {
 }): PendingProfileUpdate[] {
   const { output, account } = args;
   const now = new Date().toISOString();
+  const expiresAt = profileUpdateExpiresAt();
   // Fuzzy-human blocking across reruns: a queued (pending) contact proposal
   // blocks ANY spelling variant of the same person — one proposal per human,
   // ever, until it's resolved. A rejected proposal blocks re-proposing the
@@ -4147,7 +4199,7 @@ export function buildExecutiveMapperProposals(args: {
   }> = [];
   const blockedKeys = new Set<string>();
   for (const u of (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[]) {
-    if (u.status !== "pending" && u.status !== "rejected") continue;
+    if (!isLivePendingProfileUpdate(u) && u.status !== "rejected") continue;
     blockedKeys.add(proposalKey(u));
     if (u.field === "contact") {
       const tv = u.toValue as { fullName?: unknown; title?: unknown } | null;
@@ -4155,7 +4207,7 @@ export function buildExecutiveMapperProposals(args: {
         priorContactProposals.push({
           fullName: tv.fullName,
           title: typeof tv.title === "string" ? tv.title : null,
-          status: u.status,
+          status: u.status === "rejected" ? "rejected" : "pending",
         });
       }
     }
@@ -4264,6 +4316,7 @@ export function buildExecutiveMapperProposals(args: {
       toValue,
       rationale: `Executive Mapper ${what}.`,
       status: "pending",
+      expiresAt,
       meta: {
         reportsToName: dm.reportsToName ?? null,
         // Task #958 — the review UI must present enrichments of a known

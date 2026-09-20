@@ -596,8 +596,8 @@ export function CreateAccountDialog({
       toast({
         title: "Account created",
         description: researchPayload
-          ? `Saved with ${cleanStakeholders.length} reviewed stakeholder${cleanStakeholders.length === 1 ? "" : "s"}.`
-          : "Cartographer is researching this account…",
+          ? `Saved the reviewed research and ${cleanStakeholders.length} reviewed stakeholder${cleanStakeholders.length === 1 ? "" : "s"}.`
+          : "Base account saved. Cartographer suggestions will wait for partner review.",
       });
       setOpen(false);
       setLocation(`/accounts/${res.id}`);
@@ -625,7 +625,9 @@ export function CreateAccountDialog({
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">New account</DialogTitle>
           <DialogDescription className="text-text-mute">
-            Capture the firm shape; Account Cartographer auto-runs on create to seed firmographics, signals, and proposed contacts.
+            {research
+              ? "Review the account details and researched findings below. Creating the account saves exactly this reviewed information; no second research run is made."
+              : "Creating the account saves only the details in this form. Account Cartographer then researches the firm and sends every suggested enrichment to partner review before anything else is saved."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-5 py-3">

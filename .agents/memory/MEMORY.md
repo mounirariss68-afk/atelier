@@ -150,3 +150,4 @@
 - [Riser reviewed manifest authority](riser-reviewed-manifest-authority.md) — runtime catalog must exactly match the checked-in 326-entry manifest; durable work pins its hash and stale pins fail closed.
 - [Riser route conformance](riser-route-conformance.md) — annotation inventories are baselines, not equivalence; C16 needs shared executors plus behavioral evidence for every claimed dimension.
 - [Riser protocol compatibility](riser-protocol-compatibility.md) — canonical APIs require explicit negotiation; semantic retries preserve one turn sequence domain and the stored terminal outcome.
+- [Account enrichment approval boundary](account-enrichment-governance.md) — base create saves reviewed inputs only; every later AI enrichment uses one locked, expiring proposal queue.

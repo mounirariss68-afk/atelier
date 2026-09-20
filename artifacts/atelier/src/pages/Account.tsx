@@ -315,7 +315,15 @@ export default function Account() {
   }
 
   const a = ws.account;
-  const pending = (a.pendingProfileUpdates ?? []).filter((p) => p.status === "pending");
+  const pending = (a.pendingProfileUpdates ?? []).filter(
+    (p) => {
+      const expiresAt = (p as typeof p & { expiresAt?: string }).expiresAt;
+      return (
+        p.status === "pending" &&
+        (!expiresAt || Date.parse(expiresAt) > Date.now())
+      );
+    },
+  );
   const isArchived = a.status === "archived";
   const canArchive = !!me && (me.role === "founding_partner" || me.role === "partner");
   const canPermanentlyDelete = !!me && me.role === "founding_partner";

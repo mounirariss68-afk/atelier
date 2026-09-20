@@ -1353,6 +1353,14 @@ function AccountProposalCard({
         </p>
       ) : null}
 
+      {!degraded ? (
+        <p className="mt-2 rounded-lg border border-gold/20 bg-gold/5 p-2.5 text-xs leading-relaxed text-text-mute">
+          {ar
+            ? "ستراجع هذه النتائج في النموذج التالي. إنشاء الحساب يحفظ فقط التفاصيل والبحث الذي توافق عليه هناك؛ وأي بحث لاحق يُرسل إلى قائمة مراجعة الشريك."
+            : "Review these findings in the next form. Creating the account saves only the details and research you approve there; any later research goes to the partner review queue."}
+        </p>
+      ) : null}
+
       {summary ? (
         <p className="mt-2 text-sm leading-relaxed text-text-mute">{summary}</p>
       ) : null}

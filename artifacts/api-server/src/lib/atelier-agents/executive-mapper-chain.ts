@@ -30,7 +30,7 @@ import {
 import {
   runExecutiveMapper,
   buildExecutiveMapperProposals,
-  type PendingProfileUpdate,
+  enqueueProfileUpdateProposals,
 } from "./runner.js";
 import type { CriticalRoleCoverageEntry } from "./critical-roles.js";
 
@@ -264,51 +264,37 @@ async function runExecutiveMapperAndQueueInner(
     actorLabel: "Executive Mapper",
   });
 
-  // Re-load for the freshest queue — the LLM run takes minutes and other
-  // writers (Cartographer persist, partner edits) may have touched the row.
-  const fresh = (await loadAccount(a.id)) ?? a;
-  const proposals = buildExecutiveMapperProposals({
-    output,
-    account: fresh,
-    existingContacts,
-  });
-
-  const queue = (
-    (fresh.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []
-  ).concat(proposals);
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(atelierAccounts)
-      .set({ pendingProfileUpdates: queue, updatedAt: new Date() })
-      .where(eq(atelierAccounts.id, a.id));
-    await tx.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: a.id,
-      actorType: "agent",
+  const proposedCount = await enqueueProfileUpdateProposals({
+    accountId: a.id,
+    build: (lockedAccount) =>
+      buildExecutiveMapperProposals({
+        output,
+        account: lockedAccount,
+        existingContacts,
+      }),
+    audit: {
       actorId: "ag_executive_mapper",
       actorLabel: "Executive Mapper",
-      action: "account.profile.proposeUpdate",
-      payload: {
-        count: proposals.length,
-        fields: proposals.map((p) => p.field),
+      auditWhenEmpty: true,
+      payload: (accepted) => ({
+        count: accepted.length,
+        fields: accepted.map((p) => p.field),
         openQuestions: output.openQuestions,
         // Task #206 — code-computed critical-role coverage + guard drops,
         // recorded for auditability of the anti-junior/anti-hallucination net.
         criticalRoleCoverage: output.criticalRoleCoverage ?? null,
         droppedBySeniorityGuard: output.droppedBySeniorityGuard ?? [],
-      },
-      payloadSummary:
-        proposals.length > 0
-          ? `Executive Mapper proposed ${proposals.length} contact update(s) for ${fresh.brandName ?? fresh.name} (awaiting partner review).`
-          : `Executive Mapper sweep found no new executives to propose for ${fresh.brandName ?? fresh.name}.`,
-    });
+      }),
+      summary: (lockedAccount, accepted) =>
+        accepted.length > 0
+          ? `Executive Mapper proposed ${accepted.length} contact update(s) for ${lockedAccount.brandName ?? lockedAccount.name} (awaiting partner review).`
+          : `Executive Mapper sweep found no new executives to propose for ${lockedAccount.brandName ?? lockedAccount.name}.`,
+    },
   });
 
   return {
     runId,
-    proposedCount: proposals.length,
+    proposedCount,
     openQuestions: output.openQuestions,
     criticalRoleCoverage: output.criticalRoleCoverage ?? null,
   };

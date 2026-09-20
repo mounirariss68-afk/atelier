@@ -35,7 +35,7 @@ async function main() {
       output: any;
       account: any;
       existingContacts: Array<{ fullName: string }>;
-    }) => Array<{ field: string; toValue: unknown; status: string }>;
+    }) => Array<{ field: string; toValue: unknown; status: string; expiresAt?: string }>;
   };
 
   const AGENT = "agent_account_cartographer";
@@ -181,6 +181,11 @@ async function main() {
       out,
     );
     check("all positive-control proposals are pending", out.every((p) => p.status === "pending"), out);
+    check(
+      "new proposals carry a future expiry",
+      out.every((p) => !!p.expiresAt && Date.parse(p.expiresAt) > Date.now()),
+      out,
+    );
 
     // Re-run with those proposals now sitting in the queue as pending —
     // the identical output must produce zero new candidates.
@@ -192,6 +197,15 @@ async function main() {
     const rejectedQueue = out.map((p) => ({ ...p, status: "rejected" }));
     const rerun2 = build({ ...baseAccount, pendingProfileUpdates: rejectedQueue }, output);
     check("re-run after rejection resurfaces nothing", rerun2.length === 0, rerun2);
+
+    // An expired, never-decided proposal no longer blocks materially fresh
+    // research. The replacement gets a new id/expiry and still requires review.
+    const expiredQueue = out.map((p) => ({
+      ...p,
+      expiresAt: new Date(Date.now() - 1_000).toISOString(),
+    }));
+    const rerun3 = build({ ...baseAccount, pendingProfileUpdates: expiredQueue }, output);
+    check("expired pending proposals can be refreshed", rerun3.length === out.length, rerun3);
   }
 
   console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);

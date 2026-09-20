@@ -174,10 +174,10 @@ const PAYLOAD_TRANSLATORS: Record<string, Partial<Record<DispatchVerb, Translato
   // sourceSignals / decisionMakers / cogniriseHypothesis / refreshedSummary)
   // so the propose_write confirm card can SHOW the research. The
   // backing `account_create` tool only accepts the writable
-  // firmographic subset, so strip the display-only fields here. The
-  // post-create cartographer auto-run on accountRoutes.ts will
-  // re-research and persist the priorities + signals + DMs once the
-  // row exists.
+  // firmographic subset, so strip the display-only fields here. Any
+  // post-create Cartographer research is queued for partner review;
+  // generated priorities, signals, classification and contacts never
+  // become live merely because the base account was confirmed.
   account: {
     create: (payload) => {
       const allowed = new Set([

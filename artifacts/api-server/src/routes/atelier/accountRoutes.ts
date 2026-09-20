@@ -204,6 +204,8 @@ import {
   runWhitespaceMapper,
   runQbrComposer,
   buildCartographerProposals,
+  enqueueProfileUpdateProposals,
+  isLivePendingProfileUpdate,
   AgentNonJsonResponseError,
   runNextBestAction,
   runRelationshipHealth,
@@ -215,6 +217,7 @@ import {
   type ProcurementNavigatorOutput,
   type StrategyDeveloperOutput,
   type PendingProfileUpdate,
+  type CartographerOutput,
   type WhitespaceOutput,
   type QbrOutput,
 } from "../../lib/atelier-agents/runner.js";
@@ -571,7 +574,7 @@ async function summariseAccount(
     (x, y) => new Date(y.updatedAt).getTime() - new Date(x.updatedAt).getTime(),
   )[0];
   const pending = (a.pendingProfileUpdates ?? []).filter(
-    (u) => u.status === "pending",
+    (u) => isLivePendingProfileUpdate(u as PendingProfileUpdate),
   );
   const { status: cartographerStatus, phase: cartographerPhase } =
     await loadCartographerStatus(a.id);
@@ -757,7 +760,17 @@ async function persistReviewedResearch(args: {
 
     // Seed contacts, building a name→id map for reports_to resolution.
     const nameToId = new Map<string, string>();
+    let contactsSeeded = 0;
     for (const dm of decisionMakers) {
+      const existingId = findPersonMatch(
+        dm.fullName,
+        [...nameToId.entries()].map(([fullName, id]) => ({ fullName, id })),
+        (r) => r.fullName,
+      )?.id;
+      if (existingId) {
+        nameToId.set(dm.fullName.trim().toLowerCase(), existingId);
+        continue;
+      }
       const seniority = (dm.seniority ?? null) as
         | "board_chair" | "board_member"
         | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
@@ -794,6 +807,7 @@ async function persistReviewedResearch(args: {
         confidence: dm.confidence === "verified" ? "verified" : "inferred",
         createdByUserId: actorId,
       });
+      contactsSeeded += 1;
       nameToId.set(dm.fullName.trim().toLowerCase(), id);
     }
 
@@ -832,19 +846,57 @@ async function persistReviewedResearch(args: {
       id: rid("aud"),
       entityType: "account",
       entityId: account.id,
-      actorType: "agent",
-      actorId: "ag_account_cartographer",
-      actorLabel: "Account Cartographer",
-      action: "account.cartographer_run",
+      actorType: "human",
+      actorId,
+      actorLabel: "Research approving user",
+      action: "account.research.approved_on_create",
       payload: {
         trigger: "reviewed_on_create",
         signalCount: signals.length,
-        contactsSeeded: decisionMakers.length,
+        contactsSeeded,
         reportsToEdges: edgeCount,
         mandateAngles: research.researchBrief?.mandateAngles?.length ?? 0,
       },
-      payloadSummary: `Persisted reviewed Cartographer research and seeded ${decisionMakers.length} contact(s) for ${account.brandName ?? account.name}.`,
+      payloadSummary: `Saved user-reviewed Cartographer research for ${account.brandName ?? account.name}.`,
     });
+  });
+}
+
+async function queueCartographerResearch(args: {
+  accountId: string;
+  output: CartographerOutput;
+  runId: string | null;
+  trigger: "auto_on_create" | "manual_refresh";
+}): Promise<number> {
+  const existingContacts = await db
+    .select({ fullName: atelierContacts.fullName })
+    .from(atelierContacts)
+    .where(and(eq(atelierContacts.accountId, args.accountId), isNull(atelierContacts.deletedAt)));
+  return enqueueProfileUpdateProposals({
+    accountId: args.accountId,
+    build: (account) =>
+      buildCartographerProposals({
+        proposedBy: "ag_account_cartographer",
+        output: args.output,
+        account,
+        existingContacts,
+      }),
+    audit: {
+      actorId: "ag_account_cartographer",
+      actorLabel: "Account Cartographer",
+      auditWhenEmpty: true,
+      payload: (proposals) => ({
+        trigger: args.trigger,
+        runId: args.runId,
+        count: proposals.length,
+        fields: proposals.map((p) => p.field),
+        proposalIds: proposals.map((p) => p.id),
+      }),
+      summary: (account, proposals) =>
+        proposals.length > 0
+          ? `Account Cartographer proposed ${proposals.length} profile update(s) for ${account.name} (awaiting partner review).`
+          : `Account Cartographer found no new changes to propose for ${account.name}.`,
+    },
   });
 }
 
@@ -1032,16 +1084,10 @@ router.post("/accounts", async (req, res) => {
       });
       return;
     }
-    // Cartographer already ran during the chat flow — chain the Executive
-    // Mapper now (fire-and-forget; progress shows in the AI activity rail,
-    // proposals land in the governed review queue).
-    void runExecutiveMapperAndQueue(inserted.id, me.id).catch((err) => {
-      console.warn(
-        `[atelier] auto-on-create executive mapper failed for ${inserted.brandName ?? inserted.name}`,
-        err instanceof Error ? err.message : err,
-      );
-    });
-    // Task #722 — procurement research auto-runs on every new account.
+    // The chat flow already performed and exposed research for human review.
+    // Do not re-run account enrichment here: creating saves exactly the reviewed
+    // payload. Procurement is a separate review-gated workflow that still runs
+    // for every new account.
     void autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
     const fresh = (await loadAccount(inserted.id)) ?? inserted;
     const access = await accessibleEngagementIds(me);
@@ -1060,6 +1106,15 @@ router.post("/accounts", async (req, res) => {
   // "New account" button rather than the chat "Review & Create" flow).
   // Task #1193 — Background Work bell visibility for the auto-on-create
   // Cartographer run (pre-run-row window included). Cleared in the finally.
+  const autoCartKey = launchKey("account_cartographer", inserted.id);
+  const autoCartToken = registerLaunch(autoCartKey, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
   noteAgentLaunch({
     agentId: "account_cartographer",
     targetId: inserted.id,
@@ -1069,11 +1124,10 @@ router.post("/accounts", async (req, res) => {
   void (async () => {
     try {
       // Task #560 — use the Cartographer's returned v2 output directly
-      // (instead of re-reading the stale agent_runs row, which carried the
-      // dropped v1 `proposedProfileUpdates` shape). Persist the full
-      // research onto the account so nothing is lost on create, and seed
-      // contacts from the named decision-makers.
-      const { output: out } = await runAccountCartographer({
+      // (instead of re-reading the stale agent_runs row). Every generated
+      // enrichment is queued for partner review; only form fields confirmed
+      // during the base-account create are live at this point.
+      const { runId, output: out } = await runAccountCartographer({
         accountId: inserted.id,
         accountName: inserted.brandName ?? inserted.name,
         accountSector: inserted.sector,
@@ -1081,114 +1135,19 @@ router.post("/accounts", async (req, res) => {
         triggeredByUserId: me.id,
         actorLabel: "Account Cartographer",
       });
-      const fresh = await loadAccount(inserted.id);
-      if (!fresh) return;
-      const mergedSignals = [
-        ...(fresh.sourceSignals ?? []),
-        ...(out.sourceSignals ?? []),
-      ].slice(-20);
-      const priorityRefs = (out.account.strategicPriorities ?? [])
-        .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls ?? [] }))
-        .filter((p) => p.text.trim().length > 0);
-      // Respect any priorities/hypothesis the partner entered on the
-      // proposal/dialog; only fall back to the Cartographer's when the
-      // account has none yet.
-      const mergedPriorities =
-        (fresh.strategicPriorities ?? []).length > 0
-          ? fresh.strategicPriorities
-          : priorityRefs.map((p) => p.text);
-      const mergedHypothesis =
-        fresh.cogniriseHypothesis && fresh.cogniriseHypothesis.trim().length > 0
-          ? fresh.cogniriseHypothesis
-          : out.account.cogniriseHypothesis || null;
-      // Only seed contacts when the account has none, so re-runs never
-      // duplicate the decision-maker list.
-      const existingContacts = await db
-        .select({ id: atelierContacts.id })
-        .from(atelierContacts)
-        .where(
-          and(
-            eq(atelierContacts.accountId, inserted.id),
-            isNull(atelierContacts.deletedAt),
-          ),
-        )
-        .limit(1);
-      const seedContacts =
-        existingContacts.length === 0
-          ? (out.decisionMakers ?? [])
-              .filter((d) => d.fullName.trim().length > 0)
-              .slice(0, 7)
-          : [];
-      // Task #698 — the auto-run previously dropped the agent's identified
-      // industry. Resolve it onto the app taxonomy; only fill when the account
-      // has none yet (a reviewed/manual classification is never clobbered).
-      const autoIndustry = resolveIndustryTaxonomy(
-        out.account.industryCode ?? null,
-        out.account.subIndustryCode ?? null,
-      );
-      await db.transaction(async (tx) => {
-        await tx
-          .update(atelierAccounts)
-          .set({
-            ...(autoIndustry && !fresh.industryCode
-              ? {
-                  industryCode: autoIndustry.industryCode,
-                  subIndustryCode:
-                    fresh.subIndustryCode ?? autoIndustry.subIndustryCode,
-                }
-              : {}),
-            sourceSignals: mergedSignals,
-            strategicPriorities: mergedPriorities,
-            strategicPriorityRefs: priorityRefs,
-            cogniriseHypothesis: mergedHypothesis,
-            researchBrief: out.researchBrief,
-            enrichedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(atelierAccounts.id, inserted.id));
-        for (const d of seedContacts) {
-          // Task #538 — agent-emitted fullName is parsed into a person row.
-          const pw = await writePersonFromFullName(tx, {
-            orgId: inserted.orgId,
-            fullName: d.fullName,
-            sourceKind: "contact",
-          });
-          await tx.insert(atelierContacts).values({
-            id: rid("con"),
-            orgId: inserted.orgId,
-            accountId: inserted.id,
-            personId: pw.personId,
-            fullName: pw.fullName,
-            title: d.title ?? null,
-            seniority: d.seniority ?? null,
-            entityName: d.entityName ?? null,
-            entityScope: d.entityScope ?? null,
-            buyerPersona: d.buyerPersona ?? null,
-            timeInRole: d.timeInRole ?? null,
-            careerHistory: d.careerHistory ?? [],
-            education: d.education ?? [],
-            sourceUrl: d.sourceUrl ?? null,
-            confidence: d.confidence === "verified" ? "verified" : "inferred",
-            notes: d.rationale ?? null,
-            createdByUserId: me.id,
-          });
-        }
-        await tx.insert(atelierAuditEvents).values({
-          id: rid("aud"),
-          entityType: "account",
-          entityId: inserted.id,
-          actorType: "agent",
-          actorId: "ag_account_cartographer",
-          actorLabel: "Account Cartographer",
-          action: "account.cartographer_run",
-          payload: {
-            trigger: "auto_on_create",
-            signalCount: out.sourceSignals?.length ?? 0,
-            contactsSeeded: seedContacts.length,
-            mandateAngles: out.researchBrief?.mandateAngles?.length ?? 0,
-          },
-          payloadSummary: `Cartographer auto-ran on creation: persisted research and seeded ${seedContacts.length} contact(s) for ${inserted.brandName ?? inserted.name}.`,
-        });
+      const proposedCount = await queueCartographerResearch({
+        accountId: inserted.id,
+        output: out,
+        runId,
+        trigger: "auto_on_create",
+      });
+      settleLaunch(autoCartKey, autoCartToken, {
+        status: "succeeded",
+        error: null,
+        runId,
+        proposedCount,
+        openQuestions: [],
+        startedAt: Date.now(),
       });
       // Cartographer finished — its bell entry clears here; the Executive
       // Mapper chain registers its own (Task #1193).
@@ -1222,6 +1181,14 @@ router.post("/accounts", async (req, res) => {
       } else {
         console.warn("[atelier] auto-on-create cartographer failed", err);
       }
+      settleLaunch(autoCartKey, autoCartToken, {
+        status: "failed",
+        error: msg,
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
       try {
         await db.insert(atelierAuditEvents).values({
           id: rid("aud"),
@@ -1697,7 +1664,9 @@ async function buildWorkspace(
       // Task #632 — rolled-up family metrics (null for leaf accounts).
       hierarchyRollup,
       sourceSignals: a.sourceSignals ?? [],
-      pendingProfileUpdates: a.pendingProfileUpdates ?? [],
+      pendingProfileUpdates: ((a.pendingProfileUpdates ?? []) as PendingProfileUpdate[]).filter(
+        (u) => u.status !== "pending" || isLivePendingProfileUpdate(u),
+      ),
       // Task #608/#613 — firmographic enrichment, surfaced so the account edit
       // dialog can prefill the same fields the create dialog exposes. These come
       // from `...summary` already; the firmographic facts are non-financial and
@@ -4818,58 +4787,19 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
       // edits / approves / rejects each delta (see the decision + bulk-decision
       // endpoints). This keeps AI population uniformly governed and prevents the
       // agent from clobbering partner-curated fields (notes, hypothesis, etc.).
-      // Auto-seeding still happens on CREATE for empty new accounts; only the
-      // manual Refresh-from-web is queue-gated.
-      const existingContacts = await db
-        .select({ fullName: atelierContacts.fullName })
-        .from(atelierContacts)
-        .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
-
-      // Re-load for the freshest queue — the LLM run takes minutes and other
-      // writers (partner edits, approvals) may have touched the row meanwhile.
-      const fresh = (await loadAccount(a.id)) ?? a;
-      const proposals = buildCartographerProposals({
-        proposedBy: "ag_account_cartographer",
+      // Auto-on-create and manual refresh both use the same queue writer.
+      const proposedCount = await queueCartographerResearch({
+        accountId: a.id,
         output,
-        account: fresh,
-        existingContacts,
-      });
-
-      const queue = (
-        (fresh.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []
-      ).concat(proposals);
-
-      await db.transaction(async (tx) => {
-        // enrichedAt records that a refresh ran; the actual field writes wait for
-        // partner approval. We never touch notes/hypothesis/priorities here.
-        await tx
-          .update(atelierAccounts)
-          .set({ pendingProfileUpdates: queue, enrichedAt: new Date(), updatedAt: new Date() })
-          .where(eq(atelierAccounts.id, a.id));
-        await tx.insert(atelierAuditEvents).values({
-          id: rid("aud"),
-          entityType: "account",
-          entityId: a.id,
-          actorType: "agent",
-          actorId: "ag_account_cartographer",
-          actorLabel: "Account Cartographer",
-          action: "account.profile.proposeUpdate",
-          payload: {
-            count: proposals.length,
-            fields: proposals.map((p) => p.field),
-          },
-          payloadSummary:
-            proposals.length > 0
-              ? `Account Cartographer proposed ${proposals.length} profile update(s) for ${a.name} (awaiting partner review).`
-              : `Account Cartographer refresh found no new changes to propose for ${a.name}.`,
-        });
+        runId,
+        trigger: "manual_refresh",
       });
 
       settleLaunch(cartLaunchKey, cartToken, {
         status: "succeeded",
         error: null,
         runId,
-        proposedCount: proposals.length,
+        proposedCount,
         openQuestions: [],
         startedAt: Date.now(),
       });
@@ -5365,19 +5295,38 @@ async function applyProfileUpdateDecisions(args: {
     editedValue?: unknown;
   }>;
 }): Promise<void> {
-  const { account: a, me, decisions } = args;
+  const { account: requestedAccount, me } = args;
   const now = new Date();
   const nowIso = now.toISOString();
-  const decidedIds = new Set(decisions.map((d) => d.target.id));
-
-  const accountUpdate: Partial<typeof atelierAccounts.$inferInsert> = {
-    updatedAt: now,
-  };
-  // Working copy so multiple sourceSignals approvals chain correctly.
-  let workingSignals =
-    (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
 
   await db.transaction(async (tx) => {
+    const [a] = await tx
+      .select()
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, requestedAccount.id), isNull(atelierAccounts.deletedAt)))
+      .for("update");
+    if (!a) throw new Error("account-not-found");
+    const lockedList = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+    const requestedById = new Map(args.decisions.map((d) => [d.target.id, d]));
+    const decisions = lockedList
+      .filter((u) => requestedById.has(u.id))
+      .map((target) => ({ ...requestedById.get(target.id)!, target }));
+    if (decisions.length !== args.decisions.length) {
+      throw new Error("proposal-not-found");
+    }
+    for (const { target } of decisions) {
+      if (target.status !== "pending") throw new Error("proposal-already-decided");
+      if (target.expiresAt && Date.parse(target.expiresAt) <= now.getTime()) {
+        throw new Error("proposal-expired");
+      }
+    }
+    const decidedIds = new Set(decisions.map((d) => d.target.id));
+    const accountUpdate: Partial<typeof atelierAccounts.$inferInsert> = {
+      updatedAt: now,
+    };
+    // Working copy so multiple sourceSignals approvals chain correctly.
+    let workingSignals =
+      (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
     // Lazy contact roster — only loaded if a contact proposal is approved.
     // Lookups are FUZZY (shared person-name matcher): approving a proposal
     // spelled "Mohammed Al Jasser" must enrich an existing "Mohammed bin
@@ -5395,8 +5344,8 @@ async function applyProfileUpdateDecisions(args: {
       findPersonMatch(name, rows, (r) => r.fullName)?.id;
 
     for (const { target, decision, hasEdit, editedValue } of decisions) {
+      const effectiveValue = hasEdit ? editedValue : target.toValue;
       if (decision === "approve") {
-        const effectiveValue = hasEdit ? editedValue : target.toValue;
         const f = target.field;
         if (f === "strategicPriorities" && Array.isArray(effectiveValue)) {
           accountUpdate.strategicPriorities = effectiveValue as string[];
@@ -5493,7 +5442,7 @@ async function applyProfileUpdateDecisions(args: {
                   timeInRole: dm.timeInRole ?? null,
                   careerHistory: dm.careerHistory ?? [],
                   education: dm.education ?? [],
-                  sourceUrl: dm.sourceUrl ?? null,
+                  ...(dm.sourceUrl ? { sourceUrl: dm.sourceUrl } : {}),
                   // Never blank an existing LinkedIn link when the agent
                   // simply didn't find one this run.
                   ...(dm.linkedinUrl ? { linkedinUrl: dm.linkedinUrl } : {}),
@@ -5608,18 +5557,28 @@ async function applyProfileUpdateDecisions(args: {
         actorId: me.id,
         actorLabel: me.name,
         action: `profile_update.${decision}`,
-        payload: {
+          payload: {
           updateId: target.id,
           field: target.field,
           edited: hasEdit,
           toValue: hasEdit ? editedValue : target.toValue,
+            proposedBy: target.proposedBy,
+            proposedAt: target.proposedAt,
+            sourceEvidence:
+              target.field === "contact"
+                ? {
+                    sourceUrl:
+                      (effectiveValue as { sourceUrl?: string | null } | null)?.sourceUrl ??
+                      null,
+                  }
+                : target.meta ?? null,
         },
         payloadSummary: `${me.name} ${decision}d${hasEdit ? " (with edits)" : ""} the AI proposal on field "${target.field}".`,
       });
     }
 
     // Stamp queue items with their new status + provenance.
-    const list = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+    const list = lockedList;
     const decisionById = new Map(decisions.map((d) => [d.target.id, d]));
     accountUpdate.pendingProfileUpdates = list.map((u) => {
       if (!decidedIds.has(u.id)) return u;
@@ -5672,16 +5631,29 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
     res.status(409).json({ error: "already-decided" });
     return;
   }
+  if (target.expiresAt && Date.parse(target.expiresAt) <= Date.now()) {
+    res.status(409).json({ error: "proposal-expired" });
+    return;
+  }
   const hasEdit =
     decision === "approve" && Object.prototype.hasOwnProperty.call(parsed.data, "editedValue");
 
-  await applyProfileUpdateDecisions({
-    account: a,
-    me,
-    decisions: [
-      { target, decision, hasEdit, editedValue: (parsed.data as { editedValue?: unknown }).editedValue },
-    ],
-  });
+  try {
+    await applyProfileUpdateDecisions({
+      account: a,
+      me,
+      decisions: [
+        { target, decision, hasEdit, editedValue: (parsed.data as { editedValue?: unknown }).editedValue },
+      ],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "proposal-already-decided" || message === "proposal-expired") {
+      res.status(409).json({ error: message });
+      return;
+    }
+    throw err;
+  }
 
   const access = await accessibleEngagementIds(me);
   const ws = await buildWorkspace(a.id, access, me);
@@ -5712,18 +5684,30 @@ router.post("/accounts/:accountId/profile-updates/bulk-decision", async (req, re
   const requestedIds = parsed.data.updateIds ?? null;
   const list = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
   const targets = list.filter(
-    (u) => u.status === "pending" && (requestedIds === null || requestedIds.includes(u.id)),
+    (u) =>
+      u.status === "pending" &&
+      (!u.expiresAt || Date.parse(u.expiresAt) > Date.now()) &&
+      (requestedIds === null || requestedIds.includes(u.id)),
   );
   if (targets.length === 0) {
     res.status(404).json({ error: "no-pending-proposals" });
     return;
   }
 
-  await applyProfileUpdateDecisions({
-    account: a,
-    me,
-    decisions: targets.map((target) => ({ target, decision, hasEdit: false })),
-  });
+  try {
+    await applyProfileUpdateDecisions({
+      account: a,
+      me,
+      decisions: targets.map((target) => ({ target, decision, hasEdit: false })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "proposal-already-decided" || message === "proposal-expired") {
+      res.status(409).json({ error: message });
+      return;
+    }
+    throw err;
+  }
 
   const access = await accessibleEngagementIds(me);
   const ws = await buildWorkspace(a.id, access, me);
