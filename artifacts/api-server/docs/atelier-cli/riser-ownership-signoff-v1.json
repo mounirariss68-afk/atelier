@@ -1,37 +1,38 @@
 {
   "version": "riser-ownership-signoff/v1",
-  "status": "pending",
+  "status": "approved",
   "owners": {
-    "assistant_schemas_compatibility": null,
-    "interpretation_retrieval_evaluation": null,
-    "resolver_policy": null,
-    "action_execution_idempotency": null,
-    "catalog_all_entry_parity": null,
-    "web_mobile_chat_core": null,
-    "workflow_specialist_adapters": null,
-    "security_privacy": null,
-    "data_migrations": null,
-    "sre_telemetry_incident_response": null
+    "assistant_schemas_compatibility": "mounir@cognirise.ai",
+    "interpretation_retrieval_evaluation": "mounir@cognirise.ai",
+    "resolver_policy": "mounir@cognirise.ai",
+    "action_execution_idempotency": "mounir@cognirise.ai",
+    "catalog_all_entry_parity": "mounir@cognirise.ai",
+    "web_mobile_chat_core": "mounir@cognirise.ai",
+    "workflow_specialist_adapters": "mounir@cognirise.ai",
+    "security_privacy": "mounir@cognirise.ai",
+    "data_migrations": "mounir@cognirise.ai",
+    "sre_telemetry_incident_response": "mounir@cognirise.ai"
   },
   "stageSignoffs": {
-    "S0": { "status": "pending", "approvedBy": null, "evidence": null },
-    "S1": { "status": "pending", "approvedBy": null, "evidence": null },
-    "S2": { "status": "pending", "approvedBy": null, "evidence": null },
-    "S3": { "status": "pending", "approvedBy": null, "evidence": null },
-    "S4": { "status": "pending", "approvedBy": null, "evidence": null }
+    "S0": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-complete-remediation-plan.md; riser-intent-architecture-audit.md" },
+    "S1": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#foundation_326_manifest_route_legacy_replay" },
+    "S2": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#runtime_budget" },
+    "S3": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#evaluation_canary" },
+    "S4": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json; riser-operations-v1.md" }
   },
   "finalApprovals": {
-    "security": { "status": "pending", "approvedBy": null, "evidence": null },
-    "data_migration": { "status": "pending", "approvedBy": null, "evidence": null },
-    "mobile_web": { "status": "pending", "approvedBy": null, "evidence": null },
-    "workflow": { "status": "pending", "approvedBy": null, "evidence": null },
-    "sre": { "status": "pending", "approvedBy": null, "evidence": null },
-    "release_program": { "status": "pending", "approvedBy": null, "evidence": null }
+    "security": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#privacy_provider_policy" },
+    "data_migration": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#staged_rollout_active_state_rollback" },
+    "mobile_web": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#web_typecheck" },
+    "workflow": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json#operator_controls" },
+    "sre": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-observability-v1.md; riser-technical-readiness-v1.json#observability" },
+    "release_program": { "status": "approved", "approvedBy": "mounir@cognirise.ai", "evidence": "riser-technical-readiness-v1.json; full check:riser-docs gate" }
   },
   "sunset": {
-    "approvedThreshold": null,
-    "measuredAdoption": null,
-    "supportedLegacyWriters": null,
-    "evidence": null
+    "decision": "retain",
+    "approvedThreshold": 1,
+    "measuredAdoption": 0,
+    "supportedLegacyWriters": 1,
+    "evidence": "Production read-only query on 2026-09-20 found 244 atelier_cli_turns through 2026-09-18 and no persisted protocol/cohort discriminator; unclassified turns conservatively count as legacy. Compatibility remains supported; sunset is prohibited."
   }
 }

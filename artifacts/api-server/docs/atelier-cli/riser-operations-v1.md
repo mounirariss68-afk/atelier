@@ -144,6 +144,11 @@ supported legacy writers, successful legacy replay, and recorded mobile/web,
 security, workflow, data-migration, and SRE approval. Legacy readers and
 upcasters remain for the retention period.
 
+When production usage cannot distinguish protocol/cohort, all unclassified
+writers count as legacy. An approved `retain` decision is release-safe but is
+not permission to remove the adapter; only an approved `sunset` decision with
+threshold evidence and zero supported legacy writers permits retirement.
+
 ## Incident response and observability
 
 Dashboards, SLOs, alerts, dead-letter handling, and incident procedure are

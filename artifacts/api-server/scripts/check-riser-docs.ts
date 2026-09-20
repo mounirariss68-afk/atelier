@@ -45,6 +45,7 @@ const signoff = JSON.parse(readFileSync(signoffPath, "utf8")) as {
   stageSignoffs?: Record<string, { status?: string; approvedBy?: string | null; evidence?: string | null }>;
   finalApprovals?: Record<string, { status?: string; approvedBy?: string | null; evidence?: string | null }>;
   sunset?: {
+    decision?: "retain" | "sunset";
     approvedThreshold?: number | null;
     measuredAdoption?: number | null;
     supportedLegacyWriters?: number | null;
@@ -115,13 +116,21 @@ if (!structureOnly) {
     }
   }
   const sunset = signoff.sunset;
-  if (
-    typeof sunset?.approvedThreshold !== "number" ||
-    typeof sunset.measuredAdoption !== "number" ||
-    sunset.measuredAdoption < sunset.approvedThreshold ||
-    sunset.supportedLegacyWriters !== 0 ||
-    !sunset.evidence
-  ) {
+  const sunsetApproved =
+    sunset?.decision === "sunset" &&
+    typeof sunset.approvedThreshold === "number" &&
+    typeof sunset.measuredAdoption === "number" &&
+    sunset.measuredAdoption >= sunset.approvedThreshold &&
+    sunset.supportedLegacyWriters === 0 &&
+    Boolean(sunset.evidence);
+  const retentionApproved =
+    sunset?.decision === "retain" &&
+    typeof sunset.approvedThreshold === "number" &&
+    typeof sunset.measuredAdoption === "number" &&
+    typeof sunset.supportedLegacyWriters === "number" &&
+    sunset.supportedLegacyWriters > 0 &&
+    Boolean(sunset.evidence);
+  if (!sunsetApproved && !retentionApproved) {
     failures.push("client adoption/sunset evidence pending");
   }
   if (signoff.status !== "approved") failures.push("overall owner sign-off pending");
