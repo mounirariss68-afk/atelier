@@ -1281,6 +1281,11 @@ router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) =
 async function buildEngagementWire(
   e: typeof atelierEngagements.$inferSelect,
 ) {
+  const mobilization = e as typeof e & {
+    mobilizationStatus?: string | null;
+    charterSeed?: Record<string, unknown> | null;
+    commercialSnapshotSummary?: Record<string, unknown> | null;
+  };
   const [acct] = await db
     .select()
     .from(atelierAccounts)
@@ -1297,6 +1302,7 @@ async function buildEngagementWire(
     id: e.id,
     slug: e.slug,
     name: e.name,
+    opportunityId: e.opportunityId ?? null,
     accountId: e.accountId,
     accountName: acct?.name ?? e.accountId,
     plmStage: e.plmStage,
@@ -1307,6 +1313,9 @@ async function buildEngagementWire(
     raidStatus: e.raidStatus as "green" | "amber" | "red",
     deliverablesDueThisWeek: e.deliverablesDueThisWeek,
     legalEntityId: e.legalEntityId ?? null,
+    mobilizationStatus: mobilization.mobilizationStatus ?? "not_started",
+    charterSeed: mobilization.charterSeed ?? null,
+    commercialSnapshotSummary: mobilization.commercialSnapshotSummary ?? null,
   };
 }
 

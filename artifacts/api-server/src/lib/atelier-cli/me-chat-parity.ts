@@ -43,6 +43,21 @@ const excluded = (e: Omit<Extract<MeParityEntry, { kind: "excluded" }>, "kind">)
  * Express param names kept verbatim.
  */
 export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
+  "get /me/mobilization-assignments": excluded({
+    reason: "Assignment reads are intentionally limited to the authenticated roster identity and are not exposed as chat context.",
+    userLabel: "view my mobilization assignments",
+    web: "Me → Mobilization",
+    mobile: null,
+  }),
+  // Assignment acceptance is a security-sensitive self-scope workflow,
+  // intentionally unavailable through chat (chat cannot prove roster
+  // identity or safely render the compare-and-set transition).
+  "patch /me/mobilization-assignments/:assignmentId": excluded({
+    reason: "Self-scope roster acceptance requires the authenticated HTTP route; chat is not an assignment approval surface.",
+    userLabel: "accept or decline a staffing assignment",
+    web: "Engagement mobilization (authenticated self-scope route)",
+    mobile: null,
+  }),
   // ---- leave -------------------------------------------------------
   "post /me/leave": cap("me.leave_request"),
   "post /me/leave/:id/cancel": cap("me.leave_cancel"),

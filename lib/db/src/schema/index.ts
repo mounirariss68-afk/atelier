@@ -2,6 +2,7 @@ export * from "./assessments";
 export * from "./arcelik";
 export * from "./tasama";
 export * from "./atelier";
+export * from "./atelier-mobilization";
 export * from "./atelier-reference";
 export * from "./atelier-v5";
 export * from "./atelier-agents-lens";

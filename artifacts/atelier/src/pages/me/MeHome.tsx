@@ -50,6 +50,8 @@ import MeAssist from "./MeAssist";
 import MeLetters from "./MeLetters";
 // Task #1002 — personal tasks & reminders panel.
 import MeTasks from "./MeTasks";
+// Mobilization — my project assignments card (accept/decline proposed, view accepted).
+import { MyProjectAssignmentsCard } from "@/components/mobilization/MyProjectAssignmentsCard";
 
 const SECTIONS = ME_MVP_SECTIONS;
 
@@ -151,10 +153,19 @@ function OverviewSection({ loading, profile }: { loading: boolean; profile: Prof
   // contractor (and other non-leadership) viewers would 403 the endpoint.
   const financeLeader =
     role === "founding_partner" || role === "partner" || role === "finance";
+
+  // ?focus=mobilization — scroll the assignments card into view on mount.
+  const focusMobilization = React.useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("focus") === "mobilization";
+  }, []);
+
   return (
     <div className="space-y-6">
       <PendingApprovalsCard />
       {financeLeader && <FinanceApprovalsCard />}
+      {/* Project assignments — visible to everyone; card hides itself when empty. */}
+      <MyProjectAssignmentsCard focusOnMount={focusMobilization} />
       <NotificationCards />
       {/* Task #327 — the viewer's Microsoft 365 meetings, also on Home. */}
       <MyMeetingsCard />

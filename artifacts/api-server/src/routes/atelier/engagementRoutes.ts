@@ -14,13 +14,14 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, or, sql } from "drizzle-orm";
 import {
   db,
   atelierEngagements,
   atelierLegalEntities,
   atelierEngagementAccess,
   atelierUsers,
+  atelierPersons,
   atelierAuditEvents,
   atelierAgentRuns,
   atelierDeliverables,
@@ -30,6 +31,10 @@ import {
   atelierCharterVersions,
   atelierArtifacts,
   atelierPaneAItems,
+  atelierStaffingRequirements,
+  atelierStaffingAssignments,
+  atelierMobilizationHandoffs,
+  atelierSelfNotifications,
 } from "@workspace/db";
 import {
   AtelierRedraftCharterBody as AtelierCharterRedraftInput,
@@ -50,7 +55,9 @@ import {
   type HypothesisTree,
 } from "../../lib/atelier-agents/runner.js";
 import { isValidOrgOwner } from "../../lib/atelier-owner-validate.js";
+import { canViewEngagementCosting } from "./personaRoles";
 import { curatorAbstract } from "./knowledgeRoutes.js";
+import { emitSelfNotification } from "./meRoutes.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -129,6 +136,10 @@ export async function ensureEngAccess(
   }
   const eng = await loadEng(engId);
   if (!eng) {
+    res.status(404).json({ error: "engagement-not-found" });
+    return null;
+  }
+  if (eng.orgId !== me.orgId) {
     res.status(404).json({ error: "engagement-not-found" });
     return null;
   }
@@ -1381,6 +1392,369 @@ router.patch("/engagements/:engId", async (req, res) => {
     });
   }
   res.json({ ok: true, engagementId: eng.id, plmStage: nextStage });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task #1353 — won-project mobilization
+function canMobilize(me: typeof atelierUsers.$inferSelect, eng: typeof atelierEngagements.$inferSelect) {
+  return ["founding_partner", "partner", "finance", "hr", "senior_manager"].includes(me.role) ||
+    me.id === eng.partnerOwnerId || me.id === eng.engagementLeadId;
+}
+
+function isoValid(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+export async function transitionMobilizationAssignment(args: {
+  assignmentId: string;
+  expectedEngagementId: string;
+  actor: typeof atelierUsers.$inferSelect;
+  nextState: "accepted" | "declined" | "replaced" | "ended";
+  selfOnly?: boolean;
+}) {
+  return db.transaction(async (tx) => {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${args.expectedEngagementId}, 1353))`);
+  const [assignment] = await tx.select().from(atelierStaffingAssignments).where(and(
+    eq(atelierStaffingAssignments.id, args.assignmentId), isNull(atelierStaffingAssignments.deletedAt),
+  ));
+  if (!assignment) return { error: "assignment-not-found" as const };
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${assignment.personId}, 1353))`);
+  const [lockedAssignment] = await tx.select().from(atelierStaffingAssignments).where(eq(atelierStaffingAssignments.id, assignment.id));
+  if (!lockedAssignment || lockedAssignment.state !== assignment.state) return { error: "assignment-state-race" as const };
+  const [eng] = await tx.select().from(atelierEngagements).where(and(eq(atelierEngagements.id, assignment.engagementId), isNull(atelierEngagements.deletedAt)));
+  if (!eng || eng.orgId !== args.actor.orgId || eng.id !== args.expectedEngagementId) return { error: "assignment-not-found" as const };
+  const allowed = (assignment.state === "proposed" && ["accepted", "declined"].includes(args.nextState)) ||
+    (assignment.state === "accepted" && ["replaced", "ended"].includes(args.nextState));
+  if (!allowed) return { error: "invalid-assignment-transition" as const, from: assignment.state };
+  const mobilizer = canMobilize(args.actor, eng);
+  if (args.selfOnly || args.nextState === "accepted" || args.nextState === "declined") {
+    if (!assignment.userId || assignment.userId !== args.actor.id) return { error: "assignee-only-transition" as const };
+  } else if (!mobilizer) return { error: "mobilizer-only-transition" as const };
+  const [row] = await tx.update(atelierStaffingAssignments).set({
+    state: args.nextState,
+    acceptedAt: args.nextState === "accepted" ? new Date() : assignment.acceptedAt,
+    endedAt: ["ended", "replaced", "declined"].includes(args.nextState) ? new Date() : assignment.endedAt,
+    updatedAt: new Date(),
+  }).where(and(eq(atelierStaffingAssignments.id, assignment.id), eq(atelierStaffingAssignments.state, assignment.state))).returning();
+  if (!row) return { error: "assignment-state-race" as const };
+  if (assignment.userId && args.nextState === "accepted") {
+    const [existingAccess] = await tx.select().from(atelierEngagementAccess).where(and(
+      eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
+    ));
+    if (existingAccess) {
+      // A manually/leadership-created grant is independent of mobilization.
+      // Never overwrite its role, scope, allocation, dates, status, or source.
+      if (existingAccess.mobilizationAssignmentId) {
+        await tx.update(atelierEngagementAccess).set({
+          status: "active", allocationPct: assignment.allocationPct,
+          endDate: new Date(`${assignment.endDate}T23:59:59Z`), deletedAt: null,
+        }).where(eq(atelierEngagementAccess.id, existingAccess.id));
+      }
+    } else {
+      await tx.insert(atelierEngagementAccess).values({
+        id: rid("engacc"), engagementId: eng.id, userId: assignment.userId, roleOnEngagement: "member",
+        allocationPct: assignment.allocationPct, status: "active", grantedByUserId: args.actor.id,
+        mobilizationAssignmentId: assignment.id, endDate: new Date(`${assignment.endDate}T23:59:59Z`),
+      });
+    }
+  } else if (assignment.userId && ["declined", "replaced", "ended"].includes(args.nextState)) {
+    const remaining = await tx.select().from(atelierStaffingAssignments).where(and(
+      eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.userId, assignment.userId),
+      eq(atelierStaffingAssignments.state, "accepted"), isNull(atelierStaffingAssignments.deletedAt),
+    )).orderBy(atelierStaffingAssignments.id);
+    const [access] = await tx.select().from(atelierEngagementAccess).where(and(
+      eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
+      eq(atelierEngagementAccess.mobilizationAssignmentId, assignment.id),
+    ));
+    if (!remaining.length) await tx.update(atelierEngagementAccess).set({ status: "revoked" }).where(and(
+      eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
+      eq(atelierEngagementAccess.mobilizationAssignmentId, assignment.id),
+    ));
+    else if (access) await tx.update(atelierEngagementAccess).set({
+      mobilizationAssignmentId: remaining[0].id,
+      allocationPct: remaining.reduce((sum, item) => sum + item.allocationPct, 0),
+      endDate: new Date(`${remaining.reduce((max, item) => item.endDate > max ? item.endDate : max, remaining[0].endDate)}T23:59:59Z`),
+    }).where(eq(atelierEngagementAccess.id, access.id));
+  }
+  await tx.insert(atelierAuditEvents).values({
+    id: rid("aud"), entityType: "staffing_assignment", entityId: assignment.id, actorType: "human",
+    actorId: args.actor.id, actorLabel: args.actor.name,
+    action: `mobilization.assignment.${args.nextState}`,
+    payload: { from: assignment.state, to: args.nextState },
+    payloadSummary: `Assignment ${args.nextState}`,
+  });
+  return { row, engagement: eng };
+  });
+}
+
+router.get("/engagements/:engId/mobilization", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    const [requirements, assignments, handoffs] = await Promise.all([
+      db.select().from(atelierStaffingRequirements).where(and(eq(atelierStaffingRequirements.engagementId, eng.id), isNull(atelierStaffingRequirements.deletedAt))),
+      db.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.engagementId, eng.id), isNull(atelierStaffingAssignments.deletedAt))),
+      db.select().from(atelierMobilizationHandoffs).where(and(eq(atelierMobilizationHandoffs.engagementId, eng.id), isNull(atelierMobilizationHandoffs.deletedAt))),
+    ]);
+    const costing = canViewEngagementCosting(me.role);
+    res.json({ engagement: eng, requirements: costing ? requirements : requirements.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), assignments: costing ? assignments : assignments.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), handoffs });
+  } catch (err) { next(err); }
+});
+
+router.post("/engagements/:engId/mobilization/requirements", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    if (!canMobilize(me, eng)) { res.status(403).json({ error: "mobilization-forbidden" }); return; }
+    const b = req.body ?? {};
+    if (!b.role || !b.seniority || !isoValid(b.startDate) || !isoValid(b.endDate) || b.startDate > b.endDate) {
+      res.status(400).json({ error: "invalid-staffing-requirement" }); return;
+    }
+    if ((b.rateAmount != null || b.rateSource != null || b.rateCurrency != null) && !canViewEngagementCosting(me.role)) {
+      res.status(403).json({ error: "costing-forbidden" }); return;
+    }
+    const id = String(b.id ?? rid("staffreq"));
+    const [row] = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${eng.id}, 1353))`);
+      const [created] = await tx.insert(atelierStaffingRequirements).values({
+        id, orgId: me.orgId, engagementId: eng.id, role: String(b.role), seniority: String(b.seniority),
+        allocationPct: Math.max(0, Math.min(100, Number(b.allocationPct ?? 0))), startDate: b.startDate, endDate: b.endDate,
+        required: b.required !== false, rateSource: b.rateSource ? String(b.rateSource) : null,
+        rateAmount: b.rateAmount == null ? null : Number(b.rateAmount), rateCurrency: String(b.rateCurrency ?? "USD"),
+        availabilityStatus: String(b.availabilityStatus ?? "unknown"), notes: b.notes ? String(b.notes) : null,
+        createdByUserId: me.id,
+      }).returning();
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"), entityType: "staffing_requirement", entityId: id, actorType: "human",
+        actorId: me.id, actorLabel: me.name, action: "mobilization.requirement.create",
+        payload: { engagementId: eng.id }, payloadSummary: `Staffing requirement created for ${eng.name}`,
+      });
+      return [created];
+    });
+    res.status(201).json(row);
+  } catch (err) { next(err); }
+});
+
+router.post("/engagements/:engId/mobilization/assignments", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    if (!canMobilize(me, eng)) { res.status(403).json({ error: "mobilization-forbidden" }); return; }
+    const b = req.body ?? {};
+    const key = b.idempotencyKey ? String(b.idempotencyKey) : null;
+    if (!b.personId || !b.role || !b.seniority || !isoValid(b.startDate) || !isoValid(b.endDate) || b.startDate > b.endDate) {
+      res.status(400).json({ error: "invalid-staffing-assignment" }); return;
+    }
+    if ((b.rateAmount != null || b.rateSource != null || b.rateCurrency != null) && !canViewEngagementCosting(me.role)) {
+      res.status(403).json({ error: "costing-forbidden" }); return;
+    }
+    const [person] = await db.select().from(atelierPersons).where(and(
+      eq(atelierPersons.id, String(b.personId)), eq(atelierPersons.orgId, me.orgId), isNull(atelierPersons.deletedAt),
+    ));
+    if (!person) { res.status(400).json({ error: "person-not-found-in-org" }); return; }
+    let resolvedUserId: string | null = null;
+    if (b.userId) {
+      const [user] = await db.select().from(atelierUsers).where(and(
+        eq(atelierUsers.id, String(b.userId)), eq(atelierUsers.orgId, me.orgId),
+        eq(atelierUsers.personId, person.id), isNull(atelierUsers.deletedAt),
+      ));
+      if (!user) { res.status(400).json({ error: "user-not-linked-to-person" }); return; }
+      resolvedUserId = user.id;
+    } else {
+      const [user] = await db.select().from(atelierUsers).where(and(
+        eq(atelierUsers.orgId, me.orgId), eq(atelierUsers.personId, person.id), isNull(atelierUsers.deletedAt),
+      ));
+      resolvedUserId = user?.id ?? null;
+    }
+    if (b.requirementId) {
+      const [requirement] = await db.select().from(atelierStaffingRequirements).where(and(
+        eq(atelierStaffingRequirements.id, String(b.requirementId)), eq(atelierStaffingRequirements.engagementId, eng.id),
+        eq(atelierStaffingRequirements.orgId, me.orgId), isNull(atelierStaffingRequirements.deletedAt),
+      ));
+      if (!requirement) { res.status(400).json({ error: "requirement-not-found" }); return; }
+      if (b.startDate < requirement.startDate || b.endDate > requirement.endDate) {
+        res.status(400).json({ error: "assignment-outside-requirement-dates" }); return;
+      }
+    }
+    if (key) {
+      const [existing] = await db.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.orgId, me.orgId), eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.idempotencyKey, key)));
+      if (existing) { res.json(existing); return; }
+    }
+    const id = String(b.id ?? rid("staffasg"));
+    let [row] = await db.insert(atelierStaffingAssignments).values({
+      id, orgId: me.orgId, engagementId: eng.id, requirementId: b.requirementId ? String(b.requirementId) : null,
+      personId: person.id, userId: resolvedUserId, role: String(b.role), seniority: String(b.seniority),
+      allocationPct: Math.max(0, Math.min(100, Number(b.allocationPct ?? 0))), startDate: b.startDate, endDate: b.endDate,
+      required: b.required !== false, rateSource: b.rateSource ? String(b.rateSource) : null,
+      rateAmount: b.rateAmount == null ? null : Number(b.rateAmount), rateCurrency: String(b.rateCurrency ?? "USD"),
+      availabilityStatus: String(b.availabilityStatus ?? "unknown"), state: "proposed", idempotencyKey: key, createdByUserId: me.id,
+    }).onConflictDoNothing({ target: [atelierStaffingAssignments.orgId, atelierStaffingAssignments.idempotencyKey] }).returning();
+    const inserted = Boolean(row);
+    if (!row && key) {
+      [row] = await db.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.orgId, me.orgId), eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.idempotencyKey, key)));
+    }
+    if (!row) { res.status(409).json({ error: "assignment-idempotency-conflict" }); return; }
+    if (inserted) await audit({ entityType: "staffing_assignment", entityId: id, actor: me, action: "mobilization.assignment.propose", payload: { engagementId: eng.id, personId: person.id }, summary: `Team assignment proposed for ${eng.name}` });
+    if (inserted && resolvedUserId) {
+      await emitSelfNotification({
+        userId: resolvedUserId,
+        orgId: me.orgId,
+        kind: "mobilization_assignment_proposed",
+        title: "New mobilization assignment",
+        body: `You have been proposed for ${eng.name}.`,
+        href: "/me?focus=mobilization",
+      });
+    }
+    res.status(201).json(row);
+  } catch (err) { next(err); }
+});
+
+router.patch("/engagements/:engId/mobilization/assignments/:assignmentId", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    const nextState = String(req.body?.state ?? "");
+    if (!["accepted", "declined", "replaced", "ended"].includes(nextState)) { res.status(400).json({ error: "invalid-assignment-state" }); return; }
+    const result = await transitionMobilizationAssignment({ assignmentId: req.params.assignmentId, expectedEngagementId: eng.id, actor: me, nextState: nextState as "accepted" | "declined" | "replaced" | "ended" });
+    if ("error" in result) { const error = (result as { error: string }).error; res.status(error === "assignment-not-found" ? 404 : error.includes("only") ? 403 : 409).json(result); return; }
+    res.json(result.row);
+  } catch (err) { next(err); }
+});
+
+router.post("/engagements/:engId/mobilization/activate", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    if (!canMobilize(me, eng)) { res.status(403).json({ error: "mobilization-forbidden" }); return; }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${eng.id}, 1353))`);
+      const lockedEng = (await tx.select().from(atelierEngagements).where(eq(atelierEngagements.id, eng.id)).for("update"))[0];
+      const requirements = await tx.select().from(atelierStaffingRequirements).where(and(eq(atelierStaffingRequirements.engagementId, eng.id), eq(atelierStaffingRequirements.required, true), isNull(atelierStaffingRequirements.deletedAt), eq(atelierStaffingRequirements.status, "open")));
+      let assignments = await tx.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.state, "accepted"), isNull(atelierStaffingAssignments.deletedAt)));
+      const people = [...new Set(assignments.map((a) => a.personId))].sort();
+      for (const personId of people) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${personId}, 1353))`);
+      // Re-read after person locks so a concurrent acceptance cannot stale the validation.
+      assignments = await tx.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.state, "accepted"), isNull(atelierStaffingAssignments.deletedAt)));
+      const allAccepted = await tx.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.orgId, me.orgId), eq(atelierStaffingAssignments.state, "accepted"), isNull(atelierStaffingAssignments.deletedAt)));
+      const errors: string[] = [];
+      if (!lockedEng) errors.push("engagement-not-found");
+      if (requirements.length === 0) errors.push("no-required-staffing-requirements");
+      if (assignments.length === 0) errors.push("no-accepted-assignments");
+      const nextDay = (date: string) => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+      for (const a of assignments) {
+        if (a.startDate < eng.startDate || a.endDate > eng.plannedEndDate) errors.push(`assignment-outside-engagement-dates:${a.id}`);
+        if (a.availabilityStatus !== "available") errors.push(`availability-unconfirmed:${a.personId}`);
+        if (a.rateAmount == null) errors.push(`missing-rate:${a.role}`);
+        const personAssignments = allAccepted.filter(x => x.personId === a.personId);
+        const boundaries = new Set<string>();
+        for (const item of personAssignments) {
+          boundaries.add(item.startDate);
+          const dayAfter = new Date(`${item.endDate}T00:00:00Z`);
+          dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+          boundaries.add(dayAfter.toISOString().slice(0, 10));
+        }
+        const points = [...boundaries].sort();
+        for (let i = 0; i < points.length - 1; i++) {
+          const from = points[i];
+          const throughDate = new Date(`${points[i + 1]}T00:00:00Z`);
+          throughDate.setUTCDate(throughDate.getUTCDate() - 1);
+          const through = throughDate.toISOString().slice(0, 10);
+          const peak = personAssignments
+            .filter(item => item.startDate <= from && item.endDate >= through)
+            .reduce((sum, item) => sum + item.allocationPct, 0);
+          if (peak > 100) errors.push(`capacity-conflict:${a.personId}`);
+        }
+      }
+      for (const reqr of requirements) {
+        const matches = assignments.filter(a => a.requirementId === reqr.id);
+        if (!matches.length) errors.push(`missing-required-role:${reqr.role}`);
+        if (reqr.rateAmount == null && !matches.some(a => a.rateAmount != null)) errors.push(`missing-rate:${reqr.role}`);
+        const boundaries = new Set([reqr.startDate, nextDay(reqr.endDate)]);
+        for (const a of matches) {
+          const start = a.startDate < reqr.startDate ? reqr.startDate : a.startDate;
+          const end = a.endDate > reqr.endDate ? reqr.endDate : a.endDate;
+          if (start <= end) { boundaries.add(start); boundaries.add(nextDay(end)); }
+        }
+        const points = [...boundaries].sort();
+        for (let i = 0; i < points.length - 1; i++) {
+          const from = points[i], toExclusive = points[i + 1];
+          if (from < reqr.startDate || from > reqr.endDate) continue;
+          const through = new Date(`${toExclusive}T00:00:00Z`); through.setUTCDate(through.getUTCDate() - 1);
+          const to = through.toISOString().slice(0, 10);
+          const allocation = matches.filter(a => a.startDate <= from && a.endDate >= to).reduce((sum, a) => sum + a.allocationPct, 0);
+          if (allocation < reqr.allocationPct) errors.push(`incomplete-coverage:${reqr.role}:${from}`);
+        }
+      }
+      if (errors.length) return { errors: [...new Set(errors)] as string[] };
+      const [updated] = await tx.update(atelierEngagements).set({ mobilizationStatus: "active", plmStage: "deliver", updatedAt: new Date() } as any)
+        .where(and(eq(atelierEngagements.id, eng.id), or(eq(atelierEngagements.mobilizationStatus, "not_started"), eq(atelierEngagements.mobilizationStatus, "planned")))).returning();
+      if (!updated) return { race: true as const };
+      await tx.insert(atelierAuditEvents).values({ id: rid("aud"), entityType: "engagement", entityId: eng.id, actorType: "human", actorId: me.id, actorLabel: me.name, action: "mobilization.activate", payload: { status: "active" }, payloadSummary: `Engagement ${eng.name} activated` });
+      return { updated };
+    });
+    if ("errors" in result) { res.status(409).json({ error: "mobilization-validation-failed", reasons: result.errors }); return; }
+    if ("race" in result) { res.status(409).json({ error: "mobilization-state-race" }); return; }
+    res.json({ ok: true, engagement: result.updated });
+  } catch (err) { next(err); }
+});
+
+router.post("/engagements/:engId/mobilization/handoffs", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return;
+    if (!canMobilize(me, eng)) { res.status(403).json({ error: "mobilization-forbidden" }); return; }
+    const b = req.body ?? {};
+    if ((!b.recipientPersonId && !b.toUserId) || !b.kind || !b.idempotencyKey) { res.status(400).json({ error: "invalid-handoff" }); return; }
+    let recipientUserId = b.toUserId ? String(b.toUserId) : "";
+    if (b.recipientPersonId) {
+      const [person] = await db.select({ id: atelierPersons.id }).from(atelierPersons).where(and(eq(atelierPersons.id, String(b.recipientPersonId)), eq(atelierPersons.orgId, me.orgId), isNull(atelierPersons.deletedAt)));
+      if (!person) { res.status(400).json({ error: "handoff-recipient-not-found" }); return; }
+      const [linked] = await db.select({ id: atelierUsers.id }).from(atelierUsers).where(and(eq(atelierUsers.personId, person.id), eq(atelierUsers.orgId, me.orgId), isNull(atelierUsers.deletedAt)));
+      if (!linked) { res.status(400).json({ error: "handoff-recipient-has-no-login" }); return; }
+      recipientUserId = linked.id;
+    }
+    const [recipient] = await db.select({ id: atelierUsers.id }).from(atelierUsers).where(and(eq(atelierUsers.id, recipientUserId), eq(atelierUsers.orgId, me.orgId), isNull(atelierUsers.deletedAt)));
+    if (!recipient) { res.status(400).json({ error: "handoff-recipient-not-found" }); return; }
+    const [existing] = await db.select().from(atelierMobilizationHandoffs).where(and(eq(atelierMobilizationHandoffs.orgId, me.orgId), eq(atelierMobilizationHandoffs.engagementId, eng.id), eq(atelierMobilizationHandoffs.idempotencyKey, String(b.idempotencyKey))));
+    if (existing) { res.json(existing); return; }
+    const id = rid("handoff");
+    let [handoff] = await db.transaction(async (tx) => {
+      const inserted = await tx.insert(atelierMobilizationHandoffs).values({ id, orgId: me.orgId, engagementId: eng.id, assignmentId: b.assignmentId ? String(b.assignmentId) : null, kind: String(b.kind), fromUserId: me.id, toUserId: recipientUserId, idempotencyKey: String(b.idempotencyKey), notes: b.notes ? String(b.notes) : null, createdByUserId: me.id }).onConflictDoNothing({ target: [atelierMobilizationHandoffs.orgId, atelierMobilizationHandoffs.idempotencyKey] }).returning();
+      if (inserted[0]) {
+        await emitSelfNotification({ userId: recipientUserId, orgId: me.orgId, kind: `mobilization_handoff_${b.kind}`, title: "Mobilization handoff", body: `You have a ${b.kind} handoff for ${eng.name}.`, href: `/atelier/engagements/${eng.id}` }, tx);
+        await tx.insert(atelierAuditEvents).values({ id: rid("aud"), entityType: "mobilization_handoff", entityId: id, actorType: "human", actorId: me.id, actorLabel: me.name, action: "mobilization.handoff.create", payload: { toUserId: recipientUserId, kind: b.kind }, payloadSummary: "Mobilization handoff created" });
+      }
+      return inserted;
+    });
+    if (!handoff) {
+      [handoff] = await db.select().from(atelierMobilizationHandoffs).where(and(eq(atelierMobilizationHandoffs.orgId, me.orgId), eq(atelierMobilizationHandoffs.engagementId, eng.id), eq(atelierMobilizationHandoffs.idempotencyKey, String(b.idempotencyKey))));
+      if (handoff) {
+        const [notification] = await db.select({ id: atelierSelfNotifications.id }).from(atelierSelfNotifications).where(and(
+          eq(atelierSelfNotifications.orgId, me.orgId), eq(atelierSelfNotifications.userId, recipientUserId),
+          eq(atelierSelfNotifications.kind, `mobilization_handoff_${b.kind}`),
+          eq(atelierSelfNotifications.href, `/atelier/engagements/${eng.id}`),
+        ));
+        if (!notification) await emitSelfNotification({ userId: recipientUserId, orgId: me.orgId, kind: `mobilization_handoff_${b.kind}`, title: "Mobilization handoff", body: `You have a ${b.kind} handoff for ${eng.name}.`, href: `/atelier/engagements/${eng.id}` });
+        const [event] = await db.select({ id: atelierAuditEvents.id }).from(atelierAuditEvents).where(and(eq(atelierAuditEvents.entityType, "mobilization_handoff"), eq(atelierAuditEvents.entityId, handoff.id), eq(atelierAuditEvents.action, "mobilization.handoff.create")));
+        if (!event) await audit({ entityType: "mobilization_handoff", entityId: handoff.id, actor: me, action: "mobilization.handoff.create", payload: { toUserId: recipientUserId, kind: b.kind }, summary: "Mobilization handoff repaired" });
+        res.json(handoff); return;
+      }
+      res.status(409).json({ error: "handoff-idempotency-conflict" }); return;
+    }
+    res.status(201).json(handoff);
+  } catch (err) { next(err); }
 });
 
 export default router;

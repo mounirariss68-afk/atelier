@@ -1073,6 +1073,7 @@ export const atelierEngagementAccess = pgTable(
       .default([]),
     status: text("status").notNull().default("active"), // active | expired | revoked
     grantedByUserId: text("granted_by_user_id"),
+    mobilizationAssignmentId: text("mobilization_assignment_id"),
     grantedAt: timestamp("granted_at").notNull().defaultNow(),
     endDate: timestamp("end_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1109,6 +1110,10 @@ export const atelierEngagements = pgTable(
     plmStage: text("plm_stage").notNull(), // mobilize | deliver | compound | closed
     partnerOwnerId: text("partner_owner_id").notNull(),
     engagementLeadId: text("engagement_lead_id").notNull(),
+    mobilizationStatus: text("mobilization_status").notNull().default("not_started"),
+    charterSeed: jsonb("charter_seed").$type<Record<string, unknown> | null>(),
+    commercialSnapshotSummary: jsonb("commercial_snapshot_summary")
+      .$type<Record<string, unknown> | null>(),
     charter: jsonb("charter").$type<{
       objectives: string[];
       scope: string[];

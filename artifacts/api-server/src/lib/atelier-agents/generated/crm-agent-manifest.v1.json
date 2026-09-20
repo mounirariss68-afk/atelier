@@ -154,7 +154,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "36b8d7e1b2e7848eb247e19b6ace7c607aaa9a7549a9fa09d1e95f96ad766593",
+      "sourceHash": "d36ba56cfdc77db985df963b162a9951eae9860662257a88fb4b7929a59abcee",
       "promptHash": "8f3ba55e5d1e2610c937ca247ec8cdc1dc8779ad44015c4c3028adcb96daf0a8"
     },
     {
@@ -1001,7 +1001,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "36b8d7e1b2e7848eb247e19b6ace7c607aaa9a7549a9fa09d1e95f96ad766593",
+      "sourceHash": "d36ba56cfdc77db985df963b162a9951eae9860662257a88fb4b7929a59abcee",
       "promptHash": "5222b40a644b2767d38d208ad91e7d7bd65804f6e939bbd00922d145fb0a0633"
     },
     {

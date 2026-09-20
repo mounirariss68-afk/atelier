@@ -29,6 +29,8 @@ import {
   atelierTrainingCompletions,
   atelierTimesheetWeeks,
   atelierAgentRuns,
+  atelierStaffingAssignments,
+  atelierEngagements,
 } from "@workspace/db";
 import { listJobsForUser } from "../../lib/background-jobs.js";
 import { agentRunIsFresh } from "../../lib/atelier-agents/run-staleness.js";
@@ -46,6 +48,7 @@ import {
 } from "@workspace/api-zod";
 import { loadTrainingFileBytes } from "./performanceRoutes";
 import { personaToWire } from "./personaCookie";
+import { transitionMobilizationAssignment } from "./engagementRoutes";
 
 const router: IRouter = Router();
 
@@ -64,6 +67,79 @@ function ensurePersona(
   }
   return me;
 }
+
+// Self-only lifecycle action for employees and contractors. Engagement routes
+// intentionally reject self-scoped personas; this endpoint is the sole path
+// by which a named assignee can accept or decline their own proposal.
+router.patch("/me/mobilization-assignments/:assignmentId", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const state = String(req.body?.state ?? "");
+    if (state !== "accepted" && state !== "declined") {
+      res.status(400).json({ error: "self-assignment-state-must-be-accepted-or-declined" });
+      return;
+    }
+    const [assignment] = await db.select({ engagementId: atelierStaffingAssignments.engagementId })
+      .from(atelierStaffingAssignments).where(and(
+        eq(atelierStaffingAssignments.id, req.params.assignmentId),
+        eq(atelierStaffingAssignments.userId, me.id),
+        eq(atelierStaffingAssignments.orgId, me.orgId),
+      ));
+    if (!assignment) { res.status(404).json({ error: "assignment-not-found" }); return; }
+    const result = await transitionMobilizationAssignment({
+      assignmentId: req.params.assignmentId,
+      expectedEngagementId: assignment.engagementId,
+      actor: me,
+      nextState: state,
+      selfOnly: true,
+    });
+    if ("error" in result) {
+      const error = (result as { error: string }).error;
+      res.status(error === "assignment-not-found" ? 404 : error.includes("only") ? 403 : 409).json(result);
+      return;
+    }
+    res.json(result.row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/me/mobilization-assignments", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const rows = await db.select({
+      assignment: atelierStaffingAssignments,
+      engagementName: atelierEngagements.name,
+      engagementStartDate: atelierEngagements.startDate,
+      engagementEndDate: atelierEngagements.plannedEndDate,
+    }).from(atelierStaffingAssignments)
+      .innerJoin(atelierEngagements, eq(atelierEngagements.id, atelierStaffingAssignments.engagementId))
+      .where(and(
+        eq(atelierStaffingAssignments.orgId, me.orgId),
+        eq(atelierStaffingAssignments.userId, me.id),
+        inArray(atelierStaffingAssignments.state, ["proposed", "accepted"]),
+        isNull(atelierStaffingAssignments.deletedAt),
+        isNull(atelierEngagements.deletedAt),
+      ));
+    res.json(rows.map(({ assignment, engagementName, engagementStartDate, engagementEndDate }) => ({
+      id: assignment.id,
+      engagementId: assignment.engagementId,
+      engagementName,
+      engagementStartDate,
+      engagementEndDate,
+      role: assignment.role,
+      seniority: assignment.seniority,
+      allocationPct: assignment.allocationPct,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      state: assignment.state,
+    })));
+  } catch (err) {
+    next(err);
+  }
+});
 
 export interface SelfPersonWire {
   id: string;

@@ -25,17 +25,19 @@ import { useFinanceEntities } from "@/lib/v5-hooks";
 import { useToast } from "@/hooks/use-toast";
 import { ProcessesTab } from "@/components/tabs/ProcessesTab";
 import { FinancialsTab } from "@/components/tabs/FinancialsTab";
+import { TeamTab } from "@/components/tabs/TeamTab";
 
 const TABS = [
   { id: 'charter', label: 'Charter' },
   { id: 'workplan', label: 'Workplan' },
   { id: 'deliverables', label: 'Deliverables' },
+  { id: 'team', label: 'Team' },
   { id: 'financials', label: 'Financials' },
   { id: 'agents', label: 'Agents' },
   { id: 'processes', label: 'Processes' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'documents', label: 'Documents' },
-  { id: 'audit', label: 'Audit Trail' }
+  { id: 'audit', label: 'Audit Trail' },
 ];
 
 const TAB_IDS = new Set(TABS.map((t) => t.id));
@@ -160,6 +162,7 @@ export default function Engagement() {
           {activeTab === 'charter' && <CharterTab engId={eng.id} />}
           {activeTab === 'workplan' && <WorkplanTab engId={eng.id} />}
           {activeTab === 'deliverables' && <DeliverablesTab engId={eng.id} />}
+          {activeTab === 'team' && <TeamTab engId={eng.id} />}
           {activeTab === 'financials' && <FinancialsTab engId={eng.id} />}
           {activeTab === 'artifacts' && <ArtifactsTab engId={eng.id} />}
           {activeTab === 'documents' && <DocumentLibraryPanel engagementId={eng.id} />}
