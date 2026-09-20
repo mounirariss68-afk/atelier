@@ -12004,6 +12004,17 @@ components:
         outputs:
           type: array
           items: { $ref: "#/components/schemas/AtelierAgentSchemaField" }
+        tools:
+          type: array
+          items: { type: string }
+        guardrails:
+          type: array
+          items: { type: string }
+        humanCheckpoints:
+          type: array
+          items: { type: object }
+        promptRef: { type: string }
+        executable: { type: boolean }
 
     AgentActivityItem:
       type: object
@@ -12780,6 +12791,9 @@ components:
         targetLabel: { type: ["string", "null"] }
         output: {}
         steps:
+          type: array
+          items: {}
+        toolCalls:
           type: array
           items: {}
         humanDecisions:

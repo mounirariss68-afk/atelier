@@ -11,6 +11,7 @@ export * from "./agentActivityItem";
 export * from "./agentActivityItemConfidence";
 export * from "./agentActivityItemStatus";
 export * from "./agentCatalogEntry";
+export * from "./agentCatalogEntryHumanCheckpointsItem";
 export * from "./agentCatalogEntryStatus";
 export * from "./atelierAcceptNepEntitlement200";
 export * from "./atelierAcceptRosterInvitation200";

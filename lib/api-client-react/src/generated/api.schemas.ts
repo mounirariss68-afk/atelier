@@ -6030,6 +6030,8 @@ export const AgentCatalogEntryStatus = {
   stub: "stub",
 } as const;
 
+export type AgentCatalogEntryHumanCheckpointsItem = { [key: string]: unknown };
+
 export type AtelierAgentSchemaFieldType =
   (typeof AtelierAgentSchemaFieldType)[keyof typeof AtelierAgentSchemaFieldType];
 
@@ -6062,6 +6064,11 @@ export interface AgentCatalogEntry {
   runsLast30d: number;
   inputs?: AtelierAgentSchemaField[];
   outputs?: AtelierAgentSchemaField[];
+  tools?: string[];
+  guardrails?: string[];
+  humanCheckpoints?: AgentCatalogEntryHumanCheckpointsItem[];
+  promptRef?: string;
+  executable?: boolean;
 }
 
 export type AgentActivityItemStatus =
@@ -6819,6 +6826,7 @@ export interface AtelierAgentRunDetail {
   targetLabel?: string | null;
   output?: unknown;
   steps?: unknown[];
+  toolCalls?: unknown[];
   humanDecisions?: unknown[];
   /** @nullable */
   costUsd?: number | null;

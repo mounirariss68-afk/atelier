@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
+import { getAgent } from "@workspace/agents";
 import {
   db,
   atelierUsers,
@@ -131,7 +132,6 @@ import ownershipRoutes from "./ownershipRoutes";
 import financePlanRoutes, { computeBacklogKpisForOrg } from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
 import financeMvpSummaryRoutes from "./financeMvpSummaryRoutes";
-import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
@@ -583,7 +583,6 @@ router.use(financeReportsRoutes);
 router.use(financeMvpSummaryRoutes);
 // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
 // Retire) backed by Postgres; replaces the client-side seed module.
-router.use(agentsLensRoutes);
 // Task #360 — L2C Wave 1: Codex (CLM) — counterparty registry + clause
 // library (Step 2). Contract record + state machine land in Step 3 in the
 // same file. Change orders, deliverable acceptance, e-sign / DPA flows
@@ -1366,26 +1365,69 @@ router.get("/engagements/:engId", async (req, res) => {
 // =============================================================
 // /accounts handled by accountRoutes (Task #238 — v2 CRM).
 
-router.get("/agents", async (_req, res) => {
+router.get("/agents", async (req, res) => {
+  const me = req.atelierPersona;
+  if (!me) {
+    res.status(401).json({ error: "no-active-persona" });
+    return;
+  }
   const rows = await db
     .select()
     .from(atelierAgents)
-    .where(isNull(atelierAgents.deletedAt));
+    .where(
+      and(
+        isNull(atelierAgents.deletedAt),
+        // Registry metadata is global runtime authority; tenant rows may
+        // override presentation fields but may never make a stub executable.
+        // Null org rows are the shared catalogue used by existing callers.
+        or(isNull(atelierAgents.orgId), eq(atelierAgents.orgId, me.orgId)),
+      ),
+    );
   res.json(
     AtelierListAgentsResponse.parse(
-      rows.map((a) => ({
-        id: a.id,
-        name: a.name,
-        group: a.group,
-        stage: a.stage,
-        purpose: a.purpose,
-        model: a.model,
-        starred: a.starred,
-        status: a.status as "registered" | "mvp" | "stub",
-        runsLast30d: a.runsLast30d,
-        inputs: a.inputs,
-        outputs: a.outputs,
-      })),
+      rows.map((a) => {
+        const runtime = getAgent(a.id);
+        // A database catalogue row is not an executable agent by itself.
+        // Keep unavailable rows visible as diagnostics, but never borrow
+        // capabilities or controls from disconnected lifecycle data.
+        if (!runtime || runtime.status === "stub") {
+          return {
+            id: a.id,
+            name: a.name,
+            group: a.group,
+            stage: a.stage,
+            purpose: a.purpose,
+            model: a.model,
+            starred: false,
+            status: "stub" as const,
+            runsLast30d: a.runsLast30d,
+            inputs: [],
+            outputs: [],
+            tools: [],
+            guardrails: [],
+            humanCheckpoints: [],
+            executable: false,
+          };
+        }
+        return {
+          id: runtime.id,
+          name: runtime.name,
+          group: runtime.group,
+          stage: runtime.stage,
+          purpose: runtime.purpose,
+          model: runtime.model,
+          starred: runtime.starred,
+          status: runtime.status,
+          runsLast30d: a.runsLast30d,
+          inputs: runtime.inputSchema ? a.inputs : [],
+          outputs: runtime.outputSchema ? a.outputs : [],
+          tools: runtime.tools,
+          guardrails: runtime.guardrails,
+          humanCheckpoints: runtime.humanCheckpoints,
+          promptRef: runtime.systemPromptRef,
+          executable: true,
+        };
+      }),
     ),
   );
 });

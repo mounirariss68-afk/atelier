@@ -148,19 +148,8 @@ import FinancePlanScenarios from "@/pages/finance/FinancePlanScenarios";
 import FinancePlanHeadcount from "@/pages/finance/FinancePlanHeadcount";
 import FinancePlanRenewals from "@/pages/finance/FinancePlanRenewals";
 import FinancePlanBonus from "@/pages/finance/FinancePlanBonus";
-// Task #370 — Agents lens (Design → Retire). The lens home replaces
-// the bare /agents catalogue with a lifecycle ribbon; the catalogue
-// itself re-mounts under /agents/monitor and runs under
-// /agents/monitor/runs/:id. Profile becomes the spec view at
-// /agents/design/:id. Old URLs redirect.
-import AgentsLensHome from "@/pages/agents/AgentsLensHome";
-import AgentsDesign from "@/pages/agents/AgentsDesign";
-import AgentsBuild from "@/pages/agents/AgentsBuild";
-import AgentsEvaluate from "@/pages/agents/AgentsEvaluate";
-import AgentsDeploy from "@/pages/agents/AgentsDeploy";
-import AgentsImprove from "@/pages/agents/AgentsImprove";
-import AgentsRetire from "@/pages/agents/AgentsRetire";
-import AgentsOutcomes from "@/pages/agents/AgentsOutcomes";
+// Agents is deliberately small and runtime-backed: catalogue, profile, and
+// persisted run detail/history. Lifecycle showcase pages are not operations.
 // Task #369 — Clients lens re-homes the commercial loop under /clients
 // with a flat IA (Overview · Accounts · Opportunities · Engagements ·
 // Billing · References). Renewals/expansions are a flag on each
@@ -614,45 +603,32 @@ function Router() {
         <Route path="/wallet/treasury" component={WalletTreasury} />
         <Route path="/wallet/collections" component={WalletCollections} />
         <Route path="/accounts/:accountId" component={Account} />
-        {/* Task #370 — Agents lens (Design → Retire). New stage routes
-            live under `/agents/<stage>`; the catalogue re-mounts at
-            `/agents/monitor` and run-detail at `/agents/monitor/runs/:id`.
-            Old `/agents/library`, `/agents/runs/:id` and `/agents/:id`
-            paths redirect to the new structure so deep-links keep
-            resolving. */}
-        <Route path="/agents/design" component={AgentsDesign} />
-        <Route path="/agents/build" component={AgentsBuild} />
-        <Route path="/agents/evaluate" component={AgentsEvaluate} />
-        <Route path="/agents/deploy" component={AgentsDeploy} />
-        <Route path="/agents/improve" component={AgentsImprove} />
-        <Route path="/agents/retire" component={AgentsRetire} />
-        <Route path="/agents/outcomes" component={AgentsOutcomes} />
-        <Route path="/agents/monitor" component={Agents} />
-        <Route path="/agents/monitor/runs/:runId" component={AgentRun} />
-        <Route path="/agents/design/:agentId" component={AgentProfile} />
-        {/* Redirects from the pre-lens URLs. */}
+        <Route path="/agents/runs/:runId" component={AgentRun} />
+        {/* Legacy lifecycle and monitor URLs redirect to the retained MVP. */}
         <Route path="/agents/library">
-          {() => {
-            window.history.replaceState(null, "", "/agents/monitor");
-            window.location.replace("/agents/monitor");
-            return null;
-          }}
+          {() => <Redirect to="/agents" />}
         </Route>
-        <Route path="/agents/runs/:runId">
+        <Route path="/agents/monitor">
+          {() => <Redirect to="/agents" />}
+        </Route>
+        <Route path="/agents/design">
+          {() => <Redirect to="/agents" />}
+        </Route>
+        <Route path="/agents/design/:agentId">
           {(params) => {
-            const target = `/agents/monitor/runs/${params.runId}`;
-            window.history.replaceState(null, "", target);
-            window.location.replace(target);
-            return null;
+            return <Redirect to={`/agents/${params.agentId}`} />;
           }}
         </Route>
+        <Route path="/agents/monitor/runs/:runId">
+          {(params) => <Redirect to={`/agents/runs/${params.runId}`} />}
+        </Route>
+        {["/agents/build", "/agents/evaluate", "/agents/deploy", "/agents/improve", "/agents/retire", "/agents/outcomes"].map((path) => (
+          <Route key={path} path={path}>
+            {() => <Redirect to="/agents" />}
+          </Route>
+        ))}
         <Route path="/agents/:agentId">
-          {(params) => {
-            const target = `/agents/design/${params.agentId}`;
-            window.history.replaceState(null, "", target);
-            window.location.replace(target);
-            return null;
-          }}
+          {(params) => <AgentProfile key={params.agentId} />}
         </Route>
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />
@@ -789,7 +765,7 @@ function Router() {
         <Route path="/partners/preview/:firmId/delivery/:engId" component={PartnerPortalPreview} />
         <Route path="/partners/preview/:firmId/documents" component={PartnerPortalPreview} />
         <Route path="/partners/:section" component={PartnersIndex} />
-        <Route path="/agents" component={AgentsLensHome} />
+        <Route path="/agents" component={Agents} />
         {/* Finance MVP: six founder-facing destinations. Advanced pages stay
             mounted as deliberate detail routes for old bookmarks and future
             reactivation, but do not appear in Finance navigation. */}

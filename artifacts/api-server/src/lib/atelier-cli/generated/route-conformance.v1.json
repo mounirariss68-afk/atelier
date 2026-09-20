@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1217,
+  "routeCount": 1206,
   "capabilityCount": 328,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -5440,34 +5440,6 @@
       }
     },
     {
-      "routeId": "288664afd8052840",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/retirements",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "28930ea459a024ad",
       "file": "artifacts/api-server/src/routes/atelier/invoiceRoutes.ts",
       "method": "get",
@@ -8884,34 +8856,6 @@
       }
     },
     {
-      "routeId": "437ade046f30df7f",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/incidents",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "442252fe64b32c32",
       "file": "artifacts/api-server/src/routes/auth/index.ts",
       "method": "post",
@@ -9383,34 +9327,6 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "file download; no CLI shape (Task #383)",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
-      "routeId": "48f1d4d9bb8c5b37",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/deployments",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -11124,34 +11040,6 @@
       }
     },
     {
-      "routeId": "58defcd4136b5a54",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/incidents/:id",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "591cdb4e048d9b24",
       "file": "artifacts/api-server/src/routes/atelier/walletRoutes.ts",
       "method": "post",
@@ -11539,34 +11427,6 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "UI-workflow read; payroll-adjacent review queue",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
-      "routeId": "5c038502bec53752",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "post",
-      "path": "/agents-lens/retirements/:id/advance",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -14871,34 +14731,6 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "permanent person removal is destructive HR work; assistant authority is not approved",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
-      "routeId": "744f09bf076e2209",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "post",
-      "path": "/agents-lens/specs/:id/review",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -21176,34 +21008,6 @@
       }
     },
     {
-      "routeId": "a31c5771fe1663d1",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/eval-suites",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "a34cee7a3f56cd98",
       "file": "artifacts/api-server/src/routes/atelier/cashRoutes.ts",
       "method": "post",
@@ -24284,34 +24088,6 @@
       }
     },
     {
-      "routeId": "b8c95d51d4a1446b",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "post",
-      "path": "/agents-lens/versions/:id/promote",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "b92809b04a8eeb1f",
       "file": "artifacts/api-server/src/routes/auth/index.ts",
       "method": "post",
@@ -26687,34 +26463,6 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
-      "routeId": "c8d2aebaf6dffb2a",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/outcomes",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "leadership analytics dashboard; no entity-detail or chat response shape",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -30276,34 +30024,6 @@
       }
     },
     {
-      "routeId": "e1f00dfdb8484418",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/versions",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "e25772f912960ce9",
       "file": "artifacts/api-server/src/routes/atelier/partnersRoutes.ts",
       "method": "post",
@@ -32483,34 +32203,6 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
-      "routeId": "f3a9f7d13c03cfee",
-      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
-      "method": "get",
-      "path": "/agents-lens/specs",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -34979,19 +34671,21 @@
     {
       "capabilityId": "codex.contract_compose",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "5ce167460c3d",
+      "executionStatus": "unsupported",
+      "implementationVersion": "6157dee8fe14",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
       "capabilityId": "codex.contract_dispatch",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "b93e23535921",
+      "executionStatus": "unsupported",
+      "implementationVersion": "371f81c2349d",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -35015,10 +34709,11 @@
     {
       "capabilityId": "codex.contract_record_redline",
       "source": "cli-only",
-      "executionStatus": "executable",
-      "implementationVersion": "4d353bbed3e3",
+      "executionStatus": "unsupported",
+      "implementationVersion": "284e86f5af98",
       "divergenceIds": [
-        "cli-only-route-parity-v1"
+        "cli-only-route-parity-v1",
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -35060,21 +34755,21 @@
     {
       "capabilityId": "codex.dpa_review",
       "source": "cli-only",
-      "executionStatus": "legacy_compat",
-      "implementationVersion": "04b01b564311",
+      "executionStatus": "unsupported",
+      "implementationVersion": "a8f9d114c3d9",
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
       "capabilityId": "codex.renewal_watchdog_run",
       "source": "cli-only",
-      "executionStatus": "legacy_compat",
-      "implementationVersion": "9a6e76d862bf",
+      "executionStatus": "unsupported",
+      "implementationVersion": "a3bc52548ef0",
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "legacy-confirmation-compat-v1"
+        "riser-adapter-not-integrated-v1"
       ]
     },
     {
@@ -37082,5 +36777,5 @@
       ]
     }
   ],
-  "conformanceVersion": "9baa2c8e7ef683609a7b2edda0868ccf706e8e2c800c258e915f21f024d6071a"
+  "conformanceVersion": "661c3c24c28a1ba118e9b5f18e31f630088dbf5770d4ce2d725c169be55ca492"
 }

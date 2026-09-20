@@ -10531,6 +10531,7 @@ export const AtelierGetAgentRunResponse = zod.object({
   targetLabel: zod.string().nullish(),
   output: zod.unknown().optional(),
   steps: zod.array(zod.unknown()).optional(),
+  toolCalls: zod.array(zod.unknown()).optional(),
   humanDecisions: zod.array(zod.unknown()).optional(),
   costUsd: zod.number().nullish(),
   durationMs: zod.number().nullish(),
@@ -10566,6 +10567,7 @@ export const AtelierRecordAgentDecisionResponse = zod.object({
   targetLabel: zod.string().nullish(),
   output: zod.unknown().optional(),
   steps: zod.array(zod.unknown()).optional(),
+  toolCalls: zod.array(zod.unknown()).optional(),
   humanDecisions: zod.array(zod.unknown()).optional(),
   costUsd: zod.number().nullish(),
   durationMs: zod.number().nullish(),
@@ -10580,7 +10582,6 @@ export const AtelierListEngagementsResponseItem = zod.object({
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
-  opportunityId: zod.string().nullish(),
   accountId: zod.string(),
   accountName: zod.string(),
   plmStage: zod.enum([
@@ -10602,9 +10603,6 @@ export const AtelierListEngagementsResponseItem = zod.object({
   raidStatus: zod.enum(["green", "amber", "red"]),
   deliverablesDueThisWeek: zod.number(),
   legalEntityId: zod.string().nullish(),
-  mobilizationStatus: zod.string().nullish(),
-  charterSeed: zod.record(zod.string(), zod.unknown()).nullish(),
-  commercialSnapshotSummary: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 export const AtelierListEngagementsResponse = zod.array(
   AtelierListEngagementsResponseItem,
@@ -10618,7 +10616,6 @@ export const AtelierGetEngagementResponse = zod.object({
   id: zod.string(),
   slug: zod.string(),
   name: zod.string(),
-  opportunityId: zod.string().nullish(),
   accountId: zod.string(),
   accountName: zod.string(),
   plmStage: zod.enum([
@@ -10640,9 +10637,6 @@ export const AtelierGetEngagementResponse = zod.object({
   raidStatus: zod.enum(["green", "amber", "red"]),
   deliverablesDueThisWeek: zod.number(),
   legalEntityId: zod.string().nullish(),
-  mobilizationStatus: zod.string().nullish(),
-  charterSeed: zod.record(zod.string(), zod.unknown()).nullish(),
-  commercialSnapshotSummary: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 export const AtelierListCharterVersionsParams = zod.object({
@@ -36599,6 +36593,11 @@ export const AtelierListAgentsResponseItem = zod.object({
       }),
     )
     .optional(),
+  tools: zod.array(zod.string()).optional(),
+  guardrails: zod.array(zod.string()).optional(),
+  humanCheckpoints: zod.array(zod.object({}).passthrough()).optional(),
+  promptRef: zod.string().optional(),
+  executable: zod.boolean().optional(),
 });
 export const AtelierListAgentsResponse = zod.array(
   AtelierListAgentsResponseItem,

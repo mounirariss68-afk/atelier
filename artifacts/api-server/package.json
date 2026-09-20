@@ -12,6 +12,7 @@
     "test:roster-removal": "NODE_ENV=test tsx ./tests/crm/roster-removal-integration.ts",
     "test:mobilization": "NODE_ENV=test tsx ./tests/mobilization/run.ts",
     "test:agents": "tsx ./tests/agents/run-fixtures.ts",
+    "test:agent-operations": "NODE_ENV=test tsx ./tests/agent-operations/run.ts",
     "test:exec-mapper-launch": "tsx ./tests/executive-mapper-launch/run.ts",
     "test:proposal-html": "tsx ./tests/proposal-html/run.ts",
     "test:spine-backfill": "tsx ./tests/spine-backfill/run.ts",

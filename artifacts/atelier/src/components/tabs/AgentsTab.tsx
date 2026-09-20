@@ -10,6 +10,7 @@ import {
   type AtelierAgentDesign,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bot, Star, ShieldCheck, Activity } from "lucide-react";
@@ -154,7 +155,7 @@ export function AgentsTab({ engId }: { engId: string }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Bot className="w-4 h-4 text-gold shrink-0" />
-                    <div className="font-medium text-text">{a.name}</div>
+                      <Link href={`/agents/${a.id}`} className="font-medium text-text hover:text-gold">{a.name}</Link>
                     {a.starred && <Star className="w-3.5 h-3.5 text-gold fill-gold" />}
                   </div>
                   <MonoChip

@@ -25,6 +25,7 @@ export interface AtelierAgentRunDetail {
   targetLabel?: string | null;
   output?: unknown;
   steps?: unknown[];
+  toolCalls?: unknown[];
   humanDecisions?: unknown[];
   /** @nullable */
   costUsd?: number | null;

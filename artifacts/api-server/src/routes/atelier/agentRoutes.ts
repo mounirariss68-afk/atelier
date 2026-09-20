@@ -28,6 +28,7 @@ import {
   atelierTranscripts,
   atelierOpportunityStageTransitions,
   atelierPaneAItems,
+  atelierDeliverables,
   atelierWinLossDebriefs,
 } from "@workspace/db";
 import {
@@ -162,6 +163,72 @@ async function loadOpp(id: string) {
     .from(atelierOpportunities)
     .where(and(eq(atelierOpportunities.id, id), isNull(atelierOpportunities.deletedAt)));
   return row;
+}
+
+export async function canAccessAgentRunTarget(
+  me: typeof atelierUsers.$inferSelect,
+  run: typeof atelierAgentRuns.$inferSelect,
+  access?: Awaited<ReturnType<typeof accessibleEngagementIds>>,
+): Promise<boolean> {
+  // A targetless run is allowed only when both columns are null. A partially
+  // populated target is not safely attributable and must not be readable.
+  if (!run.targetId && !run.targetType) return true;
+  if (!run.targetId || !run.targetType) return false;
+  const scoped = access ?? (await accessibleEngagementIds(me));
+  const type = run.targetType.toLowerCase();
+  if (type === "account" || type === "atelier_account") {
+    const [row] = await db.select({ id: atelierAccounts.id }).from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, run.targetId), eq(atelierAccounts.orgId, me.orgId), isNull(atelierAccounts.deletedAt)));
+    return !!row && (await canSeeAccount(scoped, me, row.id));
+  }
+  if (type === "opportunity" || type === "atelier_opportunity") {
+    const [row] = await db.select({ accountId: atelierOpportunities.accountId }).from(atelierOpportunities)
+      .where(and(eq(atelierOpportunities.id, run.targetId), eq(atelierOpportunities.orgId, me.orgId), isNull(atelierOpportunities.deletedAt)));
+    return !!row && (await canSeeAccount(scoped, me, row.accountId));
+  }
+  if (type === "engagement" || type === "atelier_engagement") {
+    const [row] = await db.select({ id: atelierEngagements.id }).from(atelierEngagements)
+      .where(and(eq(atelierEngagements.id, run.targetId), eq(atelierEngagements.orgId, me.orgId), isNull(atelierEngagements.deletedAt)));
+    return !!row && (scoped.all || scoped.ids.has(row.id));
+  }
+  if (type === "deliverable" || type === "atelier_deliverable") {
+    const [row] = await db.select({ engagementId: atelierDeliverables.engagementId }).from(atelierDeliverables)
+      .where(and(eq(atelierDeliverables.id, run.targetId), eq(atelierDeliverables.orgId, me.orgId), isNull(atelierDeliverables.deletedAt)));
+    return !!row && (scoped.all || scoped.ids.has(row.engagementId));
+  }
+  // These are intentionally org-level targets rather than rows in a
+  // tenant-owned table. Enumerate the stable IDs emitted by current runners.
+  if (type === "firm" || type === "pipeline" || type === "atelier") {
+    if (type === "firm") {
+      return run.targetId === me.orgId || run.targetId === "firm_profile" || run.targetId === "_firm_";
+    }
+    if (type === "pipeline") return run.targetId === "atelier-global" || run.targetId === "pipeline";
+    return [
+      "win_themes", "press_watch", "certifications", "backups", "ip_catalog",
+    ].includes(run.targetId) ||
+      run.targetId.startsWith("field_notes:") ||
+      run.targetId.startsWith("compliance:");
+  }
+  // Do not let a newly introduced target type silently bypass its ACL.
+  return false;
+}
+
+function canMakeAgentDecision(
+  me: typeof atelierUsers.$inferSelect,
+  run: typeof atelierAgentRuns.$inferSelect,
+): boolean {
+  const runtime = getAgent(run.agentId);
+  if (!runtime) return false;
+  const checkpoints = runtime.humanCheckpoints.filter((cp) => cp.blocking);
+  if (checkpoints.length === 0) return false;
+  return checkpoints.some((cp) => {
+    if (cp.decider === "partner") return me.role === "partner" || me.role === "founding_partner";
+    if (cp.decider === "engagement_lead") {
+      return me.role === "partner" || me.role === "founding_partner" || me.role === "senior_manager";
+    }
+    if ((cp.decider as string) === "finance") return me.role === "finance" || me.role === "partner" || me.role === "founding_partner";
+    return false;
+  });
 }
 
 // Task #8 — canonical stalled-aging basis: opportunities sitting in the
@@ -2695,8 +2762,18 @@ router.post("/engagements/:engId/meetings", async (req, res) => {
 // -------------------------------------------------------------------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/agent-runs/:runId", async (req, res) => {
-  const [r] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [r] = await db.select().from(atelierAgentRuns).where(and(
+    eq(atelierAgentRuns.id, req.params.runId),
+    eq(atelierAgentRuns.orgId, me.orgId),
+    isNull(atelierAgentRuns.deletedAt),
+  ));
   if (!r) {
+    res.status(404).json({ error: "run-not-found" });
+    return;
+  }
+  if (!(await canAccessAgentRunTarget(me, r))) {
     res.status(404).json({ error: "run-not-found" });
     return;
   }
@@ -2735,6 +2812,21 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
   ));
   if (!r) {
     res.status(404).json({ error: "run-not-found" });
+    return;
+  }
+  if (!(await canAccessAgentRunTarget(me, r))) {
+    res.status(404).json({ error: "run-not-found" });
+    return;
+  }
+  if (!canMakeAgentDecision(me, r)) {
+    res.status(403).json({ error: "decision-not-authorized" });
+    return;
+  }
+  const priorDecisions = Array.isArray(r.humanDecisions)
+    ? (r.humanDecisions as Array<{ decision?: string }>)
+    : [];
+  if (priorDecisions.some((d) => d.decision === parsed.data.decision)) {
+    res.status(409).json({ error: "decision-already-recorded", decision: parsed.data.decision });
     return;
   }
   // Task #1022 — freeze the POV evidence snapshot BEFORE the approval is
@@ -2780,6 +2872,7 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     }
   }
   await recordDecision({
+    orgId: me.orgId,
     runId: r.id,
     decision: parsed.data.decision,
     rationale: parsed.data.rationale ?? "",
@@ -2837,7 +2930,10 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
         .where(and(eq(atelierPovs.runId, r.id), isNull(atelierPovs.deletedAt)));
     }
   }
-  const [r2] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
+  const [r2] = await db.select().from(atelierAgentRuns).where(and(
+    eq(atelierAgentRuns.id, req.params.runId),
+    eq(atelierAgentRuns.orgId, me.orgId),
+  ));
   res.json({
     id: r2.id,
     agentId: r2.agentId,

@@ -2,8 +2,9 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, or } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
+import { getAgent } from "@workspace/agents";
 import {
   db,
   atelierUsers,
@@ -25,6 +26,8 @@ import {
   AtelierUpdateAdminSettingsBody,
   AtelierListAgentRunsResponse,
 } from "@workspace/api-zod";
+import { canAccessAgentRunTarget } from "./agentRoutes.js";
+import { accessibleEngagementIds } from "./engagementRoutes.js";
 
 function ensurePersona(
   req: Request,
@@ -636,8 +639,9 @@ router.get("/admin/founder-todos", async (req, res) => {
 router.get("/agents/:agentId/runs", async (req, res) => {
   const me = await ensurePersona(req, res);
   if (!me) return;
+  const access = await accessibleEngagementIds(me);
   const limit = 20;
-  const runs = await db
+  const rows = await db
     .select({
       id: atelierAgentRuns.id,
       agentId: atelierAgentRuns.agentId,
@@ -660,17 +664,25 @@ router.get("/agents/:agentId/runs", async (req, res) => {
     .where(
       and(
         eq(atelierAgentRuns.agentId, req.params.agentId),
+        eq(atelierAgentRuns.orgId, me.orgId),
+        or(isNull(atelierAgents.orgId), eq(atelierAgents.orgId, me.orgId)),
         isNull(atelierAgentRuns.deletedAt),
       ),
     )
     .orderBy(desc(atelierAgentRuns.createdAt))
     .limit(limit);
+  const runs = [];
+  for (const row of rows) {
+    if (await canAccessAgentRunTarget(me, row as unknown as typeof atelierAgentRuns.$inferSelect, access)) {
+      runs.push(row);
+    }
+  }
   res.json(
     AtelierListAgentRunsResponse.parse(
       runs.map((r) => ({
         id: r.id,
         agentId: r.agentId,
-        agentName: r.agentName ?? r.agentId,
+        agentName: getAgent(r.agentId)?.name ?? r.agentName ?? r.agentId,
         // Task #1046 — stale "running" rows (dead process) render as error.
         status: (effectiveAgentRunStatus(r) as "running" | "blocked" | "complete" | "error") ?? "running",
         confidence: (r.confidence as "green" | "amber" | "red" | null) ?? null,

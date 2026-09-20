@@ -1664,6 +1664,7 @@ export async function runMeetingScribe(args: {
 // ------- decision logging (ApproveEditReject) -------
 
 export async function recordDecision(args: {
+  orgId?: string;
   runId: string;
   decision: "approve" | "edit" | "reject";
   rationale: string;
@@ -1692,7 +1693,10 @@ export async function recordDecision(args: {
       ],
       updatedAt: new Date(),
     })
-    .where(eq(atelierAgentRuns.id, args.runId));
+    .where(and(
+      eq(atelierAgentRuns.id, args.runId),
+      ...(args.orgId ? [eq(atelierAgentRuns.orgId, args.orgId)] : []),
+    ));
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: args.targetType,
@@ -1702,6 +1706,7 @@ export async function recordDecision(args: {
     actorLabel: args.actorLabel,
     action: `human.${args.decision}`,
     payload: { runId: args.runId, rationale: args.rationale },
+    ...(args.orgId ? { orgId: args.orgId } : {}),
     payloadSummary: `${args.actorLabel} ${args.decision}d run on ${args.targetLabel}${args.rationale ? ` — "${args.rationale.slice(0, 120)}"` : ""}`,
   });
 }
