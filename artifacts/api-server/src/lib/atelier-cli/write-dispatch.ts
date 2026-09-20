@@ -26,7 +26,10 @@
  *      `raidId`, not `id`), add a translator in `PAYLOAD_TRANSLATORS`.
  */
 
+import type { IntentKind } from "./intent-router.js";
+
 export type DispatchVerb = "create" | "update" | "link" | "transition" | "delete";
+export type DispatchKind = IntentKind | "contact_relationship";
 
 /**
  * (verb, kind) → toolName the dispatcher should invoke. Only
@@ -54,7 +57,9 @@ export type DispatchVerb = "create" | "update" | "link" | "transition" | "delete
  *     partner relationships are modelled via `atelier_partner_firms`
  *     + opportunity FKs. Listing it would create a phantom kind.
  */
-export const DISPATCH_TABLE: Record<string, Partial<Record<DispatchVerb, string>>> = {
+export const DISPATCH_TABLE: Partial<
+  Record<DispatchKind, Partial<Record<DispatchVerb, string>>>
+> = {
   account: {
     create: "account_create",
     update: "account_update",
@@ -222,7 +227,7 @@ export const CHAT_OWNED_KINDS: ReadonlySet<string> = new Set(
 );
 
 export function dispatchTarget(verb: DispatchVerb, kind: string): string | undefined {
-  return DISPATCH_TABLE[kind]?.[verb];
+  return DISPATCH_TABLE[kind as DispatchKind]?.[verb];
 }
 
 export function translateDispatchPayload(

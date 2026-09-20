@@ -66,6 +66,7 @@ import {
 } from "../atelier-agents/runner.js";
 import { chainExecutiveMapperAfterCartographer } from "../atelier-agents/executive-mapper-chain.js";
 import { noteAgentLaunch, clearAgentLaunch } from "../atelier-agents/launch-visibility.js";
+import type { IntentKind } from "./intent-router.js";
 
 const FUZZY_LIMIT = 5;
 
@@ -79,26 +80,29 @@ type ResolvableKind =
 
 type WriteVerb = "create" | "update" | "link" | "transition" | "delete";
 type WriteKind =
-  | ResolvableKind
-  | "partner_link"
-  // Task #567 — relationship edges between contacts (org-chart structure).
-  | "contact_relationship"
-  // Task #411 — 15 new chat-owned write entities.
-  | "meeting"
-  | "raid_item"
-  | "proposal"
-  | "pov"
-  | "change_order"
-  | "timesheet_entry"
-  | "invoice"
-  | "contract"
-  | "rate_card"
-  | "renewal"
-  | "partner_firm"
-  | "win_theme"
-  | "win_loss_debrief"
-  | "brief"
-  | "agent_design";
+  | Extract<
+      IntentKind,
+      | ResolvableKind
+      | "partner_link"
+      // Task #411 — chat-owned write entities.
+      | "meeting"
+      | "raid_item"
+      | "proposal"
+      | "pov"
+      | "change_order"
+      | "timesheet_entry"
+      | "invoice"
+      | "contract"
+      | "rate_card"
+      | "renewal"
+      | "partner_firm"
+      | "win_theme"
+      | "win_loss_debrief"
+      | "brief"
+      | "agent_design"
+    >
+  // Task #567 — relationship edges are dispatchable but not a user intent kind.
+  | "contact_relationship";
 
 const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
   account: {

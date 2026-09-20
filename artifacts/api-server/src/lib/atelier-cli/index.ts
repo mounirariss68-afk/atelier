@@ -2913,12 +2913,29 @@ export function looksLikeToolMiss(raw: string | null | undefined): boolean {
     /(don'?t|do not|doesn'?t|does not|no longer)\s+(currently\s+)?(have|see|find)\s+(access to\s+)?(a|any|the)?\s*(suitable\s+|available\s+|specific\s+)?(tool|capabilit(?:y|ies)|function|way to)/.test(t) ||
     /\bno\s+(suitable\s+|available\s+|matching\s+)?(tools?|capabilit(?:y|ies)|functions?)\b/.test(t) ||
     /\b(i'?m|i am)\s+(unable|not able)\s+to\s+(do|perform|handle|complete)\s+(this|that)\b/.test(t) ||
+    /\bi\s+(?:can(?:not|'?t)|am not able to|don'?t have (?:the )?(?:ability|capability) to)\s+(?:do|handle|perform|complete|help with)\s+(?:this|that|it)\b/.test(t) ||
+    /\b(?:this|that|it)\s+(?:isn'?t|is not)\s+(?:currently\s+)?supported\b/.test(t) ||
+    /\bi\s+(?:don'?t|do not)\s+(?:have|possess)\s+(?:that|the|this)\s+(?:ability|capability|functionality)\b/.test(t) ||
     // Task #792 — "isn't available in this interface/app" variants, and
     // deflections to a (nonexistent on mobile) profile-page upload.
     /\bnot\s+(currently\s+)?(supported|available)\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface|interface|app)\b/.test(t) ||
     /\b(isn'?t|is not)\s+(currently\s+)?available\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface|interface|app)\b/.test(t) ||
     /\b(upload|update|add|manage|do)\s+(it|this|that|them)?\s*(from|on|via|through)\s+(the\s+|your\s+)?profile\s+page\b/.test(t) ||
     /\bcannot\s+(find|locate)\s+(a|any)\s+(tool|capabilit(?:y|ies)|function)/.test(t)
+  );
+}
+
+export function shouldWidenAfterToolMiss(args: {
+  text: string | null | undefined;
+  retryUsed: boolean;
+  currentStepHasToolCall: boolean;
+  priorToolCallCount: number;
+}): boolean {
+  return (
+    !args.retryUsed &&
+    !args.currentStepHasToolCall &&
+    args.priorToolCallCount === 0 &&
+    looksLikeToolMiss(args.text)
   );
 }
 
@@ -5830,12 +5847,12 @@ export async function runTurn(
         // the menu ONCE from the full eligible pool (same persona
         // clamp + read-intent write hiding) and let it retry, instead
         // of surfacing a refusal for a capability that exists.
-        if (
-          !widenRetryUsed &&
-          !claudeStep.toolCall &&
-          toolCalls.length === 0 &&
-          looksLikeToolMiss(claudeStep.text)
-        ) {
+        if (shouldWidenAfterToolMiss({
+          text: claudeStep.text,
+          retryUsed: widenRetryUsed,
+          currentStepHasToolCall: Boolean(claudeStep.toolCall),
+          priorToolCallCount: toolCalls.length,
+        })) {
           widenRetryUsed = true;
           // Task #1000 — the miss prose may have partially streamed;
           // retract it before the retry step re-streams a fresh answer.

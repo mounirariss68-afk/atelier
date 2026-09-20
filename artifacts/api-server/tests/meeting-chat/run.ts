@@ -62,7 +62,11 @@ import {
   scoreTitleWordMatch,
   titleWordsAllMatch,
 } from "../../src/lib/atelier-cli/temporal-query.js";
-import { looksLikeToolMiss } from "../../src/lib/atelier-cli/index.js";
+import {
+  looksLikeToolMiss,
+  shouldWidenAfterToolMiss,
+} from "../../src/lib/atelier-cli/index.js";
+import { deterministicClassify } from "../../src/lib/atelier-cli/intent-router.js";
 import {
   CORE_TOOLS_BY_KIND,
   floorToolsForKind,
@@ -460,6 +464,10 @@ console.log("14. Task #644 — widen-on-miss refusal detector (looksLikeToolMiss
     "Unfortunately I cannot find a tool that handles this request.",
     "I'm unable to do this in the current surface.",
     "That's not supported in this chat.",
+    "I can't do that.",
+    "I don't have that ability.",
+    "That isn't supported.",
+    "I am not able to help with this.",
   ]) {
     ok(looksLikeToolMiss(miss), `miss detected: "${miss.slice(0, 44)}…"`);
   }
@@ -472,6 +480,21 @@ console.log("14. Task #644 — widen-on-miss refusal detector (looksLikeToolMiss
   ]) {
     ok(!looksLikeToolMiss(normal), `normal prose passes: "${(normal || "(empty)").slice(0, 40)}"`);
   }
+  const missState = {
+    text: "I can't do that.",
+    retryUsed: false,
+    currentStepHasToolCall: false,
+    priorToolCallCount: 0,
+  };
+  ok(shouldWidenAfterToolMiss(missState), "first capability miss gets one widened retry");
+  ok(
+    !shouldWidenAfterToolMiss({ ...missState, retryUsed: true }),
+    "a widened retry cannot loop",
+  );
+  ok(
+    !shouldWidenAfterToolMiss({ ...missState, priorToolCallCount: 1 }),
+    "tool activity prevents unsafe widening",
+  );
 }
 
 console.log("15. Task #644 — per-kind tool floor + narration scrub");
@@ -482,6 +505,10 @@ console.log("15. Task #644 — per-kind tool floor + narration scrub");
   ok(floor.join(",") === "meeting_list,check_availability", "floor restricted to eligible surface (clamp wins)");
   ok(floorToolsForKind("nonexistent_kind", eligible).length === 0, "unknown kind → empty floor");
   ok(floorToolsForKind(undefined, eligible).length === 0, "missing kind → empty floor");
+  ok(deterministicClassify("log my timesheet hours").kind === "timesheet_entry", "timesheet vocabulary is canonical");
+  ok(deterministicClassify("request annual leave").kind === "leave", "leave vocabulary is canonical");
+  ok(deterministicClassify("upload my passport document").kind === "document", "document vocabulary is canonical");
+  ok(deterministicClassify("show alliance partners").kind === "partner_firm", "partner vocabulary is canonical");
 
   const scrubbed = scrubKnownToolNames(
     "I used schedule_internal_meeting and `meeting_list` to check.",

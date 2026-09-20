@@ -27,6 +27,7 @@ import {
 import type { CliPersona, ToolDef } from "./index.js";
 import { cosine, currentProvider, embedText } from "./embeddings.js";
 import { CHAT_OWNED_KINDS } from "./write-dispatch.js";
+import type { IntentKind } from "./intent-router.js";
 
 /**
  * The four orchestrator meta-tools — always included for every turn so
@@ -107,7 +108,9 @@ export function selectRankedAdaptive(
  * Names not on the persona's eligible surface are silently skipped —
  * the floor can never widen a persona's clamp.
  */
-export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
+export const CORE_TOOLS_BY_KIND: Readonly<
+  Partial<Record<Exclude<IntentKind, "unknown" | "partner_link">, readonly string[]>>
+> = {
   meeting: [
     "schedule_internal_meeting",
     "reschedule_internal_meeting",
@@ -118,7 +121,14 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
     "check_availability",
   ],
   expense: ["create_my_expense", "my_expenses", "submit_my_expense", "expense_list"],
-  timesheet: ["log_my_time", "my_timesheets", "submit_my_timesheet", "timesheet_current"],
+  timesheet_entry: [
+    "log_my_time",
+    "my_timesheets",
+    "submit_my_timesheet",
+    "timesheet_current",
+    "timesheet_entry_create",
+    "timesheet_entry_update",
+  ],
   leave: ["request_leave", "my_leave"],
   document: [
     "save_my_document",
@@ -146,6 +156,33 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage", "entity_detail"],
   contact: ["contact_detail", "contact_list", "entity_detail"],
   engagement: ["engagement_detail", "engagement_list_active", "entity_detail", "pending_invoices"],
+  deliverable: ["engagement_create_deliverable", "deliverable_update"],
+  raid_item: ["raid_open_list", "raid_add", "raid_close"],
+  proposal: [
+    "proposal_compose",
+    "proposal_update",
+    "proposal_approve_section",
+    "proposal_edit_section",
+    "proposal_reject_section",
+    "proposal_confirm_assignments",
+    "proposal_final_read",
+  ],
+  pov: ["opportunity_draft_pov", "pov_update"],
+  change_order: [
+    "change_order_propose",
+    "change_order_update",
+    "change_order_partner_approve",
+    "change_order_dispatch",
+    "change_order_record_acceptance",
+  ],
+  contract: ["codex_contract_compose", "contract_update"],
+  rate_card: ["rate_card_create", "rate_card_update"],
+  renewal: ["renewal_list", "renewal_open", "renewal_create", "renewal_update"],
+  partner_firm: ["partner_firm_create", "partner_firm_update"],
+  win_theme: ["winloss_theme_library", "win_theme_create", "win_theme_update"],
+  win_loss_debrief: ["winloss_debrief_by_opportunity", "win_loss_debrief_create", "win_loss_debrief_update"],
+  brief: ["brief_create", "brief_update"],
+  agent_design: ["agent_design_create", "agent_design_update"],
 };
 
 /**
@@ -186,7 +223,9 @@ export function floorToolsForKind(
   eligibleNames: ReadonlySet<string>,
   query?: string,
 ): string[] {
-  const core = kind ? CORE_TOOLS_BY_KIND[kind] : undefined;
+  const core = kind
+    ? CORE_TOOLS_BY_KIND[kind as Exclude<IntentKind, "unknown" | "partner_link">]
+    : undefined;
   if (!core) return [];
   let list = core.filter((n) => eligibleNames.has(n));
   if (kind === "document" && query) {
@@ -524,11 +563,8 @@ export async function retrieveCapabilities(args: {
  * always kept reachable so users are never left without a way to
  * apply the change in chat.
  */
-const LEGACY_TOOL_OWNERSHIP: Readonly<Record<string, { kind: string; verb: string }>> = {
-  // (Empty today — round-5 deleted the *_v2 / wallet_update_expense
-  //  legacy aliases.) Add rows here as `{toolName: {kind, verb}}`
-  //  whenever a legacy chat-write surfaces that overlaps with a
-  //  covered DISPATCH_TABLE entry.
+export const LEGACY_TOOL_OWNERSHIP: Readonly<Record<string, { kind: string; verb: string }>> = {
+  raid_add_v2: { kind: "raid_item", verb: "create" },
 };
 
 const COVERED_KIND_VERBS_LAZY = (() => {

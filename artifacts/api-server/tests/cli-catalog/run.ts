@@ -59,6 +59,13 @@ import {
 } from "../../src/lib/atelier-cli/prompt-guard.js";
 import { dailyCapFor } from "../../src/lib/atelier-cli/outbound-rate-limit.js";
 import { getToolsForPersona, findToolByName } from "../../src/lib/atelier-cli/index.js";
+import {
+  CORE_TOOLS_BY_KIND,
+  LEGACY_TOOL_OWNERSHIP,
+  floorToolsForKind,
+} from "../../src/lib/atelier-cli/capability-retriever.js";
+import { INTENT_KINDS } from "../../src/lib/atelier-cli/intent-router.js";
+import { DISPATCH_TABLE } from "../../src/lib/atelier-cli/write-dispatch.js";
 
 let pass = 0;
 let fail = 0;
@@ -134,6 +141,80 @@ async function main() {
     for (const c of all) {
       assert.equal(c.schemaVersion, CATALOG_SCHEMA_VERSION, `entry ${c.id} drifted schemaVersion`);
       assert.ok(c.toolName.match(/^[a-z][a-z0-9_]*$/), `entry ${c.id} bad toolName`);
+    }
+  });
+  await test("typed intent vocabulary has a valid deterministic retrieval strategy", () => {
+    const catalog = listCapabilities();
+    const byTool = new Map(catalog.map((c) => [c.toolName, c] as const));
+    const strategyExceptions = new Map([
+      ["unknown", "clarification/ranked retrieval"],
+      ["partner_link", "not an executable entity; partner relationships use partner_firm"],
+    ]);
+
+    for (const kind of INTENT_KINDS) {
+      if (strategyExceptions.has(kind)) continue;
+      const floor = CORE_TOOLS_BY_KIND[kind as keyof typeof CORE_TOOLS_BY_KIND];
+      assert.ok(floor?.length, `intent kind ${kind} has no deterministic retrieval floor`);
+    }
+    for (const [kind, floor] of Object.entries(CORE_TOOLS_BY_KIND)) {
+      for (const toolName of floor ?? []) {
+        assert.ok(byTool.has(toolName), `retrieval floor ${kind} references missing tool ${toolName}`);
+      }
+    }
+    for (const [kind, verbs] of Object.entries(DISPATCH_TABLE)) {
+      assert.ok(
+        (INTENT_KINDS as readonly string[]).includes(kind) || kind === "contact_relationship",
+        `dispatch kind ${kind} is outside the authoritative intent vocabulary`,
+      );
+      for (const [verb, toolName] of Object.entries(verbs)) {
+        const cap = byTool.get(toolName!);
+        assert.ok(cap, `dispatch ${kind}.${verb} references missing tool ${toolName}`);
+        assert.notEqual(
+          cap?.executionStatus,
+          "unsupported",
+          `dispatch ${kind}.${verb} references unsupported tool ${toolName}`,
+        );
+      }
+    }
+    for (const [alias, owner] of Object.entries(LEGACY_TOOL_OWNERSHIP)) {
+      assert.ok(byTool.has(alias), `legacy ownership references missing alias ${alias}`);
+      assert.ok(
+        DISPATCH_TABLE[owner.kind]?.[owner.verb as keyof (typeof DISPATCH_TABLE)[string]],
+        `legacy alias ${alias} can bypass unowned path ${owner.kind}.${owner.verb}`,
+      );
+    }
+  });
+  await test("retrieval floors survive absent or low-ranked embeddings without widening roles", () => {
+    const cases = [
+      ["timesheet_entry", "timesheet_current"],
+      ["leave", "my_leave"],
+      ["document", "my_documents"],
+      ["contract", "codex_contract_compose"],
+      ["proposal", "proposal_compose"],
+      ["pov", "opportunity_draft_pov"],
+      ["change_order", "change_order_propose"],
+      ["raid_item", "raid_open_list"],
+      ["renewal", "renewal_list"],
+      ["rate_card", "rate_card_create"],
+      ["partner_firm", "partner_firm_create"],
+      ["win_loss_debrief", "winloss_debrief_by_opportunity"],
+      ["brief", "brief_create"],
+      ["deliverable", "engagement_create_deliverable"],
+    ] as const;
+    const allNames = new Set(listCapabilities().map((c) => c.toolName));
+    for (const [kind, expected] of cases) {
+      assert.ok(
+        floorToolsForKind(kind, allNames, `please handle this ${kind}`).includes(expected),
+        `${kind} lost deterministic capability ${expected}`,
+      );
+    }
+
+    const observer = { id: "p_obs", name: "Obs", role: "board_observer", orgId: "aico" };
+    const observerNames = new Set(capabilitiesForPersona(observer).map((c) => c.toolName));
+    for (const kind of INTENT_KINDS) {
+      for (const toolName of floorToolsForKind(kind, observerNames)) {
+        assert.ok(observerNames.has(toolName), `${kind} floor widened board_observer to ${toolName}`);
+      }
     }
   });
   await test("board_observer never receives a write capability", () => {

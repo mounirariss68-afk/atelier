@@ -39,30 +39,35 @@ export type IntentVerb =
 
 export type IntentTier = "haiku" | "sonnet";
 
-export type IntentKind =
-  | "account"
-  | "opportunity"
-  | "contact"
-  | "engagement"
-  | "partner_link"
-  | "deliverable"
-  | "expense"
-  | "meeting"
-  | "raid_item"
-  | "proposal"
-  | "pov"
-  | "change_order"
-  | "timesheet_entry"
-  | "invoice"
-  | "contract"
-  | "rate_card"
-  | "renewal"
-  | "partner_firm"
-  | "win_theme"
-  | "win_loss_debrief"
-  | "brief"
-  | "agent_design"
-  | "unknown";
+/** Authoritative runtime vocabulary shared by routing, retrieval and dispatch. */
+export const INTENT_KINDS = [
+  "account",
+  "opportunity",
+  "contact",
+  "engagement",
+  "partner_link",
+  "deliverable",
+  "expense",
+  "meeting",
+  "raid_item",
+  "proposal",
+  "pov",
+  "change_order",
+  "timesheet_entry",
+  "leave",
+  "document",
+  "invoice",
+  "contract",
+  "rate_card",
+  "renewal",
+  "partner_firm",
+  "win_theme",
+  "win_loss_debrief",
+  "brief",
+  "agent_design",
+  "unknown",
+] as const;
+export type IntentKind = (typeof INTENT_KINDS)[number];
 
 export interface Intent {
   /** Top-level verb. Drives the orchestrator branch. */
@@ -100,11 +105,13 @@ const KIND_KEYWORDS: Array<[IntentKind, RegExp]> = [
   ["pov", /\b(pov|proof of value|proof-of-value)\b/i],
   ["change_order", /\b(change order|co|cr)\b/i],
   ["timesheet_entry", /\b(timesheet|hours|time entry)\b/i],
+  ["leave", /\b(leave|time off|holiday request|vacation)\b/i],
+  ["document", /\b(document|file|passport|visa|identity card|trade licen[cs]e)\b/i],
   ["invoice", /\b(invoice|bill|receivable)\b/i],
   ["contract", /\b(contract|agreement|msa|nda)\b/i],
   ["rate_card", /\b(rate card|pricing card)\b/i],
   ["renewal", /\b(renewal|nrr)\b/i],
-  ["partner_firm", /\b(partner firm|alliance|reseller|subcontractor firm)\b/i],
+  ["partner_firm", /\b(partner(?!\s+(?:link|connection))|alliance|reseller|subcontractor firm)\b/i],
   ["win_theme", /\b(win theme)\b/i],
   ["win_loss_debrief", /\b(win\/loss|debrief|post-mortem)\b/i],
   ["brief", /\b(executive brief|brief)\b/i],
@@ -183,7 +190,7 @@ const ROUTER_SYSTEM = [
   "You are an intent router for a CRM/PSA chat orchestrator.",
   'Reply with ONE JSON object on a single line, with no prose, exactly matching:',
   '{"verb":"read|create|update|link|transition|delete|reset|trivial|other",',
-  ' "kind":"account|opportunity|contact|engagement|partner_link|deliverable|expense|meeting|raid_item|proposal|pov|change_order|timesheet_entry|invoice|contract|rate_card|renewal|partner_firm|win_theme|win_loss_debrief|brief|agent_design|unknown",',
+  ` "kind":"${INTENT_KINDS.join("|")}",`,
   ' "entityHints":["..."],',
   ' "confidence":0.0}',
   "Use `transition` ONLY for moving an opportunity across pipeline stages.",
@@ -204,31 +211,7 @@ const RouterOutputSchema = z
       "trivial",
       "other",
     ]),
-    kind: z.enum([
-      "account",
-      "opportunity",
-      "contact",
-      "engagement",
-      "partner_link",
-      "deliverable",
-      "expense",
-      "meeting",
-      "raid_item",
-      "proposal",
-      "pov",
-      "change_order",
-      "timesheet_entry",
-      "invoice",
-      "contract",
-      "rate_card",
-      "renewal",
-      "partner_firm",
-      "win_theme",
-      "win_loss_debrief",
-      "brief",
-      "agent_design",
-      "unknown",
-    ]),
+    kind: z.enum(INTENT_KINDS),
     entityHints: z.array(z.string().min(1).max(200)).max(5),
     confidence: z.number().min(0).max(1),
   })
