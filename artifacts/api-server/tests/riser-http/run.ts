@@ -31,6 +31,9 @@ await import("../../src/lib/atelier-cli/bootstrap-capabilities.js");
 const { createDurableAccountUpdatePreview } = await import(
   "../../src/lib/assistant/durable-account-update-preview.js"
 );
+const { CANONICAL_ASSISTANT_HEADERS } = await import(
+  "../../src/lib/assistant/compatibility.js"
+);
 const app = (await import("../../src/app.js")).default;
 
 const server = app.listen(0);
@@ -44,6 +47,7 @@ async function confirm(actionId: string, stateVersion: number) {
     headers: {
       "content-type": "application/json",
       cookie: `atelier_persona=${requesterId}`,
+      ...CANONICAL_ASSISTANT_HEADERS,
     },
     body: JSON.stringify({ stateVersion }),
   });

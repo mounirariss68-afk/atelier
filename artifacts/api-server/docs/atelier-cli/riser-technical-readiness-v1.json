@@ -1,0 +1,36 @@
+{
+  "version": "riser-technical-readiness/v1",
+  "recordedAt": "2026-09-20",
+  "technicalGates": {
+    "foundation_326_manifest_route_legacy_replay": "pass",
+    "runtime_budget": "pass",
+    "http_concurrency": "pass",
+    "compatibility": "pass",
+    "privacy_provider_policy": "pass",
+    "observability": "pass",
+    "operator_controls": "pass",
+    "staged_rollout_active_state_rollback": "pass",
+    "evaluation_438_observations_101_scopes": "pass",
+    "evaluation_canary": "pass",
+    "web_production_bundle": "pass",
+    "mobile_typecheck": "pass",
+    "mobile_ios_android_production_bundle": "pass",
+    "documentation_structure_links": "pass"
+  },
+  "productionSecretReadiness": {
+    "status": "pass",
+    "method": "Replit production secret existence inventory; values were not read or displayed",
+    "requiredKeysPresent": 17,
+    "requiredKeysMissing": 0
+  },
+  "knownBaseline": {
+    "webStandaloneTypecheck": "pre-existing non-Riser errors; production Vite bundle passes"
+  },
+  "releaseReady": false,
+  "releaseBlockers": [
+    "accountable owner names",
+    "S0-S4 owner sign-offs",
+    "independent final human approvals",
+    "approved client sunset threshold and measured production adoption evidence"
+  ]
+}

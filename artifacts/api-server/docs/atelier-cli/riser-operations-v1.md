@@ -156,6 +156,8 @@ events, actions, attempts, rollout evidence, or audit rows.
 
 The required owner domains and independent stage approvals are machine-readable
 in [riser-ownership-signoff-v1.json](./riser-ownership-signoff-v1.json).
+The latest technical gate and production secret inventory evidence is recorded
+in [riser-technical-readiness-v1.json](./riser-technical-readiness-v1.json).
 `check:riser-docs --structure` validates documentation structure without
 claiming approval. Full `check:riser-docs` is the production gate and fails
 while any owner or approval remains pending.
