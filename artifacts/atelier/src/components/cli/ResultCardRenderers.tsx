@@ -2153,7 +2153,9 @@ function RenewalCard({ data, locale }: { data: Json; locale: CliLocale }) {
       </div>
       <div className="text-[11px] font-mono text-text-mute">
         {locale === "ar" ? "حالة" : "status"}: {status}
-        {r.renewalDueAt && <span className="ml-2">due {asStr(r.renewalDueAt)}</span>}
+        {Boolean(r.renewalDueAt) && (
+          <span className="ml-2">due {asStr(r.renewalDueAt)}</span>
+        )}
       </div>
     </div>
   );

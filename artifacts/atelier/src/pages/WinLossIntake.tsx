@@ -193,7 +193,7 @@ export default function WinLossIntake() {
         onOpen={(d) => setLocation(`/opportunities/${d.opportunityId}/win-loss`)}
       />
 
-      <SectionHead title="Recently approved" />
+      <SectionHead headline="Recently approved" />
       <div className="grid gap-3">
         {approved.length === 0 && (
           <Card className="p-6 text-text-mute">
@@ -232,7 +232,7 @@ function DebriefBucket({
 }) {
   return (
     <div className="space-y-3">
-      <SectionHead title={`${title} · ${rows.length}`} />
+      <SectionHead headline={`${title} · ${rows.length}`} />
       <div className="grid gap-3">
         {rows.length === 0 && (
           <Card className="p-6 text-text-mute">{empty}</Card>

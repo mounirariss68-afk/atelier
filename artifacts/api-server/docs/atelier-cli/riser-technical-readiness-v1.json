@@ -12,6 +12,7 @@
     "staged_rollout_active_state_rollback": "pass",
     "evaluation_438_observations_101_scopes": "pass",
     "evaluation_canary": "pass",
+    "web_typecheck": "pass",
     "web_production_bundle": "pass",
     "mobile_typecheck": "pass",
     "mobile_ios_android_production_bundle": "pass",
@@ -22,9 +23,6 @@
     "method": "Replit production secret existence inventory; values were not read or displayed",
     "requiredKeysPresent": 17,
     "requiredKeysMissing": 0
-  },
-  "knownBaseline": {
-    "webStandaloneTypecheck": "pre-existing non-Riser errors; production Vite bundle passes"
   },
   "releaseReady": false,
   "releaseBlockers": [

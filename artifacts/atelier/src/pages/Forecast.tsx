@@ -98,7 +98,7 @@ export default function Forecast() {
               </div>
             </div>
           </Card>
-          <SectionHead title={`Roll-up by ${by}`} />
+          <SectionHead headline={`Roll-up by ${by}`} />
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-bg-elevate/50 text-text-mute font-mono text-xs uppercase">

@@ -184,7 +184,7 @@ export default function Reports() {
       </PageHero>
       <div className="p-6 md:p-10 space-y-8 max-w-6xl">
       <section>
-        <SectionHead title="Templates" />
+        <SectionHead headline="Templates" />
         <div className="grid gap-3 md:grid-cols-2 mt-3">
           {templates.map((t) => (
             <Card key={t.id} className="p-4 space-y-2">
@@ -204,7 +204,7 @@ export default function Reports() {
       </section>
 
       <section>
-        <SectionHead title={`Saved reports (${reports.length})`} />
+        <SectionHead headline={`Saved reports (${reports.length})`} />
         <div className="grid gap-3 mt-3">
           {reports.map((r) => (
             <Card key={r.id} className="p-4 space-y-2">

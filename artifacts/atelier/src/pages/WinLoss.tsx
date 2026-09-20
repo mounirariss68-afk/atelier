@@ -163,7 +163,7 @@ export default function WinLoss() {
       </PageHero>
       <div className="p-6 md:p-10 space-y-8 max-w-5xl">
       <Card className="p-5 space-y-3">
-        <SectionHead title="Seller view" />
+        <SectionHead headline="Seller view" />
         <p className="text-xs text-text-mute">
           What the seller believes happened. One reason per line. (Research is unanimous: this is
           NOT what the buyer will say.)
@@ -181,7 +181,7 @@ export default function WinLoss() {
       </Card>
 
       <Card className="p-5 space-y-3">
-        <SectionHead title="Buyer transcript (async ingest)" />
+        <SectionHead headline="Buyer transcript (async ingest)" />
         <p className="text-xs text-text-mute">
           Paste the buyer-side interview transcript. v2 supports async ingest only — no live
           interview wired.
@@ -209,7 +209,7 @@ export default function WinLoss() {
 
       {debrief.themes && debrief.themes.length > 0 && (
         <Card className="p-5 space-y-3">
-          <SectionHead title="Synthesized themes" />
+          <SectionHead headline="Synthesized themes" />
           {debrief.hiddenCompetitor && (
             <div className="text-sm">
               <span className="font-mono text-text-mute">Hidden competitor: </span>
@@ -241,7 +241,7 @@ export default function WinLoss() {
 
       {debrief.status === "synthesized" && (
         <Card className="p-5 space-y-3 border-l-4 border-l-gold">
-          <SectionHead title="Partner approval" />
+          <SectionHead headline="Partner approval" />
           <p className="text-sm text-text-mute">
             Approving locks the debrief, resolves the Pane A reminder, and feeds the themes
             into the Theme Curator.

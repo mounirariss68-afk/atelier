@@ -126,7 +126,7 @@ const RAG_TONE: Record<Rag, "green" | "amber" | "red"> = {
   red: "red",
 };
 
-export default function EngagementPnl(): JSX.Element {
+export default function EngagementPnl(): React.ReactElement {
   const { engagementId } = useParams<{ engagementId: string }>();
   const qc = useQueryClient();
   const { data: me } = useAtelierGetMe();
@@ -453,7 +453,7 @@ function KpiTile({
   sub?: string;
   tone?: "default" | "green" | "amber" | "red";
   testId?: string;
-}): JSX.Element {
+}): React.ReactElement {
   const toneClass =
     tone === "red"
       ? "text-danger"
@@ -485,7 +485,7 @@ function CostBar({
   incurred: number;
   forecast?: number;
   emphasis?: boolean;
-}): JSX.Element {
+}): React.ReactElement {
   const total = Math.max(budget, incurred + forecast);
   const incurredPct = total > 0 ? (incurred / total) * 100 : 0;
   const forecastPct = total > 0 ? (forecast / total) * 100 : 0;
@@ -532,7 +532,7 @@ function EtcForm({
   current: PnlResp["etc"];
   onClose: () => void;
   onDone: () => void;
-}): JSX.Element {
+}): React.ReactElement {
   const [method, setMethod] = React.useState<"manual" | "extrapolation">(current.method);
   const [manualEtcUsd, setManualEtcUsd] = React.useState(String(current.manualEtcUsd ?? ""));
   const [rationale, setRationale] = React.useState(current.rationale);

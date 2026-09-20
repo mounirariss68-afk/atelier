@@ -67,7 +67,7 @@ type SortKey = "default" | "vac" | "margin-slip" | "margin" | "contract" | "rag"
 type SlipBand = "all" | "slipping" | "on-plan" | "ahead";
 type CompleteBand = "all" | "early" | "mid" | "late";
 
-export default function EngagementHealth(): JSX.Element {
+export default function EngagementHealth(): React.ReactElement {
   const [sortKey, setSortKey] = React.useState<SortKey>("default");
   const [ragFilter, setRagFilter] = React.useState<"all" | Rag>("all");
   const [partnerFilter, setPartnerFilter] = React.useState<string>("all");
@@ -377,7 +377,7 @@ function SummaryTile({
   label: string;
   value: string;
   tone?: "default" | "green" | "amber" | "red";
-}): JSX.Element {
+}): React.ReactElement {
   const toneClass =
     tone === "red"
       ? "text-danger"
