@@ -263,6 +263,31 @@ warn.
 Add additional fixtures (`golden-2.json`, `golden-edge-empty.json`, …)
 as they become useful. One per agent is the minimum.
 
+### CRM release contract
+
+CRM and CRM-adjacent specialists have an additional reviewed release
+contract. It prevents a registry label or progress message from being
+treated as proof that a specialist is executable:
+
+- `src/lib/atelier-agents/generated/crm-agent-manifest.v1.json`
+  inventories canonical IDs and aliases, implementation, route, prompt,
+  schema, fixture and source hashes, Agents Lens linkage, UI mounts,
+  operational status, reviewed divergences, and deterministic eval IDs.
+- `pnpm --filter @workspace/api-server run
+  generate:crm-agent-manifest` regenerates it for review.
+  `check:crm-agent-manifest` fails on unreviewed drift, duplicate aliases,
+  phantom executors, stale status, missing artifacts, or unknown
+  divergences/evals.
+- `pnpm --filter @workspace/api-server run
+  test:crm-agent-contracts` is the release-blocking, model-free semantic
+  lane. Security, authorization, tenant isolation, and duplicate writes
+  have zero tolerance.
+- Live-model probes remain manual/online and are never imported by the
+  deterministic release lane.
+
+The API build runs this contract gate. A schema-valid output alone is not
+enough to justify or retain `mvp`.
+
 ### Migration status — runner.ts → runAgent
 
 The 13 runners listed below are migrated to compose `runAgent(...)`:

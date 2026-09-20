@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "1.0.0",
+  "reviewStatus": "reviewed",
+  "reviewedBy": "crm-agent-contracts",
+  "releaseLane": "deterministic-offline",
+  "description": "Versioned, model-free CRM semantic quality contract. The negative examples are deliberately retained so the evaluator tests its own gates.",
+  "evalDefinitions": [
+    { "id": "eval-citation-refusal-fact-v1", "fixtureAgent": "scout", "coveredSpecialistIds": ["ag_pursuit_scout", "ag_pov_researcher", "ag_pre_meeting_briefing"], "positiveCaseIds": ["scout-good", "scout-empty"], "negativeCaseIds": ["scout-bad-provenance"] },
+    { "id": "eval-pov-fact-promotion-v1", "fixtureAgent": "scout", "coveredSpecialistIds": ["ag_pov_author", "ag_pov_draft"], "positiveCaseIds": ["scout-good"], "negativeCaseIds": ["scout-bad-provenance"], "rule": "Only fact IDs present in the reviewed fact set may be promoted into POV." },
+    { "id": "eval-contact-cartographer-v1", "fixtureAgent": "contact", "coveredSpecialistIds": ["ag_account_cartographer"], "positiveCaseIds": ["contact-good"], "negativeCaseIds": ["contact-duplicate", "contact-bad-quality"] },
+    { "id": "eval-contact-executive-mapper-v1", "fixtureAgent": "contact", "coveredSpecialistIds": ["ag_executive_mapper"], "positiveCaseIds": ["contact-good"], "negativeCaseIds": ["contact-duplicate", "contact-bad-quality"] },
+    { "id": "eval-proposal-approval-v1", "fixtureAgent": "proposal", "coveredSpecialistIds": ["ag_proposal_composer"], "positiveCaseIds": ["proposal-good"], "negativeCaseIds": ["proposal-missing-approval"] },
+    { "id": "eval-pricing-margin-override-v1", "fixtureAgent": "pricing", "coveredSpecialistIds": ["ag_pricing_analyst", "ag_pricing_researcher", "ag_pricing_strategist"], "positiveCaseIds": ["pricing-good"], "negativeCaseIds": ["pricing-bad-margin"] },
+    { "id": "eval-pipeline-forecast-calibration-v1", "fixtureAgent": "forecast", "coveredSpecialistIds": ["ag_pipeline_forecaster"], "positiveCaseIds": ["forecast-good"], "negativeCaseIds": ["forecast-bad-calibration"] },
+    { "id": "eval-global-security-tenant-write-v1", "fixtureAgent": "security", "coveredSpecialistIds": ["ag_brand_profile_writer", "ag_charter_architect", "ag_meeting_scribe", "ag_next_best_action", "ag_procurement_navigator", "ag_qbr_composer", "ag_relationship_health", "ag_strategy_developer", "ag_synthesis_critic", "ag_theme_curator", "ag_whitespace_mapper", "ag_win_loss_interviewer"], "positiveCaseIds": ["security-good"], "negativeCaseIds": ["security-cross-tenant", "security-unauthorized", "security-duplicate-write"], "zeroTolerance": ["security", "authorization/approval", "tenant isolation", "duplicate writes"] }
+  ],
+  "specialistThresholds": [
+    { "specialistId": "ag_account_cartographer", "threshold": 0.8, "evalIds": ["eval-contact-cartographer-v1"] },
+    { "specialistId": "ag_brand_profile_writer", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_charter_architect", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_executive_mapper", "threshold": 0.8, "evalIds": ["eval-contact-executive-mapper-v1"] },
+    { "specialistId": "ag_meeting_scribe", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_next_best_action", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_pipeline_forecaster", "threshold": 0.8, "evalIds": ["eval-pipeline-forecast-calibration-v1"] },
+    { "specialistId": "ag_pov_author", "threshold": 0.8, "evalIds": ["eval-pov-fact-promotion-v1"] },
+    { "specialistId": "ag_pov_draft", "threshold": 0.8, "evalIds": ["eval-pov-fact-promotion-v1"] },
+    { "specialistId": "ag_pov_researcher", "threshold": 0.8, "evalIds": ["eval-citation-refusal-fact-v1"] },
+    { "specialistId": "ag_pre_meeting_briefing", "threshold": 0.8, "evalIds": ["eval-citation-refusal-fact-v1"] },
+    { "specialistId": "ag_pricing_analyst", "threshold": 0.8, "evalIds": ["eval-pricing-margin-override-v1"] },
+    { "specialistId": "ag_pricing_researcher", "threshold": 0.8, "evalIds": ["eval-pricing-margin-override-v1"] },
+    { "specialistId": "ag_pricing_strategist", "threshold": 0.8, "evalIds": ["eval-pricing-margin-override-v1"] },
+    { "specialistId": "ag_procurement_navigator", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_proposal_composer", "threshold": 0.8, "evalIds": ["eval-proposal-approval-v1"] },
+    { "specialistId": "ag_pursuit_scout", "threshold": 0.8, "evalIds": ["eval-citation-refusal-fact-v1"] },
+    { "specialistId": "ag_qbr_composer", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_relationship_health", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_strategy_developer", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_synthesis_critic", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_theme_curator", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_whitespace_mapper", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] },
+    { "specialistId": "ag_win_loss_interviewer", "threshold": 1, "evalIds": ["eval-global-security-tenant-write-v1"] }
+  ],
+  "excludedSpecialists": [
+    { "specialistId": "ag_case_study_picker", "reason": "unsupported embedded Proposal Composer progress label; no independent executor" },
+    { "specialistId": "ag_chat_orchestrator", "reason": "utility/router; no semantic specialist output" },
+    { "specialistId": "ag_partner_fit_context", "reason": "utility/context adapter; no independent quality contract" },
+    { "specialistId": "ag_run_staleness", "reason": "utility/maintenance job; no semantic specialist output" },
+    { "specialistId": "ag_scout_persistence", "reason": "utility/persistence adapter; covered by caller contracts" }
+  ],
+  "agents": {
+    "scout": { "threshold": 0.8, "cases": [
+      { "id": "scout-good", "input": { "facts": [{ "id": "f1", "statement": "Market expanding", "sourceUrl": "https://example.com/report" }], "text": "Market expanding [f1]", "expectedEmpty": false }, "output": { "text": "Market expanding [f1]", "factIds": ["f1"], "citations": ["https://example.com/report"], "refused": false } },
+      { "id": "scout-empty", "input": { "facts": [], "text": "", "expectedEmpty": true }, "output": { "text": "", "factIds": [], "citations": [], "refused": true } },
+      { "id": "scout-bad-provenance", "expectedPass": false, "input": { "facts": [{ "id": "f1", "statement": "Claim", "sourceUrl": "https://example.com/report" }], "text": "Claim", "expectedEmpty": false }, "output": { "text": "Claim [f1]", "factIds": ["f1"], "citations": ["not-a-url"], "refused": false } }
+    ] },
+    "contact": { "threshold": 0.8, "cases": [
+      { "id": "contact-good", "input": { "name": "Ada Lovelace", "email": "ada@example.com", "tenantId": "t1", "existing": [] }, "output": { "name": "Ada Lovelace", "email": "ada@example.com", "tenantId": "t1", "write": true } },
+      { "id": "contact-duplicate", "expectedPass": false, "input": { "name": "Ada Lovelace", "email": "ada@example.com", "tenantId": "t1", "existing": ["ada@example.com"] }, "output": { "name": "Ada Lovelace", "email": "ada@example.com", "tenantId": "t1", "write": true } },
+      { "id": "contact-bad-quality", "expectedPass": false, "input": { "name": "A", "email": "bad", "tenantId": "t1", "existing": [] }, "output": { "name": "A", "email": "bad", "tenantId": "t1", "write": true } }
+    ] },
+    "proposal": { "threshold": 0.8, "cases": [
+      { "id": "proposal-good", "input": { "requiredSections": ["scope", "price", "approval"], "citations": ["https://example.com/scope"] }, "output": { "sections": ["scope", "price", "approval"], "citationUrls": ["https://example.com/scope"], "approved": true } },
+      { "id": "proposal-missing-approval", "expectedPass": false, "input": { "requiredSections": ["scope", "price", "approval"], "citations": [] }, "output": { "sections": ["scope", "price"], "citationUrls": [], "approved": true } }
+    ] },
+    "pricing": { "threshold": 0.8, "cases": [
+      { "id": "pricing-good", "input": { "cost": 40, "price": 100, "targetMargin": 0.55, "approval": true }, "output": { "cost": 40, "price": 100, "margin": 0.6, "approved": true } },
+      { "id": "pricing-bad-margin", "expectedPass": false, "input": { "cost": 60, "price": 100, "targetMargin": 0.55, "approval": false }, "output": { "cost": 60, "price": 100, "margin": 0.4, "approved": true } }
+    ] },
+    "forecast": { "threshold": 0.8, "cases": [
+      { "id": "forecast-good", "input": { "actual": 100, "tolerance": 0.1 }, "output": { "forecast": 95 } },
+      { "id": "forecast-bad-calibration", "expectedPass": false, "input": { "actual": 100, "tolerance": 0.1 }, "output": { "forecast": 40 } }
+    ] },
+    "security": { "threshold": 1, "cases": [
+      { "id": "security-good", "input": { "tenantId": "t1", "actorTenantId": "t1", "authorized": true, "requiresApproval": false, "duplicateWrite": false }, "output": { "action": "read", "allowed": true } },
+      { "id": "security-cross-tenant", "expectedPass": false, "input": { "tenantId": "t2", "actorTenantId": "t1", "authorized": true, "requiresApproval": false, "duplicateWrite": false }, "output": { "action": "read", "allowed": true } },
+      { "id": "security-unauthorized", "expectedPass": false, "input": { "tenantId": "t1", "actorTenantId": "t1", "authorized": false, "requiresApproval": false, "duplicateWrite": false }, "output": { "action": "write", "allowed": true } },
+      { "id": "security-duplicate-write", "expectedPass": false, "input": { "tenantId": "t1", "actorTenantId": "t1", "authorized": true, "requiresApproval": false, "duplicateWrite": true }, "output": { "action": "write", "allowed": true } }
+    ] }
+  },
+  "liveModelProbes": [
+    { "id": "scout-live-tone", "agent": "ag_pursuit_scout", "path": "tests/crm/tone-probe-live.ts", "runWith": "manual-only/online", "reason": "Qualitative prose review against a configured model; never part of the release lane." }
+  ],
+  "supplementalDeterministicProbes": [
+    { "id": "perplexity-provider-contract", "agent": "ag_pov_researcher", "path": "tests/crm/perplexity-research-probe.ts", "runWith": "opt-in/offline", "reason": "Local provider stubs test retrieval failure behavior; no live model or network." }
+  ]
+}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
-    "build": "pnpm run check:riser-manifest && node ./build.mjs",
+    "build": "pnpm run check:riser-manifest && pnpm run test:crm-agent-contracts && node ./build.mjs",
     "build:production": "pnpm run test:riser-eval:canary && pnpm run build",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -147,6 +147,9 @@
     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
     ,"generate:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts"
     ,"check:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts --check"
+     ,"generate:crm-agent-manifest": "tsx ./scripts/generate-crm-agent-manifest.ts"
+     ,"check:crm-agent-manifest": "tsx ./scripts/generate-crm-agent-manifest.ts --check"
+     ,"test:crm-agent-contracts": "pnpm run check:crm-agent-manifest && tsx ./tests/crm-agent-contracts/manifest.ts && tsx ./tests/crm-agent-contracts/evaluate.ts && pnpm run test:agents"
     ,"generate:route-conformance": "tsx ./scripts/generate-route-conformance.ts"
     ,"check:route-conformance": "tsx ./scripts/generate-route-conformance.ts --check"
     ,"test:riser-foundation": "pnpm run check:riser-manifest && pnpm run check:route-conformance && tsx ./tests/riser-foundation/run.ts && tsx ./tests/riser-foundation/manifest.ts && tsx ./tests/riser-foundation/presentation.ts && tsx ./tests/riser-foundation/account-dossier-conformance.ts && tsx ./tests/riser-foundation/conformance.ts && pnpm run test:riser-legacy-replay"

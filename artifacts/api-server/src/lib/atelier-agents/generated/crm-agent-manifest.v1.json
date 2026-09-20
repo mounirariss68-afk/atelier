@@ -1,0 +1,1126 @@
+{
+  "manifestVersion": "crm-agent-manifest.v1",
+  "version": 1,
+  "generatedFrom": "atelier-crm-agent-workflows-audit.md",
+  "entryCount": 29,
+  "entries": [
+    {
+      "id": "ag_account_cartographer",
+      "name": "Account Cartographer",
+      "aliases": [
+        "account_cartographer",
+        "account research/enrichment",
+        "cartographer/refresh"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runAccountCartographer"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "queueCartographerResearch"
+      },
+      "promptRef": "prompts/account_cartographer/v1.md",
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "account_cartographer",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Account.tsx"
+      ],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-contact-cartographer-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "baab212d7d4133acad8385cf965a225fe440b7dd2e300879b6c0c9bd4325fa12"
+    },
+    {
+      "id": "ag_brand_profile_writer",
+      "name": "Brand Profile Writer",
+      "aliases": [
+        "brand_profile_writer",
+        "brand/boilerplate"
+      ],
+      "classification": "executable",
+      "registryId": "ag_brand_profile_writer",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runBrandProfileWriter"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/firmProfileRoutes.ts",
+        "hint": "runBrandProfileWriter"
+      },
+      "promptRef": "prompts/brand_profile_writer/v1.md",
+      "inputSchemaHash": "d30dd3eb50d849f805b6176b08791aa0c87d01a7fdd398f1138d21df5fbb8431",
+      "outputSchemaHash": "0946f2cad58975fdadf9bd0cfae5e393f8a11b1c3d0f240ac5ffe056c8b61e74",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_brand_profile_writer/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_brand_profile_writer",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "631a4cd840c6e18c3c03d357f2e5524c73e561d444fc2d28b0c0ed784b12addc",
+      "promptHash": "512f87848b888121e909fab852aa3a9512612295ac30ef388c6e31d49a5de007"
+    },
+    {
+      "id": "ag_case_study_picker",
+      "name": "Case Study Picker",
+      "aliases": [
+        "case_study_picker"
+      ],
+      "classification": "unsupported",
+      "registryId": null,
+      "runner": null,
+      "route": null,
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": null,
+        "sourceMode": "not-applicable"
+      },
+      "uiMounts": [],
+      "operationalStatus": "unsupported",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [
+        {
+          "id": "div_case_study_embedded_label",
+          "reason": "Embedded Proposal Composer progress label; no separate executor exists.",
+          "owner": "atelier-platform",
+          "reviewBy": "2026-12-31"
+        }
+      ],
+      "sourceHash": "393492b4e2b36347bb4fab3a975f4de724409df4ce1378f44552fd121750e3d8",
+      "promptHash": null
+    },
+    {
+      "id": "ag_charter_architect",
+      "name": "Charter Architect",
+      "aliases": [
+        "charter_architect",
+        "engagement charter"
+      ],
+      "classification": "executable",
+      "registryId": "ag_charter_architect",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runCharterArchitect"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+        "hint": "runCharterArchitect"
+      },
+      "promptRef": "prompts/charter_architect/v1.md",
+      "inputSchemaHash": "e1223478441f81fee02d5a2f7155f5016872526bd7ed3e4af43f0fda95055c46",
+      "outputSchemaHash": "b2cb1965bce876430484fa67b65852b97ae83c005c63af034f93f15f84109e0b",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_charter_architect/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_charter_architect",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "4d5fd116067c284a91c70d8863e75690844e70009c916954f42d9216c0534bde",
+      "promptHash": "8f3ba55e5d1e2610c937ca247ec8cdc1dc8779ad44015c4c3028adcb96daf0a8"
+    },
+    {
+      "id": "ag_chat_orchestrator",
+      "name": "Chat Orchestrator / generic Riser dispatch",
+      "aliases": [
+        "chat_orchestrator",
+        "Chat Orchestrator",
+        "generic Riser dispatch"
+      ],
+      "classification": "utility",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-cli/index.ts",
+        "symbol": "runTurn"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/cliRoutes.ts",
+        "hint": "/cli/turn"
+      },
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": null,
+        "sourceMode": "not-applicable"
+      },
+      "uiMounts": [],
+      "operationalStatus": "utility",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [],
+      "sourceHash": "6104f66355b85bf06db7e102573b48d2ec53ffbf1117e5db5d5fad404b36eaa7",
+      "promptHash": null
+    },
+    {
+      "id": "ag_executive_mapper",
+      "name": "Executive Mapper",
+      "aliases": [
+        "executive_mapper",
+        "executive sweep/coverage"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/executive-mapper-chain.ts",
+        "symbol": "runExecutiveMapperAndQueue"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runExecutiveMapperAndQueue"
+      },
+      "promptRef": "prompts/executive_mapper/v2.md",
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "executive_mapper",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Account.tsx"
+      ],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-contact-executive-mapper-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "9a2e2889eb6197deee379b1c59b1916781bac7374e0924b2b8aff15cfa77321b",
+      "promptHash": "431d31f5b6e66bf58c3d57eb914f673c5be7c0ffef01ef86aadb0c3e8277ed26"
+    },
+    {
+      "id": "ag_meeting_scribe",
+      "name": "Meeting Scribe",
+      "aliases": [
+        "meeting_scribe",
+        "transcript/recording scribe"
+      ],
+      "classification": "executable",
+      "registryId": "ag_meeting_scribe",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runMeetingScribe"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runMeetingScribe"
+      },
+      "promptRef": "prompts/meeting_scribe/v1.md",
+      "inputSchemaHash": "a930ecb2c2d72f76e37a51d9036a44012e8953afacbeb115a679347551a94c4a",
+      "outputSchemaHash": "b27716deefe8313b17ea3f726fbaeccf73326e25b1feb7c0f03fb5871c2dc4c1",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_meeting_scribe/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_meeting_scribe",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": "518053b0bc0fcc2b6798089514a45fcd957b3d4bb864a0058abd84e544f861dc"
+    },
+    {
+      "id": "ag_next_best_action",
+      "name": "Next-Best-Action",
+      "aliases": [
+        "next_best_action"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_next_best_action",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runNextBestAction"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runNextBestAction"
+      },
+      "promptRef": "prompts/next_best_action/v1.md",
+      "inputSchemaHash": "a9204efa26f257e637eb2ec05a664a6083c4e6a6b7dc1d271e1adca77034521a",
+      "outputSchemaHash": "b2cbc661584ae3df9a6ecce6abbf0743ecb6df9405db967b2703a546b9eb17bf",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_next_best_action/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_next_best_action",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "8e10330e1f6b73f23ac3c8c40cda5eda2335bfc201bf325c8d16fadd49640635"
+    },
+    {
+      "id": "ag_partner_fit_context",
+      "name": "Partner-fit context",
+      "aliases": [
+        "partner_fit_context",
+        "alliance capability matching"
+      ],
+      "classification": "utility",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/alliance-capability-context.ts",
+        "symbol": "buildAllianceCapabilityContext"
+      },
+      "route": null,
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": null,
+        "sourceMode": "not-applicable"
+      },
+      "uiMounts": [],
+      "operationalStatus": "utility",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [],
+      "sourceHash": "80bb509af409a7443e844ffb8dda23f039bd911878d5ce1e791d5215c50ebd9f",
+      "promptHash": null
+    },
+    {
+      "id": "ag_pipeline_forecaster",
+      "name": "Pipeline Forecaster",
+      "aliases": [
+        "pipeline_forecaster",
+        "forecast/scenario"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPipelineForecaster"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runForecasterHandler"
+      },
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "pipeline_forecaster",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-pipeline-forecast-calibration-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": null
+    },
+    {
+      "id": "ag_pov_author",
+      "name": "POV Author (outline)",
+      "aliases": [
+        "pov_author",
+        "POV outline"
+      ],
+      "classification": "executable",
+      "registryId": "ag_pov_author",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPovOutline"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runPovOutline"
+      },
+      "promptRef": "prompts/pov_author/v1.md",
+      "inputSchemaHash": "4aa2d8ab4648bf7cea3e252493b1083913156f03fada255e80b11e0417867228",
+      "outputSchemaHash": "6803086562f9acb5b98b1092a25f1899ea0bd6122ccad5f4037e2284858e8069",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pov_author/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pov_author",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-pov-fact-promotion-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
+    },
+    {
+      "id": "ag_pov_draft",
+      "name": "POV Draft",
+      "aliases": [
+        "pov_draft",
+        "HTML draft/revision"
+      ],
+      "classification": "executable",
+      "registryId": "ag_pov_draft",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPovDraft"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runPovDraft"
+      },
+      "promptRef": "prompts/pov_author/v1.md",
+      "inputSchemaHash": "aaf7e6a24c4f0f8c6a04d9db7701be36176c0199be368b3c7a096800bf3f3221",
+      "outputSchemaHash": "373f4baf234cfb2e7eca8fab036511ea8e31ffbce6cfe16b6678241f65c5058b",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pov_draft/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pov_draft",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "registered",
+      "deterministicEvalIds": [
+        "eval-pov-fact-promotion-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
+    },
+    {
+      "id": "ag_pov_researcher",
+      "name": "POV Deep Researcher",
+      "aliases": [
+        "pov_researcher",
+        "POV research",
+        "research pass"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_pov_researcher",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPovDeepResearch"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runPovDeepResearch"
+      },
+      "promptRef": "prompts/pov_author/v1.md",
+      "inputSchemaHash": "5a56786d576d7c3b19d35c565cdd3f89440f76e3ae91d418d8566e70d6982d43",
+      "outputSchemaHash": "ab29fbe8d40364728ef7d329d23ba644e22920a720274aa0e639eaaddf4cf87a",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pov_researcher",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "registered",
+      "deterministicEvalIds": [
+        "eval-citation-refusal-fact-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
+    },
+    {
+      "id": "ag_pre_meeting_briefing",
+      "name": "Pre-Meeting Briefing",
+      "aliases": [
+        "pre_meeting_briefing"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_pre_meeting_briefing",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPreMeetingBriefing"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runPreMeetingBriefing"
+      },
+      "promptRef": "prompts/pre_meeting_briefing/v1.md",
+      "inputSchemaHash": "c7f33f79c5f02e0f64eaf6499c28d7ce18fce3566d562078e78c3080a1882f6f",
+      "outputSchemaHash": "b1887b5fa3a3df703b2efdcb060c67f16cf1a7cd93098e5fcf4d25ad36cfc663",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pre_meeting_briefing/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pre_meeting_briefing",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-citation-refusal-fact-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "2d10c2929166f8792d6722a0aec3643a87de9ae5d65f8f075774bae4fa67b7ab"
+    },
+    {
+      "id": "ag_pricing_analyst",
+      "name": "Pricing Analyst",
+      "aliases": [
+        "pricing_analyst",
+        "pricing structure simulator"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_pricing_analyst",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPricingAnalyst"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/pricingRoutes.ts",
+        "hint": "runPricingAnalyst"
+      },
+      "promptRef": "prompts/pricing_analyst/v1.md",
+      "inputSchemaHash": "f5f5d98bb928545c77e3d66cd9fb655f09d23eea29f5c0798ae2fce3932a1bfc",
+      "outputSchemaHash": "ef22bfa186d4731c0555bac77458a510103888cb23e2aa2b8cc404ce80c8c1e1",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pricing_analyst/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pricing_analyst",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "registered",
+      "deterministicEvalIds": [
+        "eval-pricing-margin-override-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "490763e72047698a3119a69c63ee2a04d673af2948e2fe747468ca0fccaf1059",
+      "promptHash": "acb80fc9e5d5e77b70b67f9614f39c02b6f3e1a52466ecf7b6477ce4f359de9e"
+    },
+    {
+      "id": "ag_pricing_researcher",
+      "name": "Pricing Researcher",
+      "aliases": [
+        "pricing_researcher",
+        "runtime pricing-research alias"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPricingResearcher"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/pricingRoutes.ts",
+        "hint": "runPricingResearcher"
+      },
+      "promptRef": "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are Cognirise's Pricing Researcher",
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "pricing_researcher",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/components/tabs/PricingStructuresPanel.tsx"
+      ],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-pricing-margin-override-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "490763e72047698a3119a69c63ee2a04d673af2948e2fe747468ca0fccaf1059",
+      "promptHash": "05a8f69bb6d937fbf330100493e0e355025ce30c981bff46655dfe6a17caa3ff"
+    },
+    {
+      "id": "ag_pricing_strategist",
+      "name": "Pricing Strategist",
+      "aliases": [
+        "pricing_strategist",
+        "commercial/pricing assistant"
+      ],
+      "classification": "executable",
+      "registryId": "ag_pricing_strategist",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPricingStrategist"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/pricingRoutes.ts",
+        "hint": "runPricingStrategist"
+      },
+      "promptRef": "prompts/pricing_strategist/v1.md",
+      "inputSchemaHash": "e945b0453eacc7cba92293c0654add45af25d0700cfdbe5e95beddf931028e75",
+      "outputSchemaHash": "cb69e1ecdf40ff5ef1f37bc16b2c80ae9d34dfc412a14a8814318a7ac661132a",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pricing_strategist/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pricing_strategist",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-pricing-margin-override-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "490763e72047698a3119a69c63ee2a04d673af2948e2fe747468ca0fccaf1059",
+      "promptHash": "1a901478751c48c15de04ba0dc92576483c2ba502f6a7136ed40fb180cd78607"
+    },
+    {
+      "id": "ag_procurement_navigator",
+      "name": "Procurement Navigator",
+      "aliases": [
+        "procurement_navigator",
+        "procurement/vendor registration guide"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_procurement_navigator",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runProcurementNavigator"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runProcurementNavigator"
+      },
+      "promptRef": "prompts/procurement_navigator/v1.md",
+      "inputSchemaHash": "d58d29a5f7892581876b7fb1ff945fdcac07fb15527e7de509309ae6134edcb4",
+      "outputSchemaHash": "826e881301bf8d6ab8a84ce76c9c32b8b92584a8a98630aafa0191450d709d2c",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_procurement_navigator/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_procurement_navigator",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "078f2ec60d9543b33281e50856f4e001aa58cc3db0bfe716b9b41218097a5480"
+    },
+    {
+      "id": "ag_proposal_composer",
+      "name": "Proposal Composer",
+      "aliases": [
+        "proposal_composer",
+        "proposal writer"
+      ],
+      "classification": "executable",
+      "registryId": "ag_proposal_composer",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runProposalComposer"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+        "hint": "runProposalComposer"
+      },
+      "promptRef": "prompts/proposal_composer/v1.md",
+      "inputSchemaHash": "824849fc151282ddb713bc9dd8995f4174a95202473257c1f04ff9ebd8492ecd",
+      "outputSchemaHash": "1cf084f7267c1754de43170ec343319131a5f40d0454c070b129700b45e43657",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_proposal_composer/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_proposal_composer",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-proposal-approval-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "3464afcf6eae51d9110780c8a1bb036a1245d3514b0415d4bb587affdc00c99c",
+      "promptHash": "9f7f9d6e79c89b027ffd5e1a0a873fc62362c74790694770d1aa86833d4806d0"
+    },
+    {
+      "id": "ag_pursuit_scout",
+      "name": "Pursuit Scout",
+      "aliases": [
+        "pursuit_scout",
+        "Scout",
+        "opportunity research"
+      ],
+      "classification": "executable",
+      "registryId": "ag_pursuit_scout",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runPursuitScout"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "runPursuitScout"
+      },
+      "promptRef": "prompts/pursuit_scout/v1.md",
+      "inputSchemaHash": "3cec020633e272fe743affdd3dce38d1ed29b8b59e75a5b6539d9d900423f0bb",
+      "outputSchemaHash": "f8899bc85499eea47a26c4bd112cab10bc8be3148fe11218f53695ebef555805",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_pursuit_scout/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_pursuit_scout",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-citation-refusal-fact-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "ac7b8a2aba62f9b65cf5db7e7e4e3ac53bdd74af893084792d7f8171b0359644",
+      "promptHash": "ed5ecc224e6e7e0cbcd0ef1343c3b96aaf7628b47aa751dfe3a536bce09c0fb8"
+    },
+    {
+      "id": "ag_qbr_composer",
+      "name": "QBR Composer",
+      "aliases": [
+        "qbr_composer"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runQbrComposer"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runQbrComposer"
+      },
+      "promptRef": "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are QBR Composer",
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "qbr_composer",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Account.tsx"
+      ],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "05a8f69bb6d937fbf330100493e0e355025ce30c981bff46655dfe6a17caa3ff"
+    },
+    {
+      "id": "ag_relationship_health",
+      "name": "Relationship-Health",
+      "aliases": [
+        "relationship_health",
+        "relationship intelligence"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_relationship_health",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runRelationshipHealth"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runRelationshipHealth"
+      },
+      "promptRef": "prompts/relationship_health/v1.md",
+      "inputSchemaHash": "d58d29a5f7892581876b7fb1ff945fdcac07fb15527e7de509309ae6134edcb4",
+      "outputSchemaHash": "03c291d752e30eb01e9d40f9dd38357399c487763efc4f3cf4e5a3f148e7ad49",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_relationship_health/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_relationship_health",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "df3b0bad45e4ac60b0c9873635574fe40a1b447a0a3c7dbee859377d046a0c53"
+    },
+    {
+      "id": "ag_run_staleness",
+      "name": "Run staleness / launch visibility",
+      "aliases": [
+        "run_staleness",
+        "run staleness",
+        "launch visibility"
+      ],
+      "classification": "utility",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/run-staleness.ts",
+        "symbol": "agentRunRowIsStale"
+      },
+      "route": null,
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": null,
+        "sourceMode": "not-applicable"
+      },
+      "uiMounts": [],
+      "operationalStatus": "utility",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [],
+      "sourceHash": "b227c245172e9ad43497ffe74a131593c744455e748ea2608a192632a9ef0628",
+      "promptHash": null
+    },
+    {
+      "id": "ag_scout_persistence",
+      "name": "Scout persistence / citation guardrail",
+      "aliases": [
+        "scout_persistence",
+        "Scout persistence",
+        "citation guardrail"
+      ],
+      "classification": "utility",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/scout-persist.ts",
+        "symbol": "persistBriefAndFacts"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+        "hint": "persistBriefAndFacts"
+      },
+      "promptRef": null,
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": null,
+        "sourceMode": "not-applicable"
+      },
+      "uiMounts": [],
+      "operationalStatus": "utility",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [],
+      "sourceHash": "b6da098a3f8242b0cba610dc66ca3ab075b7281668af82812d55c03ae8f072a9",
+      "promptHash": null
+    },
+    {
+      "id": "ag_strategy_developer",
+      "name": "Strategy Developer",
+      "aliases": [
+        "strategy_developer",
+        "account strategy developer"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_strategy_developer",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runStrategyDeveloper"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runStrategyDeveloper"
+      },
+      "promptRef": "prompts/strategy_developer/v1.md",
+      "inputSchemaHash": "d58d29a5f7892581876b7fb1ff945fdcac07fb15527e7de509309ae6134edcb4",
+      "outputSchemaHash": "48538f44e1534259ee635a99659ba64fecf3b8ff8392b0740ba289592819660e",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_strategy_developer/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_strategy_developer",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "a64a9e0edf9ce8b04bcad9a3b464dc619a6394e933186a51d2b6b115ba4c2b3a"
+    },
+    {
+      "id": "ag_synthesis_critic",
+      "name": "Synthesis Critic",
+      "aliases": [
+        "synthesis_critic",
+        "deliverable quality gate"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_synthesis_critic",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runSynthesisCritic"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+        "hint": "runSynthesisCritic"
+      },
+      "promptRef": "prompts/synthesis_critic/v1.md",
+      "inputSchemaHash": "f62fba651d99e706bd7fb7a1ed66e6174c57ebd912ff2968b0ce9614f1c36e20",
+      "outputSchemaHash": "b2d90d78fbba57537e11bfc4684cf97efc061036438ffdb3fb27d2c0c0bd89e3",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_synthesis_critic/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_synthesis_critic",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "4d5fd116067c284a91c70d8863e75690844e70009c916954f42d9216c0534bde",
+      "promptHash": "5222b40a644b2767d38d208ad91e7d7bd65804f6e939bbd00922d145fb0a0633"
+    },
+    {
+      "id": "ag_theme_curator",
+      "name": "Theme Curator",
+      "aliases": [
+        "theme_curator"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_theme_curator",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runThemeCurator"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/winLossRoutes.ts",
+        "hint": "runThemeCurator"
+      },
+      "promptRef": "prompts/theme_curator/v1.md",
+      "inputSchemaHash": "f8589e3d8344064dd73567a98c69aa9f44fed64fef9f94dedbb95e9f2282b024",
+      "outputSchemaHash": "820e54810d9ec1aef061e3e420a60a6882dbfbf6b01db3ad290406777127e0f7",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_theme_curator/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_theme_curator",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "registered",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "47dd0c5a78ea1c99da50abb2827c05f96d00428c10f178a590f45cfab3640f5c",
+      "promptHash": "f406ac095ac14e24a4997b0f43e6d538b694bb51770618ac9d8f3476006671e1"
+    },
+    {
+      "id": "ag_whitespace_mapper",
+      "name": "Whitespace Mapper",
+      "aliases": [
+        "whitespace_mapper"
+      ],
+      "classification": "advisory",
+      "registryId": null,
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runWhitespaceMapper"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
+        "hint": "runWhitespaceMapper"
+      },
+      "promptRef": "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are Whitespace Mapper",
+      "inputSchemaHash": null,
+      "outputSchemaHash": null,
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
+      ],
+      "agentsLens": {
+        "recordKey": "whitespace_mapper",
+        "sourceMode": "manual-record"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Account.tsx"
+      ],
+      "operationalStatus": "runtime-only",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "009598670389d500825e00f1154c16364c92b7b1e2c3a3782f1a5a186065a0ee",
+      "promptHash": "05a8f69bb6d937fbf330100493e0e355025ce30c981bff46655dfe6a17caa3ff"
+    },
+    {
+      "id": "ag_win_loss_interviewer",
+      "name": "Win/Loss Interviewer",
+      "aliases": [
+        "win_loss_interviewer",
+        "debrief"
+      ],
+      "classification": "advisory",
+      "registryId": "ag_win_loss_interviewer",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+        "symbol": "runWinLossInterviewer"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/winLossRoutes.ts",
+        "hint": "runWinLossInterviewer"
+      },
+      "promptRef": "prompts/win_loss_interviewer/v1.md",
+      "inputSchemaHash": "f1f7f797b27c94608dd6dce00689ceffd3c7b325e853aba21f8954dcfbcc4d9c",
+      "outputSchemaHash": "6b45db9eafe3ff556ae75c8dc7f72eb3d612eba04bb075a40eab2e77a8bac337",
+      "fixtureRefs": [
+        "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json",
+        "artifacts/api-server/tests/agents/ag_win_loss_interviewer/golden.json"
+      ],
+      "agentsLens": {
+        "recordKey": "ag_win_loss_interviewer",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
+      ],
+      "operationalStatus": "mvp",
+      "deterministicEvalIds": [
+        "eval-global-security-tenant-write-v1"
+      ],
+      "approvedDivergences": [],
+      "sourceHash": "47dd0c5a78ea1c99da50abb2827c05f96d00428c10f178a590f45cfab3640f5c",
+      "promptHash": "2b377a128963feaaed5d2a2f40f40094ab5040bb3f29c7c0c49cd05ad588b695"
+    }
+  ]
+}

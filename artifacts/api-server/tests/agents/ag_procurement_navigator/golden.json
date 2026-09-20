@@ -1,0 +1,80 @@
+{
+  "agentId": "ag_procurement_navigator",
+  "input": {
+    "accountId": "acct_uae_energy_group",
+    "accountName": "UAE Energy Group"
+  },
+  "expectedOutput": {
+    "guide": {
+      "jurisdiction": "United Arab Emirates",
+      "summary": "A UAE supplier should first confirm the client's procurement channel and then complete the requested supplier registration, corporate, tax and banking checks. The client procurement team must confirm the exact portal, category and document requirements before submission.",
+      "channel": {
+        "name": "Client supplier registration portal",
+        "type": "eprocurement_platform",
+        "portalUrl": null
+      },
+      "responsibleContact": {
+        "department": "Procurement and supplier registration",
+        "title": "Supplier registration team",
+        "email": null,
+        "phone": null,
+        "notes": "Confirm the client's portal and named contact with the account partner; do not infer a portal URL."
+      },
+      "steps": [
+        {
+          "order": 1,
+          "title": "Confirm the registration route",
+          "detail": "Ask the client procurement contact whether registration is through its supplier portal, a prequalification exercise or an invited tender, and confirm the relevant service category.",
+          "sourceUrls": []
+        },
+        {
+          "order": 2,
+          "title": "Create or update the supplier record",
+          "detail": "Use the route supplied by the client to enter the legal entity, UAE licence details, registered address, tax information and primary supplier contact. Save the registration reference.",
+          "sourceUrls": []
+        },
+        {
+          "order": 3,
+          "title": "Upload supporting documents",
+          "detail": "Upload current corporate, tax, banking, ownership and compliance documents in the client's requested formats. Check that names and expiry dates match the legal entity record.",
+          "sourceUrls": []
+        },
+        {
+          "order": 4,
+          "title": "Submit for procurement review",
+          "detail": "Review the declaration and data-processing terms, submit the supplier profile and monitor the portal for clarification requests or approval status.",
+          "sourceUrls": []
+        }
+      ],
+      "requiredInformation": [
+        "Legal entity name and UAE jurisdiction",
+        "Trade licence number, issue date and expiry date",
+        "Registered and correspondence addresses",
+        "Tax registration details and primary procurement contact",
+        "Bank account and payment information",
+        "Relevant service categories and company capabilities"
+      ],
+      "requiredDocuments": [
+        "Valid UAE trade licence",
+        "Tax registration certificate, if applicable",
+        "Certificate of incorporation or equivalent constitutional document",
+        "Bank letter or confirmation of account details",
+        "Ownership or authorised-signatory information",
+        "Relevant insurance and compliance certificates requested by the client"
+      ],
+      "fees": null,
+      "timeline": "Timing depends on the client's portal and procurement review; confirm the service-level expectation with the supplier registration team.",
+      "renewal": "Review the supplier profile and expiring documents at least annually and whenever the client requests a refresh.",
+      "sources": [
+        {
+          "url": "https://u.ae/en/information-and-services/business",
+          "title": "UAE Government: Business and trade"
+        }
+      ],
+      "confidence": "amber"
+    },
+    "rationale": "The client portal and registration requirements were not established in the account input, so this guide deliberately identifies the route to confirm and omits an invented URL, fee or named contact. The UAE government business portal is included as jurisdiction context, not as proof of the client's supplier workflow.",
+    "confidence": "amber"
+  },
+  "notes": "Procurement Navigator fixture demonstrates a jurisdiction-aware, source-cited guide that explicitly omits unverified portal details."
+}

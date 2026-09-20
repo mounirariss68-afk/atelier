@@ -1,0 +1,45 @@
+{
+  "agentId": "ag_strategy_developer",
+  "input": {
+    "accountId": "acct_riyadh_public_services",
+    "accountName": "Riyadh Public Services Authority"
+  },
+  "expectedOutput": {
+    "draftStrategy": {
+      "objectives": [
+        {
+          "id": "obj-1",
+          "text": "Establish Cognirise as a trusted partner for the authority's responsible AI and service-operations agenda.",
+          "targetValue": null,
+          "targetDate": "2025-12-31"
+        },
+        {
+          "id": "obj-2",
+          "text": "Create a qualified pipeline of decision-maker conversations around one priority service transformation.",
+          "targetValue": "3 executive workshops",
+          "targetDate": "2025-09-30"
+        }
+      ],
+      "targetServiceLines": [
+        "AI strategy and governance",
+        "Service workflow transformation",
+        "Adoption and enablement"
+      ],
+      "winHypothesis": "Cognirise can win by combining responsible AI strategy with hands-on service-operations improvement, demonstrating a measurable pilot before expanding to the authority's wider transformation portfolio.",
+      "keyPlays": [
+        "Map the authority's priority services, decision makers and procurement route before proposing a solution.",
+        "Offer an executive working session to align AI ambition, governance needs and a measurable pilot outcome.",
+        "Bring a workflow diagnostic and adoption plan to the pilot conversation rather than leading with technology.",
+        "Publish a concise, evidence-led point of view tailored to public-service delivery and responsible AI."
+      ]
+    },
+    "rationale": "The draft focuses the account on a credible land-and-expand motion: establish trust through responsible AI and service-operations expertise, then prove value through a measurable pilot. It avoids unsupported revenue or relationship claims and leaves room for partner validation.",
+    "guidanceUsed": null,
+    "sourcesUsed": [
+      "Account record: acct_riyadh_public_services",
+      "Public-sector service transformation account context"
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Strategy Developer fixture exercises the complete proposal shape with measurable objectives and a cautious confidence level."
+}

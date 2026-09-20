@@ -1,0 +1,73 @@
+{
+  "agentId": "ag_brand_profile_writer",
+  "input": {
+    "firmName": "Cognirise Advisory",
+    "existingProfile": null,
+    "userBrief": "Refresh the firm profile for proposals to public-sector and regulated-industry clients. Keep the voice practical, evidence-led and confident without overstating results.",
+    "evidenceCorpus": [
+      {
+        "id": "about-2024",
+        "kind": "website",
+        "snippet": "Cognirise Advisory helps leadership teams turn responsible AI strategy into measurable operating improvements across the Gulf."
+      },
+      {
+        "id": "case-ops",
+        "kind": "case_study",
+        "snippet": "A transformation programme reduced weekly management-report preparation from three days to one day after workflow redesign and enablement."
+      }
+    ]
+  },
+  "expectedOutput": {
+    "firmName": "Cognirise Advisory",
+    "tagline": "Practical AI transformation, built for lasting adoption.",
+    "missionStatement": "We help organisations turn responsible AI ambition into better decisions, simpler operations and measurable outcomes.",
+    "voiceAttributes": [
+      "Practical",
+      "Evidence-led",
+      "Clear",
+      "Confident without hype"
+    ],
+    "principles": [
+      {
+        "name": "Start with the work",
+        "description": "We anchor transformation in the decisions, processes and people that create value every day."
+      },
+      {
+        "name": "Make adoption measurable",
+        "description": "We define observable outcomes and build the capability to sustain them after the engagement."
+      },
+      {
+        "name": "Design responsibly",
+        "description": "We treat governance, security and human judgment as part of good delivery, not an afterthought."
+      }
+    ],
+    "boilerplateShort": "Cognirise Advisory helps leadership teams turn responsible AI strategy into measurable operating improvements. We combine operating-model design, workflow improvement and practical enablement so teams can adopt change with confidence.",
+    "boilerplateLong": "Cognirise Advisory is a transformation firm helping organisations turn responsible AI ambition into measurable operating improvements. We work with leadership teams to clarify priorities, redesign the workflows that matter and equip people to adopt new ways of working. Our approach is practical and evidence-led: we connect strategy to decisions, processes and outcomes, while keeping governance and human judgment in view. Across the Gulf and beyond, we help clients build change that is useful now and sustainable over time.",
+    "capabilitiesPitch": "From AI strategy and operating-model design to workflow transformation and adoption, we help clients move from a promising idea to a governed, measurable way of working.",
+    "differentiators": [
+      "Translates AI ambition into specific decisions, workflows and outcome measures",
+      "Combines operating-model design with practical team enablement",
+      "Builds governance and responsible-use controls into delivery from the start",
+      "Works alongside client teams so capability remains after the engagement"
+    ],
+    "proofPoints": [
+      {
+        "label": "Management reporting",
+        "metric": "Reduced weekly report preparation from three days to one day in a documented transformation programme"
+      }
+    ],
+    "legalEntities": [
+      {
+        "name": "Cognirise Advisory FZ-LLC",
+        "jurisdiction": "United Arab Emirates"
+      }
+    ],
+    "contactBlock": "Cognirise Advisory\nUnited Arab Emirates\nhello@cognirise.example\ncognirise.example",
+    "brandColors": {
+      "primary": "#173F5F",
+      "ink": "#17202A",
+      "gold": "#D6A84F"
+    }
+  },
+  "notes": "Brand Profile Writer fixture covers evidence-grounded firm copy, proof, legal entity and optional brand colors."
+}
