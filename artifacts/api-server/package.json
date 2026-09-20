@@ -138,6 +138,7 @@
     "test:pov-revision": "CRM_TEST_DB_NAME=crm_test_pov tsx ./tests/crm/pov-revision-probe.ts",
     "test:orphan-invoices": "tsx ./tests/crm/orphan-invoice-probe.ts",
     "test:app-navigation": "tsx tests/app-navigation/run.ts",
+    "test:engagement-pnl-browser": "tsx ./tests/crm/realization-rebaseline-probe.ts && tsx ./tests/crm/engagement-pnl-browser-probe.ts",
     "test:nep-flow": "tsx ./tests/crm/nep-flow-probe.ts",
     "test:nep-mobile": "tsx ./tests/crm/nep-mobile-surface-probe.ts",
     "test:bookkeeper-collision": "tsx ./tests/crm/bookkeeper-collision-probe.ts",
