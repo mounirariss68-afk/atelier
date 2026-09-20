@@ -10,4 +10,7 @@ description: Non-obvious design decisions in the Word-contract lifecycle (templa
 - Manual PATCH to signature-driven statuses (signed/declined/expired/out_for_signature) → 409; terminal statuses never regress.
 - Expiry sweep (lazy, on contract read routes): `sweepExpiredContracts(orgId)` deliberately BYPASSES `canTransition` — it is the single sanctioned signed→expired path (clock-driven). It never touches declined/voided/expired, and writes a system `contract.expired` audit per flip.
   **Why:** canTransition blocks all exits from terminal statuses, but a signed contract lapsing past its expiryDate is the whole point of tracking expiry; expired itself remains terminal.
+- In Riser, a create-contract intent means active-template preparation; the clause-library composer is only for specialist work on an existing Codex contract. Template preparation owns resolution, clarification, and its confirmation preview.
+  **Why:** treating both flows as generic contract creation can select a tool that requires an existing contract, producing a false capability denial instead of the real template/counterparty prerequisite.
+  **How to apply:** keep template preparation directly discoverable to authorized personas and make any generic create-contract fallback delegate to that conversation before showing a generic confirmation.
 - Probe: `pnpm --filter @workspace/api-server test:contracts` — stub Anthropic + stub DocuSeal booted before app import; DocuSeal stub must serve `documents[{url}]` for completion archiving.

@@ -124,7 +124,10 @@ export const DISPATCH_TABLE: Partial<
     update: "invoice_update",
   },
   contract: {
-    create: "codex_contract_compose",
+    // Contract creation in chat means preparing a draft from an active
+    // Atelier template. The clause-library composer operates on an already
+    // existing Codex contract and remains available for that specialist use.
+    create: "contract_prepare",
     update: "contract_update",
   },
   rate_card: {
@@ -226,6 +229,15 @@ export const CHAT_OWNED_KINDS: ReadonlySet<string> = new Set(
     .map(([k]) => k),
 );
 
+/**
+ * Dispatch targets whose own capability owns a richer conversation than the
+ * generic propose_write envelope (clarification, disambiguation and preview).
+ * Keep these visible to the model while retaining the typed dispatch mapping
+ * as a deterministic fallback.
+ */
+export const DIRECT_CHAT_WRITE_TARGETS: ReadonlySet<string> = new Set([
+  "contract_prepare",
+]);
 export function dispatchTarget(verb: DispatchVerb, kind: string): string | undefined {
   return DISPATCH_TABLE[kind as DispatchKind]?.[verb];
 }

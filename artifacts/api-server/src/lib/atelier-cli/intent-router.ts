@@ -125,7 +125,7 @@ const VERB_KEYWORDS: Array<[IntentVerb, RegExp]> = [
   ["reset", /^\/new\b|\b(reset|start over|new session)\b/i],
   ["transition", /\b(move|advance|promote|transition|push (it )?(to|into)|mark (as )?(lost|no[- ]?decision|withdrawn|won)|close (as|won|lost))\b/i],
   ["delete", /\b(delete|remove|drop|archive)\b/i],
-  ["create", /\b(add|create|new|draft|file|log|issue|open|register)\b/i],
+  ["create", /\b(add|create|new|draft|prepare|file|log|issue|open|register)\b/i],
   ["update", /\b(update|edit|change|set|rename|amend)\b/i],
   ["link", /\b(link|attach|associate|connect)\b/i],
   ["read", /\b(list|show|find|search|who is|what is|view|fetch|get|recap|summarise|summarize)\b/i],

@@ -188,7 +188,7 @@ import { DEFAULT_CHAT_TZ, normalizeChatTz, wallParts as tzWallParts } from "./ch
 // propose_write. The capability-retriever filter at line 215 only
 // applies inside retrieveCapabilities; the chat surface that Sonnet
 // actually sees is built here, so the filter must live here too.
-import { DISPATCH_TABLE } from "./write-dispatch.js";
+import { DIRECT_CHAT_WRITE_TARGETS, DISPATCH_TABLE } from "./write-dispatch.js";
 
 // Pre-compute the set of legacy tool names that propose_write now owns.
 // Built once at module load — DISPATCH_TABLE is static.
@@ -968,6 +968,7 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
       entry.isWrite &&
       entry.module !== "meta" &&
       !ALWAYS_INCLUDE_TOOLS.has(entry.toolName) &&
+      !DIRECT_CHAT_WRITE_TARGETS.has(entry.toolName) &&
       LEGACY_DISPATCH_TARGETS.has(entry.toolName)
     ) {
       continue;
@@ -1008,6 +1009,7 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
     if (
       t.isWrite &&
       !ALWAYS_INCLUDE_TOOLS.has(t.name) &&
+      !DIRECT_CHAT_WRITE_TARGETS.has(t.name) &&
       LEGACY_DISPATCH_TARGETS.has(t.name)
     ) {
       continue;
@@ -1061,6 +1063,17 @@ export function findToolByName(
   }
   const cat = findByToolName(name);
   if (cat) {
+    // The persona surface intentionally strips direct dispatch targets from
+    // the model menu, so callers fall through to the catalog to execute them.
+    // Fallthrough must still preserve the catalog's role/persona perimeter;
+    // otherwise a generic meta-tool could resolve a capability that the
+    // caller was never granted.
+    if (
+      persona &&
+      !capabilitiesForPersona(persona).some((entry) => entry.toolName === name)
+    ) {
+      return undefined;
+    }
     return {
       name: cat.toolName,
       description: cat.description,
@@ -1622,6 +1635,12 @@ const SYSTEM_PROMPT = [
   // The orchestrator NEVER writes directly — propose_write hands off to
   // the existing entity route on commit.
   "ORCHESTRATOR POLICY (create | update | link | transition):",
+  "- CONTRACT PREPARATION is a specialist exception: for verb=`create` + kind=`contract`,",
+  "  call `contract_prepare` directly with the user's template/type, counterparty, dates,",
+  "  and explicit values. Let that tool own template/counterparty resolution, missing-field",
+  "  clarification, and its confirmation preview. Do not use `codex_contract_compose`,",
+  "  `resolve_entity`, or a generic `propose_write` preview for a new template-based draft.",
+  "  If preparation fails, report its specific prerequisite error; never claim no tool exists.",
   "- For any verb that mentions an entity by fuzzy name, call `resolve_entity` FIRST.",
   "  If it returns disambiguation options, STOP and let the user pick.",
   "- For ANY stage transition, call `evaluate_gate` BEFORE `propose_write`. If a gate is",

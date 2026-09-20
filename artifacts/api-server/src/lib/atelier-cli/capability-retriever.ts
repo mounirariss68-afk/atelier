@@ -26,7 +26,7 @@ import {
 } from "./capability-catalog.js";
 import type { CliPersona, ToolDef } from "./index.js";
 import { cosine, currentProvider, embedText } from "./embeddings.js";
-import { CHAT_OWNED_KINDS } from "./write-dispatch.js";
+import { CHAT_OWNED_KINDS, DIRECT_CHAT_WRITE_TARGETS } from "./write-dispatch.js";
 import type { IntentKind } from "./intent-router.js";
 
 /**
@@ -175,7 +175,7 @@ export const CORE_TOOLS_BY_KIND: Readonly<
     "change_order_dispatch",
     "change_order_record_acceptance",
   ],
-  contract: ["codex_contract_compose", "contract_update"],
+  contract: ["contract_prepare", "contract_status"],
   rate_card: ["rate_card_create", "rate_card_update"],
   renewal: ["renewal_list", "renewal_open", "renewal_create", "renewal_update"],
   partner_firm: ["partner_firm_create", "partner_firm_update"],
@@ -604,6 +604,7 @@ function isLegacyChatWrite(entry: CapabilityEntry | undefined, dispatchTargets: 
   if (!entry.isWrite) return false;
   if (entry.module === "meta") return false;
   if (ALWAYS_INCLUDE.has(entry.toolName)) return false;
+  if (DIRECT_CHAT_WRITE_TARGETS.has(entry.toolName)) return false;
   // (a) Direct dispatch targets — already vetted to perform a
   //     covered (kind, verb).
   if (dispatchTargets.has(entry.toolName)) return true;

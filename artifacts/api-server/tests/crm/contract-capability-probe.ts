@@ -47,9 +47,15 @@ async function main() {
   const { storeContractBytes } = await import("../../src/lib/atelier-contracts.js");
   await import("../../src/lib/atelier-cli/contract-capabilities.js");
   const { findByToolName } = await import("../../src/lib/atelier-cli/capability-catalog.js");
+  const { deterministicClassify } = await import("../../src/lib/atelier-cli/intent-router.js");
+  const { floorToolsForKind } = await import("../../src/lib/atelier-cli/capability-retriever.js");
+  const { dispatchTarget } = await import("../../src/lib/atelier-cli/write-dispatch.js");
+  const { getToolsForPersona } = await import("../../src/lib/atelier-cli/index.js");
 
   const prepare = findByToolName("contract_prepare");
   if (!prepare) throw new Error("contract_prepare capability not registered");
+  const proposeWrite = findByToolName("propose_write");
+  if (!proposeWrite) throw new Error("propose_write capability not registered");
 
   const runTag = `probe159cap_${Date.now()}`;
   const fpId = `u_${runTag}_fp`;
@@ -65,6 +71,79 @@ async function main() {
   const run = async (input: Record<string, unknown>) => prepare.run(input, ctx);
 
   try {
+    // ---- 0. user-level routing: intent → retrieval floor → dispatcher ----
+    const request = "Prepare a mutual NDA with ACME Inc.";
+    const intent = deterministicClassify(request);
+    check(
+      "contract preparation classifies as create contract",
+      intent.verb === "create" && intent.kind === "contract",
+      intent,
+    );
+    check(
+      "contract create dispatches to active-template preparation",
+      dispatchTarget("create", "contract") === "contract_prepare",
+      dispatchTarget("create", "contract"),
+    );
+    check(
+      "contract create never dispatches to clause-library composer",
+      dispatchTarget("create", "contract") !== "codex_contract_compose",
+      dispatchTarget("create", "contract"),
+    );
+    const personaToolNames = new Set(getToolsForPersona(persona).map((t: any) => t.name));
+    check(
+      "authorized persona can discover contract_prepare directly",
+      personaToolNames.has("contract_prepare"),
+      Array.from(personaToolNames).filter((n) => String(n).includes("contract")),
+    );
+    const employeeToolNames = new Set(
+      getToolsForPersona({ ...persona, id: `${fpId}_employee`, role: "employee" }).map(
+        (t: any) => t.name,
+      ),
+    );
+    check(
+      "contract preparation remains role-gated",
+      !employeeToolNames.has("contract_prepare"),
+      Array.from(employeeToolNames).filter((n) => String(n).includes("contract")),
+    );
+    for (const role of ["finance", "hr", "employee"]) {
+      const deniedCtx = {
+        persona: { ...persona, id: `${fpId}_${role}`, role },
+      } as any;
+      const proposal: any = await proposeWrite.run(
+        {
+          verb: "create",
+          kind: "contract",
+          payload: { template: "mutual NDA", counterparty: "ACME Inc." },
+        },
+        deniedCtx,
+      );
+      check(
+        `${role} cannot preview generic contract preparation`,
+        proposal?.ok === false && proposal?.errorCode === "dispatch_unregistered",
+        proposal,
+      );
+      const commit: any = await proposeWrite.run(
+        {
+          verb: "create",
+          kind: "contract",
+          payload: { template: "mutual NDA", counterparty: "ACME Inc." },
+          confirm: true,
+        },
+        deniedCtx,
+      );
+      check(
+        `${role} cannot commit generic contract preparation`,
+        commit?.ok === false && commit?.errorCode === "dispatch_unregistered",
+        commit,
+      );
+    }
+    const floor = floorToolsForKind("contract", personaToolNames, request);
+    check(
+      "contract retrieval floor selects preparation capability",
+      floor.includes("contract_prepare") && !floor.includes("codex_contract_compose"),
+      floor,
+    );
+
     await db.insert(atelierUsers).values({
       id: fpId,
       orgId: "aico",
@@ -152,6 +231,33 @@ async function main() {
       fieldStatus: "reviewed",
       createdBy: fpId,
     } as any);
+
+    // Generic create-contract routing must delegate to the preparation
+    // capability's own preview (not produce a second generic preview).
+    const routedPreview: any = await proposeWrite.run(
+      {
+        verb: "create",
+        kind: "contract",
+        payload: {
+          template: "Capprobe NDA",
+          counterparty: "Zorina Capprobe",
+          values: { fee: "AED 9,000" },
+        },
+      },
+      ctx,
+    );
+    check(
+      "generic contract route delegates to preparation preview",
+      routedPreview?.ok === true &&
+        routedPreview?.data?.stage === "preview" &&
+        routedPreview?.confirmation?.pending?.tool === "contract_prepare",
+      routedPreview,
+    );
+    check(
+      "generic contract route does not retain propose_write confirmation",
+      routedPreview?.confirmation?.pending?.tool !== "propose_write",
+      routedPreview?.confirmation,
+    );
 
     // ---- 1. preview → confirm (person counterparty, ID rerun) ----
     const preview: any = await run({
