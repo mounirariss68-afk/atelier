@@ -1410,6 +1410,7 @@ export async function transitionMobilizationAssignment(args: {
   expectedEngagementId: string;
   actor: typeof atelierUsers.$inferSelect;
   nextState: "accepted" | "declined" | "replaced" | "ended";
+  reason?: string | null;
   selfOnly?: boolean;
 }) {
   return db.transaction(async (tx) => {
@@ -1432,61 +1433,55 @@ export async function transitionMobilizationAssignment(args: {
   } else if (!mobilizer) return { error: "mobilizer-only-transition" as const };
   const [row] = await tx.update(atelierStaffingAssignments).set({
     state: args.nextState,
+    stateReason: ["declined", "ended", "replaced"].includes(args.nextState) ? (args.reason?.trim() || null) : assignment.stateReason,
     acceptedAt: args.nextState === "accepted" ? new Date() : assignment.acceptedAt,
     endedAt: ["ended", "replaced", "declined"].includes(args.nextState) ? new Date() : assignment.endedAt,
     updatedAt: new Date(),
   }).where(and(eq(atelierStaffingAssignments.id, assignment.id), eq(atelierStaffingAssignments.state, assignment.state))).returning();
   if (!row) return { error: "assignment-state-race" as const };
-  if (assignment.userId && args.nextState === "accepted") {
-    const [existingAccess] = await tx.select().from(atelierEngagementAccess).where(and(
-      eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
-    ));
-    if (existingAccess) {
-      // A manually/leadership-created grant is independent of mobilization.
-      // Never overwrite its role, scope, allocation, dates, status, or source.
-      if (existingAccess.mobilizationAssignmentId) {
-        await tx.update(atelierEngagementAccess).set({
-          status: "active", allocationPct: assignment.allocationPct,
-          endDate: new Date(`${assignment.endDate}T23:59:59Z`), deletedAt: null,
-        }).where(eq(atelierEngagementAccess.id, existingAccess.id));
-      }
-    } else {
-      await tx.insert(atelierEngagementAccess).values({
-        id: rid("engacc"), engagementId: eng.id, userId: assignment.userId, roleOnEngagement: "member",
-        allocationPct: assignment.allocationPct, status: "active", grantedByUserId: args.actor.id,
-        mobilizationAssignmentId: assignment.id, endDate: new Date(`${assignment.endDate}T23:59:59Z`),
-      });
-    }
-  } else if (assignment.userId && ["declined", "replaced", "ended"].includes(args.nextState)) {
+  if (assignment.userId) {
     const remaining = await tx.select().from(atelierStaffingAssignments).where(and(
       eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.userId, assignment.userId),
       eq(atelierStaffingAssignments.state, "accepted"), isNull(atelierStaffingAssignments.deletedAt),
     )).orderBy(atelierStaffingAssignments.id);
     const [access] = await tx.select().from(atelierEngagementAccess).where(and(
       eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
-      eq(atelierEngagementAccess.mobilizationAssignmentId, assignment.id),
+      isNull(atelierEngagementAccess.deletedAt),
     ));
-    if (!remaining.length) await tx.update(atelierEngagementAccess).set({ status: "revoked" }).where(and(
-      eq(atelierEngagementAccess.engagementId, eng.id), eq(atelierEngagementAccess.userId, assignment.userId),
-      eq(atelierEngagementAccess.mobilizationAssignmentId, assignment.id),
-    ));
-    else if (access) await tx.update(atelierEngagementAccess).set({
-      mobilizationAssignmentId: remaining[0].id,
-      allocationPct: remaining.reduce((sum, item) => sum + item.allocationPct, 0),
-      endDate: new Date(`${remaining.reduce((max, item) => item.endDate > max ? item.endDate : max, remaining[0].endDate)}T23:59:59Z`),
-    }).where(eq(atelierEngagementAccess.id, access.id));
+    const independentAccess = access && access.mobilizationAssignmentId == null;
+    if (!remaining.length) {
+      if (access && !independentAccess) {
+        await tx.update(atelierEngagementAccess).set({ status: "revoked" }).where(eq(atelierEngagementAccess.id, access.id));
+      }
+    } else {
+      const aggregate = Math.min(100, remaining.reduce((sum, item) => sum + item.allocationPct, 0));
+      const maxEnd = remaining.reduce((max, item) => item.endDate > max ? item.endDate : max, remaining[0].endDate);
+      if (access && !independentAccess) {
+        await tx.update(atelierEngagementAccess).set({
+          status: "active", mobilizationAssignmentId: remaining[0].id,
+          allocationPct: aggregate, endDate: new Date(`${maxEnd}T23:59:59Z`), deletedAt: null,
+        }).where(eq(atelierEngagementAccess.id, access.id));
+      } else if (!access && args.nextState === "accepted") {
+        await tx.insert(atelierEngagementAccess).values({
+          id: rid("engacc"), engagementId: eng.id, userId: assignment.userId, roleOnEngagement: "member",
+          allocationPct: aggregate, status: "active", grantedByUserId: args.actor.id,
+          mobilizationAssignmentId: remaining[0].id, endDate: new Date(`${maxEnd}T23:59:59Z`),
+        });
+      }
+    }
   }
   await tx.insert(atelierAuditEvents).values({
     id: rid("aud"), entityType: "staffing_assignment", entityId: assignment.id, actorType: "human",
     actorId: args.actor.id, actorLabel: args.actor.name,
     action: `mobilization.assignment.${args.nextState}`,
-    payload: { from: assignment.state, to: args.nextState },
+    payload: { from: assignment.state, to: args.nextState, reason: args.reason?.trim() || null },
     payloadSummary: `Assignment ${args.nextState}`,
   });
   return { row, engagement: eng };
   });
 }
 
+// @cli-skip: mobilization read is form/self-service-only
 router.get("/engagements/:engId/mobilization", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1495,14 +1490,18 @@ router.get("/engagements/:engId/mobilization", async (req, res, next) => {
     if (!eng) return;
     const [requirements, assignments, handoffs] = await Promise.all([
       db.select().from(atelierStaffingRequirements).where(and(eq(atelierStaffingRequirements.engagementId, eng.id), isNull(atelierStaffingRequirements.deletedAt))),
-      db.select().from(atelierStaffingAssignments).where(and(eq(atelierStaffingAssignments.engagementId, eng.id), isNull(atelierStaffingAssignments.deletedAt))),
+      db.select({ assignment: atelierStaffingAssignments, personName: atelierPersons.displayName }).from(atelierStaffingAssignments)
+        .leftJoin(atelierPersons, and(eq(atelierPersons.id, atelierStaffingAssignments.personId), eq(atelierPersons.orgId, me.orgId), isNull(atelierPersons.deletedAt)))
+        .where(and(eq(atelierStaffingAssignments.engagementId, eng.id), eq(atelierStaffingAssignments.orgId, me.orgId), isNull(atelierStaffingAssignments.deletedAt))),
       db.select().from(atelierMobilizationHandoffs).where(and(eq(atelierMobilizationHandoffs.engagementId, eng.id), isNull(atelierMobilizationHandoffs.deletedAt))),
     ]);
     const costing = canViewEngagementCosting(me.role);
-    res.json({ engagement: eng, requirements: costing ? requirements : requirements.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), assignments: costing ? assignments : assignments.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), handoffs });
+    const safeAssignments = assignments.map(({ assignment, personName }) => ({ ...assignment, personName }));
+    res.json({ engagement: eng, requirements: costing ? requirements : requirements.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), assignments: costing ? safeAssignments : safeAssignments.map(({ rateAmount, rateSource, rateCurrency, ...safe }) => safe), handoffs });
   } catch (err) { next(err); }
 });
 
+// @cli-skip: mobilization requirement creation is form/self-service-only
 router.post("/engagements/:engId/mobilization/requirements", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1539,6 +1538,7 @@ router.post("/engagements/:engId/mobilization/requirements", async (req, res, ne
   } catch (err) { next(err); }
 });
 
+// @cli-skip: mobilization assignment creation is form/self-service-only
 router.post("/engagements/:engId/mobilization/assignments", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1615,6 +1615,7 @@ router.post("/engagements/:engId/mobilization/assignments", async (req, res, nex
   } catch (err) { next(err); }
 });
 
+// @cli-skip: mobilization assignment transition is form/self-service-only
 router.patch("/engagements/:engId/mobilization/assignments/:assignmentId", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1623,12 +1624,13 @@ router.patch("/engagements/:engId/mobilization/assignments/:assignmentId", async
     if (!eng) return;
     const nextState = String(req.body?.state ?? "");
     if (!["accepted", "declined", "replaced", "ended"].includes(nextState)) { res.status(400).json({ error: "invalid-assignment-state" }); return; }
-    const result = await transitionMobilizationAssignment({ assignmentId: req.params.assignmentId, expectedEngagementId: eng.id, actor: me, nextState: nextState as "accepted" | "declined" | "replaced" | "ended" });
+    const result = await transitionMobilizationAssignment({ assignmentId: req.params.assignmentId, expectedEngagementId: eng.id, actor: me, nextState: nextState as "accepted" | "declined" | "replaced" | "ended", reason: typeof req.body?.reason === "string" ? req.body.reason : null });
     if ("error" in result) { const error = (result as { error: string }).error; res.status(error === "assignment-not-found" ? 404 : error.includes("only") ? 403 : 409).json(result); return; }
     res.json(result.row);
   } catch (err) { next(err); }
 });
 
+// @cli-skip: mobilization activation is form/self-service-only
 router.post("/engagements/:engId/mobilization/activate", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1708,6 +1710,7 @@ router.post("/engagements/:engId/mobilization/activate", async (req, res, next) 
   } catch (err) { next(err); }
 });
 
+// @cli-skip: mobilization handoff is form/self-service-only
 router.post("/engagements/:engId/mobilization/handoffs", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

@@ -69,8 +69,19 @@ export function AssignmentRow({
     >
       <div className="flex items-start gap-3 flex-wrap">
         <div className="flex-1 min-w-0 space-y-0.5">
+          {/* Person name — shown prominently so mobilizers can distinguish people */}
+          {asg.personName && (
+            <div
+              className="text-sm font-semibold text-text leading-tight"
+              data-testid={`asg-person-name-${asg.id}`}
+            >
+              {asg.personName}
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-text">{asg.role}</span>
+            <span className="text-xs font-medium text-text-soft">
+              {asg.role}
+            </span>
             <span className="text-xs text-text-mute font-mono">
               {seniorityLabel(asg.seniority)}
             </span>

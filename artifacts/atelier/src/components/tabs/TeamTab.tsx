@@ -92,6 +92,9 @@ export function TeamTab({ engId }: { engId: string }) {
   const asgs = d.assignments;
   const handoffs = d.handoffs;
   const readinessIssues = deriveReadinessIssues(reqs, asgs);
+  // Only error-severity issues block activation; warnings (e.g. pending proposals)
+  // render in the ReadinessPanel but must not prevent the Activate button.
+  const blockingIssues = readinessIssues.filter((i) => i.severity === "error");
   const isActive = d.engagement.mobilizationStatus === "active";
 
   // Assignments already shown inside a RequirementRow (by requirementId, or
@@ -118,14 +121,14 @@ export function TeamTab({ engId }: { engId: string }) {
         <div className="flex items-center gap-3">
           <MonoChip
             tone={
-              isActive ? "green" : readinessIssues.length === 0 ? "gold" : "amber"
+              isActive ? "green" : blockingIssues.length === 0 ? "gold" : "amber"
             }
           >
             {isActive
               ? "Active"
-              : readinessIssues.length === 0
+              : blockingIssues.length === 0
               ? "Ready"
-              : `${readinessIssues.length} issue${readinessIssues.length === 1 ? "" : "s"}`}
+              : `${blockingIssues.length} issue${blockingIssues.length === 1 ? "" : "s"}`}
           </MonoChip>
           <span className="text-xs font-mono text-text-mute uppercase tracking-widest">
             Mobilization
@@ -135,11 +138,11 @@ export function TeamTab({ engId }: { engId: string }) {
           <PillButton
             variant="primary"
             onClick={() => activate.mutate()}
-            disabled={activate.isPending || readinessIssues.length > 0}
+            disabled={activate.isPending || blockingIssues.length > 0}
             data-testid="btn-activate"
             title={
-              readinessIssues.length > 0
-                ? "Resolve all readiness issues before activating"
+              blockingIssues.length > 0
+                ? "Resolve all readiness errors before activating"
                 : "Activate mobilization"
             }
           >

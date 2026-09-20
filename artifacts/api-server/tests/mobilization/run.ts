@@ -35,6 +35,8 @@ async function main() {
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const api = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/atelier`;
   let assignmentId = "";
+  let secondAssignmentId = "";
+  let secondDerivedAssignmentId = "";
   const call = async (method: string, path: string, body?: unknown, persona = actor) => {
     const r = await fetch(`${api}${path}`, {
       method, headers: { "content-type": "application/json", cookie: `atelier_persona=${persona}` },
@@ -110,6 +112,23 @@ async function main() {
     check("assignee accepts", r.status === 200, r.body);
     const [independentGrantAfterAccept] = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).eq(atelierEngagementAccess.id, independentGrantBefore.id));
     check("independent grant preserved on accept", JSON.stringify(independentGrantAfterAccept) === JSON.stringify(independentGrantBefore), independentGrantAfterAccept);
+    const secondProposal = await call("POST", `/engagements/${engagement}/mobilization/assignments`, {
+      requirementId: requirement, personId: assigneePerson, userId: assignee, role: "Consultant", seniority: "mid",
+      allocationPct: 40, startDate: "2026-02-01", endDate: "2026-03-31", availabilityStatus: "available", rateAmount: 100, idempotencyKey: `second_${stamp}`,
+    });
+    check("second simultaneous proposal created", secondProposal.status === 201, secondProposal.body);
+    secondAssignmentId = secondProposal.body.id;
+    r = await call("PATCH", `/me/mobilization-assignments/${secondAssignmentId}`, { state: "accepted" }, assignee);
+    check("second simultaneous assignment accepted", r.status === 200, r.body);
+    const [independentGrantAfterSecondAccept] = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).eq(atelierEngagementAccess.id, independentGrantBefore.id));
+    check("independent grant remains unchanged across multiple assignments", JSON.stringify(independentGrantAfterSecondAccept) === JSON.stringify(independentGrantBefore), independentGrantAfterSecondAccept);
+    const declinedProposal = await call("POST", `/engagements/${engagement}/mobilization/assignments`, {
+      requirementId: requirement, personId: assigneePerson, userId: assignee, role: "Consultant", seniority: "mid",
+      allocationPct: 5, startDate: "2026-02-01", endDate: "2026-03-31", availabilityStatus: "available", idempotencyKey: `declined_${stamp}`,
+    });
+    check("decline reason proposal created", declinedProposal.status === 201, declinedProposal.body);
+    r = await call("PATCH", `/me/mobilization-assignments/${declinedProposal.body.id}`, { state: "declined", reason: "not available" }, assignee);
+    check("self decline persists reason", r.status === 200 && r.body.stateReason === "not available", r.body);
     const derivedProposal = await call("POST", `/engagements/${engagement}/mobilization/assignments`, {
       requirementId: requirement, personId: derivedAssigneePerson, userId: derivedAssignee, role: "Consultant", seniority: "mid",
       allocationPct: 10, startDate: "2026-02-01", endDate: "2026-03-31", availabilityStatus: "available", rateAmount: 100, idempotencyKey: `derived_${stamp}`,
@@ -123,6 +142,16 @@ async function main() {
       (await import("drizzle-orm")).eq(atelierEngagementAccess.userId, derivedAssignee),
     ));
     check("derived grant has provenance", derivedGrant?.mobilizationAssignmentId === derivedAssignmentId, derivedGrant);
+    const secondDerivedProposal = await call("POST", `/engagements/${engagement}/mobilization/assignments`, {
+      requirementId: requirement, personId: derivedAssigneePerson, userId: derivedAssignee, role: "Consultant", seniority: "mid",
+      allocationPct: 40, startDate: "2026-02-01", endDate: "2026-03-31", availabilityStatus: "available", rateAmount: 100, idempotencyKey: `derived_second_${stamp}`,
+    });
+    check("second derived proposal created", secondDerivedProposal.status === 201, secondDerivedProposal.body);
+    secondDerivedAssignmentId = secondDerivedProposal.body.id;
+    r = await call("PATCH", `/me/mobilization-assignments/${secondDerivedAssignmentId}`, { state: "accepted" }, derivedAssignee);
+    check("second derived assignment accepted", r.status === 200, r.body);
+    const [aggregateDerivedGrant] = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).eq(atelierEngagementAccess.id, derivedGrant.id));
+    check("derived assignments aggregate access metadata", aggregateDerivedGrant?.allocationPct === 50 && aggregateDerivedGrant?.endDate?.toISOString().startsWith("2026-03-31"), aggregateDerivedGrant);
     await db.update(atelierStaffingAssignments).set({ rateAmount: null }).where((await import("drizzle-orm")).eq(atelierStaffingAssignments.id, assignmentId));
     r = await call("POST", `/engagements/${engagement}/mobilization/activate`, {}, actor);
     check("missing rate and required coverage rejected", r.status === 409 && r.body.reasons.some((x: string) => x.startsWith("missing-rate:")) && r.body.reasons.some((x: string) => x.startsWith("missing-required-role:")), r.body);
@@ -160,8 +189,19 @@ async function main() {
     check("ending preserves independent access", JSON.stringify(revoked) === JSON.stringify(independentGrantBefore), revoked);
     r = await call("PATCH", `/engagements/${engagement}/mobilization/assignments/${derivedAssignmentId}`, { state: "ended" }, actor);
     check("derived assignment ended", r.status === 200, r.body);
+    const [recomputedDerivedGrant] = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).eq(atelierEngagementAccess.id, derivedGrant.id));
+    check("ending one derived assignment recomputes access", recomputedDerivedGrant?.status === "active" && recomputedDerivedGrant.allocationPct === 40 && recomputedDerivedGrant.mobilizationAssignmentId === secondDerivedAssignmentId, recomputedDerivedGrant);
+    r = await call("PATCH", `/engagements/${engagement}/mobilization/assignments/${secondDerivedAssignmentId}`, { state: "ended" }, actor);
+    check("final derived assignment ended", r.status === 200, r.body);
     const [derivedRevoked] = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).eq(atelierEngagementAccess.id, derivedGrant.id));
-    check("derived grant revoked", derivedRevoked?.status === "revoked" && derivedRevoked.mobilizationAssignmentId === derivedAssignmentId, derivedRevoked);
+    check("final derived assignment revokes access", derivedRevoked?.status === "revoked" && derivedRevoked.mobilizationAssignmentId === secondDerivedAssignmentId, derivedRevoked);
+    r = await call("PATCH", `/engagements/${engagement}/mobilization/assignments/${secondAssignmentId}`, { state: "ended", reason: "staffing complete" }, actor);
+    check("final assignment ended with reason", r.status === 200 && r.body.stateReason === "staffing complete", r.body);
+    const finalGrants = await db.select().from(atelierEngagementAccess).where((await import("drizzle-orm")).and(
+      (await import("drizzle-orm")).eq(atelierEngagementAccess.engagementId, engagement),
+      (await import("drizzle-orm")).eq(atelierEngagementAccess.userId, assignee),
+    ));
+    check("independent grant remains after final mobilization assignment", finalGrants.length === 1 && JSON.stringify(finalGrants[0]) === JSON.stringify(independentGrantBefore), finalGrants);
     // The remaining tables are queried to ensure the migration and cleanup
     // paths are present; handoff notifications use the canonical self feed.
     check("mobilization tables available", !!atelierMobilizationHandoffs && !!atelierSelfNotifications);

@@ -1,16 +1,16 @@
 ---
 name: Engagement mobilization safety
-description: Durable concurrency and access-provenance rules for won-project staffing.
+description: General consistency rules for staffing readiness and access provenance.
 ---
 
-Activation readiness and every write that can change readiness must use the same engagement advisory-lock protocol. Capacity-affecting assignment transitions also lock the affected person, with deterministic engagement-then-person ordering. Coverage and capacity are checked across date intervals, not by summing every assignment that overlaps anywhere.
+Treat readiness as one consistent snapshot: activation and every write that changes its inputs must participate in the same serialization boundary. Measure coverage and capacity over each time interval rather than summing every record that overlaps somewhere.
 
-**Why:** Validation outside the shared lock can activate against a stale staffing plan. A single overlap-wide allocation sum also creates both false readiness and false capacity conflicts when allocations vary over time.
+**Why:** Otherwise activation can approve stale inputs, while broad overlap sums create false positives and false negatives when allocations vary over time.
 
-**How to apply:** New requirement edits, assignment lifecycle actions, and activation checks must participate in the lock protocol and use interval-boundary allocation sweeps.
+**How to apply:** Any future readiness input or lifecycle action must join the existing serialization order and interval-based evaluation.
 
-Engagement access created by mobilization must carry explicit assignment provenance. Assignment end/replacement may revoke only access that was created by mobilization; independent lead, reviewer, or manually granted access must remain untouched.
+Access created as a side effect of staffing must remain distinguishable from access granted for an independent reason. Staffing lifecycle changes may alter only staffing-derived access.
 
-**Why:** Engagement access is both staffing metadata and an ACL. Reusing its unique person-engagement row without provenance can silently remove access that existed before mobilization.
+**Why:** A shared access row can represent leadership, review, or manual grants; treating all access as staffing-derived can silently remove valid permissions.
 
-**How to apply:** Preserve independent rows exactly. Keep derived access active while any accepted assignment remains, update its provenance deterministically, and revoke it only after the final accepted assignment ends.
+**How to apply:** Preserve independent access unchanged. Recalculate derived access from all live staffing commitments and remove it only when none remain.

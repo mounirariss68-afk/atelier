@@ -27,6 +27,8 @@ export interface StaffingAssignment {
   requirementId: string | null;
   personId: string;
   userId: string | null;
+  /** Display name of the assigned person — returned by the mobilization GET endpoint. */
+  personName: string | null;
   role: string;
   seniority: string;
   allocationPct: number;

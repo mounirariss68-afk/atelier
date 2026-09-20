@@ -28,7 +28,8 @@
     "test:partner-change-requests": "tsx --tsconfig tsconfig.test.json src/pages/PartnerPortal.change-requests.test.tsx",
     "test:tooling-ui": "tsx --tsconfig tsconfig.test.json src/pages/finance/ToolingSpend.helpers.test.tsx",
     "test:roster-person-form": "tsx --tsconfig tsconfig.test.json src/pages/roster/EditPersonForm.render.test.tsx",
-    "test:roster-mvp": "tsx --tsconfig tsconfig.test.json src/pages/roster/RosterMvp.routing.test.ts"
+    "test:roster-mvp": "tsx --tsconfig tsconfig.test.json src/pages/roster/RosterMvp.routing.test.ts",
+    "test:mobilization-readiness": "tsx --tsconfig tsconfig.test.json src/components/mobilization/ReadinessPanel.deriveIssues.test.ts"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

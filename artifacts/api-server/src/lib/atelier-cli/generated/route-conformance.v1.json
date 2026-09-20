@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1198,
+  "routeCount": 1206,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -675,6 +675,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "04ba5d494b2185d2",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "get",
+      "path": "/engagements/:engId/mobilization",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization read is form/self-service-only",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -7624,6 +7652,34 @@
       }
     },
     {
+      "routeId": "3ac4f935ca4f96fa",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "post",
+      "path": "/engagements/:engId/mobilization/requirements",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization requirement creation is form/self-service-only",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "3ae1b500c5d7ae71",
       "file": "artifacts/api-server/src/routes/atelier/invoiceRoutes.ts",
       "method": "get",
@@ -11315,6 +11371,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "5ad1b0fb51caac92",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "patch",
+      "path": "/engagements/:engId/mobilization/assignments/:assignmentId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization assignment transition is form/self-service-only",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -18236,6 +18320,34 @@
       }
     },
     {
+      "routeId": "8ec6141fa586dbcf",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "post",
+      "path": "/engagements/:engId/mobilization/assignments",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization assignment creation is form/self-service-only",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "8ec84b5ea250c5f5",
       "file": "artifacts/api-server/src/routes/atelier/partnerBillingRoutes.ts",
       "method": "post",
@@ -19323,6 +19435,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "97caddadc3178150",
+      "file": "artifacts/api-server/src/routes/atelier/meRoutes.ts",
+      "method": "get",
+      "path": "/me/mobilization-assignments",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "self-service mobilization assignments are form/mobile-only",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -21904,6 +22044,34 @@
       }
     },
     {
+      "routeId": "ab1bd5017dd63029",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "post",
+      "path": "/engagements/:engId/mobilization/activate",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization activation is form/self-service-only",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "abba6a040c469797",
       "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
       "method": "post",
@@ -23383,6 +23551,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "binary file download; no CLI tool shape",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "b5717136ca8dbf71",
+      "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
+      "method": "post",
+      "path": "/engagements/:engId/mobilization/handoffs",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "mobilization handoff is form/self-service-only",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -31900,6 +32096,34 @@
       }
     },
     {
+      "routeId": "f301d72ce3b5739d",
+      "file": "artifacts/api-server/src/routes/atelier/meRoutes.ts",
+      "method": "patch",
+      "path": "/me/mobilization-assignments/:assignmentId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "self-service mobilization response is form/mobile-only",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "f30c0b166c64fa3e",
       "file": "artifacts/api-server/src/routes/atelier/codexRoutes.ts",
       "method": "post",
@@ -36530,5 +36754,5 @@
       ]
     }
   ],
-  "conformanceVersion": "b12575607ced22191fb5073c5d68d3f3a9c15c26079d2fdf84c62de2bb00c598"
+  "conformanceVersion": "784845f9aa925f2c71cc6f5d751f5f276275539c85d3ddb612278e999a0dd219"
 }

@@ -71,6 +71,7 @@ function ensurePersona(
 // Self-only lifecycle action for employees and contractors. Engagement routes
 // intentionally reject self-scoped personas; this endpoint is the sole path
 // by which a named assignee can accept or decline their own proposal.
+// @cli-skip: self-service mobilization response is form/mobile-only
 router.patch("/me/mobilization-assignments/:assignmentId", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -92,6 +93,7 @@ router.patch("/me/mobilization-assignments/:assignmentId", async (req, res, next
       expectedEngagementId: assignment.engagementId,
       actor: me,
       nextState: state,
+      reason: typeof req.body?.reason === "string" ? req.body.reason : null,
       selfOnly: true,
     });
     if ("error" in result) {
@@ -105,6 +107,7 @@ router.patch("/me/mobilization-assignments/:assignmentId", async (req, res, next
   }
 });
 
+// @cli-skip: self-service mobilization assignments are form/mobile-only
 router.get("/me/mobilization-assignments", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
