@@ -21,7 +21,7 @@
  * mutated only through these routes.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, gte, lte } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
@@ -34,10 +34,19 @@ import {
   atelierAgentIncidents,
   atelierAgentRetirements,
   atelierAgentRuns,
+  atelierAgentRunSnapshots,
+  atelierAgentOutcomeEvents,
+  atelierResearchFacts,
+  atelierPovs,
+  atelierProposals,
   atelierAuditEvents,
 } from "@workspace/db";
 
 const router: IRouter = Router();
+
+const OUTCOME_READ_ROLES = new Set([
+  "founding_partner", "partner", "senior_manager",
+]);
 
 type Me = typeof atelierUsers.$inferSelect;
 
@@ -181,6 +190,122 @@ router.get("/agents-lens/incidents", async (req, res) => {
     .from(atelierAgentIncidents)
     .where(orgScope(me, atelierAgentIncidents));
   res.json({ items: rows });
+});
+
+/**
+ * Aggregate-only CRM outcome report.  No event/entity identifiers, labels,
+ * URLs, amounts, or restricted payloads leave this route.
+ */
+// @cli-skip: leadership analytics dashboard; no entity-detail or chat response shape
+router.get("/agents-lens/outcomes", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!OUTCOME_READ_ROLES.has(me.role)) {
+    res.status(403).json({ error: "leadership-role-required" });
+    return;
+  }
+  const agentId = typeof req.query.agentId === "string" ? req.query.agentId : undefined;
+  const entryPath = typeof req.query.entryPath === "string" ? req.query.entryPath : undefined;
+  const from = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const to = typeof req.query.to === "string" ? new Date(req.query.to) : undefined;
+  if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+    res.status(400).json({ error: "invalid-date-range" });
+    return;
+  }
+  const predicates = [eq(atelierAgentOutcomeEvents.orgId, me.orgId)];
+  if (agentId) predicates.push(eq(atelierAgentOutcomeEvents.agentId, agentId));
+  if (entryPath) predicates.push(eq(atelierAgentOutcomeEvents.entryPath, entryPath));
+  if (from) predicates.push(gte(atelierAgentOutcomeEvents.occurredAt, from));
+  if (to) {
+    const inclusiveTo = new Date(to);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(req.query.to))) inclusiveTo.setUTCHours(23, 59, 59, 999);
+    predicates.push(lte(atelierAgentOutcomeEvents.occurredAt, inclusiveTo));
+  }
+  // Keep reporting bounded even if a tenant has years of ledger history.
+  // Leadership can narrow by window/agent; truncation is surfaced explicitly.
+  const REPORT_CAP = 100_000;
+  const events = await db.select().from(atelierAgentOutcomeEvents)
+    .where(and(...predicates)).limit(REPORT_CAP + 1);
+  const truncated = events.length > REPORT_CAP;
+  if (truncated) events.splice(REPORT_CAP);
+  const avg = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  const by = (field: "agentId" | "agentVersion" | "model" | "promptVersion" | "entryPath") => {
+    const groups = new Map<string, typeof events>();
+    for (const event of events) groups.set(String(event[field]), [...(groups.get(String(event[field])) ?? []), event]);
+    return [...groups].map(([key, rows]) => ({ key, count: rows.length }));
+  };
+  // Domain rows without a same-tenant run snapshot are observable coverage
+  // gaps, not silently treated as complete ledger coverage. Attribution
+  // filters intentionally exclude these unattributable rows.
+  let unlinkedDomainRecords = 0;
+  let domainTruncated = false;
+  if (!agentId && !entryPath) {
+    const domainWindow = (column: AnyPgColumn, deletedAt: AnyPgColumn) => {
+      const conditions = [isNull(deletedAt)];
+      if (from) conditions.push(gte(column, from));
+      if (to) {
+        const inclusiveTo = new Date(to);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(req.query.to))) inclusiveTo.setUTCHours(23, 59, 59, 999);
+        conditions.push(lte(column, inclusiveTo));
+      }
+      return conditions;
+    };
+    const [facts, povs, proposals] = await Promise.all([
+      db.select({ id: atelierResearchFacts.id, runId: atelierResearchFacts.runId }).from(atelierResearchFacts)
+        .where(and(eq(atelierResearchFacts.orgId, me.orgId), ...domainWindow(atelierResearchFacts.createdAt, atelierResearchFacts.deletedAt))).limit(REPORT_CAP + 1),
+      db.select({ id: atelierPovs.id, runId: atelierPovs.runId }).from(atelierPovs)
+        .where(and(eq(atelierPovs.orgId, me.orgId), ...domainWindow(atelierPovs.createdAt, atelierPovs.deletedAt))).limit(REPORT_CAP + 1),
+      db.select({ id: atelierProposals.id, runId: atelierProposals.runId }).from(atelierProposals)
+        .where(and(eq(atelierProposals.orgId, me.orgId), ...domainWindow(atelierProposals.createdAt, atelierProposals.deletedAt))).limit(REPORT_CAP + 1),
+    ]);
+    const runIds = [...facts, ...povs, ...proposals].map((r) => r.runId).filter((id): id is string => !!id);
+    const snapshots = runIds.length ? await db.select({ runId: atelierAgentRunSnapshots.runId }).from(atelierAgentRunSnapshots)
+      .where(and(eq(atelierAgentRunSnapshots.orgId, me.orgId), inArray(atelierAgentRunSnapshots.runId, runIds))) : [];
+    const linked = new Set(snapshots.map((r) => r.runId));
+    unlinkedDomainRecords = [...facts, ...povs, ...proposals].filter((r) => !r.runId || !linked.has(r.runId)).length;
+    domainTruncated = facts.length > REPORT_CAP || povs.length > REPORT_CAP || proposals.length > REPORT_CAP;
+  }
+  const missing = events.filter((e) => e.missingLinks.length > 0 || e.dataQualityFlags.length > 0).length;
+  const observedEvents = events.length + unlinkedDomainRecords;
+  const totalMissing = missing + unlinkedDomainRecords;
+  const accepted = events.filter((e) => e.outcomeStatus === "accepted").length;
+  const rejected = events.filter((e) => e.outcomeStatus === "rejected").length;
+  const edited = events.filter((e) => e.outcomeStatus === "edited").length;
+  const approvalLatencies = events.map((e) => Number(e.metadata.approvalLatencyMs)).filter(Number.isFinite);
+  const relevantEdits = events.filter((e) => (e.outcomeKind === "decision" || e.outcomeKind === "proposal") && (e.outcomeStatus === "accepted" || e.outcomeStatus === "edited"));
+  const sourceAccepted = events.reduce((sum, e) => sum + (e.sourceAcceptedCount ?? 0), 0);
+  const sourceRejected = events.reduce((sum, e) => sum + (e.sourceRejectedCount ?? 0), 0);
+  const proposalEvents = events.filter((e) => e.outcomeKind === "proposal");
+  const pricingEvents = events.filter((e) => e.outcomeKind === "pricing" || e.outcomeKind === "pricing_override");
+  const forecastPairs = events
+    .filter((e) => e.actualValue != null && e.predictedValue != null && e.predictedValue !== 0)
+    .map((e) => Math.abs((e.actualValue! - e.predictedValue!) / e.predictedValue!));
+  res.json({
+    window: { asOf: new Date().toISOString(), from: from?.toISOString() ?? null, to: to?.toISOString() ?? null },
+    totals: {
+      events: events.length,
+      accepted, rejected, edited,
+      expired: events.filter((e) => e.outcomeStatus === "expired").length,
+      superseded: events.filter((e) => e.outcomeStatus === "superseded" || !!e.supersedesEventId).length,
+    },
+    metrics: {
+      approvalLatencyMs: approvalLatencies.length ? avg(approvalLatencies) : null,
+      editReworkRate: relevantEdits.length ? relevantEdits.filter((e) => e.outcomeStatus === "edited").length / relevantEdits.length : null,
+      sourceAcceptanceRate: sourceAccepted + sourceRejected ? sourceAccepted / (sourceAccepted + sourceRejected) : null,
+      // Research-assisted conversion based on promoted-fact run linkage; this
+      // describes an association, not sole causation by the research agent.
+      researchConversionRate: (() => { const rows = events.filter((e) => e.outcomeKind === "research_conversion" && (e.outcomeStatus === "converted" || e.outcomeStatus === "not_converted")); const converted = rows.filter((e) => e.outcomeStatus === "converted").length; return rows.length ? converted / rows.length : null; })(),
+      povSendRate: (() => { const rows = events.filter((e) => e.outcomeKind === "pov" && (e.outcomeStatus === "generated" || e.outcomeStatus === "sent")); const sent = rows.filter((e) => e.outcomeStatus === "sent"); if (!sent.length) return null; const cohort = new Set(rows.map((e) => e.originEntityId)); return sent.length / (cohort.size || rows.length); })(),
+      proposalCycleTimeMs: (() => { const values = proposalEvents.map((e) => Number(e.metadata.cycleTimeMs)).filter(Number.isFinite); return values.length ? avg(values) : null; })(),
+      marginOverrideRate: (() => { const rows = pricingEvents.filter((e) => e.outcomeStatus === "edited" || e.outcomeStatus === "accepted"); return rows.length ? rows.filter((e) => e.outcomeStatus === "edited").length / rows.length : null; })(),
+      forecastErrorPct: forecastPairs.length ? avg(forecastPairs) : null,
+    },
+    coverage: { totalEvents: observedEvents, completeEvents: observedEvents - totalMissing, missingLinkEvents: totalMissing, unlinkedDomainRecords, unknownVersionEvents: events.filter((e) => e.dataQualityFlags.some((f) => f.includes("version-missing"))).length, truncated: truncated || domainTruncated },
+    breakdowns: {
+      agentId: by("agentId"), agentVersion: by("agentVersion"), model: by("model"),
+      promptVersion: by("promptVersion"), entryPath: by("entryPath"),
+    },
+  });
 });
 
 // Task #382 — incident detail with linked run telemetry and candidate

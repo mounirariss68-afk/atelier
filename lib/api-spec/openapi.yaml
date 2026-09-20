@@ -7446,8 +7446,79 @@ paths:
               schema: { $ref: "#/components/schemas/AtelierPartnerCoDeliver" }
 
 
+  /atelier/agents-lens/outcomes:
+    get:
+      operationId: atelierGetAgentOutcomes
+      tags: [atelier]
+      summary: Aggregate CRM agent outcome measurements
+      parameters:
+        - { name: agentId, in: query, required: false, schema: { type: string } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: entryPath, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Aggregate-only measurements; no deal rows or restricted content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAgentOutcomesReport"
+        "403": { description: Leadership role required }
 components:
   schemas:
+    AtelierAgentOutcomesReport:
+      type: object
+      required: [window, totals, metrics, coverage, breakdowns]
+      properties:
+        window:
+          type: object
+          required: [asOf, from, to]
+          properties:
+            asOf: { type: string, format: date-time }
+            from: { type: ["string", "null"], format: date-time }
+            to: { type: ["string", "null"], format: date-time }
+        totals:
+          type: object
+          required: [events, accepted, rejected, edited, expired, superseded]
+          properties:
+            events: { type: integer }
+            accepted: { type: integer }
+            rejected: { type: integer }
+            edited: { type: integer }
+            expired: { type: integer }
+            superseded: { type: integer }
+        metrics:
+          type: object
+          required: [approvalLatencyMs, editReworkRate, sourceAcceptanceRate, researchConversionRate, povSendRate, proposalCycleTimeMs, marginOverrideRate, forecastErrorPct]
+          properties:
+            approvalLatencyMs: { type: ["number", "null"] }
+            editReworkRate: { type: ["number", "null"] }
+            sourceAcceptanceRate: { type: ["number", "null"] }
+            researchConversionRate: { type: ["number", "null"] }
+            povSendRate: { type: ["number", "null"] }
+            proposalCycleTimeMs: { type: ["number", "null"] }
+            marginOverrideRate: { type: ["number", "null"] }
+            forecastErrorPct: { type: ["number", "null"] }
+        coverage:
+          type: object
+          required: [totalEvents, completeEvents, missingLinkEvents, unlinkedDomainRecords, unknownVersionEvents, truncated]
+          properties:
+            totalEvents: { type: integer }
+            completeEvents: { type: integer }
+            missingLinkEvents: { type: integer }
+            unlinkedDomainRecords: { type: integer }
+            unknownVersionEvents: { type: integer }
+            truncated: { type: boolean }
+        breakdowns:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              required: [key, count]
+              properties:
+                key: { type: string }
+                count: { type: integer }
     HealthStatus:
       type: object
       properties:

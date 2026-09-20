@@ -5,6 +5,68 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type AtelierAgentOutcomesReportWindow = {
+  asOf: string;
+  /** @nullable */
+  from: string | null;
+  /** @nullable */
+  to: string | null;
+};
+
+export type AtelierAgentOutcomesReportTotals = {
+  events: number;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  expired: number;
+  superseded: number;
+};
+
+export type AtelierAgentOutcomesReportMetrics = {
+  /** @nullable */
+  approvalLatencyMs: number | null;
+  /** @nullable */
+  editReworkRate: number | null;
+  /** @nullable */
+  sourceAcceptanceRate: number | null;
+  /** @nullable */
+  researchConversionRate: number | null;
+  /** @nullable */
+  povSendRate: number | null;
+  /** @nullable */
+  proposalCycleTimeMs: number | null;
+  /** @nullable */
+  marginOverrideRate: number | null;
+  /** @nullable */
+  forecastErrorPct: number | null;
+};
+
+export type AtelierAgentOutcomesReportCoverage = {
+  totalEvents: number;
+  completeEvents: number;
+  missingLinkEvents: number;
+  unlinkedDomainRecords: number;
+  unknownVersionEvents: number;
+  truncated: boolean;
+};
+
+export type AtelierAgentOutcomesReportBreakdownsItem = {
+  key: string;
+  count: number;
+};
+
+export type AtelierAgentOutcomesReportBreakdowns = {
+  [key: string]: AtelierAgentOutcomesReportBreakdownsItem[];
+};
+
+export interface AtelierAgentOutcomesReport {
+  window: AtelierAgentOutcomesReportWindow;
+  totals: AtelierAgentOutcomesReportTotals;
+  metrics: AtelierAgentOutcomesReportMetrics;
+  coverage: AtelierAgentOutcomesReportCoverage;
+  breakdowns: AtelierAgentOutcomesReportBreakdowns;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -10437,4 +10499,11 @@ export type AtelierListPartnerFirmQuotedDeals200 = {
 
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;
+};
+
+export type AtelierGetAgentOutcomesParams = {
+  agentId?: string;
+  from?: string;
+  to?: string;
+  entryPath?: string;
 };

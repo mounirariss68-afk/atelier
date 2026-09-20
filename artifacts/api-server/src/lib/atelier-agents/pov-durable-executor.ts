@@ -21,6 +21,7 @@ import {
   executeServerOwnedCrmWork,
 } from "../assistant/workflow-runtime.js";
 import { decryptAssistantValueAudited } from "../assistant/action-runtime.js";
+import { recordOutcomeForRun } from "./outcome-ledger.js";
 
 async function insertVersion(values: {
   povId: string; body: string; sections: unknown; citations: unknown;
@@ -165,6 +166,18 @@ export async function executeDurablePovWork(args: {
               payloadSummary: `${args.requesterName} revised POV "${args.title}" → v${version.versionNumber}.`,
             }).onConflictDoNothing();
           }
+        });
+        const [povRow] = await db.select({ opportunityId: atelierPovs.opportunityId })
+          .from(atelierPovs).where(eq(atelierPovs.id, args.povId)).limit(1);
+        await recordOutcomeForRun({
+          orgId: args.orgId, eventKey: `pov:${args.povId}:version:${version.versionNumber}`,
+          occurredAt: new Date(), runId, actorUserId: args.requesterId,
+          originEntityType: "opportunity", originEntityId: povRow?.opportunityId ?? args.povId,
+          entityType: "pov_version", entityId: version.versionId,
+          entryPath: "background POV completion", outcomeKind: "pov",
+          outcomeStatus: args.revision ? "reworked" : "generated",
+          priorState: args.revision ? "drafted" : "outline", currentState: "drafted",
+          reworkCount: args.revision ? 1 : 0, missingLinks: [],
         });
         return {
           result: { ok: true, data: { versionId: version.versionId, versionNumber: version.versionNumber } },

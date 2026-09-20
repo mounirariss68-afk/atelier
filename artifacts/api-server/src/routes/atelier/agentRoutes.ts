@@ -104,6 +104,7 @@ import {
 } from "../../lib/atelier-agents/pov-quality.js";
 import { buildPovBackgroundContext } from "../../lib/atelier-agents/pov-grounding.js";
 import { executeDurablePovWork } from "../../lib/atelier-agents/pov-durable-executor.js";
+import { recordOutcomeForRun } from "../../lib/atelier-agents/outcome-ledger.js";
 import { createServerOwnedCrmWorkflow, decideWorkCheckpoint } from "../../lib/assistant/workflow-runtime.js";
 import { perplexitySearch } from "../../lib/atelier-agents/perplexity.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
@@ -1244,6 +1245,7 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
       and(
         eq(atelierResearchFacts.id, req.params.factId),
         eq(atelierResearchFacts.opportunityId, req.params.oppId),
+        eq(atelierResearchFacts.orgId, me.orgId),
       ),
     )
     .returning();
@@ -1253,6 +1255,7 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
   }
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
+    orgId: me.orgId,
     entityType: "opportunity",
     entityId: req.params.oppId,
     actorType: "human",
@@ -1262,6 +1265,19 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
     payload: { factId: updated.id, topic: updated.topic },
     payloadSummary: `${me.name} ${parsed.data.promote ? "promoted" : "demoted"} fact "${updated.topic}".`,
   });
+  if (updated.runId) {
+    await recordOutcomeForRun({
+      orgId: me.orgId, eventKey: `research-fact:${updated.id}:${parsed.data.promote ? "accepted" : "rejected"}:${updated.updatedAt.toISOString()}`,
+      occurredAt: updated.promotedAt ?? new Date(), runId: updated.runId,
+      actorUserId: me.id,
+      originEntityType: "opportunity", originEntityId: updated.opportunityId,
+      entityType: "research_fact", entityId: updated.id, entryPath: "POST /opportunities/:oppId/research/:factId/promote",
+      outcomeKind: "source", outcomeStatus: parsed.data.promote ? "accepted" : "rejected",
+      priorState: parsed.data.promote ? "unpromoted" : "promoted", currentState: parsed.data.promote ? "promoted" : "unpromoted",
+      sourceAcceptedCount: parsed.data.promote ? 1 : 0, sourceRejectedCount: parsed.data.promote ? 0 : 1,
+      missingLinks: [],
+    });
+  }
   res.json({
     id: updated.id,
     oppId: updated.opportunityId,
@@ -1849,7 +1865,7 @@ async function insertPovVersionRaceSafe(values: {
 router.get("/povs/:povId/draft-status", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  const [pov] = await db.select().from(atelierPovs).where(and(eq(atelierPovs.id, req.params.povId), eq(atelierPovs.orgId, me.orgId)));
   if (!pov || pov.deletedAt) {
     res.status(404).json({ error: "pov-not-found" });
     return;
@@ -2081,7 +2097,10 @@ router.patch("/povs/:povId", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
-  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  const [pov] = await db.select().from(atelierPovs).where(and(
+    eq(atelierPovs.id, req.params.povId),
+    eq(atelierPovs.orgId, me.orgId),
+  ));
   if (!pov || pov.deletedAt) {
     res.status(404).json({ error: "pov-not-found" });
     return;
@@ -2125,10 +2144,11 @@ router.patch("/povs/:povId", async (req, res) => {
   const [updated] = await db
     .update(atelierPovs)
     .set(patch)
-    .where(eq(atelierPovs.id, pov.id))
+    .where(and(eq(atelierPovs.id, pov.id), eq(atelierPovs.orgId, me.orgId)))
     .returning();
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
+    orgId: me.orgId,
     entityType: "pov",
     entityId: pov.id,
     actorType: "human",
@@ -2137,6 +2157,13 @@ router.patch("/povs/:povId", async (req, res) => {
     action: "pov.update",
     payload: { changes: changed } as never,
     payloadSummary: `${me.name} updated POV "${updated.title}".`,
+  });
+  if (pov.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `pov:${pov.id}:edited:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: pov.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: updated.opportunityId,
+    entityType: "pov", entityId: pov.id, entryPath: "PATCH /povs/:povId",
+    outcomeKind: "pov", outcomeStatus: "edited", priorState: pov.status, currentState: updated.status,
+    reworkCount: 1, editDistance: Math.min(1, Object.keys(changed).length / 3), missingLinks: [],
   });
   res.json(povWire(updated));
 });
@@ -2703,7 +2730,9 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
-  const [r] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
+  const [r] = await db.select().from(atelierAgentRuns).where(and(
+    eq(atelierAgentRuns.id, req.params.runId), eq(atelierAgentRuns.orgId, me.orgId),
+  ));
   if (!r) {
     res.status(404).json({ error: "run-not-found" });
     return;
@@ -2759,6 +2788,25 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     targetType: r.targetType ?? "agent_run",
     targetId: r.targetId ?? r.id,
     targetLabel: r.targetLabel ?? r.id,
+  });
+  await recordOutcomeForRun({
+    orgId: me.orgId,
+    eventKey: `decision:${r.id}:${parsed.data.decision}`,
+    occurredAt: new Date(),
+    runId: r.id,
+    actorUserId: me.id,
+    originEntityType: r.targetType ?? "agent_run",
+    originEntityId: r.targetId ?? r.id,
+    entityType: r.targetType ?? "agent_run",
+    entityId: r.targetId ?? r.id,
+    entryPath: "POST /agents/:runId/decision",
+    outcomeKind: "decision",
+    outcomeStatus: parsed.data.decision === "approve" ? "accepted" : parsed.data.decision === "reject" ? "rejected" : "edited",
+    priorState: null,
+    currentState: parsed.data.decision,
+    missingLinks: r.targetId ? [] : ["domain-entity"],
+    dataQualityFlags: [],
+    metadata: { approvalLatencyMs: Math.max(0, Date.now() - r.createdAt.getTime()) },
   });
   // Server-side state transition: if the human approved AND the run was not
   // blocked, flip the linked record's status from 'draft' → 'official'.
@@ -2818,7 +2866,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const opp = await loadOpp(req.params.oppId);
-  if (!opp) {
+  if (!opp || opp.orgId !== me.orgId) {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
   }
@@ -2881,6 +2929,26 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     res.status(result.status).json({ error: result.error, ...(result.gate ?? {}) });
     return;
   }
+
+  const causalFacts = await db.select({ runId: atelierResearchFacts.runId })
+    .from(atelierResearchFacts).where(and(
+      eq(atelierResearchFacts.orgId, me.orgId),
+      eq(atelierResearchFacts.opportunityId, opp.id),
+      eq(atelierResearchFacts.promoted, true),
+      isNull(atelierResearchFacts.deletedAt),
+    ));
+  const causalRunIds = Array.from(new Set(causalFacts.map((f) => f.runId).filter((id): id is string => !!id)));
+  const terminal = resolveSalesStage(result.opportunity.salesStage);
+  const terminalStatus = terminal === "contract" ? "converted" :
+    ["lost", "no_decision", "withdrawn"].includes(terminal) ? "not_converted" : null;
+  if (terminalStatus) for (const runId of causalRunIds) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `opportunity:${opp.id}:stage:${result.transition.id}:${runId}`,
+    occurredAt: new Date(), runId, actorUserId: me.id,
+    originEntityType: "opportunity", originEntityId: opp.id, entityType: "opportunity",
+    entityId: opp.id, entryPath: "POST /opportunities/:oppId/stage-transition",
+    outcomeKind: "research_conversion", outcomeStatus: terminalStatus,
+    priorState: result.transition.fromStage, currentState: result.transition.toStage, missingLinks: [],
+  });
 
   res.json({
     opportunity: await buildOppWire(result.opportunity, canAccessPartnersLens(me.role)),
@@ -2995,7 +3063,14 @@ async function runForecasterHandler(req: Request, res: Response) {
   // Side effect: agent runner records audit, flags stalled deals + miscalibrated
   // probabilities into Pane A.
   try {
-    await runPipelineForecaster({ actorId: me.id, actorLabel: me.name, summary });
+    const forecaster = await runPipelineForecaster({ actorId: me.id, actorLabel: me.name, summary });
+    await recordOutcomeForRun({
+      orgId: me.orgId, eventKey: `forecast:${forecaster.runId}:generated`, occurredAt: new Date(),
+      runId: forecaster.runId, actorUserId: me.id, originEntityType: "pipeline", originEntityId: "atelier-global",
+      entityType: "pipeline", entityId: "atelier-global", entryPath: "POST /pipeline/forecast/run",
+      outcomeKind: "forecast", outcomeStatus: "generated", priorState: null, currentState: "generated",
+      missingLinks: [], metadata: { workflow: "pipeline-forecast" },
+    });
   } catch (e) {
     // Forecaster is mock-first; never fail the HTTP response on a side-effect error.
     // eslint-disable-next-line no-console

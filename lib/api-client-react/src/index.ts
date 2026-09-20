@@ -985,6 +985,12 @@ export {
   useAtelierArchivePartnerConflict,
   useAtelierListPartnerAgreements,
   useAtelierGetPartnerCoDeliver,
+  // Agents Lens — CRM Outcome Measurements
+  getAtelierGetAgentOutcomesUrl,
+  atelierGetAgentOutcomes,
+  getAtelierGetAgentOutcomesQueryKey,
+  getAtelierGetAgentOutcomesQueryOptions,
+  useAtelierGetAgentOutcomes,
 } from "./generated/api";
 export type {
   HealthCheckQueryResult,

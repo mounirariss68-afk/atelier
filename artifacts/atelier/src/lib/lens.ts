@@ -162,6 +162,7 @@ export const LENSES: readonly LensDef[] = [
       { id: "monitor", label: "Monitor", href: "/agents/monitor", icon: Activity },
       { id: "improve", label: "Improve", href: "/agents/improve", icon: TrendingUp },
       { id: "retire", label: "Retire", href: "/agents/retire", icon: Archive },
+      { id: "outcomes", label: "Outcomes", href: "/agents/outcomes", icon: BarChart3 },
     ],
   },
   {

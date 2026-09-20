@@ -50,6 +50,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { ensureEngAccess, audit } from "./engagementRoutes.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import { recordOutcomeForRun } from "../../lib/atelier-agents/outcome-ledger.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -672,6 +673,13 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     payload: { proposalId: proposal.id, runId, sections: sectionRows.length },
     summary: `${me.name} composed proposal "${proposal.title}" (${sectionRows.length} sections)`,
   });
+  await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal:${proposal.id}:created`, occurredAt: proposal.createdAt,
+    runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: opp.id,
+    entityType: "proposal", entityId: proposal.id, entryPath: "POST /opportunities/:oppId/proposal",
+    outcomeKind: "proposal", outcomeStatus: "draft", priorState: null, currentState: "draft",
+    missingLinks: [],
+  });
   res.status(201).json({ proposal, sections: sectionRows, runId });
 });
 
@@ -697,7 +705,7 @@ router.patch("/proposal-sections/:sectionId", async (req, res) => {
     .where(eq(atelierProposalSections.id, req.params.sectionId));
   if (!section) { res.status(404).json({ error: "section-not-found" }); return; }
   const [parent] = await db
-    .select({ opportunityId: atelierProposals.opportunityId })
+    .select({ opportunityId: atelierProposals.opportunityId, runId: atelierProposals.runId })
     .from(atelierProposals)
     .where(eq(atelierProposals.id, section.proposalId));
   if (!parent) { res.status(404).json({ error: "parent-proposal-not-found" }); return; }
@@ -714,6 +722,13 @@ router.patch("/proposal-sections/:sectionId", async (req, res) => {
     action: "proposal_section.edit",
     payload: { sectionId: updated.id, sectionKey: updated.sectionId, proposalId: updated.proposalId },
     summary: `${me.name} edited proposal section "${updated.name}" (status reset to draft)`,
+  });
+  if (parent.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal-section:${updated.id}:edited:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: parent.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: parent.opportunityId,
+    entityType: "proposal_section", entityId: updated.id, entryPath: "PATCH /proposal-sections/:sectionId",
+    outcomeKind: "proposal", outcomeStatus: "edited", priorState: "approved", currentState: "draft",
+    missingLinks: [],
   });
   res.json(updated);
 });
@@ -742,7 +757,7 @@ router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
     .where(eq(atelierProposalSections.id, req.params.sectionId));
   if (!section) { res.status(404).json({ error: "section-not-found" }); return; }
   const [parent] = await db
-    .select({ opportunityId: atelierProposals.opportunityId })
+    .select({ opportunityId: atelierProposals.opportunityId, runId: atelierProposals.runId })
     .from(atelierProposals)
     .where(eq(atelierProposals.id, section.proposalId));
   if (!parent) { res.status(404).json({ error: "parent-proposal-not-found" }); return; }
@@ -763,6 +778,13 @@ router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
     action: "proposal_section.reject",
     payload: { sectionId: updated.id, sectionKey: updated.sectionId, reason },
     summary: `${me.name} rejected proposal section "${updated.name}": ${reason}`,
+  });
+  if (parent.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal-section:${updated.id}:rejected:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: parent.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: parent.opportunityId,
+    entityType: "proposal_section", entityId: updated.id, entryPath: "POST /proposal-sections/:sectionId/reject",
+    outcomeKind: "proposal", outcomeStatus: "rejected", priorState: "draft", currentState: "rejected",
+    missingLinks: [],
   });
   res.json(updated);
 });
@@ -786,7 +808,7 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
     return;
   }
   const [parentProposal] = await db
-    .select({ opportunityId: atelierProposals.opportunityId })
+    .select({ opportunityId: atelierProposals.opportunityId, runId: atelierProposals.runId })
     .from(atelierProposals)
     .where(eq(atelierProposals.id, section.proposalId));
   if (!parentProposal) {
@@ -814,6 +836,13 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
       proposalId: updated.proposalId,
     },
     summary: `${me.name} approved proposal section "${updated.name}"`,
+  });
+  if (parentProposal.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal-section:${updated.id}:approved:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: parentProposal.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: parentProposal.opportunityId,
+    entityType: "proposal_section", entityId: updated.id, entryPath: "POST /proposal-sections/:sectionId/approve",
+    outcomeKind: "proposal", outcomeStatus: "accepted", priorState: "draft", currentState: "approved",
+    missingLinks: [],
   });
   res.json(updated);
 });
@@ -941,6 +970,12 @@ router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
     payload: { proposalId: proposal.id },
     summary: `${me.name} approved proposal pricing for "${proposal.title}"`,
   });
+  if (proposal.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal:${proposal.id}:pricing-approved:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: proposal.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: proposal.opportunityId,
+    entityType: "proposal", entityId: proposal.id, entryPath: "POST /proposals/:proposalId/approve-pricing",
+    outcomeKind: "pricing", outcomeStatus: "accepted", priorState: "pending", currentState: "approved", missingLinks: [],
+  });
   res.json(updated);
 });
 
@@ -994,6 +1029,12 @@ router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
     action: "proposal.override_pricing",
     payload: { proposalId: proposal.id, rationale },
     summary: `${me.name} overrode pricing for "${proposal.title}": ${rationale}`,
+  });
+  if (proposal.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal:${proposal.id}:pricing-overridden:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: proposal.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: proposal.opportunityId,
+    entityType: "proposal", entityId: proposal.id, entryPath: "POST /proposals/:proposalId/override-pricing",
+    outcomeKind: "pricing", outcomeStatus: "edited", priorState: "override-required", currentState: "overridden", missingLinks: [],
   });
   res.json(updated);
 });
@@ -1233,6 +1274,13 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     action: "proposal.send",
     payload: { proposalId: proposal.id, pdfUrl, docxUrl },
     summary: `${me.name} sent proposal "${proposal.title}" to client`,
+  });
+  if (proposal.runId) await recordOutcomeForRun({
+    orgId: me.orgId, eventKey: `proposal:${proposal.id}:sent:${updated.updatedAt.toISOString()}`, occurredAt: updated.updatedAt,
+    runId: proposal.runId, actorUserId: me.id, originEntityType: "opportunity", originEntityId: proposal.opportunityId,
+    entityType: "proposal", entityId: proposal.id, entryPath: "POST /proposals/:proposalId/send",
+    outcomeKind: "proposal", outcomeStatus: "accepted", priorState: proposal.status, currentState: "sent",
+    missingLinks: [], metadata: { cycleTimeMs: Math.max(0, updated.updatedAt.getTime() - proposal.createdAt.getTime()) },
   });
   res.json({ proposal: updated, pdfUrl, docxUrl });
 });

@@ -35,6 +35,7 @@ import type {
   AtelierAdminSettingsUpdate,
   AtelierAgentDecisionInput,
   AtelierAgentDesign,
+  AtelierAgentOutcomesReport,
   AtelierAgentRunDetail,
   AtelierAgentRunSummary,
   AtelierAgentsUsageCounts200Item,
@@ -145,6 +146,7 @@ import type {
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
+  AtelierGetAgentOutcomesParams,
   AtelierGetBankSignatories200,
   AtelierGetExpenseGlMappings200,
   AtelierGetFinanceApprovalsInbox200,
@@ -30900,6 +30902,112 @@ export function useAtelierGetPartnerCoDeliver<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetPartnerCoDeliverQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Aggregate CRM agent outcome measurements
+ */
+export const getAtelierGetAgentOutcomesUrl = (
+  params?: AtelierGetAgentOutcomesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/agents-lens/outcomes?${stringifiedParams}`
+    : `/api/atelier/agents-lens/outcomes`;
+};
+
+export const atelierGetAgentOutcomes = async (
+  params?: AtelierGetAgentOutcomesParams,
+  options?: RequestInit,
+): Promise<AtelierAgentOutcomesReport> => {
+  return customFetch<AtelierAgentOutcomesReport>(
+    getAtelierGetAgentOutcomesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetAgentOutcomesQueryKey = (
+  params?: AtelierGetAgentOutcomesParams,
+) => {
+  return [
+    `/api/atelier/agents-lens/outcomes`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierGetAgentOutcomesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAgentOutcomes>>,
+  TError = ErrorType<void>,
+>(
+  params?: AtelierGetAgentOutcomesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAgentOutcomes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAgentOutcomesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAgentOutcomes>>
+  > = ({ signal }) =>
+    atelierGetAgentOutcomes(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAgentOutcomes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAgentOutcomesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAgentOutcomes>>
+>;
+export type AtelierGetAgentOutcomesQueryError = ErrorType<void>;
+
+/**
+ * @summary Aggregate CRM agent outcome measurements
+ */
+
+export function useAtelierGetAgentOutcomes<
+  TData = Awaited<ReturnType<typeof atelierGetAgentOutcomes>>,
+  TError = ErrorType<void>,
+>(
+  params?: AtelierGetAgentOutcomesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAgentOutcomes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAgentOutcomesQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

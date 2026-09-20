@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1197,
+  "routeCount": 1198,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -26216,6 +26216,34 @@
       }
     },
     {
+      "routeId": "c8d2aebaf6dffb2a",
+      "file": "artifacts/api-server/src/routes/atelier/agentsLensRoutes.ts",
+      "method": "get",
+      "path": "/agents-lens/outcomes",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "leadership analytics dashboard; no entity-detail or chat response shape",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "c8f97dcb451d34cb",
       "file": "artifacts/api-server/src/routes/atelier/governanceRoutes.ts",
       "method": "patch",
@@ -36502,5 +36530,5 @@
       ]
     }
   ],
-  "conformanceVersion": "ec7f67efb77392bdd5aed44af04515b7a954eaaa5f6737d374781621e9cd4e35"
+  "conformanceVersion": "b12575607ced22191fb5073c5d68d3f3a9c15c26079d2fdf84c62de2bb00c598"
 }

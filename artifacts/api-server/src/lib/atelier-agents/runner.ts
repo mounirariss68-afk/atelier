@@ -23,7 +23,7 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities } from "@workspace/db";
+import { db, atelierAgentRuns, atelierAgentRunSnapshots, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities, atelierUsers } from "@workspace/db";
 import { eq, and, gte, isNull, inArray, desc } from "drizzle-orm";
 import { getAgent } from "@workspace/agents";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
@@ -215,6 +215,12 @@ interface StartRunInput {
   targetLabel: string;
   inputs: Record<string, unknown>;
   actorLabel: string;
+  agentVersion?: string;
+  registryVersion?: string;
+  promptVersion?: string;
+  promptHash?: string;
+  model?: string;
+  entryPath?: string;
 }
 
 // Per-user-per-day token budget. Soft USD ceiling; throws BudgetExceededError
@@ -246,10 +252,23 @@ async function assertBudget(userId: string | null): Promise<void> {
 
 export async function startRun(input: StartRunInput): Promise<string> {
   await assertBudget(input.triggeredByUserId);
+  const actor = input.triggeredByUserId
+    ? (await db.select({ orgId: atelierUsers.orgId }).from(atelierUsers)
+      .where(eq(atelierUsers.id, input.triggeredByUserId)).limit(1))[0]
+    : undefined;
+  if (input.triggeredByUserId && !actor) throw new Error("agent run actor is missing");
+  if (input.orgId && actor && input.orgId !== actor.orgId) {
+    throw new Error("agent run tenant does not match actor");
+  }
+  // Null-actor scheduled sweeps predate explicit tenant inputs and are
+  // intentionally represented by one firm-system run. Their downstream work
+  // remains separately scoped to each tenant.
+  const orgId = input.orgId ?? actor?.orgId ?? "aico";
   const id = rid("run");
-  await db.insert(atelierAgentRuns).values({
+  await db.transaction(async (tx) => {
+   await tx.insert(atelierAgentRuns).values({
     id,
-    ...(input.orgId ? { orgId: input.orgId } : {}),
+     orgId,
     agentId: input.agentId,
     triggeredByUserId: input.triggeredByUserId,
     targetType: input.targetType,
@@ -259,9 +278,27 @@ export async function startRun(input: StartRunInput): Promise<string> {
     status: "running",
     statusMessage: "starting",
     progressPct: 5,
-  });
-  await db.insert(atelierAuditEvents).values({
+   });
+   await tx.insert(atelierAgentRunSnapshots).values({
+    runId: id,
+     orgId,
+    agentId: input.agentId,
+     agentVersion: input.agentVersion ?? "unknown",
+     registryVersion: input.registryVersion ?? "unknown",
+     promptVersion: input.promptVersion ?? "unknown",
+    promptHash: input.promptHash ?? null,
+    model: input.model ?? "unknown",
+    entryPath: input.entryPath ?? "legacy.startRun",
+    dataQualityFlags: [
+       ...(!input.agentVersion || input.agentVersion === "unknown" || input.agentVersion === "unversioned" ? ["agent-version-missing"] : []),
+       ...(!input.registryVersion || input.registryVersion === "unknown" || input.registryVersion === "unversioned" ? ["registry-version-missing"] : []),
+       ...(!input.promptVersion || input.promptVersion === "unknown" || input.promptVersion === "unversioned" ? ["prompt-version-missing"] : []),
+       ...(!input.model || input.model === "unknown" || input.model === "unversioned" ? ["model-missing"] : []),
+    ],
+   });
+   await tx.insert(atelierAuditEvents).values({
     id: rid("aud"),
+     orgId,
     entityType: input.targetType,
     entityId: input.targetId,
     actorType: "agent",
@@ -270,6 +307,7 @@ export async function startRun(input: StartRunInput): Promise<string> {
     action: "agent.start",
     payload: { runId: id, inputs: input.inputs },
     payloadSummary: `Started ${input.actorLabel} on ${input.targetLabel}`,
+   });
   });
   return id;
 }

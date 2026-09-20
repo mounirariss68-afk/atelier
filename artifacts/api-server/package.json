@@ -145,7 +145,8 @@
     "test:background-work-bell": "NODE_ENV=test tsx ./tests/crm/background-work-bell-probe.ts",
     "test:tone-multilingual": "tsx ./tests/crm/tone-probe-multilingual.ts",
     "test:payslip-probe": "NODE_ENV=test tsx ./tests/payslip-probe/run.ts",
-    "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts"
+     "test:wallet-invoice-create": "tsx ./tests/wallet-invoice-create/run.ts",
+     "test:agent-outcomes": "CRM_TEST_DB_NAME=crm_test_agent_outcomes NODE_ENV=test tsx ./tests/crm/agent-outcomes-probe.ts"
     ,"generate:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts"
     ,"check:riser-manifest": "tsx ./scripts/generate-riser-manifest.ts --check"
      ,"generate:crm-agent-manifest": "tsx ./scripts/generate-crm-agent-manifest.ts"

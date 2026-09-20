@@ -161,6 +161,7 @@ import AgentsEvaluate from "@/pages/agents/AgentsEvaluate";
 import AgentsDeploy from "@/pages/agents/AgentsDeploy";
 import AgentsImprove from "@/pages/agents/AgentsImprove";
 import AgentsRetire from "@/pages/agents/AgentsRetire";
+import AgentsOutcomes from "@/pages/agents/AgentsOutcomes";
 // Task #369 — Clients lens re-homes the commercial loop under /clients
 // with a flat IA (Overview · Accounts · Opportunities · Engagements ·
 // Billing · References). Renewals/expansions are a flag on each
@@ -626,6 +627,7 @@ function Router() {
         <Route path="/agents/deploy" component={AgentsDeploy} />
         <Route path="/agents/improve" component={AgentsImprove} />
         <Route path="/agents/retire" component={AgentsRetire} />
+        <Route path="/agents/outcomes" component={AgentsOutcomes} />
         <Route path="/agents/monitor" component={Agents} />
         <Route path="/agents/monitor/runs/:runId" component={AgentRun} />
         <Route path="/agents/design/:agentId" component={AgentProfile} />

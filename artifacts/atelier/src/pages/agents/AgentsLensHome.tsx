@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ArchiveRestore,
+  BarChart3,
 } from "lucide-react";
 import { useAtelierListAgents } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
@@ -102,6 +103,13 @@ export const AGENTS_LIFECYCLE_STAGES = [
     href: "/agents/retire",
     icon: Archive,
     blurb: "Deprecation schedule, replacement mapping, archive.",
+  },
+  {
+    id: "outcomes",
+    label: "Outcomes",
+    href: "/agents/outcomes",
+    icon: BarChart3,
+    blurb: "Aggregate CRM outcome performance — acceptance, rework, coverage, and evidence quality.",
   },
 ] as const;
 

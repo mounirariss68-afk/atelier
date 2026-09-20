@@ -39787,3 +39787,56 @@ export const AtelierGetPartnerCoDeliverResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Aggregate CRM agent outcome measurements
+ */
+export const AtelierGetAgentOutcomesQueryParams = zod.object({
+  agentId: zod.coerce.string().optional(),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+  entryPath: zod.coerce.string().optional(),
+});
+
+export const AtelierGetAgentOutcomesResponse = zod.object({
+  window: zod.object({
+    asOf: zod.coerce.date(),
+    from: zod.coerce.date().nullable(),
+    to: zod.coerce.date().nullable(),
+  }),
+  totals: zod.object({
+    events: zod.number(),
+    accepted: zod.number(),
+    rejected: zod.number(),
+    edited: zod.number(),
+    expired: zod.number(),
+    superseded: zod.number(),
+  }),
+  metrics: zod.object({
+    approvalLatencyMs: zod.number().nullable(),
+    editReworkRate: zod.number().nullable(),
+    sourceAcceptanceRate: zod.number().nullable(),
+    researchConversionRate: zod.number().nullable(),
+    povSendRate: zod.number().nullable(),
+    proposalCycleTimeMs: zod.number().nullable(),
+    marginOverrideRate: zod.number().nullable(),
+    forecastErrorPct: zod.number().nullable(),
+  }),
+  coverage: zod.object({
+    totalEvents: zod.number(),
+    completeEvents: zod.number(),
+    missingLinkEvents: zod.number(),
+    unlinkedDomainRecords: zod.number(),
+    unknownVersionEvents: zod.number(),
+    truncated: zod.boolean(),
+  }),
+  breakdowns: zod.record(
+    zod.string(),
+    zod.array(
+      zod.object({
+        key: zod.string(),
+        count: zod.number(),
+      }),
+    ),
+  ),
+});

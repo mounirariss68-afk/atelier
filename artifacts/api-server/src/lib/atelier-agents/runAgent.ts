@@ -45,6 +45,8 @@ export interface RunAgentArgs<TInput> {
   targetType: string;
   targetId: string;
   targetLabel: string;
+  /** Stable attribution retained with the run snapshot. */
+  entryPath?: string;
   /** Display name on audit events. Defaults to the registry `name`. */
   actorLabel?: string;
 }
@@ -134,6 +136,11 @@ export async function runAgent<TInput, TOutput>(
     targetLabel: args.targetLabel,
     inputs: inputForRow,
     actorLabel,
+    agentVersion: "unknown",
+    registryVersion: "crm-agent-manifest.v1",
+    promptVersion: agent.systemPromptRef,
+    model: agent.model,
+    entryPath: args.entryPath ?? "runAgent",
   });
 
   try {
