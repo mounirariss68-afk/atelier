@@ -64,6 +64,7 @@ import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { refreshPartnerFirmRag } from "./partner-capability-rag.js";
 import { runAllianceCartographerAndQueue } from "../atelier-agents/alliance-mapper-chain.js";
 import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
+import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import {
   resolvePersonForCaller,
   ensureWeekShell,
@@ -174,10 +175,114 @@ async function personaCanSeeAccount(
   return a?.partnerOwnerId === persona.id;
 }
 
+async function personaCanAccessEngagement(
+  persona: { id: string; role: string; orgId: string },
+  engagementId: string,
+): Promise<boolean> {
+  const [engagement] = await db
+    .select({ id: atelierEngagements.id, orgId: atelierEngagements.orgId })
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.id, engagementId),
+        eq(atelierEngagements.orgId, persona.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  if (!engagement) return false;
+  const access = await accessibleEngagementIds(
+    persona as Parameters<typeof accessibleEngagementIds>[0],
+  );
+  return access.all || access.ids.has(engagementId);
+}
+
+async function personaCanAccessOpportunity(
+  persona: { id: string; role: string; orgId: string },
+  opportunityId: string,
+): Promise<boolean> {
+  const [opportunity] = await db
+    .select({
+      id: atelierOpportunities.id,
+      partnerOwnerId: atelierOpportunities.partnerOwnerId,
+      engagementLeadId: atelierOpportunities.engagementLeadId,
+    })
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.id, opportunityId),
+        eq(atelierOpportunities.orgId, persona.orgId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  if (!opportunity) return false;
+  return (
+    persona.role === "founding_partner" ||
+    persona.role === "partner" ||
+    opportunity.partnerOwnerId === persona.id ||
+    opportunity.engagementLeadId === persona.id
+  );
+}
+
+async function personaCanAccessMeetingParent(
+  persona: { id: string; role: string; orgId: string },
+  parentType: string,
+  parentId: string,
+): Promise<boolean> {
+  if (parentType === "engagement") {
+    return personaCanAccessEngagement(persona, parentId);
+  }
+  if (parentType === "opportunity") {
+    return personaCanAccessOpportunity(persona, parentId);
+  }
+  return false;
+}
+
 const COMMON_INPUT_PROPS = {
   confirm: { type: "boolean", description: "Set true to commit." },
   summary: { type: "string", description: "Optional human description." },
 };
+const MEETING_WRITE_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "finance",
+  "hr",
+  "senior_manager",
+  "consultant",
+  "contractor",
+  "partner_firm_resource",
+]);
+const RAID_EDIT_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "senior_manager",
+  "consultant",
+]);
+
+export function meetingUpdatePatch(
+  input: Record<string, unknown>,
+): Partial<typeof atelierMeetings.$inferInsert> {
+  const patch: Partial<typeof atelierMeetings.$inferInsert> = { updatedAt: new Date() };
+  if (input.parentType !== undefined) patch.parentType = String(input.parentType);
+  if (input.parentId !== undefined) patch.parentId = String(input.parentId);
+  if (input.title !== undefined) patch.title = String(input.title).trim();
+  if (input.date !== undefined) patch.date = String(input.date);
+  if (input.kind !== undefined) patch.kind = String(input.kind);
+  if (input.attendees !== undefined) patch.attendees = input.attendees as string[];
+  return patch;
+}
+
+export function raidUpdatePatch(
+  input: Record<string, unknown>,
+): Partial<typeof atelierRaidItems.$inferInsert> {
+  const patch: Partial<typeof atelierRaidItems.$inferInsert> = { updatedAt: new Date() };
+  if (input.kind !== undefined) patch.kind = String(input.kind);
+  if (input.description !== undefined) patch.description = String(input.description);
+  if (input.severity !== undefined) patch.severity = String(input.severity);
+  if (input.mitigation !== undefined) patch.mitigation = input.mitigation === null ? null : String(input.mitigation);
+  if (input.ownerId !== undefined) patch.ownerId = input.ownerId === null ? null : String(input.ownerId);
+  if (input.dueDate !== undefined) patch.dueDate = input.dueDate === null ? null : String(input.dueDate);
+  return patch;
+}
 
 // ---------------------------------------------------------------------
 // 1. meeting (advisory wrapper — heavier capture flow lives in opportunity_capture_meeting)
@@ -207,6 +312,16 @@ defineCapability({
     additionalProperties: false,
   },
   isWrite: true,
+  requiredRoles: [
+    "founding_partner",
+    "partner",
+    "finance",
+    "hr",
+    "senior_manager",
+    "consultant",
+    "contractor",
+    "partner_firm_resource",
+  ],
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "entity_card",
@@ -216,6 +331,18 @@ defineCapability({
   async run(input, ctx) {
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "meeting_create requires confirm:true." };
+    }
+    if (!MEETING_WRITE_ROLES.has(ctx.persona.role)) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "Your role cannot create meetings." };
+    }
+    const parentType = String(input.parentType);
+    const parentId = String(input.parentId);
+    if (!(await personaCanAccessMeetingParent(ctx.persona, parentType, parentId))) {
+      return {
+        ok: false,
+        errorCode: "parent_forbidden",
+        errorMessage: "The meeting parent does not exist or is outside your access.",
+      };
     }
     // Task #653 — dedup. A meeting with the same parent, title, and date is the
     // same meeting; return the existing row rather than inserting a duplicate
@@ -228,8 +355,8 @@ defineCapability({
       .where(
         and(
           eq(atelierMeetings.orgId, ctx.persona.orgId),
-          eq(atelierMeetings.parentType, String(input.parentType)),
-          eq(atelierMeetings.parentId, String(input.parentId)),
+          eq(atelierMeetings.parentType, parentType),
+          eq(atelierMeetings.parentId, parentId),
           eq(atelierMeetings.title, dedupTitle),
           eq(atelierMeetings.date, dedupDate),
         ),
@@ -242,8 +369,8 @@ defineCapability({
     await db.insert(atelierMeetings).values({
       id,
       orgId: ctx.persona.orgId,
-      parentType: String(input.parentType),
-      parentId: String(input.parentId),
+      parentType,
+      parentId,
       kind: String(input.kind ?? "discovery"),
       title: String(input.title),
       date: String(input.date),
@@ -252,6 +379,97 @@ defineCapability({
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "meeting", id, "create", input);
     return { ok: true, data: { id, kind: "meeting", navigateTo: null } };
+  },
+});
+
+defineCapability({
+  id: "coverage.meeting_update",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "engagement",
+  toolName: "meeting_update",
+  description: "Update editable fields on an existing opportunity or engagement meeting.",
+  slashAliases: { en: ["/meeting-update"] },
+  representativePrompts: { en: ["Rename a meeting or update its attendees."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      meetingId: { type: "string", minLength: 4 },
+      parentType: { type: "string", enum: ["opportunity", "engagement"] },
+      parentId: { type: "string", minLength: 4 },
+      title: { type: "string", minLength: 3 },
+      date: { type: "string" },
+      kind: { type: "string", enum: ["discovery", "workshop", "steering", "kickoff"] },
+      attendees: { type: "array", items: { type: "string" } },
+    },
+    required: ["meetingId"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  requiredRoles: [
+    "founding_partner",
+    "partner",
+    "finance",
+    "hr",
+    "senior_manager",
+    "consultant",
+    "contractor",
+    "partner_firm_resource",
+  ],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: false,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "meeting_update requires confirm:true." };
+    }
+    if (!MEETING_WRITE_ROLES.has(ctx.persona.role)) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "Your role cannot update meetings." };
+    }
+    const meetingId = String(input.meetingId ?? "");
+    const [existing] = await db.select().from(atelierMeetings).where(and(
+      eq(atelierMeetings.id, meetingId),
+      eq(atelierMeetings.orgId, ctx.persona.orgId),
+      isNull(atelierMeetings.deletedAt),
+    ));
+    if (!existing) return { ok: false, errorCode: "not_found", errorMessage: "meeting not found" };
+    if (
+      !(await personaCanAccessMeetingParent(
+        ctx.persona,
+        existing.parentType,
+        existing.parentId,
+      ))
+    ) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "Meeting is outside your access." };
+    }
+    const requestedParentType =
+      input.parentType === undefined ? existing.parentType : String(input.parentType);
+    const requestedParentId =
+      input.parentId === undefined ? existing.parentId : String(input.parentId);
+    if (
+      requestedParentType !== existing.parentType ||
+      requestedParentId !== existing.parentId
+    ) {
+      return {
+        ok: false,
+        errorCode: "unsupported_reparent",
+        errorMessage:
+          "Riser cannot move a meeting to a different parent. Create a new meeting on the intended opportunity or engagement instead.",
+      };
+    }
+    const patch = meetingUpdatePatch(input);
+    if (Object.keys(patch).length === 1) {
+      return { ok: false, errorCode: "no_changes", errorMessage: "Provide at least one editable meeting field." };
+    }
+    await db.update(atelierMeetings).set(patch).where(and(
+      eq(atelierMeetings.id, meetingId),
+      eq(atelierMeetings.orgId, ctx.persona.orgId),
+    ));
+    await audit(ctx.persona.orgId, ctx.persona.id, "meeting", meetingId, "update", patch);
+    return { ok: true, data: { id: meetingId, kind: "meeting", navigateTo: null } };
   },
 });
 
@@ -328,6 +546,79 @@ defineCapability({
         // result card matches what the REST Workplan UI shows.
         mitigation: input.mitigation ? String(input.mitigation) : null,
         navigateTo: null,
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "coverage.raid_update",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "raid",
+  toolName: "raid_update",
+  description: "Edit supported fields on an open RAID item without changing its lifecycle status.",
+  slashAliases: { en: ["/raid-update"] },
+  representativePrompts: { en: ["Update a RAID item's severity or mitigation."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      raidId: { type: "string", minLength: 4 },
+      kind: { type: "string", enum: ["risk", "assumption", "issue", "dependency"] },
+      description: { type: "string", minLength: 3 },
+      severity: { type: "string", enum: ["green", "amber", "red"] },
+      mitigation: { type: ["string", "null"] },
+      ownerId: { type: ["string", "null"] },
+      dueDate: { type: ["string", "null"] },
+    },
+    required: ["raidId"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  requiredRoles: ["founding_partner", "partner", "senior_manager", "consultant"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "raid_item",
+  irreversible: false,
+  surfaceOn: ["engagement_dashboard", "global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "raid_update requires confirm:true." };
+    }
+    if (!RAID_EDIT_ROLES.has(ctx.persona.role)) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "Your role cannot edit RAID items." };
+    }
+    const raidId = String(input.raidId ?? "");
+    const [existing] = await db.select().from(atelierRaidItems).where(and(
+      eq(atelierRaidItems.id, raidId),
+      eq(atelierRaidItems.orgId, ctx.persona.orgId),
+      isNull(atelierRaidItems.deletedAt),
+    ));
+    if (!existing) return { ok: false, errorCode: "not_found", errorMessage: "RAID item not found" };
+    if (!(await personaCanAccessEngagement(ctx.persona, existing.engagementId))) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "RAID item is outside your engagement access." };
+    }
+    if (input.ownerId && !(await isValidOrgOwner(String(input.ownerId), ctx.persona.orgId))) {
+      return { ok: false, errorCode: "invalid_owner", errorMessage: "The owner must be an active user in your organisation." };
+    }
+    const patch = raidUpdatePatch(input);
+    if (Object.keys(patch).length === 1) {
+      return { ok: false, errorCode: "no_changes", errorMessage: "Provide at least one editable RAID field." };
+    }
+    await db.update(atelierRaidItems).set(patch).where(and(
+      eq(atelierRaidItems.id, raidId),
+      eq(atelierRaidItems.orgId, ctx.persona.orgId),
+    ));
+    await audit(ctx.persona.orgId, ctx.persona.id, "raid_item", raidId, "update", patch);
+    return {
+      ok: true,
+      data: {
+        id: raidId,
+        raidId,
+        kind: existing.kind,
+        status: existing.status,
+        navigateTo: { path: `/clients/deliver/engagements/${existing.engagementId}`, when: "on_commit" as const },
       },
     };
   },

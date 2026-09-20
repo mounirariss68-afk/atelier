@@ -146,7 +146,11 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
   // for the confirm card; the actual commit dispatches in-process via
   // `dispatchTarget(verb, kind)` → `findToolByName(...).run({...payload, confirm:true})`.
   meeting: { create: "POST /atelier/meetings", update: "PATCH /atelier/meetings/:id" },
-  raid_item: { create: "POST /atelier/raid", update: "PATCH /atelier/raid/:id" },
+  raid_item: {
+    create: "POST /atelier/raid",
+    update: "PATCH /atelier/raid/:id",
+    transition: "POST /atelier/raid/:id/close",
+  },
   proposal: { create: "POST /atelier/proposals", update: "PATCH /atelier/proposals/:id" },
   pov: { create: "POST /atelier/povs", update: "PATCH /atelier/povs/:id" },
   change_order: { create: "POST /atelier/change-orders", update: "PATCH /atelier/change-orders/:id" },
@@ -306,6 +310,14 @@ defineCapability({
     }
 
     if (input.confirm !== true) {
+      if (!dispatchToolName) {
+        return {
+          ok: false,
+          errorCode: "unsupported_dispatch",
+          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
+          data: { stage: "failed", verb, kind, targetId, route },
+        };
+      }
       // Task #495 — at proposal time, compute the context page the
       // user should be looking at while reviewing the confirm card
       // (e.g. the opportunity detail page when proposing a stage
@@ -361,6 +373,18 @@ defineCapability({
       // Lazy import to avoid circular module load (index.ts imports
       // bootstrap-capabilities.js which imports this file).
       const { findToolByName } = await import("./index.js");
+      const { capabilitiesForPersona } = await import("./capability-catalog.js");
+      if (
+        !capabilitiesForPersona(ctx.persona).some(
+          (capability) => capability.toolName === dispatchToolName,
+        )
+      ) {
+        return {
+          ok: false,
+          errorCode: "dispatch_forbidden",
+          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
+        };
+      }
       const tool = findToolByName(dispatchToolName, ctx.persona);
       if (!tool) {
         return {
@@ -555,6 +579,14 @@ defineCapability({
     }
 
     if (input.confirm !== true) {
+      if (!dispatchToolName) {
+        return {
+          ok: false,
+          errorCode: "unsupported_dispatch",
+          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
+          data: { stage: "failed", verb, kind, targetId, route },
+        };
+      }
       // Task #495 — at proposal time, compute the context page the
       // user should be looking at while reviewing the confirm card
       // (e.g. the opportunity detail page when proposing a stage
@@ -610,6 +642,18 @@ defineCapability({
       // Lazy import to avoid circular module load (index.ts imports
       // bootstrap-capabilities.js which imports this file).
       const { findToolByName } = await import("./index.js");
+      const { capabilitiesForPersona } = await import("./capability-catalog.js");
+      if (
+        !capabilitiesForPersona(ctx.persona).some(
+          (capability) => capability.toolName === dispatchToolName,
+        )
+      ) {
+        return {
+          ok: false,
+          errorCode: "dispatch_forbidden",
+          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
+        };
+      }
       const tool = findToolByName(dispatchToolName, ctx.persona);
       if (!tool) {
         return {
@@ -831,6 +875,14 @@ defineCapability({
     }
 
     if (input.confirm !== true) {
+      if (!dispatchToolName) {
+        return {
+          ok: false,
+          errorCode: "unsupported_dispatch",
+          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
+          data: { stage: "failed", verb, kind, targetId, route },
+        };
+      }
       // Task #495 — at proposal time, compute the context page the
       // user should be looking at while reviewing the confirm card
       // (e.g. the opportunity detail page when proposing a stage
@@ -886,6 +938,18 @@ defineCapability({
       // Lazy import to avoid circular module load (index.ts imports
       // bootstrap-capabilities.js which imports this file).
       const { findToolByName } = await import("./index.js");
+      const { capabilitiesForPersona } = await import("./capability-catalog.js");
+      if (
+        !capabilitiesForPersona(ctx.persona).some(
+          (capability) => capability.toolName === dispatchToolName,
+        )
+      ) {
+        return {
+          ok: false,
+          errorCode: "dispatch_forbidden",
+          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
+        };
+      }
       const tool = findToolByName(dispatchToolName, ctx.persona);
       if (!tool) {
         return {
@@ -1173,6 +1237,14 @@ defineCapability({
     }
 
     if (input.confirm !== true) {
+      if (!dispatchToolName) {
+        return {
+          ok: false,
+          errorCode: "unsupported_dispatch",
+          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
+          data: { stage: "failed", verb, kind, targetId, route },
+        };
+      }
       // Task #495 — at proposal time, compute the context page the
       // user should be looking at while reviewing the confirm card
       // (e.g. the opportunity detail page when proposing a stage
@@ -1228,6 +1300,18 @@ defineCapability({
       // Lazy import to avoid circular module load (index.ts imports
       // bootstrap-capabilities.js which imports this file).
       const { findToolByName } = await import("./index.js");
+      const { capabilitiesForPersona } = await import("./capability-catalog.js");
+      if (
+        !capabilitiesForPersona(ctx.persona).some(
+          (capability) => capability.toolName === dispatchToolName,
+        )
+      ) {
+        return {
+          ok: false,
+          errorCode: "dispatch_forbidden",
+          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
+        };
+      }
       const tool = findToolByName(dispatchToolName, ctx.persona);
       if (!tool) {
         return {

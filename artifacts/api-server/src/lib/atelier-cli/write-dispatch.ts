@@ -91,17 +91,13 @@ export const DISPATCH_TABLE: Partial<
   },
   // — 15 new entities for Task #411.
   meeting: {
-    // `opportunity_capture_meeting` is upsert-style: when caller
-    // supplies a meetingId it patches; otherwise it inserts.
-    create: "opportunity_capture_meeting",
-    update: "opportunity_capture_meeting",
+    create: "meeting_create",
+    update: "meeting_update",
   },
   raid_item: {
     create: "raid_add",
-    // `raid_close` is the only typed mutating verb on a RAID row;
-    // expects { raidId, mitigation? }, so the dispatcher payload
-    // translator below remaps `id` → `raidId`.
-    update: "raid_close",
+    update: "raid_update",
+    transition: "raid_close",
   },
   proposal: {
     create: "proposal_compose",
@@ -169,11 +165,28 @@ export const DISPATCH_TABLE: Partial<
  */
 type Translator = (payload: Record<string, unknown>, targetId: string | null) => Record<string, unknown>;
 const PAYLOAD_TRANSLATORS: Record<string, Partial<Record<DispatchVerb, Translator>>> = {
+  meeting: {
+    update: (payload, targetId) => {
+      const out: Record<string, unknown> = { ...payload };
+      const id = (typeof payload.id === "string" && payload.id) || targetId || "";
+      if (id) out.meetingId = id;
+      delete out.id;
+      return out;
+    },
+  },
   raid_item: {
     update: (payload, targetId) => {
       const out: Record<string, unknown> = { ...payload };
       const id = (typeof payload.id === "string" && payload.id) || targetId || "";
       if (id) out.raidId = id;
+      delete out.id;
+      return out;
+    },
+    transition: (payload, targetId) => {
+      const out: Record<string, unknown> = { ...payload };
+      const id = (typeof payload.id === "string" && payload.id) || targetId || "";
+      if (id) out.raidId = id;
+      delete out.id;
       return out;
     },
   },
@@ -251,3 +264,106 @@ export function translateDispatchPayload(
   const t = PAYLOAD_TRANSLATORS[kind]?.[verb];
   return t ? t(payload, targetId) : payload;
 }
+
+export type DispatchMutationSemantics = "insert" | "update" | "transition" | "delete" | "link";
+
+export function assertDispatchCatalogCompatible(entries: readonly DispatchCatalogEntry[]): void {
+  const byTool = new Map(entries.map((entry) => [entry.toolName, entry]));
+  for (const [kind, verbs] of Object.entries(DISPATCH_TABLE)) {
+    for (const [verb, target] of Object.entries(verbs) as Array<[DispatchVerb, string]>) {
+      const entry = byTool.get(target);
+      if (!entry) throw new Error(`dispatch-target-unregistered:${kind}.${verb}:${target}`);
+      if (!entry.isWrite) throw new Error(`dispatch-target-not-write:${kind}.${verb}:${target}`);
+      const properties = entry.inputSchema.properties as Record<string, unknown> | undefined;
+      if (
+        TARGET_SEMANTICS[target] &&
+        !properties?.confirm &&
+        entry.inputSchema.additionalProperties === false
+      ) {
+        throw new Error(`dispatch-target-rejects-confirm:${kind}.${verb}:${target}`);
+      }
+      if (verb !== "create" && verb !== "link" && TARGET_SEMANTICS[target]) {
+        // Mirror propose_write's commit path: targetId is first injected as
+        // generic `id`, then an optional translator adapts it for the target.
+        const translated = translateDispatchPayload(
+          verb,
+          kind,
+          { id: "dispatch_contract_id" },
+          "dispatch_contract_id",
+        );
+        const required = Array.isArray(entry.inputSchema.required)
+          ? entry.inputSchema.required.filter((field): field is string => typeof field === "string")
+          : [];
+        const missing = required.filter(
+          (field) =>
+            field !== "confirm" &&
+            (field === "id" || /Id$/.test(field)) &&
+            translated[field] === undefined,
+        );
+        if (missing.length > 0) {
+          throw new Error(
+            `dispatch-target-missing-required-input:${kind}.${verb}:${target}:${missing.join(",")}`,
+          );
+        }
+        if (entry.inputSchema.additionalProperties === false) {
+          for (const field of Object.keys(translated)) {
+            if (!properties?.[field]) {
+              throw new Error(
+                `dispatch-target-rejects-translated-input:${kind}.${verb}:${target}:${field}`,
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+const VERB_SEMANTICS: Record<DispatchVerb, DispatchMutationSemantics> = {
+  create: "insert",
+  update: "update",
+  transition: "transition",
+  delete: "delete",
+  // Relationship links are represented as inserted edge rows.
+  link: "insert",
+};
+
+type DispatchCatalogEntry = {
+  toolName: string;
+  isWrite: boolean;
+  inputSchema: Record<string, unknown>;
+};
+
+/**
+ * Boot/test-time semantic contract for dispatcher rows. This deliberately
+ * rejects the harmful class of mappings where an update points at an
+ * insert-only or transition-only executor.
+ */
+export function assertDispatchSemanticsCompatible(): void {
+  const targetVerbs = new Map<string, DispatchMutationSemantics>();
+  for (const [kind, verbs] of Object.entries(DISPATCH_TABLE)) {
+    for (const [verb, target] of Object.entries(verbs) as Array<[DispatchVerb, string]>) {
+      const expected = VERB_SEMANTICS[verb];
+      const declared = TARGET_SEMANTICS[target];
+      if (declared && declared !== expected) {
+        throw new Error(
+          `dispatch-semantic-mismatch:${kind}.${verb}:${target}:${declared}`,
+        );
+      }
+      const prior = targetVerbs.get(target);
+      if (prior && prior !== expected) {
+        throw new Error(`dispatch-target-reused-across-semantics:${target}:${prior}:${expected}`);
+      }
+      targetVerbs.set(target, expected);
+    }
+  }
+}
+
+/** Capabilities whose name does not reliably describe their mutation semantics. */
+const TARGET_SEMANTICS: Record<string, DispatchMutationSemantics> = {
+  meeting_create: "insert",
+  meeting_update: "update",
+  raid_add: "insert",
+  raid_update: "update",
+  raid_close: "transition",
+};

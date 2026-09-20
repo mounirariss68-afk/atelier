@@ -1,8 +1,8 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "3f51de532e32fcdde9ecd4cb28ed0cc659f730f16e7aeeb843a1b84f98a1e61e",
-  "entryCount": 326,
+  "manifestVersion": "308061af5511824c1b9d180fff1e9f4fc24b7f3c89d140b114a02968752d5191",
+  "entryCount": 328,
   "entries": [
     {
       "capabilityId": "account.archive",
@@ -4150,15 +4150,19 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "unsupported",
+      "executionStatus": "executable",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [],
-      "policyClass": "unsupported",
-      "implementationVersion": "6157dee8fe14",
+      "effectiveRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "confirmed_write",
+      "implementationVersion": "5ce167460c3d",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4176,8 +4180,7 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1",
-        "riser-adapter-not-integrated-v1"
+        "cli-only-route-parity-v1"
       ]
     },
     {
@@ -4190,14 +4193,17 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "outbound_write",
-      "executionStatus": "unsupported",
+      "executionStatus": "executable",
       "roles": [
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [],
-      "policyClass": "unsupported",
-      "implementationVersion": "371f81c2349d",
+      "effectiveRoles": [
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "outbound_write",
+      "implementationVersion": "b93e23535921",
       "approverRoles": [
         "founding_partner",
         "partner"
@@ -4214,8 +4220,7 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1",
-        "riser-adapter-not-integrated-v1"
+        "cli-only-route-parity-v1"
       ]
     },
     {
@@ -4307,15 +4312,19 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "unsupported",
+      "executionStatus": "executable",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [],
-      "policyClass": "unsupported",
-      "implementationVersion": "284e86f5af98",
+      "effectiveRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "confirmed_write",
+      "implementationVersion": "4d353bbed3e3",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4333,8 +4342,7 @@
         "minimumDataVersion": 1
       },
       "divergenceIds": [
-        "cli-only-route-parity-v1",
-        "riser-adapter-not-integrated-v1"
+        "cli-only-route-parity-v1"
       ]
     },
     {
@@ -4509,16 +4517,21 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "unsupported",
+      "executionStatus": "legacy_compat",
       "roles": [
         "compliance_officer",
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [],
-      "policyClass": "unsupported",
-      "implementationVersion": "a8f9d114c3d9",
+      "effectiveRoles": [
+        "compliance_officer",
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "legacy_write",
+      "implementationVersion": "04b01b564311",
       "approverRoles": [
         "compliance_officer",
         "finance",
@@ -4538,7 +4551,7 @@
       },
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "riser-adapter-not-integrated-v1"
+        "legacy-confirmation-compat-v1"
       ]
     },
     {
@@ -4551,15 +4564,19 @@
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
-      "executionStatus": "unsupported",
+      "executionStatus": "legacy_compat",
       "roles": [
         "finance",
         "founding_partner",
         "partner"
       ],
-      "effectiveRoles": [],
-      "policyClass": "unsupported",
-      "implementationVersion": "a3bc52548ef0",
+      "effectiveRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "legacy_write",
+      "implementationVersion": "9a6e76d862bf",
       "approverRoles": [
         "finance",
         "founding_partner",
@@ -4578,7 +4595,7 @@
       },
       "divergenceIds": [
         "cli-only-route-parity-v1",
-        "riser-adapter-not-integrated-v1"
+        "legacy-confirmation-compat-v1"
       ]
     },
     {
@@ -5387,21 +5404,95 @@
       "effect": "write",
       "effectClass": "internal_write",
       "executionStatus": "legacy_compat",
-      "roles": [],
+      "roles": [
+        "consultant",
+        "contractor",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "senior_manager"
+      ],
       "effectiveRoles": [
-        "compliance_officer",
         "consultant",
         "finance",
         "founding_partner",
         "hr",
         "partner",
         "partner_firm_resource",
-        "recruiter",
         "senior_manager"
       ],
       "policyClass": "legacy_write",
-      "implementationVersion": "92bcae971911",
-      "approverRoles": [],
+      "implementationVersion": "9e9f14c7ebef",
+      "approverRoles": [
+        "consultant",
+        "contractor",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "senior_manager"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "entity_card",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1",
+        "legacy-confirmation-compat-v1"
+      ]
+    },
+    {
+      "capabilityId": "coverage.meeting_update",
+      "toolName": "meeting_update",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "da392ab5b6dd",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "write",
+      "effectClass": "internal_write",
+      "executionStatus": "legacy_compat",
+      "roles": [
+        "consultant",
+        "contractor",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "senior_manager"
+      ],
+      "effectiveRoles": [
+        "consultant",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "senior_manager"
+      ],
+      "policyClass": "legacy_write",
+      "implementationVersion": "32f403285b95",
+      "approverRoles": [
+        "consultant",
+        "contractor",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "senior_manager"
+      ],
       "confirmation": {
         "required": false,
         "irreversible": false,
@@ -5661,6 +5752,53 @@
       },
       "presentation": {
         "cardType": "entity_card",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1",
+        "legacy-confirmation-compat-v1"
+      ]
+    },
+    {
+      "capabilityId": "coverage.raid_update",
+      "toolName": "raid_update",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "3b58fa158d6f",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "write",
+      "effectClass": "internal_write",
+      "executionStatus": "legacy_compat",
+      "roles": [
+        "consultant",
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "effectiveRoles": [
+        "consultant",
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "policyClass": "legacy_write",
+      "implementationVersion": "df91dfcd0a03",
+      "approverRoles": [
+        "consultant",
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "raid_item",
         "contractVersion": 1,
         "renderer": "legacy-native-v1",
         "minimumDataVersion": 1
