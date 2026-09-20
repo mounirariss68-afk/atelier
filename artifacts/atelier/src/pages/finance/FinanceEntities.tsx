@@ -26,6 +26,7 @@ import {
 } from "@/lib/v5-hooks";
 import { Plus, Archive, Sparkles, Loader2, ArrowUpRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import OwnershipPanel from "./OwnershipPanel";
 
 import {
   jsonReq,
@@ -308,6 +309,7 @@ export default function FinanceEntities() {
   const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
   const canWrite = me?.role === "founding_partner" || me?.role === "partner";
+  const canManageEconomics = canWrite || me?.role === "finance";
   const [showArchived, setShowArchived] = React.useState(false);
   const { entities, isLoading } = useLegalEntities(showArchived);
   const [countryFilter, setCountryFilter] = React.useState<string>("all");
@@ -352,6 +354,7 @@ export default function FinanceEntities() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-6">
+      <OwnershipPanel canWrite={!!canManageEconomics} />
       <div className="flex flex-wrap items-center gap-2">
         <button
           className={`px-3 h-8 rounded-full text-xs font-mono border ${countryFilter === "all" ? "border-gold text-gold" : "border-border text-text-mute hover:text-text"}`}

@@ -126,6 +126,7 @@ import financeComplyRoutes from "./financeComplyRoutes";
 import payrollRoutes from "./payrollRoutes";
 import nepCompRoutes from "./nepCompRoutes";
 import governanceRoutes from "./governanceRoutes";
+import ownershipRoutes from "./ownershipRoutes";
 import financePlanRoutes, { computeBacklogKpisForOrg } from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
@@ -496,6 +497,8 @@ router.use(forecastRoutes);
 router.use(reportsRoutes);
 // Governance classification PATCH must precede the legacy broad roster PATCH.
 router.use(governanceRoutes);
+// Task #1363 — normalized ownership, commercial rights and distributions.
+router.use(ownershipRoutes);
 // Mount v3 Roster routes (Task #254). Roster endpoints accept any
 // authenticated persona — comp/bank fields are stripped server-side
 // for non-Partner/Operations callers.

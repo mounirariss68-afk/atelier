@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1175,
+  "routeCount": 1197,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -61,6 +61,34 @@
         "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "00664aa43b52b8af",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/commercial-rights",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -5916,6 +5944,34 @@
       }
     },
     {
+      "routeId": "2d0970f1a0e09119",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership/structures",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "2dc6b772d6f84e1c",
       "file": "artifacts/api-server/src/routes/atelier/meSelfServiceRoutes.ts",
       "method": "get",
@@ -6081,6 +6137,34 @@
         "reason": "covered by CLI capability me.leave (Task #405)",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "2ebade92aeb1b803",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership/group",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -10536,6 +10620,34 @@
       }
     },
     {
+      "routeId": "540ab4bf93caf5bd",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/interests/:id/approve",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "54366dc372f09e1f",
       "file": "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
       "method": "get",
@@ -10813,6 +10925,34 @@
         "reason": "pending Task #340 read-parity migration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "57a10bd3fdf04441",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership/people/:personId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -12188,6 +12328,34 @@
       }
     },
     {
+      "routeId": "64619ecdbe002ccc",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/distributions/:id/:verb",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "64a0e22bed4c9e83",
       "file": "artifacts/api-server/src/routes/atelier/performanceRoutes.ts",
       "method": "get",
@@ -12605,6 +12773,34 @@
         "reason": "Separate Arcelik product API; it is outside the Atelier assistant capability realm.",
         "reviewBy": "2027-03-31",
         "rollback": "Disable Arcelik routes without changing the Atelier catalog."
+      }
+    },
+    {
+      "routeId": "66bf2d3a7b7ee574",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/distributions",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -13840,6 +14036,34 @@
       }
     },
     {
+      "routeId": "70f4b74366ca99ff",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/distributions/true-ups",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "70f8dd1ed5f38ab9",
       "file": "artifacts/api-server/src/routes/atelier/walletRoutes.ts",
       "method": "delete",
@@ -14985,6 +15209,34 @@
         "reason": "finance approval write moving money; UI maker-checker flow only",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "7a1fa7d48f196dca",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/interests",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -16500,6 +16752,34 @@
       }
     },
     {
+      "routeId": "83f79b61f092bf61",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/structures",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "8433512e9f94d69f",
       "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
       "method": "patch",
@@ -17141,6 +17421,34 @@
         "reason": "pending Task #340 read-parity migration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "896c6327add37f33",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/structures/:id/approve",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -22184,6 +22492,34 @@
       }
     },
     {
+      "routeId": "b0c8c53519f6f4de",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "<dynamic:c39406194582>",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "b0d57423c730630b",
       "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
       "method": "post",
@@ -23248,6 +23584,34 @@
       }
     },
     {
+      "routeId": "b7a6e92462863a67",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/links",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "b7a74f5b2700e9de",
       "file": "artifacts/api-server/src/routes/salon/index.ts",
       "method": "get",
@@ -23976,6 +24340,34 @@
       }
     },
     {
+      "routeId": "bd4919a1fb78a281",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "bd919b88639336d5",
       "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
       "method": "delete",
@@ -24617,6 +25009,62 @@
         "reason": "pending Task #340 read-parity migration",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "c1b78e61249c985c",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/distributions/payments",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
+      "routeId": "c1b99f1213951f09",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/commercial-rights/:id/approve",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -26524,6 +26972,34 @@
       }
     },
     {
+      "routeId": "cdf26c5941111411",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/links/:id/approve",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "ce84cbf97cbcb8d4",
       "file": "artifacts/api-server/src/routes/atelier/meSelfServiceRoutes.ts",
       "method": "post",
@@ -26916,6 +27392,34 @@
       }
     },
     {
+      "routeId": "d091b14733bad036",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/structures/:id/reject",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "d09447dc664b0abd",
       "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
       "method": "get",
@@ -27053,6 +27557,34 @@
         "reason": "personal Microsoft 365 surface (self-scope, no CLI parity)",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "d1790c44f51ff275",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/distributions",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -29100,6 +29632,34 @@
       }
     },
     {
+      "routeId": "e0f51859b46bd554",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership/entities/:id",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "e0f547f4271c416a",
       "file": "artifacts/api-server/src/routes/atelier/nepCompRoutes.ts",
       "method": "patch",
@@ -29716,6 +30276,34 @@
       }
     },
     {
+      "routeId": "e5fff8cf174a351d",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "post",
+      "path": "/finance/ownership/interests/:id/reject",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
+      }
+    },
+    {
       "routeId": "e636afb77e34f40b",
       "file": "artifacts/api-server/src/routes/atelier/marginReportsRoutes.ts",
       "method": "post",
@@ -30217,6 +30805,34 @@
         "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "eacb81a8620031c5",
+      "file": "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts",
+      "method": "get",
+      "path": "/finance/ownership/structures/:id",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Finance Economics Owners",
+        "reason": "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+        "reviewBy": "2027-03-31",
+        "rollback": "Disable the ownership economics router while preserving the normalized database records and finance review workflow."
       }
     },
     {
@@ -35886,5 +36502,5 @@
       ]
     }
   ],
-  "conformanceVersion": "ca3848fb0d2df0749360d2ad966bbae331a5d76952960d8daddab5b8e54a2df3"
+  "conformanceVersion": "ec7f67efb77392bdd5aed44af04515b7a954eaaa5f6737d374781621e9cd4e35"
 }

@@ -39,6 +39,11 @@ const externalBoundary = (
 });
 
 export const ROUTE_FILE_DIVERGENCES = {
+  "artifacts/api-server/src/routes/atelier/ownershipRoutes.ts": externalBoundary(
+    "Finance Economics Owners",
+    "Ownership and distribution economics are finance-gated HTTP workflows with no assistant capability surface.",
+    "Disable the ownership economics router while preserving the normalized database records and finance review workflow.",
+  ),
   "artifacts/api-server/src/routes/arcelik.ts": externalBoundary(
     "Arcelik Product Owners",
     "Separate Arcelik product API; it is outside the Atelier assistant capability realm.",

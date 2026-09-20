@@ -19,10 +19,12 @@ import { useAtelierGetMe } from "@workspace/api-client-react";
 import {
   useLegalEntities,
   useLegalEntityDetail,
+  useOwnershipEntity,
   type LegalEntityRow,
   type LegalEntityLinkedDoc,
   type EntityBankAccount,
 } from "@/lib/v5-hooks";
+import { EntityOwnershipCard } from "./OwnershipPanel";
 import {
   Dialog,
   DialogContent,
@@ -292,6 +294,7 @@ export default function FinanceEntityDetail() {
   const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
   const { entity: e, documents, bankAccounts, isLoading, isError } = useLegalEntityDetail(id);
+  const ownership = useOwnershipEntity(id);
   // Used only to refresh the grid cache after edits from this page.
   useLegalEntities(true);
 
@@ -456,6 +459,7 @@ export default function FinanceEntityDetail() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-8">
+        {ownership.data && <EntityOwnershipCard entity={ownership.data} asOf={ownership.data ? new Date().toISOString().slice(0, 10) : ""} />}
         {/* Task #1182 — unsettled pre-formation pool nudge */}
         {e.status === "active" && e.formation && !e.formation.settlement && (
           <Link href="/finance/pre-formation">

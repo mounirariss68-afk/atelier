@@ -17,6 +17,7 @@ import {
 } from "@/components/travel/TravelProfileCard";
 // Task #1157 — icons for the salary advance card.
 import { DollarSign, X, Plus, RefreshCw } from "lucide-react";
+import { PersonOwnershipSection } from "@/pages/finance/OwnershipPanel";
 
 interface Person {
   id: string;
@@ -559,6 +560,9 @@ function ProfileTab({
       {/* Task #1159 — comp-change history timeline for viewers with comp access. */}
       {viewerCanSeeComp && person.workerType === "employee" && (
         <CompHistorySection personId={person.id} />
+      )}
+      {(person.relationshipType === "equity_partner" || viewerCanSeeComp) && (
+        <PersonOwnershipSection personId={person.id} />
       )}
       {person.notes && (
         <Card className="p-4 md:col-span-2">

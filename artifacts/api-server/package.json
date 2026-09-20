@@ -109,6 +109,7 @@
     "test:entity-bank-accounts": "tsx ./tests/crm/entity-bank-accounts-probe.ts",
     "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts",
     "test:ownership-industry": "tsx ./tests/crm/ownership-industry-probe.ts",
+    "test:ownership-1363": "NODE_ENV=test tsx ./tests/ownership-1363/run.ts",
     "test:finance-entity-lifecycle": "tsx ./tests/crm/finance-entity-lifecycle-probe.ts",
     "test:mobile-auth": "tsx ./tests/mobile-auth/run.ts",
     "test:meeting-brief": "tsx ./tests/meeting-brief/run.ts",

@@ -1962,3 +1962,108 @@ export function useGlBookkeeperStatus(period: string) {
     refetchInterval: 60_000, // auto runs land in the background — keep fresh
   });
 }
+
+// ============================================================
+// Finance — normalized equity ownership and distributions (Task #1363)
+// ============================================================
+export interface OwnershipStake {
+  id: string; holderId?: string | null; holderName: string;
+  holderKind?: string; entityId?: string | null; entityName?: string | null;
+  legalOwnershipPct: number | null; votingControlPct: number | null; profitParticipationPct: number | null;
+  shareClass?: string | null; effectiveFrom: string; effectiveTo?: string | null;
+  status?: string | null; sourceAgreement?: string | null; pendingTerms?: string | null; warnings?: string[];
+}
+export interface OwnershipEntitySummary {
+  id: string; name: string; shortName?: string | null; country?: string | null; status: string;
+  /** Lifecycle is separate from the maker/checker approval state when supplied by the API. */
+  lifecycleStatus?: "planned" | "incorporated" | "franchise-operated" | "franchise_operated" | "archived" | string | null;
+  approvalStatus?: "pending" | "approved" | "rejected" | string | null;
+  predecessorIds?: string[]; successorIds?: string[]; directStakes: OwnershipStake[];
+  warnings: string[]; pendingTerms: string[];
+  franchise?: { operatorName: string; territory: string; agreementFrom?: string | null; agreementTo?: string | null; fees?: string | null; royaltySharePct?: number | null } | null;
+}
+export interface LookThroughInterest {
+  holderId?: string | null; holderName: string; entityId: string; entityName: string;
+  legalOwnershipPct: number | null; votingControlPct: number | null; profitParticipationPct: number | null; path?: string[];
+}
+export interface OwnershipOverview {
+  asOf: string; entities: OwnershipEntitySummary[]; stakes?: OwnershipStake[];
+  people?: Array<{ personId: string; name: string; relationshipType?: string | null; compensationBasis?: string | null }>;
+  warnings: string[]; pendingTerms: string[];
+  validation?: Array<{ code: string; message: string; severity?: string }>;
+}
+export interface OwnershipGroupResponse {
+  structures: Array<Record<string, unknown> & { id: string; name?: string; status?: string; lifecycleStatus?: string; approvalStatus?: string; proposedBy?: string | null }>;
+  links: Array<Record<string, unknown> & { id: string; status?: string; approvalStatus?: string; proposedBy?: string | null }>;
+  interests: Array<Record<string, unknown> & { id: string; status?: string; approvalStatus?: string; proposedBy?: string | null; stakeholderId?: string }>;
+  stakeholders: Array<Record<string, unknown> & { id: string; label?: string }>;
+  commercialRights: Array<Record<string, unknown> & { id: string; status?: string; approvalStatus?: string; proposedBy?: string | null }>;
+}
+export interface OwnershipEntityDetail extends OwnershipEntitySummary {
+  history?: OwnershipStake[]; lookThrough?: LookThroughInterest[];
+  commercialRights?: Array<{ id: string; kind: string; holderName: string; ratePct?: number | null; basis?: string | null; effectiveFrom?: string | null; effectiveTo?: string | null; status?: string | null; pendingTerms?: string | null; sourceAgreement?: string | null }>;
+}
+export interface OwnershipPersonDetail {
+  personId: string; name: string; relationshipType?: string | null; compensationBasis?: string | null;
+  directInterests: OwnershipStake[]; lookThrough: LookThroughInterest[]; warnings: string[]; pendingTerms: string[];
+}
+export interface DistributionAllocation {
+  id: string; personId?: string | null; holderName: string; percentage: number; amount: number;
+  status?: string | null; paidAmount?: number; trueUpAmount?: number;
+}
+export interface DistributionDeclaration {
+  id: string; year: number; currency: string; status: string; estimatedProfit: number;
+  cashReserve: number; operatingCapitalReserve: number; approvedDistributableProfit: number | null;
+  snapshotAt?: string | null; allocations: DistributionAllocation[];
+  payments?: Array<{ id: string; allocationId?: string; amount: number; paidAt?: string | null; status?: string }>;
+  trueUps?: Array<{ id: string; allocationId?: string; amount: number; reason?: string; status?: string }>; warnings?: string[];
+}
+export function useOwnership(asOf = new Date().toISOString().slice(0, 10)) {
+  return useQuery<OwnershipOverview>({
+    queryKey: ["atelier-v5", "ownership", asOf],
+    queryFn: () => get(`/finance/ownership?asOf=${encodeURIComponent(asOf)}`),
+    staleTime: 30_000,
+  });
+}
+export function useOwnershipGroup() {
+  return useQuery<OwnershipGroupResponse>({
+    queryKey: ["atelier-v5", "ownership-group"],
+    queryFn: () => get("/finance/ownership/group"),
+    staleTime: 15_000,
+  });
+}
+export function useOwnershipEntity(id: string | null, asOf = new Date().toISOString().slice(0, 10)) {
+  return useQuery<OwnershipEntityDetail>({
+    queryKey: ["atelier-v5", "ownership-entity", id, asOf],
+    queryFn: () => get(`/finance/ownership/entities/${encodeURIComponent(id!)}?asOf=${encodeURIComponent(asOf)}`),
+    enabled: !!id, staleTime: 30_000,
+  });
+}
+export function useOwnershipPerson(personId: string | null, asOf = new Date().toISOString().slice(0, 10)) {
+  return useQuery<OwnershipPersonDetail>({
+    queryKey: ["atelier-v5", "ownership-person", personId, asOf],
+    queryFn: () => get(`/finance/ownership/people/${encodeURIComponent(personId!)}?asOf=${encodeURIComponent(asOf)}`),
+    enabled: !!personId, staleTime: 30_000,
+  });
+}
+export function useDistributions() {
+  return useQuery<{ items: DistributionDeclaration[] }>({
+    queryKey: ["atelier-v5", "distributions"], queryFn: () => get("/finance/distributions"), staleTime: 15_000,
+  });
+}
+export function useOwnershipMutation(path: string, method: "POST" | "PATCH" = "POST") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => fetch(`${API_BASE}${path}`, {
+      method, credentials: "include", headers: { "content-type": "application/json", Accept: "application/json" }, body: JSON.stringify(body),
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? `Request failed (${res.status})`);
+      return data;
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["atelier-v5", "ownership"] });
+      void qc.invalidateQueries({ queryKey: ["atelier-v5", "distributions"] });
+    },
+  });
+}

@@ -10,6 +10,7 @@ import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
 import { ensureAtelierSelfLinkage } from "./lib/atelier-self-linkage";
 import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
+import { ensureAtelierOwnershipSeed } from "./lib/atelier-seed-ownership";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { startBookkeeperAutoJob } from "./lib/atelier-agents/bookkeeperAuto";
 import { startEntityAllocationAutoJob } from "./lib/atelier-agents/entityAllocationAuto";
@@ -170,6 +171,9 @@ app.listen(port, (err) => {
         { err },
         "Pricing seed failed — Pricing module has no active rate card",
       );
+    });
+    await ensureAtelierOwnershipSeed().catch((err) => {
+      logger.error({ err }, "Ownership economics seed failed — finance structure remains available for explicit setup");
     });
     // Task #969 — idempotent boot-time ingestion of the templatized v3
     // Non-Equity Partner Agreement (configuration content, not demo data):
