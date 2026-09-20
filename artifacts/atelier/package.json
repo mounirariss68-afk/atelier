@@ -22,6 +22,8 @@
     "test:slash-composer": "tsx src/components/cli/slashComposer.test.ts",
     "test:cli-attachment-upload": "tsx src/components/cli/attachmentUpload.test.ts",
     "test:me-lens-gating": "tsx --tsconfig tsconfig.json src/lib/meLensGating.test.ts",
+    "test:finance-mvp-routing": "tsx --tsconfig tsconfig.json src/lib/financeMvpRouting.test.ts",
+    "test:finance-mvp-pages": "tsx --tsconfig tsconfig.test.json src/pages/finance/FinanceMvp.pages.test.tsx",
     "generate:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts",
     "test:screen-catalog": "tsx --tsconfig tsconfig.json scripts/generate-screen-catalog.ts --check",
     "test:deeplink-focus": "tsx src/lib/useDeepLinkFocus.test.ts",

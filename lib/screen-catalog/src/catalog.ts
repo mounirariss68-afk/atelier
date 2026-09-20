@@ -154,6 +154,30 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
+    "id": "agents.outcomes",
+    "title": "Outcomes",
+    "description": "Outcomes — inside the Agents area (Agent library, runs, evaluations — design to retire.)",
+    "path": "/agents/outcomes",
+    "breadcrumb": [
+      "Agents",
+      "Outcomes"
+    ],
+    "keywords": [],
+    "roles": [
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer"
+    ],
+    "parameterized": false
+  },
+  {
     "id": "agents.retire",
     "title": "Retire",
     "description": "Retire — inside the Agents area (Agent library, runs, evaluations — design to retire.)",
@@ -744,120 +768,9 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "finance.approvals",
-    "title": "Approvals",
-    "description": "Approvals — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/approvals",
-    "breadcrumb": [
-      "Finance",
-      "Approvals"
-    ],
-    "keywords": [],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "finance.billing",
-    "title": "Bill & Collect",
-    "description": "Bill & Collect — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/billing",
-    "breadcrumb": [
-      "Finance",
-      "Bill & Collect"
-    ],
-    "keywords": [
-      "invoice",
-      "invoices",
-      "collections",
-      "receivables",
-      "ar"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "finance.close",
-    "title": "Close",
-    "description": "Close — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/close",
-    "breadcrumb": [
-      "Finance",
-      "Close"
-    ],
-    "keywords": [
-      "period",
-      "month",
-      "end"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "finance.comply",
-    "title": "Comply",
-    "description": "Comply — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/comply",
-    "breadcrumb": [
-      "Finance",
-      "Comply"
-    ],
-    "keywords": [
-      "tax",
-      "vat",
-      "filings",
-      "statutory"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
     "id": "finance.entities",
     "title": "Entities",
-    "description": "Entities — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
+    "description": "Entities — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
     "path": "/finance/entities",
     "breadcrumb": [
       "Finance",
@@ -883,20 +796,15 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "finance.ledger",
-    "title": "Record",
-    "description": "Record — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/ledger",
+    "id": "finance.money-in",
+    "title": "Money in",
+    "description": "Money in — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
+    "path": "/finance/money-in",
     "breadcrumb": [
       "Finance",
-      "Record"
+      "Money in"
     ],
-    "keywords": [
-      "journal",
-      "journals",
-      "gl",
-      "bookkeeping"
-    ],
+    "keywords": [],
     "roles": [
       "founding_partner",
       "partner",
@@ -912,13 +820,13 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "finance.nep-comp",
-    "title": "NEP Comp",
-    "description": "NEP Comp — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/nep-comp",
+    "id": "finance.money-out",
+    "title": "Money out",
+    "description": "Money out — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
+    "path": "/finance/money-out",
     "breadcrumb": [
       "Finance",
-      "NEP Comp"
+      "Money out"
     ],
     "keywords": [],
     "roles": [
@@ -938,7 +846,7 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
   {
     "id": "finance.overview",
     "title": "Overview",
-    "description": "Overview — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
+    "description": "Overview — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
     "path": "/finance",
     "breadcrumb": [
       "Finance",
@@ -960,49 +868,15 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
     "parameterized": false
   },
   {
-    "id": "finance.payables",
-    "title": "Pay",
-    "description": "Pay — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/payables",
+    "id": "finance.reconcile",
+    "title": "Reconcile",
+    "description": "Reconcile — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
+    "path": "/finance/reconcile",
     "breadcrumb": [
       "Finance",
-      "Pay"
+      "Reconcile"
     ],
-    "keywords": [
-      "bills",
-      "vendors",
-      "payments",
-      "ap"
-    ],
-    "roles": [
-      "founding_partner",
-      "partner",
-      "finance",
-      "hr",
-      "senior_manager",
-      "consultant",
-      "partner_firm_resource",
-      "board_observer",
-      "recruiter",
-      "compliance_officer"
-    ],
-    "parameterized": false
-  },
-  {
-    "id": "finance.plan",
-    "title": "Plan",
-    "description": "Plan — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
-    "path": "/finance/plan",
-    "breadcrumb": [
-      "Finance",
-      "Plan"
-    ],
-    "keywords": [
-      "budget",
-      "forecast",
-      "fpa",
-      "cash"
-    ],
+    "keywords": [],
     "roles": [
       "founding_partner",
       "partner",
@@ -1019,12 +893,12 @@ export const SCREEN_CATALOG: readonly ScreenEntry[] = [
   },
   {
     "id": "finance.reports",
-    "title": "Report",
-    "description": "Report — inside the Finance area (Entities, ledgers, FP&A, close, comply.)",
+    "title": "Reports",
+    "description": "Reports — inside the Finance area (Entities, money in and out, reconciliation, and performance.)",
     "path": "/finance/reports",
     "breadcrumb": [
       "Finance",
-      "Report"
+      "Reports"
     ],
     "keywords": [
       "statement",

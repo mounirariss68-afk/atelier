@@ -185,24 +185,16 @@ export const LENSES: readonly LensDef[] = [
     id: "finance",
     label: "Finance",
     prefix: "/finance",
-    description: "Entities, ledgers, FP&A, close, comply.",
+    description: "Entities, money in and out, reconciliation, and performance.",
     shortcut: "⌘5",
     shortcutKey: "5",
     sections: [
       { id: "overview", label: "Overview", href: "/finance", icon: LayoutDashboard },
-      // Task #1091 — unified approvals inbox. Gated to finance leadership
-      // (founding_partner | partner | finance) via financeSectionVisibleForRole.
-      { id: "approvals", label: "Approvals", href: "/finance/approvals", icon: Inbox },
       { id: "entities", label: "Entities", href: "/finance/entities", icon: Landmark },
-      { id: "ledger", label: "Record", href: "/finance/ledger", icon: BookOpen },
-      { id: "billing", label: "Bill & Collect", href: "/finance/billing", icon: Receipt },
-      { id: "payables", label: "Pay", href: "/finance/payables", icon: Banknote },
-      // Task #1298 — non-salaried NEP compensation (comp-gated tab).
-      { id: "nep-comp", label: "NEP Comp", href: "/finance/nep-comp", icon: Banknote },
-      { id: "close", label: "Close", href: "/finance/close", icon: Lock },
-      { id: "plan", label: "Plan", href: "/finance/plan", icon: CalendarRange },
-      { id: "reports", label: "Report", href: "/finance/reports", icon: BarChart3 },
-      { id: "comply", label: "Comply", href: "/finance/comply", icon: ShieldCheck },
+      { id: "money-out", label: "Money out", href: "/finance/money-out", icon: Receipt },
+      { id: "money-in", label: "Money in", href: "/finance/money-in", icon: Banknote },
+      { id: "reconcile", label: "Reconcile", href: "/finance/reconcile", icon: RefreshCw },
+      { id: "reports", label: "Reports", href: "/finance/reports", icon: BarChart3 },
     ],
   },
   {
@@ -272,24 +264,14 @@ export function meSectionVisibleForRole(
 }
 
 /**
- * Task #1091 — the Finance lens is visible to every non-self-only role, but
- * the Approvals inbox aggregates founder/finance-only approval queues (the
- * server 403s non-leadership on /finance/approvals/inbox). Gate the tab to
- * finance leadership so it never shows a dead 403 surface to, e.g., a
- * consultant browsing the Finance lens.
+ * The six founder-facing Finance destinations are safe for every role that can
+ * see the Finance lens. Sensitive mutations remain gated by their pages and
+ * server routes; advanced direct routes stay available without appearing here.
  */
 export function financeSectionVisibleForRole(
-  sectionId: string,
-  role: string | null | undefined,
+  _sectionId: string,
+  _role: string | null | undefined,
 ): boolean {
-  if (sectionId === "approvals") {
-    return role === "founding_partner" || role === "partner" || role === "finance";
-  }
-  // Task #1298 — NEP compensation is comp data: founders/HR/Finance only
-  // (mirrors the server's canViewCompensation gate).
-  if (sectionId === "nep-comp") {
-    return role === "founding_partner" || role === "hr" || role === "finance";
-  }
   return true;
 }
 

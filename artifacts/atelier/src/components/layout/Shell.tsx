@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay, Palette, Newspaper, Shield, BarChart3, FolderOpen, Wallet, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, Sparkles, Sun, Moon, CirclePause, CirclePlay, Palette, Newspaper, Shield, BarChart3, FolderOpen, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import riserAvatarSrc from "@/assets/riser-avatar.png";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -177,7 +177,7 @@ export function TopNav() {
   // muddled concepts (managed entities · firm IP/ops · personal landing).
   // The top bar now reads: Logo · Home · ManagePicker · (lens section tabs,
   // rendered by the active lens page itself) · CLI · Bell · Avatar.
-  // Firm-IP / ops items (Atelier, Press, Guardhouse, Reports, Wallet,
+  // Firm-IP / ops items (Atelier, Press, Guardhouse, Reports,
   // Settings, Admin) moved into the avatar → Firm submenu. Underlying
   // routes for old top-nav entries still resolve so deep-links don't die
   // (see comments in App.tsx on `/crm`, `/opportunities`, `/engagements`,
@@ -206,7 +206,6 @@ export function TopNav() {
     { href: "/documents", label: "Documents", icon: FolderOpen },
     // Task #274 — Agreements + Contracts moved into the top-level
     // Contracts lens (Manage picker), out of the Firm menu.
-    { href: "/wallet", label: "Wallet", icon: Wallet },
     { href: "/settings", label: "Settings", icon: Settings },
     { href: "/admin", label: "Admin", icon: SlidersHorizontal, gated: true },
   ];

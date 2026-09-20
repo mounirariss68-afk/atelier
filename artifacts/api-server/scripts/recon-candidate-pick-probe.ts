@@ -4,6 +4,8 @@
  * confirm with candidateIndex applies the SELECTED invoice (not the
  * top one), out-of-range/conflicting indexes 400, and exceptions +
  * summary refresh after apply. Self-cleaning (__t1077 pattern). */
+import "../tests/crm/scratch-db.js";
+
 process.env.NODE_ENV = "test";
 const PERSONA = "p_mounir_ariss";
 const T = "__t1077";

@@ -97,16 +97,17 @@ import CodexRenewals from "@/pages/CodexRenewals";
 import {
   FinanceLensHome,
 } from "@/pages/lens/LensPlaceholder";
-// Task #372 — Finance lens (Entities · Record · Bill & Collect · Pay ·
-// Close · Plan · Report · Comply). Entities is the new backbone; the
-// other sections re-mount existing wallet/ledger/forecast/pricing/reports
-// pages under canonical /finance/* paths with old URLs preserved.
-import FinanceHome from "@/pages/finance/FinanceHome";
+// Founder-facing Finance MVP. Advanced finance routes remain mounted below for
+// bookmarked detail links, but the primary workspace exposes six simple tasks.
+import FinanceMvpOverview from "@/pages/finance/FinanceMvpOverview";
+import FinanceMvpMoneyOut from "@/pages/finance/FinanceMvpMoneyOut";
+import FinanceMvpMoneyIn from "@/pages/finance/FinanceMvpMoneyIn";
+import FinanceMvpReconcile from "@/pages/finance/FinanceMvpReconcile";
+import FinanceMvpReports from "@/pages/finance/FinanceMvpReports";
 // Task #1091 — unified finance approvals inbox + autopilot settings.
 import FinanceApprovals from "@/pages/finance/FinanceApprovals";
 import FinanceEntities from "@/pages/finance/FinanceEntities";
 import FinanceEntityDetail from "@/pages/finance/FinanceEntityDetail";
-import FinanceSection from "@/pages/finance/FinanceSection";
 // Task #418 — Finance Payables (P2P) hardening sub-pages.
 import {
   FinancePayablesPaymentRuns,
@@ -115,7 +116,6 @@ import {
   FinancePayablesPartnerInvoices,
   FinancePayablesSupplierInvoices,
   FinancePayablesWht,
-  FinancePayablesOverview,
 } from "@/pages/finance/FinancePayables";
 // Task #419 — Wave 7: Finance Comply sub-pages.
 import FinanceComplyControls from "@/pages/finance/FinanceComplyControls";
@@ -138,7 +138,6 @@ import EngagementPnl from "@/pages/finance/EngagementPnl";
 // Task #1251 — vendor tooling cost allocation.
 import ToolingSpend from "@/pages/finance/ToolingSpend";
 import BillingWorklist from "@/pages/finance/BillingWorklist";
-import FinanceClose from "@/pages/finance/FinanceClose";
 import FinancePayroll from "@/pages/finance/FinancePayroll";
 import FinanceNepComp from "@/pages/finance/FinanceNepComp";
 import LedgerPage from "@/pages/finance/LedgerPage";
@@ -594,7 +593,7 @@ function Router() {
         <Route path="/ledger/utilization" component={Utilization} />
         <Route path="/ledger/utilization/:personId" component={Utilization} />
         <Route path="/ledger/firm-economics" component={FirmEconomics} />
-        <Route path="/wallet" component={WalletExpenses} />
+        <Route path="/wallet">{() => <Redirect to="/finance/money-out" />}</Route>
         <Route path="/wallet/expenses" component={WalletExpenses} />
         <Route path="/wallet/expenses/new" component={WalletNewExpense} />
         <Route path="/wallet/expenses/:id" component={WalletExpenseDetail} />
@@ -791,27 +790,25 @@ function Router() {
         <Route path="/partners/preview/:firmId/documents" component={PartnerPortalPreview} />
         <Route path="/partners/:section" component={PartnersIndex} />
         <Route path="/agents" component={AgentsLensHome} />
-        {/* Task #372 — Finance lens. Eight sections: Entities · Record ·
-            Bill & Collect · Pay · Close · Plan · Report · Comply. The
-            Entities backbone is the new ground-truth list of legal
-            entities (CR, tax IDs, e-invoicing, licences, banks,
-            signatories, fiscal calendar, IC/TP); other sections are
-            landing pages that link into the existing wallet / ledger /
-            forecast / pricing / reports surfaces re-mounted under
-            canonical /finance/* paths. */}
-        <Route path="/finance" component={FinanceHome} />
+        {/* Finance MVP: six founder-facing destinations. Advanced pages stay
+            mounted as deliberate detail routes for old bookmarks and future
+            reactivation, but do not appear in Finance navigation. */}
+        <Route path="/finance" component={FinanceMvpOverview} />
         {/* Task #1091 — unified approvals inbox (founding_partner |
             partner | finance; the finance lens itself is already gated to
             those roles). */}
         <Route path="/finance/approvals" component={FinanceApprovals} />
         <Route path="/finance/entities" component={FinanceEntities} />
+        <Route path="/finance/money-out" component={FinanceMvpMoneyOut} />
+        <Route path="/finance/money-in" component={FinanceMvpMoneyIn} />
+        <Route path="/finance/reconcile" component={FinanceMvpReconcile} />
         <Route path="/finance/pre-formation" component={FinancePreFormation} />
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/billing/worklist" component={BillingWorklist} />
-        <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
+        <Route path="/finance/billing">{() => <Redirect to="/finance/money-in" />}</Route>
         {/* Task #1103 — dedicated payables landing (action inbox + staged
             groups) replaces the generic FinanceSection landing. */}
-        <Route path="/finance/payables" component={FinancePayablesOverview} />
+        <Route path="/finance/payables">{() => <Redirect to="/finance/money-out" />}</Route>
         <Route path="/finance/payables/self-billing" component={FinancePayablesSelfBilling} />
         <Route path="/finance/payables/partner-invoices" component={FinancePayablesPartnerInvoices} />
         {/* Task #1070 — internal supplier-invoice upload + review. */}
@@ -819,7 +816,7 @@ function Router() {
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
         <Route path="/finance/payables/run-history" component={FinancePayablesRunHistory} />
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
-        <Route path="/finance/close" component={FinanceClose} />
+        <Route path="/finance/close">{() => <Redirect to="/finance/reconcile" />}</Route>
         {/* Task #655 — statutory payroll runs, EOSB, filings. */}
         <Route path="/finance/payroll" component={FinancePayroll} />
         {/* Task #1298 — non-salaried NEP compensation (plans, margin-share
@@ -835,7 +832,7 @@ function Router() {
         <Route path="/finance/plan/headcount" component={FinancePlanHeadcount} />
         <Route path="/finance/plan/renewals" component={FinancePlanRenewals} />
         <Route path="/finance/plan/bonus" component={FinancePlanBonus} />
-        <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
+        <Route path="/finance/plan">{() => <Redirect to="/finance/reports" />}</Route>
         {/* Task #417 (Wave 5) — three-statement, profitability cube, board pack. */}
         <Route path="/finance/reports/pnl" component={FinanceReportsPnl} />
         <Route path="/finance/reports/bs" component={FinanceReportsBs} />
@@ -844,14 +841,14 @@ function Router() {
         <Route path="/finance/reports/board-pack" component={FinanceReportsBoardPack} />
         <Route path="/finance/reports/margin" component={FinanceReportsMargin} />
         <Route path="/finance/reports/working-capital" component={FinanceReportsWorkingCapital} />
-        <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
+        <Route path="/finance/reports" component={FinanceMvpReports} />
         {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).
             These must come before the catch-all /finance/comply landing. */}
         <Route path="/finance/comply/controls" component={FinanceComplyControls} />
         <Route path="/finance/comply/statutory" component={FinanceComplyStatutory} />
         <Route path="/finance/comply/tp" component={FinanceComplyTp} />
         <Route path="/finance/comply/insurance" component={FinanceComplyInsurance} />
-        <Route path="/finance/comply">{() => <FinanceSection sectionId="comply" />}</Route>
+        <Route path="/finance/comply">{() => <Redirect to="/finance/reports" />}</Route>
         {/* Re-mounts of existing pages under canonical /finance/* paths.
             The old URLs (/wallet/*, /ledger/firm-economics etc, /forecast,
             /reports) keep working — internal links throughout the app
