@@ -33,8 +33,10 @@ async function main() {
   const runB = `run_${tag}_b`;
   const runC = `run_${tag}_c`;
   const runUnknown = `run_${tag}_unknown`;
+  const runRegistryA = `run_${tag}_registry_a`;
+  const runRegistryB = `run_${tag}_registry_b`;
   const accountC = `acct_${tag}_c`;
-  const ids = [userA, userB, userC, runA, runB, runC, runUnknown, accountC, `ag_missing_${tag}`, `ag_stub_${tag}`, `ag_pursuit_scout`];
+  const ids = [userA, userB, userC, runA, runB, runC, runUnknown, runRegistryA, runRegistryB, accountC, `ag_missing_${tag}`, `ag_stub_${tag}`, `ag_pursuit_scout`];
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const { port } = server.address() as AddressInfo;
@@ -115,6 +117,16 @@ async function main() {
         inputs: {}, output: { answer: "unknown" }, steps: [], toolCalls: [], humanDecisions: [],
         status: "complete", targetType: "future_target", targetId: "future_1", targetLabel: "Unknown",
       },
+      {
+        id: runRegistryA, orgId: orgA, agentId: "ag_pov_author", triggeredByUserId: userA,
+        inputs: {}, output: { answer: "registry-backed" }, steps: [], toolCalls: [], humanDecisions: [],
+        status: "complete",
+      },
+      {
+        id: runRegistryB, orgId: orgB, agentId: "ag_pov_author", triggeredByUserId: userB,
+        inputs: {}, output: { answer: "foreign" }, steps: [], toolCalls: [], humanDecisions: [],
+        status: "complete",
+      },
     ] as any);
 
     const catalogue = await api("GET", "/agents", userA);
@@ -124,6 +136,9 @@ async function main() {
     const unavailableStub = catalogue.body.find((a: any) => a.id === `ag_stub_${tag}`);
     check("catalogue marks runtime-missing row unavailable", unavailableMissing?.executable === false, catalogue.body);
     check("catalogue marks stub row unavailable", unavailableStub?.executable === false, catalogue.body);
+    const registryBacked = catalogue.body.find((a: any) => a.id === "ag_pov_author");
+    check("registry agent appears without a catalogue row", registryBacked?.executable === true, catalogue.body);
+    check("registry run count is org scoped", registryBacked?.runsLast30d === 1, registryBacked);
 
     const first = await api("GET", `/agent-runs/${runA}`, userA);
     const second = await api("GET", `/agent-runs/${runA}`, userA);
@@ -169,7 +184,7 @@ async function main() {
     check("decision audit is attributed to org A", audits.length > 0 && audits.every((a) => a.orgId === orgA), audits);
   } finally {
     await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, [runA, runB]));
-    await db.delete(atelierAgentRuns).where(inArray(atelierAgentRuns.id, [runA, runB, runC, runUnknown]));
+    await db.delete(atelierAgentRuns).where(inArray(atelierAgentRuns.id, [runA, runB, runC, runUnknown, runRegistryA, runRegistryB]));
     await db.delete(atelierAccounts).where(eq(atelierAccounts.id, accountC));
     await db.delete(atelierAgents).where(inArray(atelierAgents.id, [`ag_missing_${tag}`, `ag_stub_${tag}`, `ag_pursuit_scout`]));
     await db.delete(atelierUsers).where(inArray(atelierUsers.id, [userA, userB, userC]));

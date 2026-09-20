@@ -1460,7 +1460,7 @@ const stub = (
     purpose,
     model,
     starred: false,
-    status: "registered",
+    status: "stub",
     systemPromptRef: `prompts/${id}.md`,
     inputSchema: stubInput,
     outputSchema: stubOutput,

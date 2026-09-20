@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray, or, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, or, gte, type SQL } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
-import { getAgent } from "@workspace/agents";
+import { ATELIER_AGENTS, getAgent } from "@workspace/agents";
 import {
   db,
   atelierUsers,
@@ -1371,7 +1371,7 @@ router.get("/agents", async (req, res) => {
     res.status(401).json({ error: "no-active-persona" });
     return;
   }
-  const rows = await db
+  const catalogueRows = await db
     .select()
     .from(atelierAgents)
     .where(
@@ -1383,6 +1383,68 @@ router.get("/agents", async (req, res) => {
         or(isNull(atelierAgents.orgId), eq(atelierAgents.orgId, me.orgId)),
       ),
     );
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recentRuns = await db
+    .select({ agentId: atelierAgentRuns.agentId })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.orgId, me.orgId),
+        gte(atelierAgentRuns.createdAt, since),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    );
+  const runCounts = new Map<string, number>();
+  for (const run of recentRuns) {
+    const canonicalId = getAgent(run.agentId)?.id ?? run.agentId;
+    runCounts.set(canonicalId, (runCounts.get(canonicalId) ?? 0) + 1);
+  }
+
+  // The runtime registry is the execution authority. Catalogue rows are
+  // retained only for tenant diagnostics, while registry agents are included
+  // even when provisioning has not yet created their catalogue row.
+  const catalogueByRuntimeId = new Map<string, (typeof catalogueRows)[number]>();
+  for (const row of catalogueRows) {
+    const runtime = getAgent(row.id);
+    if (runtime && runtime.status !== "stub") {
+      const current = catalogueByRuntimeId.get(runtime.id);
+      // Prefer the canonical row when both a canonical id and a legacy bare
+      // alias survive in an older database.
+      if (!current || row.id === runtime.id) {
+        catalogueByRuntimeId.set(runtime.id, row);
+      }
+    }
+  }
+  const registryRows = ATELIER_AGENTS
+    .filter((runtime) => runtime.status !== "stub")
+    .map((runtime) => {
+      const catalogue = catalogueByRuntimeId.get(runtime.id);
+      return {
+        id: runtime.id,
+        name: catalogue?.name ?? runtime.name,
+        group: catalogue?.group ?? runtime.group,
+        stage: catalogue?.stage ?? runtime.stage,
+        purpose: catalogue?.purpose ?? runtime.purpose,
+        model: catalogue?.model ?? runtime.model,
+        starred: catalogue?.starred ?? runtime.starred,
+        status: runtime.status,
+        runsLast30d: runCounts.get(runtime.id) ?? 0,
+        inputs: catalogue?.inputs ?? [],
+        outputs: catalogue?.outputs ?? [],
+        tools: runtime.tools,
+        guardrails: runtime.guardrails,
+        humanCheckpoints: runtime.humanCheckpoints,
+        promptRef: runtime.systemPromptRef,
+        executable: true,
+      };
+    });
+  const rows = [
+    ...registryRows,
+    ...catalogueRows.filter((row) => {
+      const runtime = getAgent(row.id);
+      return !runtime || runtime.status === "stub";
+    }),
+  ];
   res.json(
     AtelierListAgentsResponse.parse(
       rows.map((a) => {
@@ -1400,7 +1462,7 @@ router.get("/agents", async (req, res) => {
             model: a.model,
             starred: false,
             status: "stub" as const,
-            runsLast30d: a.runsLast30d,
+            runsLast30d: runCounts.get(a.id) ?? 0,
             inputs: [],
             outputs: [],
             tools: [],
@@ -1418,7 +1480,7 @@ router.get("/agents", async (req, res) => {
           model: runtime.model,
           starred: runtime.starred,
           status: runtime.status,
-          runsLast30d: a.runsLast30d,
+          runsLast30d: runCounts.get(a.id) ?? 0,
           inputs: runtime.inputSchema ? a.inputs : [],
           outputs: runtime.outputSchema ? a.outputs : [],
           tools: runtime.tools,
