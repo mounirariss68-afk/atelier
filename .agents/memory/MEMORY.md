@@ -154,3 +154,4 @@
 - [Group ownership economics](atelier-group-ownership.md) — ownership, control, profit rights, and commercial rights stay separate, effective-dated, stable-ID-linked, and maker-checker approved.
 - [Won-deal commercial baseline](atelier-commercial-baseline.md) — Contract entry atomically freezes saved pricing basis/provenance and materializes the signed SOW plus billing handoff.
 - [Engagement mobilization safety](atelier-mobilization-safety.md) — activation and staffing writes share locks; only mobilization-derived access may be revoked by assignment lifecycle.
+- [Finance MVP operating record](finance-mvp-operating-record.md) — funding is append-only; summaries separate currencies; bank exceptions must be approved before close.

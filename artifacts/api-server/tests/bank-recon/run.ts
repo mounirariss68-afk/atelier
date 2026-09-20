@@ -15,8 +15,8 @@
  *   5. Exceptions derived for unmatched rows, amount mismatches and
  *      in-file duplicates, with reasons.
  *   6. Classify (fee/transfer/other) resolves an exception.
- *   7. Finalise gating: 409 exceptions_present without acknowledgement,
- *      success with exceptionsAcknowledged=true.
+ *   7. Finalise gating: acknowledgement cannot bypass unresolved exceptions;
+ *      success only after every exception is resolved.
  */
 
 // DB isolation bootstrap — MUST be the first import.
@@ -327,7 +327,17 @@ async function main(): Promise<void> {
     const fin2 = await call("POST", `/wallet/bank/recon/${reconId}/finalise`, FP_ID, {
       rationale: "probe ack", varianceAccepted: true, exceptionsAcknowledged: true,
     });
-    check("finalise with acknowledgement succeeds", fin2.status === 200, JSON.stringify(fin2.body));
+    check("acknowledgement cannot bypass unresolved exceptions", fin2.status === 409 && fin2.body?.error === "exceptions_present", JSON.stringify(fin2.body));
+    await db.update(atelierBankTransaction).set({
+      matchedState: "matched",
+      matchApprovedByUserId: FP_ID,
+      matchApprovedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(atelierBankTransaction.bankAccountId, bankId));
+    const fin3 = await call("POST", `/wallet/bank/recon/${reconId}/finalise`, FP_ID, {
+      rationale: "all exceptions resolved", varianceAccepted: true,
+    });
+    check("finalise succeeds after every exception is resolved", fin3.status === 200, JSON.stringify(fin3.body));
     const finGate = await call("POST", `/wallet/bank/recon/${reconId}/finalise`, FIN_ID, {
       rationale: "probe", varianceAccepted: true, exceptionsAcknowledged: true,
     });

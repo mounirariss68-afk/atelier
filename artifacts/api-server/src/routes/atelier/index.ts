@@ -119,6 +119,7 @@ import partnerPortalRoutes from "./partnerPortalRoutes";
 import partnerBillingRoutes from "./partnerBillingRoutes";
 import { partnerPortalThrottle } from "./portalFirmResolver";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
+import shareholderFundingRoutes from "./shareholderFundingRoutes";
 import preformationRoutes from "./preformationRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
@@ -129,6 +130,7 @@ import governanceRoutes from "./governanceRoutes";
 import ownershipRoutes from "./ownershipRoutes";
 import financePlanRoutes, { computeBacklogKpisForOrg } from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
+import financeMvpSummaryRoutes from "./financeMvpSummaryRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
@@ -548,6 +550,7 @@ router.use(partnerPortalRoutes);
 // Task #875 — partner contracts & billing hub (portal + internal surfaces).
 router.use(partnerBillingRoutes);
 router.use(financeEntitiesRoutes);
+router.use(shareholderFundingRoutes);
 // Task #1092 — pre-formation entity cost pools (dashboard + settlement).
 router.use(preformationRoutes);
 // Task #383 — expense taxonomy, categorization suggestions, GL/VAT
@@ -577,6 +580,7 @@ router.use(financePlanRoutes);
 // per entity + consolidated with FX translation and IC eliminations,
 // profitability cube, board pack with PDF export and monthly schedules.
 router.use(financeReportsRoutes);
+router.use(financeMvpSummaryRoutes);
 // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
 // Retire) backed by Postgres; replaces the client-side seed module.
 router.use(agentsLensRoutes);

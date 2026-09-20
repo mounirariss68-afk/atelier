@@ -183,7 +183,12 @@ export const atelierPaymentRuns = pgTable(
     makerName: text("maker_name").notNull().default(""),
     signatures: jsonb("signatures").$type<PaymentRunSignature[]>().notNull().default([]),
     approvedAt: timestamp("approved_at"),
+    /** Stable, human-readable payment-instruction reference. */
+    instructionReference: text("instruction_reference"),
     exportedAt: timestamp("exported_at"),
+    /** Export means instructions were produced, never that a transfer ran. */
+    sentAt: timestamp("sent_at"),
+    sentByUserId: text("sent_by_user_id"),
     paidAt: timestamp("paid_at"),
     cancelledAt: timestamp("cancelled_at"),
     cancelledByUserId: text("cancelled_by_user_id"),
@@ -195,6 +200,7 @@ export const atelierPaymentRuns = pgTable(
     index("idx_atelier_payrun_status").on(t.status),
     index("idx_atelier_payrun_bank").on(t.bankAccountId),
     uniqueIndex("uq_atelier_payrun_number").on(t.orgId, t.runNumber),
+    uniqueIndex("uq_atelier_payment_instruction_reference").on(t.orgId, t.instructionReference),
   ],
 );
 

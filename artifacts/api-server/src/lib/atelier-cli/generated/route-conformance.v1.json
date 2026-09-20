@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1206,
+  "routeCount": 1217,
   "capabilityCount": 326,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -3396,6 +3396,34 @@
       }
     },
     {
+      "routeId": "18e6e24ed01df167",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "post",
+      "path": "/finance/shareholder-funding/:id/confirm",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance approval write; chat parity requires a confirm-flow capability",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "18f405fedf0fa2bb",
       "file": "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
       "method": "post",
@@ -6527,6 +6555,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "31d89553692cf1f8",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "post",
+      "path": "/finance/shareholder-funding",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance register write; chat parity requires a confirm-flow capability",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -11908,6 +11964,34 @@
       }
     },
     {
+      "routeId": "6026223f1bf5e0a7",
+      "file": "artifacts/api-server/src/routes/atelier/bankRoutes.ts",
+      "method": "post",
+      "path": "/transactions/:id/match/approve",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner approval write; chat parity requires a confirm-flow capability",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "60775ef45365d1f6",
       "file": "artifacts/api-server/src/routes/atelier/v5Routes.ts",
       "method": "get",
@@ -13280,6 +13364,34 @@
       }
     },
     {
+      "routeId": "6a9f9fed98a3645e",
+      "file": "artifacts/api-server/src/routes/atelier/financeMvpSummaryRoutes.ts",
+      "method": "get",
+      "path": "/finance/mvp/summary",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance analytical read; existing finance chat tools remain authoritative",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "6abd00d0b7b88021",
       "file": "artifacts/api-server/src/routes/atelier/financePlanRoutes.ts",
       "method": "get",
@@ -13499,6 +13611,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "6c84bb626c9a46b4",
+      "file": "artifacts/api-server/src/routes/atelier/financeMvpSummaryRoutes.ts",
+      "method": "get",
+      "path": "/finance/mvp/contract",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "static UI contract metadata",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -18012,6 +18152,34 @@
       }
     },
     {
+      "routeId": "8cdcd96c2ae2705d",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "get",
+      "path": "/finance/shareholder-funding",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance register read; dedicated UI workflow",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "8d5d9f43c3148269",
       "file": "artifacts/api-server/src/routes/atelier/payRoutes.ts",
       "method": "post",
@@ -22268,6 +22436,34 @@
       }
     },
     {
+      "routeId": "ad47f5449689bdbd",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "post",
+      "path": "/finance/shareholder-funding/:id/repay",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance lifecycle write; chat parity requires a confirm-flow capability",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "ad95c5bf92a0b625",
       "file": "artifacts/api-server/src/routes/atelier/expenseTaxonomyRoutes.ts",
       "method": "post",
@@ -22375,6 +22571,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "internal partner-admin contact-suggestion decision — UI-only write (Task #1172)",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "ae5e701e6995fde5",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "get",
+      "path": "/finance/shareholder-funding/:id",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance register detail; dedicated UI workflow",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -22991,6 +23215,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "b3068d2587a6e196",
+      "file": "artifacts/api-server/src/routes/atelier/shareholderFundingRoutes.ts",
+      "method": "post",
+      "path": "/finance/shareholder-funding/:id/reverse",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance lifecycle write; chat parity requires a confirm-flow capability",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -24391,6 +24643,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "personal Microsoft 365 surface (self-scope, no CLI parity)",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "bb633d64e21bbed8",
+      "file": "artifacts/api-server/src/routes/atelier/financePayablesRoutes.ts",
+      "method": "post",
+      "path": "/finance/payables/payment-runs/:id/mark-sent",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "manual bank hand-off status; no chat write until confirm semantics are designed",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -29963,6 +30243,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "contract lifecycle is UI/chat-capability-driven (Task #159)",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "e1dd3640980b7f54",
+      "file": "artifacts/api-server/src/routes/atelier/bankRoutes.ts",
+      "method": "post",
+      "path": "/transactions/:id/match",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "finance reconciliation proposal; dedicated review UI",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -36754,5 +37062,5 @@
       ]
     }
   ],
-  "conformanceVersion": "784845f9aa925f2c71cc6f5d751f5f276275539c85d3ddb612278e999a0dd219"
+  "conformanceVersion": "8e80c7d450e65e931e7d77ae508d024ce0d65ebd49255e9ea18223509e6686fa"
 }

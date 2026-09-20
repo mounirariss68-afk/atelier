@@ -98,7 +98,9 @@ DECLARE
     -- route-level persona gates apply in addition to org isolation.
     'atelier_person_relationship_classifications','atelier_admin_person_mappings',
     'atelier_assistant_budget_ledgers','atelier_assistant_budget_reservations',
-    'atelier_work_items','atelier_assistant_observations'
+    'atelier_work_items','atelier_assistant_observations',
+    -- Finance MVP shareholder funding register.
+    'atelier_shareholder_funding'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

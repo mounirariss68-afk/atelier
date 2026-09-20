@@ -25,6 +25,11 @@ import {
   atelierBankReconPeriod,
   atelierAuditEvents,
   atelierPeriodCloseLock,
+  atelierExpenses,
+  atelierPartnerFirmInvoices,
+  atelierInvoice,
+  atelierCashReceipt,
+  atelierShareholderFunding,
 } from "@workspace/db";
 import { parseBankStatement, rowsToCanonicalCsv } from "../../lib/bank-parsers/index.js";
 import {
@@ -689,6 +694,141 @@ router.get("/transactions", async (req, res) => {
   return res.json({ ok: true, data: { rows } });
 });
 
+const MATCH_KINDS = new Set([
+  "supplier_bill", "customer_receipt", "customer_invoice", "expense",
+  "shareholder_contribution", "contractor_payment", "partner_firm_invoice",
+  "invoice_application", "manual_journal", "other",
+]);
+
+async function transactionIsLocked(me: typeof atelierUsers.$inferSelect, txn: typeof atelierBankTransaction.$inferSelect) {
+  const locks = await db.select({ id: atelierBankReconPeriod.id })
+    .from(atelierBankReconPeriod)
+    .where(and(
+      eq(atelierBankReconPeriod.orgId, me.orgId),
+      eq(atelierBankReconPeriod.bankAccountId, txn.bankAccountId),
+      eq(atelierBankReconPeriod.status, "finalised"),
+      sql`${atelierBankReconPeriod.periodStart} <= ${txn.postedDate}`,
+      sql`${atelierBankReconPeriod.periodEnd} >= ${txn.postedDate}`,
+    ));
+  return locks.length > 0;
+}
+
+async function validMatchReference(
+  me: typeof atelierUsers.$inferSelect,
+  txn: typeof atelierBankTransaction.$inferSelect,
+  kind: string,
+  refId: string,
+): Promise<boolean> {
+  const sameEntity = (entityId: string | null | undefined) =>
+    !txn.legalEntityId || !entityId || txn.legalEntityId === entityId;
+  if (kind === "expense") {
+    const [row] = await db.select({ entityId: atelierExpenses.entityId }).from(atelierExpenses).where(and(
+      eq(atelierExpenses.id, refId), eq(atelierExpenses.orgId, me.orgId), isNull(atelierExpenses.deletedAt),
+    ));
+    return !!row && sameEntity(row.entityId);
+  }
+  if (kind === "supplier_bill" || kind === "partner_firm_invoice") {
+    const [row] = await db.select({ entityId: atelierPartnerFirmInvoices.legalEntityId }).from(atelierPartnerFirmInvoices).where(and(
+      eq(atelierPartnerFirmInvoices.id, refId), eq(atelierPartnerFirmInvoices.orgId, me.orgId), isNull(atelierPartnerFirmInvoices.deletedAt),
+    ));
+    return !!row && sameEntity(row.entityId);
+  }
+  if (kind === "customer_invoice") {
+    const [row] = await db.select({ entityId: atelierInvoice.legalEntityId }).from(atelierInvoice).where(and(
+      eq(atelierInvoice.id, refId), eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt),
+    ));
+    return !!row && sameEntity(row.entityId);
+  }
+  if (kind === "customer_receipt") {
+    const [row] = await db.select({ bankTransactionId: atelierCashReceipt.bankTransactionId }).from(atelierCashReceipt).where(and(
+      eq(atelierCashReceipt.id, refId), eq(atelierCashReceipt.orgId, me.orgId), isNull(atelierCashReceipt.deletedAt),
+    ));
+    return !!row && row.bankTransactionId === txn.id;
+  }
+  if (kind === "shareholder_contribution") {
+    const [row] = await db.select({ entityId: atelierShareholderFunding.entityId, entryType: atelierShareholderFunding.entryType }).from(atelierShareholderFunding).where(and(
+      eq(atelierShareholderFunding.id, refId), eq(atelierShareholderFunding.orgId, me.orgId), isNull(atelierShareholderFunding.deletedAt),
+    ));
+    return !!row && row.entryType === "contribution" && sameEntity(row.entityId);
+  }
+  // Existing matcher-owned kinds retain their established validation/apply
+  // flows; the generic manual route only adds first-class MVP references.
+  return ["contractor_payment", "invoice_application", "manual_journal", "other"].includes(kind);
+}
+
+// A match is proposed first and then approved by an authorised reviewer. This
+// keeps bank evidence auditable and lets shareholder funding participate
+// without coupling this route to the funding register module.
+// @cli-skip: finance reconciliation proposal; dedicated review UI
+router.post("/transactions/:id/match", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const [txn] = await db.select().from(atelierBankTransaction).where(and(
+    eq(atelierBankTransaction.id, req.params.id),
+    eq(atelierBankTransaction.orgId, me.orgId),
+    isNull(atelierBankTransaction.deletedAt),
+  ));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (await transactionIsLocked(me, txn)) return res.status(409).json({ error: "period-locked" });
+  const b = req.body as { matchedRefKind?: string; matchedRefId?: string; evidence?: Record<string, unknown> };
+  if (!b.matchedRefKind || !MATCH_KINDS.has(b.matchedRefKind) || !b.matchedRefId) {
+    return res.status(400).json({ error: "invalid_match", message: "matchedRefKind and matchedRefId are required." });
+  }
+  if (b.evidence != null && (typeof b.evidence !== "object" || Array.isArray(b.evidence))) {
+    return res.status(400).json({ error: "invalid_evidence" });
+  }
+  if (!(await validMatchReference(me, txn, b.matchedRefKind, b.matchedRefId))) {
+    return res.status(400).json({ error: "invalid_match_reference", message: "The referenced record was not found in this organization/entity." });
+  }
+  const now = new Date();
+  await db.update(atelierBankTransaction).set({
+    matchedState: "proposed",
+    matchedRefKind: b.matchedRefKind,
+    matchedRefId: b.matchedRefId,
+    matchEvidence: b.evidence ?? null,
+    matchedByUserId: me.id,
+    matchedAt: now,
+    matchApprovedByUserId: null,
+    matchApprovedAt: null,
+    updatedAt: now,
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "bank_transaction.match_proposed",
+    payload: { matchedRefKind: b.matchedRefKind, matchedRefId: b.matchedRefId, evidence: b.evidence ?? null },
+    summary: `Proposed ${b.matchedRefKind} match for bank transaction ${txn.id}` });
+  return res.status(202).json({ ok: true, data: { id: txn.id, matchedState: "proposed" } });
+});
+
+// @cli-skip: partner approval write; chat parity requires a confirm-flow capability
+router.post("/transactions/:id/match/approve", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isPartnerTier(me)) return res.status(403).json({ error: "forbidden", message: "partner-tier only" });
+  const [txn] = await db.select().from(atelierBankTransaction).where(and(
+    eq(atelierBankTransaction.id, req.params.id),
+    eq(atelierBankTransaction.orgId, me.orgId),
+    isNull(atelierBankTransaction.deletedAt),
+  ));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (await transactionIsLocked(me, txn)) return res.status(409).json({ error: "period-locked" });
+  if (txn.matchedState !== "proposed" || !txn.matchedRefKind || !txn.matchedRefId) {
+    return res.status(409).json({ error: "match-not-proposed" });
+  }
+  if (!(await validMatchReference(me, txn, txn.matchedRefKind, txn.matchedRefId))) {
+    return res.status(409).json({ error: "invalid_match_reference", message: "The referenced record no longer exists in this organization/entity." });
+  }
+  const now = new Date();
+  await db.update(atelierBankTransaction).set({
+    matchedState: "matched", matchApprovedByUserId: me.id, matchApprovedAt: now, updatedAt: now,
+  }).where(and(eq(atelierBankTransaction.id, txn.id), eq(atelierBankTransaction.matchedState, "proposed")));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "bank_transaction.match_approved",
+    payload: { matchedRefKind: txn.matchedRefKind, matchedRefId: txn.matchedRefId },
+    summary: `Approved bank transaction match ${txn.id}` });
+  return res.json({ ok: true, data: { id: txn.id, matchedState: "matched", approvedByUserId: me.id } });
+});
+
 // ─────────────────────── reconciliation ───────────────────────
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/recon", async (req, res) => {
@@ -825,15 +965,15 @@ router.post("/recon/:id/finalise", async (req, res) => {
   if (Math.abs(period.variance) > 0.01 && !b.varianceAccepted) {
     return res.status(409).json({ error: "variance_present", variance: period.variance, message: "Set varianceAccepted=true to finalise with variance." });
   }
-  // Task #1071 — outstanding exceptions block finalisation unless
-  // explicitly acknowledged by the partner.
+  // Task #1374 — unresolved exceptions must be resolved before finalisation.
+  // Acknowledgement alone is not approval and cannot bypass this gate.
   const periodTxns = await loadPeriodTxns(me.orgId, period);
   const openExceptions = deriveStatementExceptions(periodTxns);
-  if (openExceptions.length > 0 && !b.exceptionsAcknowledged) {
+  if (openExceptions.length > 0) {
     return res.status(409).json({
       error: "exceptions_present",
       count: openExceptions.length,
-      message: "Resolve outstanding exceptions or set exceptionsAcknowledged=true to finalise anyway.",
+      message: "Resolve and approve every bank exception before finalising this period.",
     });
   }
   await db.update(atelierBankReconPeriod).set({

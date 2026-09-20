@@ -128,8 +128,17 @@ export const atelierBankTransaction = pgTable(
     // Task #431 — persisted matcher proposal (inflow invoice candidates or
     // outflow source candidates), triage outcomes and GL linkage.
     matchProposal: jsonb("match_proposal").$type<Record<string, unknown>>(),
-    matchedRefKind: text("matched_ref_kind"), // invoice_application | contractor_payment | partner_firm_invoice | expense | manual_journal | other
+    // invoice_application | customer_receipt | customer_invoice |
+    // contractor_payment | partner_firm_invoice | supplier_bill | expense |
+    // shareholder_contribution | manual_journal | other
+    matchedRefKind: text("matched_ref_kind"),
     matchedRefId: text("matched_ref_id"),
+    /** Human-review evidence for a proposed/confirmed match. */
+    matchEvidence: jsonb("match_evidence").$type<Record<string, unknown>>(),
+    matchedByUserId: text("matched_by_user_id"),
+    matchedAt: timestamp("matched_at"),
+    matchApprovedByUserId: text("match_approved_by_user_id"),
+    matchApprovedAt: timestamp("match_approved_at"),
     parkedReason: text("parked_reason"),
     parkedByUserId: text("parked_by_user_id"),
     glJournalEntryId: text("gl_journal_entry_id"),

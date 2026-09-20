@@ -188,7 +188,7 @@ export const atelierLegalEntities = pgTable(
     /** ISO-3166 alpha-2 (AE, SA, GB, ...). */
     country: text("country").notNull(),
     jurisdiction: text("jurisdiction").notNull().default(""),
-    /** active | in_formation | dormant | winding_down | archived */
+     /** planned | active | in_formation | dormant | winding_down | archived */
     status: text("status").notNull().default("active"),
     incorporationDate: text("incorporation_date"),
     durationYears: integer("duration_years"),

@@ -245,7 +245,7 @@ const entityBody = z.object({
     .toUpperCase()
     .regex(/^[A-Z]{2}$/, "ISO-3166 alpha-2 code required"),
   jurisdiction: str(300).default(""),
-  status: z.enum(["active", "in_formation", "dormant", "winding_down"]).default("active"),
+  status: z.enum(["planned", "active", "in_formation", "dormant", "winding_down"]).default("active"),
   incorporationDate: optStr(20),
   durationYears: z.number().int().min(0).max(1000).nullish(),
   baseCurrency: str(10).default(""),

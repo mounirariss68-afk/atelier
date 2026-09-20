@@ -368,7 +368,10 @@ function runWire(
     makerName: run.makerName,
     signatures: run.signatures,
     approvedAt: run.approvedAt?.toISOString() ?? null,
+    instructionReference: run.instructionReference,
     exportedAt: run.exportedAt?.toISOString() ?? null,
+    sentAt: run.sentAt?.toISOString() ?? null,
+    sentByUserId: run.sentByUserId,
     paidAt: run.paidAt?.toISOString() ?? null,
     cancelledAt: run.cancelledAt?.toISOString() ?? null,
     cancelReason: run.cancelReason,
@@ -580,6 +583,7 @@ router.post("/finance/payables/payment-runs/build", async (req, res, next) => {
       totalUsd,
       makerUserId: me.id,
       makerName: me.name,
+      instructionReference: runNumber,
       createdByUserId: me.id,
     });
     for (const inv of invoices) {
@@ -882,12 +886,42 @@ router.post("/finance/payables/payment-runs/:id/export", async (req, res, next) 
         entityType: "payment_run", entityId: run.id, actor: me,
         action: "finance.payment_run.export",
         payload: { runNumber: run.runNumber, itemCount: items.length },
-        summary: `Exported bank file for payment run ${run.runNumber} (${items.length} item(s)).`,
+        summary: `Exported payment instructions for run ${run.runNumber} (${items.length} item(s)); no bank transfer was executed.`,
       });
     }
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${run.runNumber}.csv`));
     res.send(lines.join("\n"));
+  } catch (err) { next(err); }
+});
+
+// Exporting creates a bank-ready instruction file; it does not claim the file
+// was sent. This explicit transition records the manual hand-off separately.
+// @cli-skip: manual bank hand-off status; no chat write until confirm semantics are designed
+router.post("/finance/payables/payment-runs/:id/mark-sent", async (req, res, next) => {
+  try {
+    const me = writeGate(req, res);
+    if (!me) return;
+    const run = await loadRun(me, req.params.id);
+    if (!run) { res.status(404).json({ error: "not-found" }); return; }
+    if (run.status !== "exported") {
+      res.status(409).json({ error: "invalid-status", message: "Export the payment instructions before marking them sent." });
+      return;
+    }
+    if (run.sentAt) {
+      res.json({ ok: true, alreadySent: true, sentAt: run.sentAt.toISOString() });
+      return;
+    }
+    const now = new Date();
+    await db.update(atelierPaymentRuns).set({ sentAt: now, sentByUserId: me.id, updatedAt: now })
+      .where(and(eq(atelierPaymentRuns.id, run.id), eq(atelierPaymentRuns.status, "exported")));
+    await audit({
+      entityType: "payment_run", entityId: run.id, actor: me,
+      action: "finance.payment_run.mark_sent",
+      payload: { runNumber: run.runNumber, instructionReference: run.instructionReference },
+      summary: `Marked payment instructions ${run.instructionReference ?? run.runNumber} sent for manual bank submission.`,
+    });
+    res.json({ ok: true, sentAt: now.toISOString(), instructionReference: run.instructionReference ?? run.runNumber });
   } catch (err) { next(err); }
 });
 

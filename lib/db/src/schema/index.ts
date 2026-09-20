@@ -30,3 +30,4 @@ export * from "./atelier-close";
 export * from "./atelier-selfbilling";
 export * from "./atelier-billing";
 export * from "./atelier-assistant";
+export * from "./atelier-finance-mvp";
