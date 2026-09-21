@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray, or, gte, type SQL } from "drizzle-orm";
+import { eq, and, count, desc, isNull, inArray, or, gte, type SQL } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
 import { ATELIER_AGENTS, getAgent } from "@workspace/agents";
 import {
@@ -10,6 +10,7 @@ import {
   atelierEngagements,
   atelierAgents,
   atelierAgentRuns,
+  atelierCliTurns,
   atelierAssets,
   atelierAuditEvents,
   atelierPaneAItems,
@@ -1384,21 +1385,35 @@ router.get("/agents", async (req, res) => {
       ),
     );
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const recentRuns = await db
-    .select({ agentId: atelierAgentRuns.agentId })
-    .from(atelierAgentRuns)
-    .where(
-      and(
-        eq(atelierAgentRuns.orgId, me.orgId),
-        gte(atelierAgentRuns.createdAt, since),
-        isNull(atelierAgentRuns.deletedAt),
+  const [recentRuns, riserActivityRows] = await Promise.all([
+    db
+      .select({ agentId: atelierAgentRuns.agentId })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.orgId, me.orgId),
+          gte(atelierAgentRuns.createdAt, since),
+          isNull(atelierAgentRuns.deletedAt),
+        ),
       ),
-    );
+    db
+      .select({ value: count() })
+      .from(atelierCliTurns)
+      .where(
+        and(
+          eq(atelierCliTurns.orgId, me.orgId),
+          gte(atelierCliTurns.createdAt, since),
+        ),
+      ),
+  ]);
   const runCounts = new Map<string, number>();
   for (const run of recentRuns) {
     const canonicalId = getAgent(run.agentId)?.id ?? run.agentId;
     runCounts.set(canonicalId, (runCounts.get(canonicalId) ?? 0) + 1);
   }
+  // Riser is the chat orchestrator, so its activity is persisted as CLI turns
+  // rather than specialist atelier_agent_runs rows.
+  runCounts.set("ag_riser_orchestrator", Number(riserActivityRows[0]?.value ?? 0));
 
   // The runtime registry is the execution authority. Catalogue rows are
   // retained only for tenant diagnostics, while registry agents are included

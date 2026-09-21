@@ -30,14 +30,14 @@ export default function Agents() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-text"><Bot className="w-4 h-4 text-gold" /><span className="font-semibold">{agent.name}</span>{agent.starred && <Star className="w-3.5 h-3.5 text-gold fill-gold" />}</div>
                       <div className="flex flex-col items-end gap-1">
-                        <MonoChip tone={agent.status === "mvp" ? "green" : "gold"}>{agent.status}</MonoChip>
+                        <MonoChip tone={agent.status === "core" || agent.status === "mvp" ? "green" : "gold"}>{agent.status}</MonoChip>
                         {agent.capabilityType !== "generic" && <span className="text-[10px] font-mono uppercase tracking-wide text-text-faint">{agent.capabilityType?.replace("_", " ")}</span>}
                       </div>
                     </div>
                     <p className="text-sm text-text-mute leading-relaxed">{agent.purpose}</p>
                     <div className="flex items-center justify-between text-xs font-mono text-text-faint">
                       <span className="flex items-center gap-1.5"><Cpu className="w-3.5 h-3.5" />{agent.model}</span>
-                      <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" />{agent.runsLast30d} runs / 30d</span>
+                      <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" />{agent.runsLast30d} {agent.capabilityType === "orchestrator" ? "turns" : "runs"} / 30d</span>
                     </div>
                   </Card>
                 </Link>

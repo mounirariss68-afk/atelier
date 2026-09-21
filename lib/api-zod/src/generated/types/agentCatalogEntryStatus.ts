@@ -10,6 +10,7 @@ export type AgentCatalogEntryStatus =
   (typeof AgentCatalogEntryStatus)[keyof typeof AgentCatalogEntryStatus];
 
 export const AgentCatalogEntryStatus = {
+  core: "core",
   registered: "registered",
   mvp: "mvp",
   stub: "stub",

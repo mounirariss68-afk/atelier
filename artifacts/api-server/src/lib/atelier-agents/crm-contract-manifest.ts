@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export type ExecutionClass = "executable" | "advisory" | "unsupported" | "utility";
-export type OperationalStatus = "mvp" | "registered" | "runtime-only" | "utility" | "unsupported";
+export type OperationalStatus = "core" | "mvp" | "registered" | "runtime-only" | "utility" | "unsupported";
 export type LensSourceMode = "runtime-registry" | "manual-record" | "not-applicable";
 export interface AgentsLensLink { recordKey: string | null; sourceMode: LensSourceMode; }
 export interface ApprovedDivergence { id: string; reason: string; owner: string; reviewBy: string; }
@@ -108,7 +108,7 @@ const CRM_CONTRACT_ROWS: CrmContractRow[] = [
   ["Pre-Meeting Briefing", "ag_pre_meeting_briefing", [], "advisory", "ag_pre_meeting_briefing", "runPreMeetingBriefing", "accountRoutes.ts", "pre-meeting-briefing", "pre_meeting_briefing", "mvp"],
   ["Whitespace Mapper", "ag_whitespace_mapper", [], "advisory", null, "runWhitespaceMapper", "accountRoutes.ts", "runWhitespaceMapper", null, "runtime-only"],
   ["QBR Composer", "ag_qbr_composer", [], "advisory", null, "runQbrComposer", "accountRoutes.ts", "runQbrComposer", null, "runtime-only"],
-  ["Riser", "ag_riser_orchestrator", ["Chat Orchestrator", "generic Riser dispatch"], "utility", "ag_riser_orchestrator", "runSalonConcierge", "agentRoutes.ts", "chat", "chat_orchestrator", "registered"],
+  ["Riser", "ag_riser_orchestrator", ["Chat Orchestrator", "generic Riser dispatch"], "utility", "ag_riser_orchestrator", "runSalonConcierge", "agentRoutes.ts", "chat", "chat_orchestrator", "core"],
   ["Partner-fit context", "ag_partner_fit_context", ["alliance capability matching"], "utility", null, "buildAllianceCapabilityContext", "agentRoutes.ts", "opportunities", null, "utility"],
   ["Win/Loss Interviewer", "ag_win_loss_interviewer", ["debrief"], "advisory", "ag_win_loss_interviewer", "runWinLossInterviewer", "winLossRoutes.ts", "debrief", "win_loss_interviewer", "mvp"],
   ["Brand Profile Writer", "ag_brand_profile_writer", ["brand/boilerplate"], "executable", "ag_brand_profile_writer", "runBrandProfileWriter", "firmProfileRoutes.ts", "brand-profile", "brand_profile_writer", "mvp"],

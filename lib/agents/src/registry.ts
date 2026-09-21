@@ -14,6 +14,8 @@ import type { ZodTypeAny } from "zod";
  *   - the Definition of Done checklist every agent task must pass
  *
  * Statuses:
+ *   - `core`       — production platform capability that orchestrates or
+ *                    governs other agents rather than behaving as a leaf agent.
  *   - `mvp`        — ships end-to-end in the v3 walkthrough; runner + prompt
  *                    + schema + UI are real.
  *   - `registered` — runner + prompt exist but coverage is partial (e.g.
@@ -48,7 +50,7 @@ export const RiserOrchestrator = defineAgent({
   purpose: "Routes governed assistant requests through the reviewed capability catalogue.",
   model: "policy-routed",
   starred: true,
-  status: "registered",
+  status: "core",
   systemPromptRef: "orchestrator:riser-reviewed-capability-manifest",
   inputSchema: z.object({ message: z.string().min(1) }),
   outputSchema: z.object({ outcome: z.unknown() }),

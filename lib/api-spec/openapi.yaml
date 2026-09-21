@@ -12031,7 +12031,7 @@ components:
         purpose: { type: string }
         model: { type: string }
         starred: { type: boolean }
-        status: { type: string, enum: [registered, mvp, stub] }
+        status: { type: string, enum: [core, registered, mvp, stub] }
         runsLast30d: { type: integer }
         inputs:
           type: array

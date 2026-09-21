@@ -29,7 +29,7 @@ export type AgentStage =
   | "Compound"
   | "Cross-cutting";
 
-export type AgentStatus = "registered" | "mvp" | "stub";
+export type AgentStatus = "core" | "registered" | "mvp" | "stub";
 export type AgentConfidence = "green" | "amber" | "red";
 export type AgentCapabilityType = "generic" | "account_scoped" | "orchestrator";
 

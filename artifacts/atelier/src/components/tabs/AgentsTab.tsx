@@ -159,7 +159,7 @@ export function AgentsTab({ engId }: { engId: string }) {
                     {a.starred && <Star className="w-3.5 h-3.5 text-gold fill-gold" />}
                   </div>
                   <MonoChip
-                    tone={a.status === "mvp" ? "green" : a.status === "registered" ? "amber" : "default"}
+                    tone={a.status === "core" || a.status === "mvp" ? "green" : a.status === "registered" ? "amber" : "default"}
                   >
                     {a.status}
                   </MonoChip>
@@ -167,7 +167,7 @@ export function AgentsTab({ engId }: { engId: string }) {
                 <p className="text-xs text-text-mute mt-2 leading-relaxed">{a.purpose}</p>
                 <div className="mt-3 flex items-center justify-between text-[10px] font-mono text-text-mute uppercase">
                   <span>{a.model}</span>
-                  <span>{a.runsLast30d} runs / 30d</span>
+                  <span>{a.runsLast30d} {a.capabilityType === "orchestrator" ? "turns" : "runs"} / 30d</span>
                 </div>
               </Card>
             ))}

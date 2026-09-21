@@ -857,7 +857,7 @@
         "sourceMode": "runtime-registry"
       },
       "uiMounts": [],
-      "operationalStatus": "registered",
+      "operationalStatus": "core",
       "deterministicEvalIds": [],
       "approvedDivergences": [],
       "sourceHash": "237c14d516203d20a923eccbded3879c937d22a45a82860ec72a6a182397ca43",

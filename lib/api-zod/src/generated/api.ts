@@ -36555,7 +36555,7 @@ export const AtelierListAgentsResponseItem = zod.object({
   purpose: zod.string(),
   model: zod.string(),
   starred: zod.boolean(),
-  status: zod.enum(["registered", "mvp", "stub"]),
+  status: zod.enum(["core", "registered", "mvp", "stub"]),
   runsLast30d: zod.number(),
   inputs: zod
     .array(

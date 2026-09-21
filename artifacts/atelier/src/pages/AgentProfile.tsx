@@ -23,8 +23,9 @@ import { useToast } from "@/hooks/use-toast";
 export default function AgentProfile() {
   const [, params] = useRoute("/agents/:agentId");
   const agentId = params?.agentId ?? "";
+  const isRiser = agentId === "ag_riser_orchestrator";
   const agents = useAtelierListAgents();
-  const runs = useAtelierListAgentRuns(agentId, { query: { enabled: !!agentId, queryKey: getAtelierListAgentRunsQueryKey(agentId) } });
+  const runs = useAtelierListAgentRuns(agentId, { query: { enabled: !!agentId && !isRiser, queryKey: getAtelierListAgentRunsQueryKey(agentId) } });
   if (agents.isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (agents.isError) return <div className="container-atelier py-12 text-danger">This agent profile is unavailable.</div>;
   const agent = (agents.data ?? []).find((item) => item.id === agentId);
@@ -38,7 +39,7 @@ export default function AgentProfile() {
         <BackLink href="/agents">Back to catalogue</BackLink>
         <SectionHead eyebrow={`${agent.group} · ${agent.stage}`} headline={agent.name} lede={agent.purpose} />
         <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-text-mute">
-          <MonoChip tone={available ? (agent.status === "mvp" ? "green" : "gold") : "default"}>{available ? agent.status : "unavailable"}</MonoChip>
+          <MonoChip tone={available ? (agent.status === "core" || agent.status === "mvp" ? "green" : "gold") : "default"}>{available ? agent.status : "unavailable"}</MonoChip>
           <span className="flex items-center gap-2"><Cpu className="w-4 h-4" />{agent.model}</span>
         </div>
       </PageHero>
@@ -53,8 +54,8 @@ export default function AgentProfile() {
           </div>
         ) : null}
         <Card className="p-6 space-y-4">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-mono text-sm uppercase tracking-widest text-text-mute flex items-center gap-2"><Activity className="w-4 h-4" />Run history</h2><span className="text-xs text-text-faint">{agent.runsLast30d} runs / 30d</span></div>
-          {runs.isLoading ? <Skeleton className="h-24 bg-bg-elevate" /> : runs.isError ? <p className="text-sm text-danger">Run history could not be loaded.</p> : runRows.length === 0 ? <p className="text-sm text-text-mute">No persisted runs for this agent.</p> : (
+          <div className="flex items-center justify-between gap-3"><h2 className="font-mono text-sm uppercase tracking-widest text-text-mute flex items-center gap-2"><Activity className="w-4 h-4" />{isRiser ? "Activity" : "Run history"}</h2><span className="text-xs text-text-faint">{agent.runsLast30d} {isRiser ? "turns" : "runs"} / 30d</span></div>
+          {isRiser ? <p className="text-sm text-text-mute">Riser activity is persisted in chat history. Specialist agent runs remain in the run history below their own profiles.</p> : runs.isLoading ? <Skeleton className="h-24 bg-bg-elevate" /> : runs.isError ? <p className="text-sm text-danger">Run history could not be loaded.</p> : runRows.length === 0 ? <p className="text-sm text-text-mute">No persisted runs for this agent.</p> : (
             <div className="border border-border-soft rounded-md divide-y divide-border-soft">{runRows.map((run) => <Link key={run.id} href={`/agents/runs/${run.id}`} className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-bg-elevate/40"><div className="min-w-0"><div className="text-sm text-text truncate">{run.message}</div><div className="text-xs text-text-faint font-mono">{new Date(run.startedAt).toLocaleString()}{run.targetLabel && ` · ${run.targetLabel}`}</div></div><div className="flex items-center gap-3"><MonoChip tone={run.status === "complete" ? "green" : run.status === "error" ? "default" : "gold"}>{run.status}</MonoChip><ArrowUpRight className="w-4 h-4 text-text-faint" /></div></Link>)}</div>
           )}
         </Card>
