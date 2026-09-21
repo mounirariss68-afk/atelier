@@ -721,6 +721,30 @@ defineCapability({
         },
       };
     }
+    const outOfOrderIndex = rawSegments.findIndex((segment, index) => {
+      if (index === 0) return false;
+      const previousDate = String(rawSegments[index - 1]?.date ?? "").trim();
+      const currentDate = String(segment.date ?? "").trim();
+      return currentDate < previousDate;
+    });
+    if (outOfOrderIndex > 0) {
+      return {
+        ok: false,
+        errorCode: "out_of_order_dates",
+        errorMessage: `Departure date for leg ${outOfOrderIndex + 1} cannot be before leg ${outOfOrderIndex}.`,
+        clarification: {
+          field: `segments.${outOfOrderIndex}.date`,
+          question: `What date should leg ${outOfOrderIndex + 1} leave? It cannot be before the previous leg.`,
+          fields: [{
+            field: `segments.${outOfOrderIndex}.date`,
+            label: `Departure date — leg ${outOfOrderIndex + 1}`,
+            inputType: "date" as const,
+          }],
+          tool: "travel_search_flights",
+          partial: { ...input },
+        },
+      };
+    }
 
     try {
       // Resolve each endpoint to an IATA code (bare codes pass through).
@@ -1125,6 +1149,24 @@ defineCapability({
               inputType: "date",
             },
           ],
+          tool: "travel_select_flight",
+          partial: { ...input },
+        },
+      };
+    }
+    if (!legContext && tripType === "one way" && addReturn === "yes" && returnDate < date) {
+      return {
+        ok: false,
+        errorCode: "return_before_departure",
+        errorMessage: "Return date cannot be before the departure date.",
+        clarification: {
+          field: "returnDate",
+          question: `Pick a return date on or after ${date}.`,
+          fields: [{
+            field: "returnDate",
+            label: `Return date (${destination} → ${origin})`,
+            inputType: "date",
+          }],
           tool: "travel_select_flight",
           partial: { ...input },
         },

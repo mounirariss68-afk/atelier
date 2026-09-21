@@ -49,6 +49,15 @@ function segmentValid(seg: CliPlannerSegment): boolean {
   );
 }
 
+function firstOutOfOrderDate(segments: CliPlannerSegment[]): number | null {
+  for (let index = 1; index < segments.length; index++) {
+    const previous = segments[index - 1]?.date.trim() ?? "";
+    const current = segments[index]?.date.trim() ?? "";
+    if (previous && current && current < previous) return index;
+  }
+  return null;
+}
+
 /** Big airport code / text used on the FROM/TO blocks. */
 function airportCode(text: string, iata?: string | null): string {
   if (iata && iata.trim()) return iata.trim().toUpperCase();
@@ -118,6 +127,7 @@ export function FlightPlannerCard({
   }
   function setPrimaryDate(date: string) {
     updatePrimary({ ...primary, date });
+    if (returnDate && returnDate < date) setReturnDate("");
   }
   function swapPrimary() {
     updatePrimary({
@@ -186,13 +196,29 @@ export function FlightPlannerCard({
 
   const isValid = (() => {
     if (tripType === "return") {
-      return segmentValid(primary) && /^\d{4}-\d{2}-\d{2}$/.test(returnDate.trim());
+      return (
+        segmentValid(primary) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(returnDate.trim()) &&
+        returnDate.trim() >= primary.date.trim()
+      );
     }
     if (tripType === "one_way") {
       return segmentValid(primary);
     }
-    return segments.length > 0 && segments.every(segmentValid);
+    return segments.length > 0 && segments.every(segmentValid) && firstOutOfOrderDate(segments) === null;
   })();
+  const dateOrderProblem =
+    tripType === "return" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(primary.date.trim()) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(returnDate.trim()) &&
+    returnDate.trim() < primary.date.trim()
+      ? s("plannerReturnBeforeDepart", locale)
+      : tripType === "multi_city" && firstOutOfOrderDate(segments) !== null
+        ? s("plannerLegBeforePrevious", locale).replace(
+            "{n}",
+            String((firstOutOfOrderDate(segments) ?? 0) + 1),
+          )
+        : null;
 
   function humanAnswer(plan: CliFlightPlanner): string {
     const tt =
@@ -309,6 +335,7 @@ export function FlightPlannerCard({
                 label={s("plannerReturnDate", locale)}
                 value={returnDate}
                 onChange={setReturnDate}
+                min={primary.date || undefined}
                 testid="planner-return-date"
               />
             )}
@@ -368,6 +395,7 @@ export function FlightPlannerCard({
                 label={s("plannerDate", locale)}
                 value={seg.date}
                 onChange={(d) => updateSeg(i, { date: d })}
+                min={i > 0 ? segments[i - 1]?.date || undefined : undefined}
                 testid={i === 0 ? "planner-date" : undefined}
               />
             </div>
@@ -440,6 +468,11 @@ export function FlightPlannerCard({
         </div>
       </div>
 
+      {dateOrderProblem && (
+        <p className="text-xs text-danger" role="alert" data-testid="planner-date-order-error">
+          {dateOrderProblem}
+        </p>
+      )}
       <button
         type="button"
         onClick={confirm}
@@ -496,11 +529,13 @@ function DateField({
   label,
   value,
   onChange,
+  min,
   testid,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  min?: string;
   testid?: string;
 }) {
   return (
@@ -511,6 +546,7 @@ function DateField({
       <input
         type="date"
         value={value}
+        min={min}
         onChange={(e) => onChange(e.target.value)}
         className="bg-bg-deep border border-border-soft rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
         data-testid={testid}

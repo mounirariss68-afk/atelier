@@ -224,6 +224,14 @@ export const STRINGS = {
   plannerSwap: { en: "Swap origin and destination", ar: "تبديل المغادرة والوصول" },
   plannerDepartDate: { en: "Departure", ar: "المغادرة" },
   plannerReturnDate: { en: "Return", ar: "العودة" },
+  plannerReturnBeforeDepart: {
+    en: "Return date can't be before departure",
+    ar: "لا يمكن أن يكون تاريخ العودة قبل تاريخ المغادرة",
+  },
+  plannerLegBeforePrevious: {
+    en: "Leg {n} date can't be before the previous leg",
+    ar: "لا يمكن أن يكون تاريخ الرحلة {n} قبل الرحلة السابقة",
+  },
   plannerDate: { en: "Date", ar: "التاريخ" },
   plannerPassengers: { en: "Passengers", ar: "المسافرون" },
   plannerAdults: { en: "Adults", ar: "بالغون" },

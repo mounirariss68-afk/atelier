@@ -511,6 +511,25 @@ const ok = (name: string) => {
   ok("return flight search: resolution, round-trip endpoint, comparison, sort, links");
 }
 
+// Return and multi-city legs cannot move backwards in time.
+{
+  requests.length = 0;
+  const r = await flights.run(
+    {
+      segments: [
+        { origin: "DXB", destination: "IST", date: "2027-03-06" },
+        { origin: "IST", destination: "DXB", date: "2027-03-02" },
+      ],
+    },
+    ctx,
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.errorCode, "out_of_order_dates");
+  assert.equal(r.clarification?.field, "segments.1.date");
+  assert.equal(requests.length, 0, "invalid date order must be rejected before provider calls");
+  ok("return before departure is rejected before flight search");
+}
+
 // 3a. One-way search with defaults (#715): only segments provided →
 // searches immediately, 1 adult, no cabin_class in the body.
 {
@@ -1552,4 +1571,4 @@ assert.ok(planTrip, "travel_plan_trip registered");
 
 ignavStub.close();
 stayingStub.close();
-console.log(`\ntravel-probe: ${passed}/33 groups passed`);
+console.log(`\ntravel-probe: ${passed}/34 groups passed`);
