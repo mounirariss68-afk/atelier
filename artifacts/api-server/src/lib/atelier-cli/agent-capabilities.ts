@@ -119,6 +119,11 @@ const AGENT_INVOCABLE_ROLES: AtelierRole[] = [
 export function registerAgentCapabilities(): CapabilityEntry[] {
   const out: CapabilityEntry[] = [];
   for (const agent of ATELIER_AGENTS) {
+    // Orchestrators and account-scoped agents are catalogue-visible, but their
+    // real launch contracts live on governed operational surfaces. Projecting
+    // them into this generic assistant adapter would create a synthetic run
+    // path that bypasses those scopes, approvals, and persisted workflows.
+    if ((agent.capabilityType ?? "generic") !== "generic") continue;
     const entry = defineCapability({
       id: `agent.${agent.id}`,
       schemaVersion: CATALOG_SCHEMA_VERSION,

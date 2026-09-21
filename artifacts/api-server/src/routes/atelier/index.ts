@@ -1435,7 +1435,9 @@ router.get("/agents", async (req, res) => {
         guardrails: runtime.guardrails,
         humanCheckpoints: runtime.humanCheckpoints,
         promptRef: runtime.systemPromptRef,
-        executable: true,
+        executable: (runtime.capabilityType ?? "generic") === "generic",
+        capabilityType: runtime.capabilityType ?? "generic",
+        operationalHref: runtime.operationalHref ?? `/agents/${runtime.id}`,
       };
     });
   const rows = [
@@ -1469,6 +1471,8 @@ router.get("/agents", async (req, res) => {
             guardrails: [],
             humanCheckpoints: [],
             executable: false,
+            capabilityType: "generic" as const,
+            operationalHref: `/agents/${a.id}`,
           };
         }
         return {
@@ -1487,7 +1491,9 @@ router.get("/agents", async (req, res) => {
           guardrails: runtime.guardrails,
           humanCheckpoints: runtime.humanCheckpoints,
           promptRef: runtime.systemPromptRef,
-          executable: true,
+          executable: (runtime.capabilityType ?? "generic") === "generic",
+          capabilityType: runtime.capabilityType ?? "generic",
+          operationalHref: runtime.operationalHref ?? `/agents/${runtime.id}`,
         };
       }),
     ),

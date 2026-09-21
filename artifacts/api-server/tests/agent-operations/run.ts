@@ -139,6 +139,39 @@ async function main() {
     const registryBacked = catalogue.body.find((a: any) => a.id === "ag_pov_author");
     check("registry agent appears without a catalogue row", registryBacked?.executable === true, catalogue.body);
     check("registry run count is org scoped", registryBacked?.runsLast30d === 1, registryBacked);
+    const cartographer = catalogue.body.find((a: any) => a.id === "ag_account_cartographer");
+    const mapper = catalogue.body.find((a: any) => a.id === "ag_executive_mapper");
+    const riser = catalogue.body.find((a: any) => a.id === "ag_riser_orchestrator");
+    check("Cartographer is account-scoped and links to Accounts", cartographer?.capabilityType === "account_scoped" && cartographer?.operationalHref === "/clients/accounts" && cartographer?.executable === false, cartographer);
+    check("Executive Mapper is account-scoped and links to Accounts", mapper?.capabilityType === "account_scoped" && mapper?.operationalHref === "/clients/accounts" && mapper?.executable === false, mapper);
+    check("Riser is an orchestrator and links to its application surface", riser?.capabilityType === "orchestrator" && riser?.operationalHref === "/" && riser?.executable === false, riser);
+
+    const governedRunsBefore = await db
+      .select({ id: atelierAgentRuns.id })
+      .from(atelierAgentRuns)
+      .where(and(
+        eq(atelierAgentRuns.orgId, orgA),
+        eq(atelierAgentRuns.agentId, "account_cartographer"),
+      ));
+    const blockedCartographer = await api("POST", "/agents/ag_account_cartographer/run", userA, { accountId: accountC });
+    const blockedCartographerMode = await api("POST", "/agents/ag_account_cartographer/run", userA, {
+      _mode: "partner",
+      partnerFirmId: "caller-controlled-partner",
+    });
+    const blockedMapper = await api("POST", "/agents/ag_executive_mapper/run", userA, { accountId: accountC });
+    const blockedRiser = await api("POST", "/agents/ag_riser_orchestrator/run", userA, { message: "hello" });
+    const governedRunsAfter = await db
+      .select({ id: atelierAgentRuns.id })
+      .from(atelierAgentRuns)
+      .where(and(
+        eq(atelierAgentRuns.orgId, orgA),
+        eq(atelierAgentRuns.agentId, "account_cartographer"),
+      ));
+    check("generic dispatcher fails closed for Cartographer", blockedCartographer.status === 400 && blockedCartographer.body?.operationalHref === "/clients/accounts", blockedCartographer);
+    check("generic mode dispatcher fails closed for Cartographer", blockedCartographerMode.status === 400 && blockedCartographerMode.body?.operationalHref === "/clients/accounts", blockedCartographerMode);
+    check("blocked Cartographer mode creates no run", governedRunsAfter.length === governedRunsBefore.length, { before: governedRunsBefore, after: governedRunsAfter });
+    check("generic dispatcher fails closed for Executive Mapper", blockedMapper.status === 400 && blockedMapper.body?.operationalHref === "/clients/accounts", blockedMapper);
+    check("generic dispatcher fails closed for Riser", blockedRiser.status === 400 && blockedRiser.body?.operationalHref === "/", blockedRiser);
 
     const basePrompt = await api("GET", "/agents/ag_pov_author/prompt", userA);
     check("full filesystem prompt is readable", basePrompt.status === 200 &&
@@ -149,12 +182,17 @@ async function main() {
       body: "Consultants must not be able to replace agent prompts.",
     });
     check("non-partner prompt edit is denied", deniedPromptEdit.status === 403, deniedPromptEdit);
-    const firstPromptEdit = await api("PUT", "/agents/ag_pov_author/prompt", userA, {
+    const firstPromptEdit = await api("PUT", "/agents/pov_author/prompt", userA, {
       body: "Organisation A prompt override version one.",
     });
     check("partner can create an active prompt override", firstPromptEdit.status === 200 &&
       firstPromptEdit.body?.source === "override" &&
-      firstPromptEdit.body?.version === 1, firstPromptEdit);
+      firstPromptEdit.body?.version === 1 &&
+      firstPromptEdit.body?.agentId === "ag_pov_author", firstPromptEdit);
+    const barePromptRead = await api("GET", "/agents/pov_author/prompt", userA);
+    check("bare prompt id round-trips through the canonical override", barePromptRead.status === 200 &&
+      barePromptRead.body?.agentId === "ag_pov_author" &&
+      barePromptRead.body?.body === firstPromptEdit.body?.body, barePromptRead);
     const foreignPrompt = await api("GET", "/agents/ag_pov_author/prompt", userB);
     check("prompt overrides are isolated by organisation", foreignPrompt.status === 200 &&
       foreignPrompt.body?.source === "filesystem" &&

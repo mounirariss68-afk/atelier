@@ -12022,7 +12022,7 @@ components:
 
     AgentCatalogEntry:
       type: object
-      required: [id, name, group, stage, purpose, model, starred, status, runsLast30d]
+      required: [id, name, group, stage, purpose, model, starred, status, runsLast30d, executable, capabilityType, operationalHref]
       properties:
         id: { type: string }
         name: { type: string }
@@ -12050,6 +12050,8 @@ components:
           items: { type: object }
         promptRef: { type: string }
         executable: { type: boolean }
+        capabilityType: { type: string, enum: [generic, account_scoped, orchestrator] }
+        operationalHref: { type: string }
 
     AtelierAgentPrompt:
       type: object

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentCatalogEntryCapabilityType } from "./agentCatalogEntryCapabilityType";
 import type { AgentCatalogEntryHumanCheckpointsItem } from "./agentCatalogEntryHumanCheckpointsItem";
 import type { AgentCatalogEntryStatus } from "./agentCatalogEntryStatus";
 import type { AtelierAgentSchemaField } from "./atelierAgentSchemaField";
@@ -25,5 +26,7 @@ export interface AgentCatalogEntry {
   guardrails?: string[];
   humanCheckpoints?: AgentCatalogEntryHumanCheckpointsItem[];
   promptRef?: string;
-  executable?: boolean;
+  executable: boolean;
+  capabilityType: AgentCatalogEntryCapabilityType;
+  operationalHref: string;
 }

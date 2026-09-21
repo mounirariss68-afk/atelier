@@ -25,11 +25,14 @@ export default function Agents() {
             <SectionLabel>{group}</SectionLabel>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {available.filter((agent) => agent.group === group).map((agent) => (
-                <Link key={agent.id} href={`/agents/${agent.id}`}>
+                <Link key={agent.id} href={agent.operationalHref ?? `/agents/${agent.id}`}>
                   <Card className="h-full p-5 space-y-4 hover:border-gold/50 transition-colors" data-testid={`agent-card-${agent.id}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-text"><Bot className="w-4 h-4 text-gold" /><span className="font-semibold">{agent.name}</span>{agent.starred && <Star className="w-3.5 h-3.5 text-gold fill-gold" />}</div>
-                      <MonoChip tone={agent.status === "mvp" ? "green" : "gold"}>{agent.status}</MonoChip>
+                      <div className="flex flex-col items-end gap-1">
+                        <MonoChip tone={agent.status === "mvp" ? "green" : "gold"}>{agent.status}</MonoChip>
+                        {agent.capabilityType !== "generic" && <span className="text-[10px] font-mono uppercase tracking-wide text-text-faint">{agent.capabilityType?.replace("_", " ")}</span>}
+                      </div>
                     </div>
                     <p className="text-sm text-text-mute leading-relaxed">{agent.purpose}</p>
                     <div className="flex items-center justify-between text-xs font-mono text-text-faint">

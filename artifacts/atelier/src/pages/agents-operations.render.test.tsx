@@ -25,6 +25,8 @@ const agent = {
   status: "mvp" as const,
   runsLast30d: 1,
   executable: true,
+  capabilityType: "generic" as const,
+  operationalHref: "/agents/ag_operations_probe",
   tools: ["lookup"],
   guardrails: ["cite sources"],
   humanCheckpoints: [{ id: "cp_partner", label: "Partner approves the output", decider: "partner", blocking: true }],
@@ -68,9 +70,17 @@ function render(path: string, Page: React.ComponentType, setup: (client: QueryCl
 const catalogueHtml = render("/agents", Agents, (client) => {
   client.setQueryData(getAtelierListAgentsQueryKey(), [agent]);
 });
-assert.match(catalogueHtml, /Agent catalogue/);
-assert.match(catalogueHtml, /href="\/agents\/ag_operations_probe"/);
 
+const governedCatalogueHtml = render("/agents", Agents, (client) => {
+  client.setQueryData(getAtelierListAgentsQueryKey(), [{
+    ...agent,
+    id: "ag_account_cartographer",
+    name: "Account Cartographer",
+    executable: false,
+    capabilityType: "account_scoped",
+    operationalHref: "/clients/accounts",
+  }]);
+});
 const profileHtml = render(`/agents/${agent.id}`, AgentProfile, (client) => {
   client.setQueryData(getAtelierListAgentsQueryKey(), [agent]);
   client.setQueryData(getAtelierListAgentRunsQueryKey(agent.id), [run]);

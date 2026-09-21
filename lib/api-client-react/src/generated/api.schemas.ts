@@ -6032,6 +6032,15 @@ export const AgentCatalogEntryStatus = {
 
 export type AgentCatalogEntryHumanCheckpointsItem = { [key: string]: unknown };
 
+export type AgentCatalogEntryCapabilityType =
+  (typeof AgentCatalogEntryCapabilityType)[keyof typeof AgentCatalogEntryCapabilityType];
+
+export const AgentCatalogEntryCapabilityType = {
+  generic: "generic",
+  account_scoped: "account_scoped",
+  orchestrator: "orchestrator",
+} as const;
+
 export type AtelierAgentSchemaFieldType =
   (typeof AtelierAgentSchemaFieldType)[keyof typeof AtelierAgentSchemaFieldType];
 
@@ -6068,7 +6077,9 @@ export interface AgentCatalogEntry {
   guardrails?: string[];
   humanCheckpoints?: AgentCatalogEntryHumanCheckpointsItem[];
   promptRef?: string;
-  executable?: boolean;
+  executable: boolean;
+  capabilityType: AgentCatalogEntryCapabilityType;
+  operationalHref: string;
 }
 
 export type AtelierAgentPromptSource =

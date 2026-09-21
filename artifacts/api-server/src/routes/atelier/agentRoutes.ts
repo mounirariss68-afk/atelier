@@ -310,14 +310,16 @@ function promptAgent(agentId: string) {
   return agent;
 }
 
+// @cli-skip: partner-facing prompt administration read; not an assistant execution capability
 router.get("/agents/:agentId/prompt", async (req, res): Promise<void> => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const agentId = String(req.params.agentId);
-  if (!promptAgent(agentId)) {
+  const agent = promptAgent(String(req.params.agentId));
+  if (!agent) {
     res.status(404).json({ error: "agent-prompt-not-found", message: "Agent is not executable or is not registered." });
     return;
   }
+  const agentId = agent.id;
   try {
     const effective = await resolveEffectiveAgentPrompt({ orgId: me.orgId, agentId });
     res.json({ agentId, ...effective, updatedAt: effective.updatedAt.toISOString() });
@@ -326,6 +328,7 @@ router.get("/agents/:agentId/prompt", async (req, res): Promise<void> => {
   }
 });
 
+// @cli-skip: partner-facing prompt administration write; assistant self-modification is intentionally forbidden
 router.put("/agents/:agentId/prompt", async (req, res): Promise<void> => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -333,11 +336,12 @@ router.put("/agents/:agentId/prompt", async (req, res): Promise<void> => {
     res.status(403).json({ error: "agent-prompt-edit-forbidden", message: "Only partners and founding partners may edit prompts." });
     return;
   }
-  const agentId = String(req.params.agentId);
-  if (!promptAgent(agentId)) {
+  const agent = promptAgent(String(req.params.agentId));
+  if (!agent) {
     res.status(404).json({ error: "agent-prompt-not-found", message: "Agent is not executable or is not registered." });
     return;
   }
+  const agentId = agent.id;
   const body = typeof req.body?.body === "string" ? req.body.body : "";
   if (!body.trim() || body.length > 100_000) {
     res.status(400).json({ error: "invalid-agent-prompt", message: "Prompt body must be nonempty and no more than 100000 characters." });
@@ -3301,6 +3305,23 @@ router.post("/agents/:agentId/run", async (req, res) => {
   const { _mode, ...rest } = body;
   const mode = typeof _mode === "string" && _mode.length > 0 ? _mode : undefined;
 
+  // Resolve governance before considering mode extensions. Account-scoped
+  // capabilities and orchestrators must never reach a generic mode wrapper,
+  // even when the caller supplies a mode that happens to have a dispatcher.
+  const agent = getAgent(agentId);
+  if (!agent) {
+    res.status(404).json({ error: "agent-not-found", agentId });
+    return;
+  }
+  if ((agent.capabilityType ?? "generic") !== "generic") {
+    res.status(400).json({
+      error: "agent-not-dispatchable-here",
+      hint: "This capability is governed by its operational surface.",
+      operationalHref: agent.operationalHref ?? null,
+    });
+    return;
+  }
+
   // Mode extensions take precedence and bypass the base inputSchema
   // (the base schema would not match the mode's input shape).
   const modeFn = mode ? dispatchV5ModeExtension(agentId, mode) : undefined;
@@ -3325,11 +3346,6 @@ router.post("/agents/:agentId/run", async (req, res) => {
   }
 
   // No mode requested — require a registered agent and a base dispatcher.
-  const agent = getAgent(agentId);
-  if (!agent) {
-    res.status(404).json({ error: "agent-not-found", agentId });
-    return;
-  }
   const baseFn = ATELIER_V5_DISPATCH[agentId];
   if (!baseFn) {
     res.status(400).json({

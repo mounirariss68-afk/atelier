@@ -13,7 +13,7 @@
         "cartographer/refresh"
       ],
       "classification": "advisory",
-      "registryId": null,
+      "registryId": "ag_account_cartographer",
       "runner": {
         "file": "artifacts/api-server/src/lib/atelier-agents/runner.ts",
         "symbol": "runAccountCartographer"
@@ -23,19 +23,21 @@
         "hint": "queueCartographerResearch"
       },
       "promptRef": "prompts/account_cartographer/v1.md",
-      "inputSchemaHash": null,
-      "outputSchemaHash": null,
+      "inputSchemaHash": "9cb24731c6708e5f567d35ae507dfd58984191157191b54f038fb7deaec5634e",
+      "outputSchemaHash": "80bd08fb80c108349ec134eafb655a7df54eea6e15a2cc50bee09a02550f3e28",
       "fixtureRefs": [
         "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
       ],
       "agentsLens": {
-        "recordKey": "account_cartographer",
-        "sourceMode": "manual-record"
+        "recordKey": "ag_account_cartographer",
+        "sourceMode": "runtime-registry"
       },
       "uiMounts": [
-        "artifacts/atelier/src/pages/Account.tsx"
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
       ],
-      "operationalStatus": "runtime-only",
+      "operationalStatus": "registered",
       "deterministicEvalIds": [
         "eval-contact-cartographer-v1"
       ],
@@ -158,39 +160,6 @@
       "promptHash": "8f3ba55e5d1e2610c937ca247ec8cdc1dc8779ad44015c4c3028adcb96daf0a8"
     },
     {
-      "id": "ag_chat_orchestrator",
-      "name": "Chat Orchestrator / generic Riser dispatch",
-      "aliases": [
-        "chat_orchestrator",
-        "Chat Orchestrator",
-        "generic Riser dispatch"
-      ],
-      "classification": "utility",
-      "registryId": null,
-      "runner": {
-        "file": "artifacts/api-server/src/lib/atelier-cli/index.ts",
-        "symbol": "runTurn"
-      },
-      "route": {
-        "file": "artifacts/api-server/src/routes/atelier/cliRoutes.ts",
-        "hint": "/cli/turn"
-      },
-      "promptRef": null,
-      "inputSchemaHash": null,
-      "outputSchemaHash": null,
-      "fixtureRefs": [],
-      "agentsLens": {
-        "recordKey": null,
-        "sourceMode": "not-applicable"
-      },
-      "uiMounts": [],
-      "operationalStatus": "utility",
-      "deterministicEvalIds": [],
-      "approvedDivergences": [],
-      "sourceHash": "237c14d516203d20a923eccbded3879c937d22a45a82860ec72a6a182397ca43",
-      "promptHash": null
-    },
-    {
       "id": "ag_executive_mapper",
       "name": "Executive Mapper",
       "aliases": [
@@ -198,7 +167,7 @@
         "executive sweep/coverage"
       ],
       "classification": "advisory",
-      "registryId": null,
+      "registryId": "ag_executive_mapper",
       "runner": {
         "file": "artifacts/api-server/src/lib/atelier-agents/executive-mapper-chain.ts",
         "symbol": "runExecutiveMapperAndQueue"
@@ -208,19 +177,21 @@
         "hint": "runExecutiveMapperAndQueue"
       },
       "promptRef": "prompts/executive_mapper/v2.md",
-      "inputSchemaHash": null,
-      "outputSchemaHash": null,
+      "inputSchemaHash": "219c057691f2e03c1dca6e197716120a434fc1cddd6aa68143f8a7180908b0b4",
+      "outputSchemaHash": "80bd08fb80c108349ec134eafb655a7df54eea6e15a2cc50bee09a02550f3e28",
       "fixtureRefs": [
         "artifacts/api-server/tests/crm-agent-contracts/v1.reviewed.json"
       ],
       "agentsLens": {
-        "recordKey": "executive_mapper",
-        "sourceMode": "manual-record"
+        "recordKey": "ag_executive_mapper",
+        "sourceMode": "runtime-registry"
       },
       "uiMounts": [
-        "artifacts/atelier/src/pages/Account.tsx"
+        "artifacts/atelier/src/pages/Agents.tsx",
+        "artifacts/atelier/src/pages/AgentProfile.tsx",
+        "artifacts/atelier/src/pages/AgentRun.tsx"
       ],
-      "operationalStatus": "runtime-only",
+      "operationalStatus": "registered",
       "deterministicEvalIds": [
         "eval-contact-executive-mapper-v1"
       ],
@@ -266,7 +237,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": "518053b0bc0fcc2b6798089514a45fcd957b3d4bb864a0058abd84e544f861dc"
     },
     {
@@ -371,7 +342,7 @@
         "eval-pipeline-forecast-calibration-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": null
     },
     {
@@ -412,7 +383,7 @@
         "eval-pov-fact-promotion-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -453,7 +424,7 @@
         "eval-pov-fact-promotion-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -494,7 +465,7 @@
         "eval-citation-refusal-fact-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -778,7 +749,7 @@
         "eval-citation-refusal-fact-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "2b132fb54bdea581dab93ca8f9a433341324e4d32cd3a6470005384c811bf282",
+      "sourceHash": "58f5dba3f47011655b8c0ef0a971b3fc570a8ad8c189ac93aa44a63d9fb321d4",
       "promptHash": "ed5ecc224e6e7e0cbcd0ef1343c3b96aaf7628b47aa751dfe3a536bce09c0fb8"
     },
     {
@@ -860,6 +831,39 @@
       "promptHash": "df3b0bad45e4ac60b0c9873635574fe40a1b447a0a3c7dbee859377d046a0c53"
     },
     {
+      "id": "ag_riser_orchestrator",
+      "name": "Riser",
+      "aliases": [
+        "riser_orchestrator",
+        "Chat Orchestrator",
+        "generic Riser dispatch"
+      ],
+      "classification": "utility",
+      "registryId": "ag_riser_orchestrator",
+      "runner": {
+        "file": "artifacts/api-server/src/lib/atelier-cli/index.ts",
+        "symbol": "runTurn"
+      },
+      "route": {
+        "file": "artifacts/api-server/src/routes/atelier/cliRoutes.ts",
+        "hint": "/cli/turn"
+      },
+      "promptRef": "prompts/chat_orchestrator/v1.md",
+      "inputSchemaHash": "c204b15a802a9e33eb3c8ecb330fe47a5fab143a029534832831f6c83156ebe1",
+      "outputSchemaHash": "b60db62ef1ad1c3ef413b3100cf7c28c9cbc0bfbfad01f202a0e4d9aa5d43878",
+      "fixtureRefs": [],
+      "agentsLens": {
+        "recordKey": "ag_riser_orchestrator",
+        "sourceMode": "runtime-registry"
+      },
+      "uiMounts": [],
+      "operationalStatus": "registered",
+      "deterministicEvalIds": [],
+      "approvedDivergences": [],
+      "sourceHash": "237c14d516203d20a923eccbded3879c937d22a45a82860ec72a6a182397ca43",
+      "promptHash": "7ee9936c1f1a67f6361633181e2324761d0a40628be8cc94116cd3700e108d88"
+    },
+    {
       "id": "ag_run_staleness",
       "name": "Run staleness / launch visibility",
       "aliases": [
@@ -919,7 +923,7 @@
       "operationalStatus": "utility",
       "deterministicEvalIds": [],
       "approvedDivergences": [],
-      "sourceHash": "e62d3aead3ef1e327ef176dd4cd21936a6611769e2ce48babffe04ab65c8f4b6",
+      "sourceHash": "97329a63eeb0d1223a567bc5779251df8aa4e3212cab5dd931ed7111862a71b3",
       "promptHash": null
     },
     {

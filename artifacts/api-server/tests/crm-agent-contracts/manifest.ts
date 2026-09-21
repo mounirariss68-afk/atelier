@@ -69,6 +69,13 @@ for (const entry of document.entries) {
   }
   const registered = entry.registryId ? registry.get(entry.registryId) : undefined;
   if (registered && entry.operationalStatus !== registered.status) throw new Error(`status mismatch: ${entry.id}`);
+  if (entry.registryId && !registered) throw new Error(`missing governed registry entry: ${entry.id}`);
+  if (["ag_account_cartographer", "ag_executive_mapper"].includes(entry.id) && registered?.capabilityType !== "account_scoped") {
+    throw new Error(`account capability is not account-scoped: ${entry.id}`);
+  }
+  if (entry.id === "ag_riser_orchestrator" && registered?.capabilityType !== "orchestrator") {
+    throw new Error("Riser is not classified as an orchestrator");
+  }
   if (entry.operationalStatus === "mvp" && (
     !entry.registryId ||
     !entry.fixtureRefs.includes(`artifacts/api-server/tests/agents/${entry.registryId}/golden.json`)

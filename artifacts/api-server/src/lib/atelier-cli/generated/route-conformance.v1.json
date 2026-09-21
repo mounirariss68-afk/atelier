@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1206,
+  "routeCount": 1208,
   "capabilityCount": 328,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -1711,6 +1711,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "file download endpoint (PDF/CSV export), not chat-parity material",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "0a4613d7e9094c7e",
+      "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+      "method": "put",
+      "path": "/agents/:agentId/prompt",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-facing prompt administration write; assistant self-modification is intentionally forbidden",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -20756,6 +20784,34 @@
       }
     },
     {
+      "routeId": "a0c783113a1879bf",
+      "file": "artifacts/api-server/src/routes/atelier/agentRoutes.ts",
+      "method": "get",
+      "path": "/agents/:agentId/prompt",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-facing prompt administration read; not an assistant execution capability",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "a0fd4bb69595526a",
       "file": "artifacts/api-server/src/routes/atelier/msProvisioningRoutes.ts",
       "method": "get",
@@ -36777,5 +36833,5 @@
       ]
     }
   ],
-  "conformanceVersion": "661c3c24c28a1ba118e9b5f18e31f630088dbf5770d4ce2d725c169be55ca492"
+  "conformanceVersion": "7f1ac5b2205ce83886d275d8bdb6eb0b882b3298bd992f2b024f341a57fc5d59"
 }

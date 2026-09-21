@@ -52,7 +52,7 @@ function evalsFor(id: string): string[] {
     return ["eval-pricing-margin-override-v1"];
   }
   if (id === "ag_pipeline_forecaster") return ["eval-pipeline-forecast-calibration-v1"];
-  if (["ag_case_study_picker", "ag_chat_orchestrator", "ag_partner_fit_context", "ag_run_staleness", "ag_scout_persistence"].includes(id)) {
+  if (["ag_case_study_picker", "ag_riser_orchestrator", "ag_partner_fit_context", "ag_run_staleness", "ag_scout_persistence"].includes(id)) {
     return [];
   }
   return ["eval-global-security-tenant-write-v1"];
@@ -72,9 +72,22 @@ function uiMountsFor(id: string, registryId: string | null, classification: Exec
 }
 
 /** Reviewed inventory from atelier-crm-agent-workflows-audit.md §Authoritative inventory. */
-export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = [
-  ["Account Cartographer", "ag_account_cartographer", ["account research/enrichment", "cartographer/refresh"], "advisory", null, "runAccountCartographer", "accountRoutes.ts", "queueCartographerResearch", null, "runtime-only"],
-  ["Executive Mapper", "ag_executive_mapper", ["executive sweep/coverage"], "advisory", null, "runExecutiveMapper", "accountRoutes.ts", "executive", null, "runtime-only"],
+type CrmContractRow = [
+  name: string,
+  id: string,
+  aliases: string[],
+  classification: ExecutionClass,
+  registryId: string | null,
+  runnerSymbol: string | null,
+  routeFile: string | null,
+  routeHint: string | null,
+  prompt: string | null,
+  status: OperationalStatus,
+];
+
+const CRM_CONTRACT_ROWS: CrmContractRow[] = [
+  ["Account Cartographer", "ag_account_cartographer", ["account research/enrichment", "cartographer/refresh"], "advisory", "ag_account_cartographer", "runAccountCartographer", "accountRoutes.ts", "queueCartographerResearch", null, "registered"],
+  ["Executive Mapper", "ag_executive_mapper", ["executive sweep/coverage"], "advisory", "ag_executive_mapper", "runExecutiveMapper", "accountRoutes.ts", "executive", null, "registered"],
   ["Pursuit Scout", "ag_pursuit_scout", ["Scout", "opportunity research"], "executable", "ag_pursuit_scout", "runPursuitScout", "agentRoutes.ts", "opportunity", "pursuit_scout", "mvp"],
   ["POV Deep Researcher", "ag_pov_researcher", ["POV research", "research pass"], "advisory", "ag_pov_researcher", "runPovDeepResearch", "agentRoutes.ts", "pov-research", "pov_author", "registered"],
   ["POV Author (outline)", "ag_pov_author", ["POV outline"], "executable", "ag_pov_author", "runPovOutline", "agentRoutes.ts", "pov_author", "pov_author", "mvp"],
@@ -95,16 +108,19 @@ export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = [
   ["Pre-Meeting Briefing", "ag_pre_meeting_briefing", [], "advisory", "ag_pre_meeting_briefing", "runPreMeetingBriefing", "accountRoutes.ts", "pre-meeting-briefing", "pre_meeting_briefing", "mvp"],
   ["Whitespace Mapper", "ag_whitespace_mapper", [], "advisory", null, "runWhitespaceMapper", "accountRoutes.ts", "runWhitespaceMapper", null, "runtime-only"],
   ["QBR Composer", "ag_qbr_composer", [], "advisory", null, "runQbrComposer", "accountRoutes.ts", "runQbrComposer", null, "runtime-only"],
-  ["Chat Orchestrator / generic Riser dispatch", "ag_chat_orchestrator", ["Chat Orchestrator", "generic Riser dispatch"], "utility", null, "runSalonConcierge", "agentRoutes.ts", "chat", "chat_orchestrator", "utility"],
+  ["Riser", "ag_riser_orchestrator", ["Chat Orchestrator", "generic Riser dispatch"], "utility", "ag_riser_orchestrator", "runSalonConcierge", "agentRoutes.ts", "chat", "chat_orchestrator", "registered"],
   ["Partner-fit context", "ag_partner_fit_context", ["alliance capability matching"], "utility", null, "buildAllianceCapabilityContext", "agentRoutes.ts", "opportunities", null, "utility"],
   ["Win/Loss Interviewer", "ag_win_loss_interviewer", ["debrief"], "advisory", "ag_win_loss_interviewer", "runWinLossInterviewer", "winLossRoutes.ts", "debrief", "win_loss_interviewer", "mvp"],
   ["Brand Profile Writer", "ag_brand_profile_writer", ["brand/boilerplate"], "executable", "ag_brand_profile_writer", "runBrandProfileWriter", "firmProfileRoutes.ts", "brand-profile", "brand_profile_writer", "mvp"],
   ["Synthesis Critic", "ag_synthesis_critic", ["deliverable quality gate"], "advisory", "ag_synthesis_critic", "runSynthesisCritic", "engagementRoutes.ts", "synthesis", "synthesis_critic", "mvp"],
   ["Scout persistence / citation guardrail", "ag_scout_persistence", ["Scout persistence", "citation guardrail"], "utility", null, "persistBriefAndFacts", "agentRoutes.ts", "scout", null, "utility"],
   ["Run staleness / launch visibility", "ag_run_staleness", ["run staleness", "launch visibility"], "utility", null, "startRun", "agentRoutes.ts", "launch", null, "utility"],
-].map(([name, id, aliases, classification, registryId, runnerSymbol, routeFile, routeHint, prompt, status]) => ({
+];
+
+export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = CRM_CONTRACT_ROWS.map(
+([name, id, aliases, classification, registryId, runnerSymbol, routeFile, routeHint, prompt, status]) => ({
   id, name, aliases: [...new Set([id.replace(/^ag_/, ""), ...aliases])], classification, registryId,
-  runner: id === "ag_case_study_picker" ? null : id === "ag_chat_orchestrator"
+  runner: id === "ag_case_study_picker" ? null : id === "ag_riser_orchestrator"
     ? { file: "artifacts/api-server/src/lib/atelier-cli/index.ts", symbol: "runTurn" }
     : id === "ag_executive_mapper"
     ? { file: "artifacts/api-server/src/lib/atelier-agents/executive-mapper-chain.ts", symbol: "runExecutiveMapperAndQueue" }
@@ -114,20 +130,20 @@ export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = [
     ? { file: "artifacts/api-server/src/lib/atelier-agents/run-staleness.ts", symbol: "agentRunRowIsStale" }
     : id === "ag_scout_persistence"
     ? { file: "artifacts/api-server/src/lib/atelier-agents/scout-persist.ts", symbol: runnerSymbol }
-    : runner(runnerSymbol),
+    : runner(runnerSymbol!),
   route: id === "ag_case_study_picker" || id === "ag_partner_fit_context" || id === "ag_run_staleness"
     ? null
-    : id === "ag_chat_orchestrator"
+    : id === "ag_riser_orchestrator"
     ? route("artifacts/api-server/src/routes/atelier/cliRoutes.ts", "/cli/turn")
     : route(
-        `artifacts/api-server/src/routes/atelier/${routeFile}`,
+        `artifacts/api-server/src/routes/atelier/${routeFile!}`,
         id === "ag_executive_mapper"
           ? "runExecutiveMapperAndQueue"
           : id === "ag_pipeline_forecaster"
           ? "runForecasterHandler"
           : id === "ag_account_cartographer"
-          ? routeHint
-          : runnerSymbol,
+          ? routeHint!
+          : runnerSymbol!,
       ),
   promptRef: id === "ag_account_cartographer"
     ? "prompts/account_cartographer/v1.md"
@@ -150,9 +166,11 @@ export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = [
     ? []
     : [QUALITY_FIXTURE, ...(registryId && fixture(registryId) ? [fixture(registryId)!] : [])],
   agentsLens: {
-    recordKey: classification === "utility" || classification === "unsupported"
+    recordKey: registryId
+      ? registryId
+      : classification === "utility" || classification === "unsupported"
       ? null
-      : registryId ?? id.replace(/^ag_/, ""),
+      : id.replace(/^ag_/, ""),
     sourceMode: registryId
       ? "runtime-registry"
       : classification === "utility" || classification === "unsupported"

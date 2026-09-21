@@ -31,6 +31,7 @@ export type AgentStage =
 
 export type AgentStatus = "registered" | "mvp" | "stub";
 export type AgentConfidence = "green" | "amber" | "red";
+export type AgentCapabilityType = "generic" | "account_scoped" | "orchestrator";
 
 export type AgentTool = string;
 
@@ -65,6 +66,13 @@ export interface Agent<I extends ZodTypeAny = ZodTypeAny, O extends ZodTypeAny =
   guardrails: string[];
   humanCheckpoints: HumanCheckpoint[];
   evals: AgentEval[];
+  /**
+   * Governs how this capability may be launched. Anything other than
+   * `generic` must fail closed at the generic /agents/:id/run dispatcher.
+   */
+  capabilityType?: AgentCapabilityType;
+  /** UI surface that owns the capability's real access and approval flow. */
+  operationalHref?: string;
 }
 
 export interface ToolCall {

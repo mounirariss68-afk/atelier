@@ -38,6 +38,82 @@ const leadCheck = (label = "Engagement Lead approves"): HumanCheckpoint => ({
 // Shared confidence enum used across most agent outputs.
 const Confidence = z.enum(["green", "amber", "red"]);
 
+// Governed catalogue representations for capabilities whose execution is
+// intentionally owned outside the generic agent dispatcher.
+export const RiserOrchestrator = defineAgent({
+  id: "ag_riser_orchestrator",
+  name: "Riser",
+  group: "Atelier",
+  stage: "Cross-cutting",
+  purpose: "Routes governed assistant requests through the reviewed capability catalogue.",
+  model: "policy-routed",
+  starred: true,
+  status: "registered",
+  systemPromptRef: "orchestrator:riser-reviewed-capability-manifest",
+  inputSchema: z.object({ message: z.string().min(1) }),
+  outputSchema: z.object({ outcome: z.unknown() }),
+  tools: ["reviewed_capability_catalogue"],
+  guardrails: [
+    "Every action resolves against the reviewed capability manifest.",
+    "Access, confirmation, tenant, and budget checks fail closed.",
+    "The generic agent dispatcher cannot launch this orchestrator.",
+  ],
+  humanCheckpoints: [],
+  evals: [],
+  capabilityType: "orchestrator",
+  operationalHref: "/",
+});
+
+export const AccountCartographer = defineAgent({
+  id: "ag_account_cartographer",
+  name: "Account Cartographer",
+  group: "Account Management",
+  stage: "Identify",
+  purpose: "Researches an account and queues sourced profile updates for human review.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "registered",
+  systemPromptRef: "prompts/account_cartographer/v1.md",
+  inputSchema: z.object({ accountId: z.string().min(1), focusOpportunityId: z.string().nullable().optional() }),
+  outputSchema: z.object({ proposalsQueued: z.number().int().nonnegative() }).passthrough(),
+  tools: ["web_search", "account.read", "account.profile.propose_update"],
+  guardrails: [
+    "Account access is checked before launch.",
+    "Research becomes a proposal and never writes profile fields directly.",
+    "Runs and proposals remain organisation scoped.",
+    "The generic agent dispatcher cannot launch this account-scoped capability.",
+  ],
+  humanCheckpoints: [partnerCheck("Partner approves, edits, or rejects proposed profile updates")],
+  evals: [],
+  capabilityType: "account_scoped",
+  operationalHref: "/clients/accounts",
+});
+
+export const ExecutiveMapper = defineAgent({
+  id: "ag_executive_mapper",
+  name: "Executive Mapper",
+  group: "Account Management",
+  stage: "Identify",
+  purpose: "Maps public leadership roles and queues contact proposals on an accessible account.",
+  model: "claude-sonnet-4-6",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/executive_mapper/v2.md",
+  inputSchema: z.object({ accountId: z.string().min(1) }),
+  outputSchema: z.object({ proposalsQueued: z.number().int().nonnegative() }).passthrough(),
+  tools: ["web_search", "account.read", "account.profile.propose_update"],
+  guardrails: [
+    "Account access is checked before launch.",
+    "Discovered people remain proposals until human review.",
+    "Runs and proposals remain organisation scoped.",
+    "The generic agent dispatcher cannot launch this account-scoped capability.",
+  ],
+  humanCheckpoints: [partnerCheck("Partner approves, edits, or rejects proposed contacts")],
+  evals: [],
+  capabilityType: "account_scoped",
+  operationalHref: "/clients/accounts",
+});
+
 // ====================== 8 MVP STARRED AGENTS ======================
 
 export const PursuitScout = defineAgent({
@@ -2253,6 +2329,9 @@ export const ProcurementNavigator = defineAgent({
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
+  RiserOrchestrator,
+  AccountCartographer,
+  ExecutiveMapper,
   // MVP — fully wired end-to-end
   PursuitScout,
   POVAuthor,

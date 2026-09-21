@@ -36597,7 +36597,9 @@ export const AtelierListAgentsResponseItem = zod.object({
   guardrails: zod.array(zod.string()).optional(),
   humanCheckpoints: zod.array(zod.object({}).passthrough()).optional(),
   promptRef: zod.string().optional(),
-  executable: zod.boolean().optional(),
+  executable: zod.boolean(),
+  capabilityType: zod.enum(["generic", "account_scoped", "orchestrator"]),
+  operationalHref: zod.string(),
 });
 export const AtelierListAgentsResponse = zod.array(
   AtelierListAgentsResponseItem,

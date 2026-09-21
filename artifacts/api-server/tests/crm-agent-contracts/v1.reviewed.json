@@ -42,7 +42,7 @@
   ],
   "excludedSpecialists": [
     { "specialistId": "ag_case_study_picker", "reason": "unsupported embedded Proposal Composer progress label; no independent executor" },
-    { "specialistId": "ag_chat_orchestrator", "reason": "utility/router; no semantic specialist output" },
+    { "specialistId": "ag_riser_orchestrator", "reason": "utility/orchestrator; no semantic specialist output" },
     { "specialistId": "ag_partner_fit_context", "reason": "utility/context adapter; no independent quality contract" },
     { "specialistId": "ag_run_staleness", "reason": "utility/maintenance job; no semantic specialist output" },
     { "specialistId": "ag_scout_persistence", "reason": "utility/persistence adapter; covered by caller contracts" }

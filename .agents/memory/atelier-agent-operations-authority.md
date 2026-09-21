@@ -8,3 +8,9 @@ The executable runtime registry is the sole authority for whether an agent can r
 **Why:** The retired lifecycle showcase represented disconnected design, evaluation, deployment, improvement, retirement, and outcome records as though they controlled execution. That made simulated and cache-only state look operational.
 
 **How to apply:** Build Agents surfaces from runtime registry metadata plus organisation-scoped persisted run records. Persist and audit human decisions server-side. Do not reintroduce lifecycle tables, static client policy copy, or optimistic-only actions as operational truth.
+
+Registry visibility and generic dispatch are separate contracts. Every non-generic capability must declare whether it is account-scoped or an orchestrator and link to the operational surface that owns its checks and approvals. Generic run routes and assistant capability projection must reject or omit those entries.
+
+**Why:** Account research agents and Riser need catalogue visibility, but projecting them as generic runs would bypass account access, proposal approval, workflow persistence, or orchestrator policy controls.
+
+**How to apply:** Default legacy entries to generic. For account-scoped and orchestrator entries, keep the real bespoke entry point, expose its operational link in the catalogue, and fail closed in generic dispatch even when a valid registry record exists.
