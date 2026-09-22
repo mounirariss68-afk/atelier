@@ -339,3 +339,17 @@ mtime_ms = 1789457391462
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/224c4b91-a3f3-413b-a9ac-a11d4fdc465f/00d0e7d5-9676-4e44-9e7f-f081b7ae51a8"
 storage_version_token = "1789457500586160"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "MDOVgmXCnKoQ3QfM10F_1"
+uri = "file://exports/riser-flight-hotel-search-kit.zip"
+type = "unspecified"
+title = "Riser Flight & Hotel Search Kit"
+description = "Portable Node/TypeScript starter plus the exact current Riser flight and hotel search implementation, web/mobile UI references, chat protocol, preferences, tests, setup guide, and security notes. No API keys or installed dependencies are included."
+logical_id = "b8b47982-9566-4a71-a8c3-81244a784bc0"
+content_hash = "sha256:8fb7ca857a9b819a771f92bfc5a56c06bfad6da782bb6f0ba1209f98d4f7f2f5"
+size = 455176
+mtime_ms = 1790058269130
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:587eca17-43f3-4691-865f-c3e4caf9e152/b8b47982-9566-4a71-a8c3-81244a784bc0/a247223e-8134-46ac-91f1-3953307c65b8"
+storage_version_token = "1790058277118467"
+content_type = "application/octet-stream"
