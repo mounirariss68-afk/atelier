@@ -12,7 +12,8 @@
  * entity via atelier_documents.entity_id.
  */
 
-import { pgTable, text, integer, jsonb, timestamp, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, jsonb, timestamp, index, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export interface EntityRegistration {
   id: string;
@@ -231,3 +232,46 @@ export const atelierLegalEntities = pgTable(
     index("idx_atelier_legal_entities_country").on(t.orgId, t.country),
   ],
 );
+
+/** Governed, org-scoped aliases. Retired aliases remain audit-visible and
+ * cannot be re-used while an active alias has the same normalized value. */
+export const atelierLegalEntityAliases = pgTable("atelier_legal_entity_aliases", {
+  id: text("id").primaryKey(),
+  orgId: text("org_id").notNull().default("aico"),
+  entityId: text("entity_id").notNull(),
+  alias: text("alias").notNull(),
+  normalizedAlias: text("normalized_alias").notNull(),
+  status: text("status").notNull().default("active"),
+  createdBy: text("created_by").notNull(),
+  retiredBy: text("retired_by"),
+  retiredAt: timestamp("retired_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("idx_legal_entity_aliases_org").on(t.orgId),
+  index("idx_legal_entity_aliases_entity").on(t.orgId, t.entityId),
+  uniqueIndex("uniq_legal_entity_alias_active").on(t.orgId, t.normalizedAlias).where(sql`${t.status} = 'active'`),
+]);
+
+export interface LegalEntityBundleConcept {
+  key: string;
+  synonyms: string[];
+  exclusions?: string[];
+  /** registration and tax concepts can be source-authority constrained. */
+  source: "registration" | "entity_document";
+}
+
+export const atelierLegalEntityBundleDefinitions = pgTable("atelier_legal_entity_bundle_definitions", {
+  id: text("id").primaryKey(),
+  orgId: text("org_id").notNull().default("aico"),
+  entityId: text("entity_id").notNull(),
+  bundleKey: text("bundle_key").notNull(),
+  version: integer("version").notNull(),
+  concepts: jsonb("concepts").$type<LegalEntityBundleConcept[]>().notNull(),
+  status: text("status").notNull().default("active"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("idx_legal_entity_bundles_entity").on(t.orgId, t.entityId),
+  uniqueIndex("uniq_legal_entity_bundle_version").on(t.orgId, t.entityId, t.bundleKey, t.version),
+  uniqueIndex("uniq_legal_entity_bundle_active").on(t.orgId, t.entityId, t.bundleKey).where(sql`${t.status} = 'active'`),
+]);

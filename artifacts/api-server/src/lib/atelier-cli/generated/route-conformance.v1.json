@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1208,
+  "routeCount": 1215,
   "capabilityCount": 328,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -11488,6 +11488,34 @@
       }
     },
     {
+      "routeId": "5c86285f23575b59",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "get",
+      "path": "/finance/entities/:id/aliases",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity alias governance; semantic chat only consumes approved aliases",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "5cec3e2bb642dad0",
       "file": "artifacts/api-server/src/routes/atelier/financePayablesRoutes.ts",
       "method": "post",
@@ -15408,6 +15436,34 @@
       }
     },
     {
+      "routeId": "7a8a1825f26152c6",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "patch",
+      "path": "/finance/entities/:id/aliases/:aliasId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity alias governance; semantic chat only consumes approved aliases",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "7a9ee20b05455301",
       "file": "artifacts/api-server/src/routes/atelier/payrollRoutes.ts",
       "method": "post",
@@ -18259,6 +18315,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "8e8a8dd11ee08aba",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "post",
+      "path": "/finance/entities/:id/aliases",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity alias governance; semantic chat only consumes approved aliases",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -24200,6 +24284,34 @@
       }
     },
     {
+      "routeId": "b977430251303b1e",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "delete",
+      "path": "/finance/entities/:id/aliases/:aliasId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity alias governance; semantic chat only consumes approved aliases",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "b99d7f2a840af8a8",
       "file": "artifacts/api-server/src/routes/atelier/hireRoutes.ts",
       "method": "patch",
@@ -27252,6 +27364,34 @@
       }
     },
     {
+      "routeId": "cdbf8b36422658a6",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "post",
+      "path": "/finance/entities/:id/document-bundles/:bundleKey/activate",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity bundle governance; semantic chat only consumes active versions",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "cde53071a5df71a0",
       "file": "artifacts/api-server/src/routes/atelier/changeOrderRoutes.ts",
       "method": "post",
@@ -30075,6 +30215,62 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "finance reconciliation proposal; dedicated review UI",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "e221a8a740cd2e42",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "get",
+      "path": "/finance/entities/:id/document-bundles",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity bundle governance; semantic chat only consumes active versions",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "e2257c2334333cae",
+      "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
+      "method": "post",
+      "path": "/finance/entities/:id/document-bundles",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated legal-entity bundle governance; semantic chat only consumes active versions",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -35245,7 +35441,7 @@
       "capabilityId": "document.email",
       "source": "cli-only",
       "executionStatus": "executable",
-      "implementationVersion": "db2ece90bc4c",
+      "implementationVersion": "00fc96b2b16b",
       "divergenceIds": [
         "cli-only-route-parity-v1"
       ]
@@ -36833,5 +37029,5 @@
       ]
     }
   ],
-  "conformanceVersion": "7f1ac5b2205ce83886d275d8bdb6eb0b882b3298bd992f2b024f341a57fc5d59"
+  "conformanceVersion": "3f57eb81e775b4cd0f31342062ea2100dcd8871ca42e07960076738bee005965"
 }

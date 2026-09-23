@@ -186,7 +186,7 @@ export async function hybridResolveEntity(
 }
 
 const ORG_WIDE_RESOLVER_ROLES = new Set([
-  "founding_partner", "partner", "senior_manager", "finance", "hr",
+  "founding_partner", "partner",
 ]);
 
 export async function contactBelongsToScopedAccount(args: {

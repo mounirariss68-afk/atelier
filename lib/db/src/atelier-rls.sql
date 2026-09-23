@@ -105,7 +105,8 @@ DECLARE
     -- never an authorization source, but database isolation must still
     -- prevent a missed application predicate from crossing organisations.
     'atelier_document_chunk_embeddings','atelier_entity_embeddings',
-    'atelier_partner_capability_chunks','atelier_strategy_exemplars'
+    'atelier_partner_capability_chunks','atelier_strategy_exemplars',
+    'atelier_legal_entity_aliases','atelier_legal_entity_bundle_definitions'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

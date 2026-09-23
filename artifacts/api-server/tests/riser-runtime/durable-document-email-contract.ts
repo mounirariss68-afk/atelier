@@ -9,12 +9,16 @@ import {
 // the request before the connection failed. It must never be retried blindly.
 assert.equal(isAmbiguousTransportError(new Error("socket closed")), true);
 assert.equal(isAmbiguousTransportError(new MsGraphError("server error", 503)), true);
-assert.equal(isAmbiguousTransportError(new MsGraphError("rate limited", 429)), true);
+assert.equal(isAmbiguousTransportError(new MsGraphError("timeout", 408)), true);
 
 // Auth and ordinary validation failures are known failures, not unknown
 // provider outcomes; they may safely be surfaced as a reconnect/error result.
 assert.equal(isAmbiguousTransportError(new MsGraphError("bad request", 400)), false);
 assert.equal(isAmbiguousTransportError(new MsGraphError("unauthorized", 401)), false);
+assert.equal(isAmbiguousTransportError(new MsGraphError("conflict", 409)), false);
+assert.equal(isAmbiguousTransportError(new MsGraphError("payload too large", 413)), false);
+assert.equal(isAmbiguousTransportError(new MsGraphError("rate limited", 429)), false);
+assert.equal(isAmbiguousTransportError(new MsGraphError("unprocessable", 422)), false);
 
 const now = new Date("2026-09-23T08:00:00.000Z").getTime();
 assert.equal(

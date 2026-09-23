@@ -5,6 +5,8 @@ import {
   atelierAssistantOutbox,
   atelierDocuments,
   atelierDocumentVersions,
+  atelierLegalEntities,
+  atelierLegalEntityBundleDefinitions,
   atelierMsConnections,
 } from "@workspace/db";
 import {
@@ -46,6 +48,15 @@ type EmailInput = {
   subject?: string;
   message?: string;
   mode: "draft" | "send";
+  semanticContext?: {
+    entityId: string;
+    entityLabel: string;
+    entityUpdatedAt: string;
+    bundleDefinitionId: string;
+    bundleKey: string;
+    bundleVersion: number;
+    concepts: string[];
+  };
   __durableActionId?: string;
   __durableStateVersion?: number;
 };
@@ -67,7 +78,9 @@ function durableEnabled(): boolean {
 
 export function isAmbiguousTransportError(error: unknown): boolean {
   if (error instanceof MsAuthError) return false;
-  if (error instanceof MsGraphError) return error.status >= 408 || error.status === 429;
+  if (error instanceof MsGraphError) {
+    return error.status === 408 || error.status >= 500;
+  }
   return true;
 }
 
@@ -76,12 +89,33 @@ async function exactTargetsCurrent(orgId: string, targets: unknown[]): Promise<b
   for (const target of targets) {
     if (!target || typeof target !== "object") return false;
     const row = target as Record<string, unknown>;
-    if (
-      row.type !== "document" ||
-      typeof row.id !== "string" ||
-      typeof row.versionId !== "string" ||
-      typeof row.updatedAt !== "string"
-    ) return false;
+    if (row.type === "legal_entity") {
+      if (typeof row.id !== "string" || typeof row.updatedAt !== "string") return false;
+      const [entity] = await db.select({
+        status: atelierLegalEntities.status,
+        updatedAt: atelierLegalEntities.updatedAt,
+      }).from(atelierLegalEntities).where(and(
+        eq(atelierLegalEntities.id, row.id),
+        eq(atelierLegalEntities.orgId, orgId),
+      ));
+      if (!entity || entity.status === "archived" || entity.updatedAt.toISOString() !== row.updatedAt) return false;
+      continue;
+    }
+    if (row.type === "legal_entity_bundle") {
+      if (typeof row.id !== "string" || typeof row.entityId !== "string" || typeof row.version !== "number") return false;
+      const [bundle] = await db.select({
+        status: atelierLegalEntityBundleDefinitions.status,
+        entityId: atelierLegalEntityBundleDefinitions.entityId,
+        version: atelierLegalEntityBundleDefinitions.version,
+      }).from(atelierLegalEntityBundleDefinitions).where(and(
+        eq(atelierLegalEntityBundleDefinitions.id, row.id),
+        eq(atelierLegalEntityBundleDefinitions.orgId, orgId),
+      ));
+      if (!bundle || bundle.status !== "active" || bundle.entityId !== row.entityId || bundle.version !== row.version) return false;
+      continue;
+    }
+    if (row.type !== "document" || typeof row.id !== "string" ||
+        typeof row.versionId !== "string" || typeof row.updatedAt !== "string") return false;
     const [doc] = await db
       .select({ updatedAt: atelierDocuments.updatedAt, currentVersionId: atelierDocuments.currentVersionId })
       .from(atelierDocuments)
@@ -114,6 +148,7 @@ export async function createDurableDocumentEmailPreview(args: {
   input: EmailInput;
   selected: LibPair[];
   recipientLabels: string[];
+  semanticContext?: EmailInput["semanticContext"];
 }): Promise<{ actionId: string; stateVersion: number }> {
   if (!durableEnabled()) throw new Error("durable-document-email-disabled");
   const capability = findByToolName("email_company_documents");
@@ -131,6 +166,7 @@ export async function createDurableDocumentEmailPreview(args: {
     mode: args.input.mode,
     ...(args.input.subject !== undefined ? { subject: args.input.subject } : {}),
     ...(args.input.message !== undefined ? { message: args.input.message } : {}),
+    ...(args.semanticContext ? { semanticContext: args.semanticContext } : {}),
   };
   const policy = await evaluateAssistantPolicy({
     orgId: args.persona.orgId,
@@ -146,6 +182,22 @@ export async function createDurableDocumentEmailPreview(args: {
     versionId: version.id,
     updatedAt: doc.updatedAt.toISOString(),
   }));
+  if (args.semanticContext) {
+    targets.push({
+      type: "legal_entity",
+      id: args.semanticContext.entityId,
+      versionId: "",
+      updatedAt: args.semanticContext.entityUpdatedAt,
+    });
+    targets.push({
+      type: "legal_entity_bundle",
+      id: args.semanticContext.bundleDefinitionId,
+      entityId: args.semanticContext.entityId,
+      version: args.semanticContext.bundleVersion,
+      versionId: "",
+      updatedAt: "",
+    } as never);
+  }
   const created = await createDurableActionPreview({
     orgId: args.persona.orgId,
     requesterId: args.persona.id,
@@ -159,12 +211,23 @@ export async function createDurableDocumentEmailPreview(args: {
     riskClass: args.input.mode === "send" ? "high" : "write",
     irreversible: args.input.mode === "send",
     outboundChannels: ["email"],
-    summary: `${args.input.mode === "send" ? "Send" : "Create draft"} with ${selected.length} document(s)`,
+    summary: `${args.input.mode === "send" ? "Send" : "Create draft"} with ${selected.length} document(s)${args.semanticContext ? ` for ${args.semanticContext.entityLabel}` : ""}`,
     diff: {
       mode: args.input.mode,
       recipients: args.recipientLabels,
       documentIds: selected.map(({ doc }) => doc.id),
       versionIds: selected.map(({ version }) => version.id),
+      ...(args.semanticContext ? {
+        legalEntity: {
+          id: args.semanticContext.entityId,
+          label: args.semanticContext.entityLabel,
+        },
+        bundle: {
+          key: args.semanticContext.bundleKey,
+          version: args.semanticContext.bundleVersion,
+          concepts: args.semanticContext.concepts,
+        },
+      } : {}),
     },
     expiresAt: new Date(Date.now() + EXPIRY_MS),
     idempotencyKey: `durable:${args.turnId}:${args.step}:document-email`,
@@ -335,7 +398,18 @@ export async function confirmAndExecuteDurableDocumentEmail(args: {
   const validSelected = selected as LibPair[];
   const [conn] = await db.select().from(atelierMsConnections)
     .where(eq(atelierMsConnections.userId, args.requesterId)).limit(1);
-  if (!conn) throw new Error("ms_not_connected");
+  if (!conn) {
+    const result = { code: "ms_not_connected" };
+    await completeDurableAction({
+      actionId: action.id,
+      orgId: action.orgId,
+      requesterId: action.requesterId,
+      fencingToken: claim.fencingToken,
+      status: "failed",
+      result,
+    });
+    return { state: "failed", result };
+  }
   const { freshAccessToken } = await import("../msScheduling.js");
   let accessToken: string;
   let scopes: string[];

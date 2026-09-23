@@ -80,6 +80,18 @@ async function expectPgCode(promise: Promise<unknown>, code: string): Promise<vo
   }
 }
 
+function capturePgFailure(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => null,
+    (error) => error,
+  );
+}
+
+async function expectCapturedPgCode(promise: Promise<unknown>, code: string): Promise<void> {
+  const error = await promise;
+  assert.equal((error as { code?: string } | null)?.code, code);
+}
+
 try {
   const migration = await readFile(
     resolve(process.cwd(), "../../lib/db/drizzle/0095_semantic_projection_rls.sql"),
@@ -152,13 +164,13 @@ try {
       `UPDATE atelier_documents SET status = 'deleted', deleted_at = now() WHERE id = $1`,
       [ids.raceDocA],
     );
-    const claim = claimSecond.query(
+    const claim = capturePgFailure(claimSecond.query(
       `UPDATE atelier_legal_entities SET registrations = $1::jsonb WHERE id = $2`,
       [registration(ids.raceDocA), ids.raceEntityA],
-    );
+    ));
     await new Promise((done) => setTimeout(done, 50));
     await deleteFirst.query("COMMIT");
-    await expectPgCode(claim, "23503");
+    await expectCapturedPgCode(claim, "23503");
     await claimSecond.query("ROLLBACK");
   } finally {
     deleteFirst.release();
@@ -177,13 +189,13 @@ try {
       `UPDATE atelier_legal_entities SET registrations = $1::jsonb WHERE id = $2`,
       [registration(ids.raceDocB), ids.raceEntityB],
     );
-    const remove = deleteSecond.query(
+    const remove = capturePgFailure(deleteSecond.query(
       `UPDATE atelier_documents SET status = 'deleted', deleted_at = now() WHERE id = $1`,
       [ids.raceDocB],
-    );
+    ));
     await new Promise((done) => setTimeout(done, 50));
     await claimFirst.query("COMMIT");
-    await expectPgCode(remove, "23503");
+    await expectCapturedPgCode(remove, "23503");
     await deleteSecond.query("ROLLBACK");
   } finally {
     claimFirst.release();
@@ -203,13 +215,13 @@ try {
       `UPDATE atelier_documents SET entity_id = 'lent_competing' WHERE id = $1`,
       [ids.racePatchDocA],
     );
-    const claim = patchClaimSecond.query(
+    const claim = capturePgFailure(patchClaimSecond.query(
       `UPDATE atelier_legal_entities SET registrations = $1::jsonb WHERE id = $2`,
       [registration(ids.racePatchDocA), ids.racePatchEntityA],
-    );
+    ));
     await new Promise((done) => setTimeout(done, 50));
     await patchFirst.query("COMMIT");
-    await expectPgCode(claim, "23503");
+    await expectCapturedPgCode(claim, "23503");
     await patchClaimSecond.query("ROLLBACK");
   } finally {
     patchFirst.release();
@@ -229,13 +241,13 @@ try {
       `UPDATE atelier_legal_entities SET registrations = $1::jsonb WHERE id = $2`,
       [registration(ids.racePatchDocB), ids.racePatchEntityB],
     );
-    const patch = patchSecond.query(
+    const patch = capturePgFailure(patchSecond.query(
       `UPDATE atelier_documents SET entity_id = 'lent_competing', doc_kind = 'other' WHERE id = $1`,
       [ids.racePatchDocB],
-    );
+    ));
     await new Promise((done) => setTimeout(done, 50));
     await patchClaimFirst.query("COMMIT");
-    await expectPgCode(patch, "23503");
+    await expectCapturedPgCode(patch, "23503");
     await patchSecond.query("ROLLBACK");
   } finally {
     patchClaimFirst.release();

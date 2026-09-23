@@ -22,6 +22,8 @@ import {
   atelierDocuments,
   atelierAuditEvents,
   atelierBankAccount,
+  atelierLegalEntityAliases,
+  atelierLegalEntityBundleDefinitions,
 } from "@workspace/db";
 import { isFoundingPartner, isPartner } from "./personaRoles";
 import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
@@ -33,11 +35,13 @@ import { ensureStatutoryFilings } from "../../lib/atelier-payroll/payrollRun.js"
 // Task #1092 — ownership type → recommended settlement treatment.
 import { recommendedTreatment } from "../../lib/atelier-preformation.js";
 import { duplicateTaxCertificateKind } from "../../lib/finance-tax-certificate-policy.js";
+import { DEFAULT_COMPANY_REGISTRATION_AND_TAX } from "../../lib/legal-entity-document-semantics.js";
 
 const router: IRouter = Router();
 
 type Me = typeof atelierUsers.$inferSelect;
 type EntityRow = typeof atelierLegalEntities.$inferSelect;
+class CanonicalAliasCollisionError extends Error {}
 
 function ensurePersona(req: Request, res: Response): Me | null {
   const me = req.atelierPersona ?? null;
@@ -46,6 +50,10 @@ function ensurePersona(req: Request, res: Response): Me | null {
     return null;
   }
   return me;
+}
+
+function normalizeGovernedAlias(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
 }
 
 function denyRecruiter(me: Me, res: Response): boolean {
@@ -904,6 +912,17 @@ router.post("/finance/entities", async (req, res) => {
   let row: EntityRow;
   try {
     row = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"legal-entity-names:" + me.orgId}))`);
+      const aliases = await tx.select().from(atelierLegalEntityAliases).where(and(
+        eq(atelierLegalEntityAliases.orgId, me.orgId),
+        eq(atelierLegalEntityAliases.status, "active"),
+      ));
+      const canonicalNames = [b.legalNameEn, b.legalNameAr, b.shortName]
+        .filter((name): name is string => !!name)
+        .map(normalizeGovernedAlias);
+      if (aliases.some((alias) => canonicalNames.includes(alias.normalizedAlias))) {
+        throw new CanonicalAliasCollisionError();
+      }
       const [created] = await tx.insert(atelierLegalEntities).values({
       id,
       orgId: me.orgId,
@@ -932,12 +951,26 @@ router.post("/finance/entities", async (req, res) => {
       isHeadEntity: b.isHeadEntity ?? false,
       notes: b.notes ?? null,
       }).returning();
+      await tx.insert(atelierLegalEntityBundleDefinitions).values({
+        id: rid("ebundle"),
+        orgId: me.orgId,
+        entityId: id,
+        bundleKey: "company_registration_and_tax",
+        version: 1,
+        concepts: DEFAULT_COMPANY_REGISTRATION_AND_TAX,
+        status: "active",
+        createdBy: me.id,
+      });
       await linkTaxCertificates(tx, me.orgId, id, registrations);
       return created;
     });
   } catch (error) {
     if (error instanceof TaxCertificateClaimError) {
       res.status(409).json({ error: "tax-certificate-already-linked", message: error.message });
+      return;
+    }
+    if (error instanceof CanonicalAliasCollisionError) {
+      res.status(409).json({ error: "canonical-name-collides-with-active-alias" });
       return;
     }
     throw error;
@@ -1050,6 +1083,20 @@ router.patch("/finance/entities/:id", async (req, res) => {
   let row: EntityRow;
   try {
     row = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"legal-entity-names:" + me.orgId}))`);
+      const aliases = await tx.select().from(atelierLegalEntityAliases).where(and(
+        eq(atelierLegalEntityAliases.orgId, me.orgId),
+        eq(atelierLegalEntityAliases.status, "active"),
+        ne(atelierLegalEntityAliases.entityId, existing.id),
+      ));
+      const canonicalNames = [
+        b.legalNameEn ?? existing.legalNameEn,
+        b.legalNameAr === undefined ? existing.legalNameAr : b.legalNameAr,
+        b.shortName ?? existing.shortName,
+      ].filter((name): name is string => !!name).map(normalizeGovernedAlias);
+      if (aliases.some((alias) => canonicalNames.includes(alias.normalizedAlias))) {
+        throw new CanonicalAliasCollisionError();
+      }
       const [updated] = await tx.update(atelierLegalEntities)
         .set(patch)
         .where(eq(atelierLegalEntities.id, existing.id))
@@ -1062,6 +1109,10 @@ router.patch("/finance/entities/:id", async (req, res) => {
   } catch (error) {
     if (error instanceof TaxCertificateClaimError) {
       res.status(409).json({ error: "tax-certificate-already-linked", message: error.message });
+      return;
+    }
+    if (error instanceof CanonicalAliasCollisionError) {
+      res.status(409).json({ error: "canonical-name-collides-with-active-alias" });
       return;
     }
     throw error;
@@ -1405,6 +1456,223 @@ router.post("/finance/entities/:id/bank-letter-extract", async (req, res) => {
     documentId,
     proposal: { confidenceNote: out.confidenceNote, fields: out.fields },
   });
+});
+
+// Task #1410 — governed legal-entity aliases. Retiring is soft-delete so the
+// audit trail and historical inbound messages remain explainable.
+// @cli-skip: partner-gated legal-entity alias governance; semantic chat only consumes approved aliases
+router.get("/finance/entities/:id/aliases", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res)) return;
+  const rows = await db.select().from(atelierLegalEntityAliases).where(and(
+    eq(atelierLegalEntityAliases.orgId, me.orgId),
+    eq(atelierLegalEntityAliases.entityId, req.params.id),
+  ));
+  res.json({ items: rows });
+});
+
+// @cli-skip: partner-gated legal-entity alias governance; semantic chat only consumes approved aliases
+router.post("/finance/entities/:id/aliases", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res) || !requireEntityWriter(me, res)) return;
+  const entity = await loadEntity(me.orgId, req.params.id);
+  if (!entity) { res.status(404).json({ error: "entity-not-found" }); return; }
+  const parsed = z.object({ alias: str(200).min(1) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "invalid-alias" }); return; }
+  const normalizedAlias = normalizeGovernedAlias(parsed.data.alias);
+  if (!normalizedAlias) { res.status(400).json({ error: "invalid-alias" }); return; }
+  const registry = await db.select({
+    id: atelierLegalEntities.id,
+    legalNameEn: atelierLegalEntities.legalNameEn,
+    legalNameAr: atelierLegalEntities.legalNameAr,
+    shortName: atelierLegalEntities.shortName,
+  }).from(atelierLegalEntities).where(and(
+    eq(atelierLegalEntities.orgId, me.orgId),
+    ne(atelierLegalEntities.status, "archived"),
+  ));
+  const canonicalCollision = registry.find((candidate) =>
+    candidate.id !== entity.id &&
+    [candidate.legalNameEn, candidate.legalNameAr, candidate.shortName]
+      .some((name) => !!name && normalizeGovernedAlias(name) === normalizedAlias));
+  if (canonicalCollision) {
+    res.status(409).json({ error: "alias-collides-with-canonical-entity", entityId: canonicalCollision.id });
+    return;
+  }
+  const [existing] = await db.select().from(atelierLegalEntityAliases).where(and(
+    eq(atelierLegalEntityAliases.orgId, me.orgId),
+    eq(atelierLegalEntityAliases.normalizedAlias, normalizedAlias),
+    eq(atelierLegalEntityAliases.status, "active"),
+  ));
+  if (existing) { res.status(409).json({ error: "alias-collision", aliasId: existing.id }); return; }
+  let row: typeof atelierLegalEntityAliases.$inferSelect;
+  try {
+    row = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"legal-entity-names:" + me.orgId}))`);
+      const currentRegistry = await tx.select({
+        id: atelierLegalEntities.id,
+        legalNameEn: atelierLegalEntities.legalNameEn,
+        legalNameAr: atelierLegalEntities.legalNameAr,
+        shortName: atelierLegalEntities.shortName,
+      }).from(atelierLegalEntities).where(and(
+        eq(atelierLegalEntities.orgId, me.orgId),
+        ne(atelierLegalEntities.status, "archived"),
+      ));
+      if (currentRegistry.some((candidate) =>
+        candidate.id !== entity.id &&
+        [candidate.legalNameEn, candidate.legalNameAr, candidate.shortName]
+          .some((name) => !!name && normalizeGovernedAlias(name) === normalizedAlias))) {
+        throw new CanonicalAliasCollisionError();
+      }
+      const [created] = await tx.insert(atelierLegalEntityAliases).values({
+        id: rid("ealias"), orgId: me.orgId, entityId: entity.id, alias: parsed.data.alias,
+        normalizedAlias, status: "active", createdBy: me.id,
+      }).returning();
+      return created!;
+    });
+  } catch (error) {
+    if (error instanceof CanonicalAliasCollisionError) {
+      res.status(409).json({ error: "alias-collides-with-canonical-entity" });
+      return;
+    }
+    if ((error as { code?: string }).code === "23505") {
+      res.status(409).json({ error: "alias-collision" });
+      return;
+    }
+    throw error;
+  }
+  await auditEntity({ entityId: entity.id, actor: me, action: "legal_entity.alias.create", payload: { aliasId: row!.id, alias: parsed.data.alias }, summary: `Created legal-entity alias "${parsed.data.alias}"` });
+  res.status(201).json({ item: row });
+});
+
+// @cli-skip: partner-gated legal-entity alias governance; semantic chat only consumes approved aliases
+router.patch("/finance/entities/:id/aliases/:aliasId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res) || !requireEntityWriter(me, res)) return;
+  const [row] = await db.select().from(atelierLegalEntityAliases).where(and(
+    eq(atelierLegalEntityAliases.id, req.params.aliasId),
+    eq(atelierLegalEntityAliases.orgId, me.orgId),
+    eq(atelierLegalEntityAliases.entityId, req.params.id),
+  ));
+  if (!row) { res.status(404).json({ error: "alias-not-found" }); return; }
+  if (row.status !== "active") { res.status(409).json({ error: "alias-retired" }); return; }
+  const parsed = z.object({ status: z.literal("retired") }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "only-retirement-is-supported" }); return; }
+  const [updated] = await db.update(atelierLegalEntityAliases).set({
+    status: "retired", retiredBy: me.id, retiredAt: new Date(),
+  }).where(eq(atelierLegalEntityAliases.id, row.id)).returning();
+  await auditEntity({ entityId: row.entityId, actor: me, action: "legal_entity.alias.retire", payload: { aliasId: row.id }, summary: `Retired legal-entity alias "${row.alias}"` });
+  res.json({ item: updated });
+});
+
+// @cli-skip: partner-gated legal-entity alias governance; semantic chat only consumes approved aliases
+router.delete("/finance/entities/:id/aliases/:aliasId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res) || !requireEntityWriter(me, res)) return;
+  const [row] = await db.select().from(atelierLegalEntityAliases).where(and(
+    eq(atelierLegalEntityAliases.id, req.params.aliasId),
+    eq(atelierLegalEntityAliases.orgId, me.orgId),
+    eq(atelierLegalEntityAliases.entityId, req.params.id),
+  ));
+  if (!row) { res.status(404).json({ error: "alias-not-found" }); return; }
+  if (row.status === "retired") { res.status(204).send(); return; }
+  await db.update(atelierLegalEntityAliases).set({
+    status: "retired", retiredBy: me.id, retiredAt: new Date(),
+  }).where(eq(atelierLegalEntityAliases.id, row.id));
+  await auditEntity({ entityId: row.entityId, actor: me, action: "legal_entity.alias.retire", payload: { aliasId: row.id }, summary: `Retired legal-entity alias "${row.alias}"` });
+  res.status(204).send();
+});
+
+const bundleConceptSchema = z.object({
+  key: z.enum(["registration", "ejari", "constitutional", "ct", "vat"]),
+  synonyms: z.array(str(120).min(1)).min(1).max(30),
+  exclusions: z.array(str(120).min(1)).max(30).optional(),
+  source: z.enum(["registration", "entity_document"]),
+});
+const bundleSchema = z.object({
+  bundleKey: str(100).min(1),
+  concepts: z.array(bundleConceptSchema).min(1).max(20),
+});
+
+// @cli-skip: partner-gated legal-entity bundle governance; semantic chat only consumes active versions
+router.get("/finance/entities/:id/document-bundles", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res)) return;
+  const rows = await db.select().from(atelierLegalEntityBundleDefinitions).where(and(
+    eq(atelierLegalEntityBundleDefinitions.orgId, me.orgId),
+    eq(atelierLegalEntityBundleDefinitions.entityId, req.params.id),
+  )).orderBy(desc(atelierLegalEntityBundleDefinitions.version));
+  res.json({ items: rows });
+});
+
+// @cli-skip: partner-gated legal-entity bundle governance; semantic chat only consumes active versions
+router.post("/finance/entities/:id/document-bundles", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res) || !requireEntityWriter(me, res)) return;
+  const entity = await loadEntity(me.orgId, req.params.id);
+  if (!entity) { res.status(404).json({ error: "entity-not-found" }); return; }
+  const parsed = bundleSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "invalid-bundle", details: parsed.error.flatten() }); return; }
+  const keys = parsed.data.concepts.map((c) => c.key);
+  if (new Set(keys).size !== keys.length) { res.status(400).json({ error: "duplicate-concept-key" }); return; }
+  const sourceMismatch = parsed.data.concepts.some((c) =>
+    (c.key === "ct" || c.key === "vat") ? c.source !== "registration" : c.source !== "entity_document");
+  if (sourceMismatch) { res.status(400).json({ error: "invalid-concept-source" }); return; }
+  const activate = req.body.activate === true;
+  const row = await db.transaction(async (tx) => {
+    const lockKey = `${me.orgId}:${entity.id}:${parsed.data.bundleKey}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+    const prior = await tx.select().from(atelierLegalEntityBundleDefinitions).where(and(
+      eq(atelierLegalEntityBundleDefinitions.orgId, me.orgId),
+      eq(atelierLegalEntityBundleDefinitions.entityId, entity.id),
+      eq(atelierLegalEntityBundleDefinitions.bundleKey, parsed.data.bundleKey),
+    )).orderBy(desc(atelierLegalEntityBundleDefinitions.version));
+    const version = (prior[0]?.version ?? 0) + 1;
+    if (activate) {
+      await tx.update(atelierLegalEntityBundleDefinitions).set({ status: "retired" }).where(and(
+        eq(atelierLegalEntityBundleDefinitions.orgId, me.orgId),
+        eq(atelierLegalEntityBundleDefinitions.entityId, entity.id),
+        eq(atelierLegalEntityBundleDefinitions.bundleKey, parsed.data.bundleKey),
+        eq(atelierLegalEntityBundleDefinitions.status, "active"),
+      ));
+    }
+    const [created] = await tx.insert(atelierLegalEntityBundleDefinitions).values({
+      id: rid("ebundle"), orgId: me.orgId, entityId: entity.id,
+      bundleKey: parsed.data.bundleKey, version, concepts: parsed.data.concepts,
+      status: activate ? "active" : "draft", createdBy: me.id,
+    }).returning();
+    return created!;
+  });
+  await auditEntity({ entityId: entity.id, actor: me, action: "legal_entity.document_bundle.create", payload: { bundleId: row.id, bundleKey: row.bundleKey, version: row.version, activate }, summary: `Created document bundle ${row.bundleKey} v${row.version}` });
+  res.status(201).json({ item: row });
+});
+
+// @cli-skip: partner-gated legal-entity bundle governance; semantic chat only consumes active versions
+router.post("/finance/entities/:id/document-bundles/:bundleKey/activate", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me || denyRecruiter(me, res) || !requireEntityWriter(me, res)) return;
+  const updated = await db.transaction(async (tx) => {
+    const lockKey = `${me.orgId}:${req.params.id}:${req.params.bundleKey}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+    const rows = await tx.select().from(atelierLegalEntityBundleDefinitions).where(and(
+      eq(atelierLegalEntityBundleDefinitions.orgId, me.orgId),
+      eq(atelierLegalEntityBundleDefinitions.entityId, req.params.id),
+      eq(atelierLegalEntityBundleDefinitions.bundleKey, req.params.bundleKey),
+    )).orderBy(desc(atelierLegalEntityBundleDefinitions.version));
+    const target = rows[0];
+    if (!target) return null;
+    await tx.update(atelierLegalEntityBundleDefinitions).set({ status: "retired" }).where(and(
+      eq(atelierLegalEntityBundleDefinitions.orgId, me.orgId),
+      eq(atelierLegalEntityBundleDefinitions.entityId, req.params.id),
+      eq(atelierLegalEntityBundleDefinitions.bundleKey, req.params.bundleKey),
+      eq(atelierLegalEntityBundleDefinitions.status, "active"),
+    ));
+    const [activated] = await tx.update(atelierLegalEntityBundleDefinitions).set({ status: "active" })
+      .where(eq(atelierLegalEntityBundleDefinitions.id, target.id)).returning();
+    return activated!;
+  });
+  if (!updated) { res.status(404).json({ error: "bundle-not-found" }); return; }
+  await auditEntity({ entityId: req.params.id, actor: me, action: "legal_entity.document_bundle.activate", payload: { bundleId: updated.id, version: updated.version }, summary: `Activated document bundle ${updated.bundleKey} v${updated.version}` });
+  res.json({ item: updated });
 });
 
 export default router;

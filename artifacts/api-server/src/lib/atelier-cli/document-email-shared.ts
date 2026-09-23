@@ -180,8 +180,7 @@ export async function loadVisibleLibraryPairs(ctx: ToolContext): Promise<LibPair
         isNull(atelierDocuments.deletedAt),
       ),
     )
-    .orderBy(desc(atelierDocuments.updatedAt))
-    .limit(500);
+    .orderBy(desc(atelierDocuments.updatedAt));
   const visible: LibPair[] = [];
   for (const doc of allDocs) {
     if (!(await canSeeDocument(meRow, access, doc))) continue;

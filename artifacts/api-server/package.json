@@ -118,6 +118,7 @@
     "test:finance-entity-lifecycle": "tsx ./tests/crm/finance-entity-lifecycle-probe.ts",
     "test:finance-source-integrity": "tsx ./tests/crm/finance-source-integrity-policy.ts",
     "test:semantic-source-integrity": "tsx ./tests/crm/finance-source-integrity-policy.ts && tsx ./tests/riser-runtime/durable-document-email-contract.ts && tsx ./tests/crm/semantic-source-integrity-db.ts",
+    "test:legal-entity-semantics": "tsx ./tests/crm/legal-entity-document-semantics.ts",
     "test:shareholder-funding": "NODE_ENV=test tsx ./tests/shareholder-funding/run.ts",
     "test:mobile-auth": "tsx ./tests/mobile-auth/run.ts",
     "test:meeting-brief": "tsx ./tests/meeting-brief/run.ts",

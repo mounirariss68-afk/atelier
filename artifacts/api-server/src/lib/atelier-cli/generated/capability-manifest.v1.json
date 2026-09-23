@@ -1,7 +1,7 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "f04f698f8b37251d6790e8751e352a83a4d833cd0f4d6e76393e1234bf55f76e",
+  "manifestVersion": "0ae01da0cbb4cd41e517af599686adc20144cf9bc523af54a44d88a224a7ce54",
   "entryCount": 328,
   "entries": [
     {
@@ -6397,7 +6397,7 @@
       "source": "cli-only",
       "catalogVersion": 3,
       "inputSchemaVersion": 3,
-      "inputSchemaHash": "f55d9e4514c5",
+      "inputSchemaHash": "2a907dbcf9f2",
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "outbound_write",
@@ -6415,7 +6415,7 @@
         "senior_manager"
       ],
       "policyClass": "outbound_write",
-      "implementationVersion": "db2ece90bc4c",
+      "implementationVersion": "00fc96b2b16b",
       "approverRoles": [],
       "confirmation": {
         "required": true,

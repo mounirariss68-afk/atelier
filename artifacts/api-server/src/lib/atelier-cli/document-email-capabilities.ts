@@ -15,13 +15,16 @@
  *     return a pick-one options card;
  *   - attachments over ~3 MB are refused honestly.
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import {
   db,
   atelierDocuments,
   atelierDocumentVersions,
   atelierAuditEvents,
   atelierMsConnections,
+  atelierLegalEntities,
+  atelierLegalEntityAliases,
+  atelierLegalEntityBundleDefinitions,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -54,6 +57,15 @@ import { resolveAccount } from "./resolvers/index.js";
 import { rankNearestNames } from "./nearest-suggestions.js";
 import type { ToolResult } from "./index.js";
 import { createDurableDocumentEmailPreview } from "../assistant/durable-document-email.js";
+import {
+  classifySemanticBundleWithClaude,
+  normalizeAlias,
+  parseSemanticBundle,
+  resolveEntityBundle,
+  rolloutModeFromEnv,
+  type BundleConcept,
+  type SemanticConcept,
+} from "../legal-entity-document-semantics.js";
 
 const MAIL_ATTACH_MAX_BYTES = 3 * 1024 * 1024;
 
@@ -78,6 +90,83 @@ function ownDocOptionWire(d: OwnDocRow) {
     label: d.title || d.kind,
     secondary: [d.kind, d.fileName, "personal document"].filter(Boolean).join(" — "),
   };
+}
+
+async function observeLegalDocumentSemantics(args: {
+  orgId: string;
+  entityName: string;
+  query: string;
+  visible: Array<{ doc: DocRow; version: VersionRow | null }>;
+}): Promise<void> {
+  const normalized = normalizeAlias(args.entityName);
+  const entities = await db.select().from(atelierLegalEntities).where(and(
+    eq(atelierLegalEntities.orgId, args.orgId),
+    ne(atelierLegalEntities.status, "archived"),
+  ));
+  const aliases = await db.select().from(atelierLegalEntityAliases).where(and(
+    eq(atelierLegalEntityAliases.orgId, args.orgId),
+    eq(atelierLegalEntityAliases.normalizedAlias, normalized),
+    eq(atelierLegalEntityAliases.status, "active"),
+  ));
+  const ids = new Set(aliases.map((alias) => alias.entityId));
+  for (const entity of entities) {
+    if ([entity.legalNameEn, entity.legalNameAr, entity.shortName]
+      .some((name) => !!name && normalizeAlias(name) === normalized)) ids.add(entity.id);
+  }
+  const matches = entities.filter((entity) => ids.has(entity.id));
+  if (matches.length !== 1) {
+    console.info("[legal-entity-document-semantics-shadow]", {
+      orgId: args.orgId, outcome: matches.length === 0 ? "entity_missing" : "entity_ambiguous",
+    });
+    return;
+  }
+  const entity = matches[0]!;
+  const [definition] = await db.select().from(atelierLegalEntityBundleDefinitions).where(and(
+    eq(atelierLegalEntityBundleDefinitions.orgId, args.orgId),
+    eq(atelierLegalEntityBundleDefinitions.entityId, entity.id),
+    eq(atelierLegalEntityBundleDefinitions.bundleKey, "company_registration_and_tax"),
+    eq(atelierLegalEntityBundleDefinitions.status, "active"),
+  )).orderBy(desc(atelierLegalEntityBundleDefinitions.version)).limit(1);
+  if (!definition) {
+    console.info("[legal-entity-document-semantics-shadow]", { orgId: args.orgId, outcome: "bundle_missing" });
+    return;
+  }
+  const configured = definition.concepts as BundleConcept[];
+  const concepts = await classifySemanticBundleWithClaude({
+    query: args.query, orgId: args.orgId, configured,
+  });
+  const authoritativeRows = await db.select().from(atelierDocuments).where(and(
+    eq(atelierDocuments.orgId, args.orgId),
+    eq(atelierDocuments.entityId, entity.id),
+  ));
+  const versionIds = authoritativeRows.map((doc) => doc.currentVersionId).filter((id): id is string => !!id);
+  const versions = versionIds.length
+    ? await db.select().from(atelierDocumentVersions).where(inArray(atelierDocumentVersions.id, versionIds))
+    : [];
+  const byVersion = new Map(versions.map((version) => [version.id, version]));
+  const requested = configured.filter((concept) => concepts.includes(concept.key as SemanticConcept));
+  const outcomes = resolveEntityBundle(
+    { id: entity.id, registrations: entity.registrations },
+    args.visible.filter(({ doc }) => doc.entityId === entity.id).map(({ doc, version }) => ({
+      id: doc.id, title: doc.title, docKind: doc.docKind, currentVersionId: doc.currentVersionId,
+      status: doc.status, deletedAt: doc.deletedAt, available: !!version?.blobRef, versionExists: !!version,
+    })),
+    requested,
+    authoritativeRows.map((doc) => {
+      const version = doc.currentVersionId ? byVersion.get(doc.currentVersionId) : undefined;
+      return {
+        id: doc.id, title: doc.title, docKind: doc.docKind, currentVersionId: doc.currentVersionId,
+        status: doc.status, deletedAt: doc.deletedAt, available: !!version?.blobRef, versionExists: !!version,
+      };
+    }),
+  );
+  console.info("[legal-entity-document-semantics-shadow]", {
+    orgId: args.orgId,
+    outcome: concepts.length === 0 ? "concept_unclear" : "resolved",
+    bundleVersion: definition.version,
+    concepts,
+    resolutionOutcomes: outcomes.map((outcome) => outcome.outcome),
+  });
 }
 
 defineCapability({
@@ -119,6 +208,11 @@ defineCapability({
         type: "string",
         description:
           "Account/client name when the request scopes the document to an account, e.g. 'email the report for U Mobile to Sarah' → accountName 'U Mobile'. Also prefers that account's contacts when resolving recipient names.",
+      },
+      entityName: {
+        type: "string",
+        description:
+          "Canonical Finance legal-entity name or governed alias, e.g. 'Cognirise Dubai'. Never resolves through CRM.",
       },
       to: {
         type: "array",
@@ -207,6 +301,193 @@ defineCapability({
       return { ok: false, errorCode: "not_found", errorMessage: "Your login could not be resolved to a user record." };
     }
     const visible = visibleOrNull;
+    let semanticSelected: Array<{ doc: DocRow; version: VersionRow }> | null = null;
+    let semanticContext:
+      | {
+          entityId: string;
+          entityLabel: string;
+          entityUpdatedAt: string;
+          bundleDefinitionId: string;
+          bundleKey: string;
+          bundleVersion: number;
+          concepts: string[];
+        }
+      | undefined;
+    const entityName = typeof input.entityName === "string" ? input.entityName.trim() : "";
+    const semanticMode = rolloutModeFromEnv(ctx.persona.orgId, recipients);
+    if (entityName && semanticMode === "shadow") {
+      await observeLegalDocumentSemantics({
+        orgId: ctx.persona.orgId,
+        entityName,
+        query: String(input.query ?? ""),
+        visible,
+      }).catch((error) => {
+        console.warn("[legal-entity-document-semantics-shadow] evaluation failed", {
+          orgId: ctx.persona.orgId,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      });
+    }
+    if (entityName && semanticMode !== "off" && semanticMode !== "shadow") {
+      const normalized = normalizeAlias(entityName);
+      const entities = await db.select().from(atelierLegalEntities).where(and(
+        eq(atelierLegalEntities.orgId, ctx.persona.orgId),
+        ne(atelierLegalEntities.status, "archived"),
+      ));
+      const aliases = await db.select().from(atelierLegalEntityAliases).where(and(
+        eq(atelierLegalEntityAliases.orgId, ctx.persona.orgId),
+        eq(atelierLegalEntityAliases.normalizedAlias, normalized),
+        eq(atelierLegalEntityAliases.status, "active"),
+      ));
+      const ids = new Set(aliases.map((alias) => alias.entityId));
+      for (const entity of entities) {
+        if (
+          normalizeAlias(entity.legalNameEn) === normalized ||
+          (entity.shortName && normalizeAlias(entity.shortName) === normalized) ||
+          (entity.legalNameAr && normalizeAlias(entity.legalNameAr) === normalized)
+        ) ids.add(entity.id);
+      }
+      const matches = entities.filter((entity) => ids.has(entity.id));
+      if (matches.length === 0) {
+        return { ok: false, errorCode: "legal_entity_not_found", errorMessage: `I couldn't resolve "${entityName}" to an approved Finance legal entity.` };
+      }
+      if (matches.length > 1) {
+        const options = matches.map((entity) => ({
+          id: entity.id,
+          label: entity.shortName || entity.legalNameEn,
+          secondary: [entity.legalNameEn, entity.jurisdiction].filter(Boolean).join(" — "),
+        }));
+        return {
+          ok: true,
+          data: { prompt: `"${entityName}" matches more than one legal entity. Which one do you mean?`, options, navigateTo: null },
+          disambiguation: { kind: "legal_entity", options },
+        };
+      }
+      const entity = matches[0]!;
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      const [definition] = await db.select().from(atelierLegalEntityBundleDefinitions).where(and(
+        eq(atelierLegalEntityBundleDefinitions.orgId, ctx.persona.orgId),
+        eq(atelierLegalEntityBundleDefinitions.entityId, entity.id),
+        eq(atelierLegalEntityBundleDefinitions.bundleKey, "company_registration_and_tax"),
+        eq(atelierLegalEntityBundleDefinitions.status, "active"),
+      )).orderBy(desc(atelierLegalEntityBundleDefinitions.version)).limit(1);
+      if (!definition) {
+        return {
+          ok: false,
+          errorCode: "legal_document_bundle_not_governed",
+          errorMessage: `No approved company registration and tax bundle is active for ${entity.shortName || entity.legalNameEn}. Ask a partner to review and activate one.`,
+        };
+      }
+      const configured = definition.concepts as BundleConcept[];
+      const concepts = await classifySemanticBundleWithClaude({
+        query,
+        orgId: ctx.persona.orgId,
+        configured,
+      });
+      if (concepts.length === 0) {
+        return {
+          ok: false,
+          errorCode: "legal_document_concept_unclear",
+          errorMessage: "Which legal-entity documents do you need: registration, Ejari, constitutional, Corporate Tax, VAT, or the company registration and tax document pack?",
+        };
+      }
+      const requested = configured.filter((concept) => concepts.includes(concept.key as SemanticConcept));
+      const entityVisible = visible.filter(({ doc }) => doc.entityId === entity.id);
+      const authoritativeRows = await db.select().from(atelierDocuments).where(and(
+        eq(atelierDocuments.orgId, ctx.persona.orgId),
+        eq(atelierDocuments.entityId, entity.id),
+      ));
+      const currentVersionIds = authoritativeRows
+        .map((doc) => doc.currentVersionId)
+        .filter((id): id is string => !!id);
+      const currentVersions = currentVersionIds.length > 0
+        ? await db.select().from(atelierDocumentVersions).where(inArray(atelierDocumentVersions.id, currentVersionIds))
+        : [];
+      const versionsById = new Map(currentVersions.map((version) => [version.id, version]));
+      const resolutions = resolveEntityBundle(
+        { id: entity.id, registrations: entity.registrations },
+        entityVisible.map(({ doc, version }) => ({
+          id: doc.id,
+          title: doc.title,
+          docKind: doc.docKind,
+          currentVersionId: doc.currentVersionId,
+          status: doc.status,
+          deletedAt: doc.deletedAt,
+          available: !!version?.blobRef,
+          versionExists: !!version,
+        })),
+        requested,
+        authoritativeRows.map((doc) => {
+          const version = doc.currentVersionId ? versionsById.get(doc.currentVersionId) : undefined;
+          return {
+            id: doc.id,
+            title: doc.title,
+            docKind: doc.docKind,
+            currentVersionId: doc.currentVersionId,
+            status: doc.status,
+            deletedAt: doc.deletedAt,
+            available: !!version?.blobRef,
+            versionExists: !!version,
+          };
+        }),
+      );
+      const unresolved = resolutions.filter((result) => result.outcome !== "resolved");
+      if (unresolved.length > 0) {
+        const detail = unresolved.map((result) =>
+          `${result.concept}: ${result.outcome}${result.documentIds.length ? ` (${result.documentIds.join(", ")})` : ""}`
+        ).join("; ");
+        const options = unresolved.flatMap((result) => result.documentIds.map((id) => {
+          const pair = entityVisible.find((candidate) => candidate.doc.id === id);
+          return { id, label: pair?.doc.title ?? id, secondary: `${result.concept} — ${result.outcome}` };
+        }));
+        if (options.length > 0) {
+          return {
+            ok: true,
+            data: { prompt: `I couldn't safely assemble the governed pack for ${entity.shortName || entity.legalNameEn}: ${detail}.`, options, navigateTo: null },
+            disambiguation: { kind: "document", options },
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "legal_document_bundle_incomplete",
+          errorMessage: `I couldn't safely assemble the governed pack for ${entity.shortName || entity.legalNameEn}: ${detail}.`,
+        };
+      }
+      semanticSelected = resolutions.map((result) => {
+        const id = result.outcome === "resolved" ? result.documentId : "";
+        const pair = entityVisible.find((candidate) => candidate.doc.id === id);
+        if (!pair?.version?.blobRef) throw new Error("semantic-source-drift");
+        return { doc: pair.doc, version: pair.version };
+      });
+      semanticContext = {
+        entityId: entity.id,
+        entityLabel: entity.shortName || entity.legalNameEn,
+        entityUpdatedAt: entity.updatedAt.toISOString(),
+        bundleDefinitionId: definition.id,
+        bundleKey: definition.bundleKey,
+        bundleVersion: definition.version,
+        concepts,
+      };
+      if (semanticMode === "retrieval") {
+        return {
+          ok: true,
+          data: {
+            rollout: "retrieval",
+            message: "The governed pack resolved. Outlook draft creation is not enabled for this rollout cohort yet.",
+            legalEntity: semanticContext,
+            documents: semanticSelected.map(({ doc, version }) => ({ id: doc.id, title: doc.title, versionId: version.id, fileName: version.fileName })),
+            navigateTo: null,
+          },
+        };
+      }
+      if (mode !== "draft") {
+        return {
+          ok: false,
+          errorCode: "legal_entity_documents_draft_only",
+          errorMessage: "Legal-entity document packs can only create an Outlook draft; immediate send is not enabled.",
+        };
+      }
+    }
 
     // ---- Task #846: cross-domain handoff to the PERSONAL doc flow -------
     // A request that reaches the company tool may really target the
@@ -248,7 +529,7 @@ defineCapability({
       return null;
     };
 
-    let selected: Array<{ doc: DocRow; version: VersionRow }> = [];
+    let selected: Array<{ doc: DocRow; version: VersionRow }> = semanticSelected ?? [];
     const ids = Array.isArray(input.documentIds)
       ? [...new Set(input.documentIds.map((v) => String(v)).filter(Boolean))]
       : [];
@@ -264,7 +545,9 @@ defineCapability({
       }
       return { doc: pair.doc, version: pair.version };
     };
-    if (ids.length > 0) {
+    if (semanticSelected) {
+      // Exact governed selection is already resolved from authoritative rows.
+    } else if (ids.length > 0) {
       const byId = new Map(visible.map((p) => [p.doc.id, p]));
       // Task #846 — ids that aren't library docs may be the caller's OWN
       // personal-document ids (e.g. picked from a cross-domain options
@@ -463,6 +746,7 @@ defineCapability({
           },
           selected,
           recipientLabels,
+          semanticContext,
         });
       } catch (error) {
         return {
@@ -484,6 +768,7 @@ defineCapability({
                 target: "outlook_draft",
                 recipients: recipientLabels,
                 documents: selected.map(({ doc }) => doc.title),
+              ...(semanticContext ? { legalEntity: semanticContext } : {}),
               },
             };
       return {
@@ -500,6 +785,7 @@ defineCapability({
               fileName: version.fileName,
               sizeBytes: version.sizeBytes,
             })),
+            ...(semanticContext ? { legalEntity: semanticContext } : {}),
           },
         },
         confirmation: {
