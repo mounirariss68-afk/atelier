@@ -538,6 +538,8 @@ export async function getMsProfile(accessToken: string): Promise<MsProfile> {
 export interface MsCalendarEvent {
   id: string;
   iCalUId?: string;
+  seriesMasterId?: string;
+  type?: string;
   subject?: string;
   isCancelled?: boolean;
   isAllDay?: boolean;
@@ -623,7 +625,7 @@ export async function getCalendarView(
     $orderby: "start/dateTime",
     $top: "100",
     $select:
-      "id,iCalUId,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink,showAs",
+      "id,iCalUId,seriesMasterId,type,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink,showAs",
   });
   const out: MsCalendarEvent[] = [];
   let path: string | null = `/me/calendarView?${qs.toString()}`;
@@ -637,7 +639,42 @@ export async function getCalendarView(
     path = next ? next.replace(graphBase(), "") : null;
     if (path && !path.startsWith("/")) path = null; // absolute foreign URL — stop
   }
+  // Graph occasionally expands recurring occurrences without their inherited
+  // subject. Resolve only those incomplete occurrences; keep genuinely empty
+  // string subjects as intentionally untitled.
+  for (const ev of out) {
+    if ((ev.subject === undefined || ev.subject === null) && ev.seriesMasterId) {
+      try {
+        const authoritative = await getCalendarEvent(accessToken, ev.id);
+        if (authoritative.subject !== undefined && authoritative.subject !== null) {
+          ev.subject = authoritative.subject;
+          continue;
+        }
+        const master = await getCalendarEvent(accessToken, ev.seriesMasterId);
+        if (master.subject !== undefined && master.subject !== null) {
+          ev.subject = master.subject;
+        }
+      } catch {
+        // The route still returns the occurrence; the wire fallback is used
+        // only when Graph cannot supply a title from either source.
+      }
+    }
+  }
   return out;
+}
+
+const CALENDAR_EVENT_SELECT =
+  "id,iCalUId,seriesMasterId,type,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink,showAs";
+
+/** Fetch one authoritative event/occurrence with every field used by Atelier. */
+export async function getCalendarEvent(
+  accessToken: string,
+  eventId: string,
+): Promise<MsCalendarEvent> {
+  return graphGet<MsCalendarEvent>(
+    accessToken,
+    `/me/events/${encodeURIComponent(eventId)}?$select=${encodeURIComponent(CALENDAR_EVENT_SELECT)}`,
+  );
 }
 // ------------------------------------------------------------------
 // Task #602 — leave → Outlook out-of-office surfaces.

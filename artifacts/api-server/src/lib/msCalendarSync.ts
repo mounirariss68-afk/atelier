@@ -43,6 +43,7 @@ import {
   MsGraphError,
   createGraphSubscription,
   deleteGraphSubscription,
+  getCalendarEvent,
   getCalendarViewDelta,
   getCalendarViewForCalendar,
   listCalendars,
@@ -91,6 +92,62 @@ function eventTime(ev: MsCalendarEvent, which: "start" | "end"): Date | null {
   if (!dt) return null;
   const d = new Date(dt.endsWith("Z") ? dt : `${dt}Z`);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Graph delta objects are sparse: omitted properties mean "unchanged", while
+ * explicit null/false/empty values are real updates. Merge only defined keys. */
+export function mergeCalendarDelta(
+  existing: MsCalendarEvent | null,
+  delta: MsCalendarDeltaEvent,
+): MsCalendarDeltaEvent {
+  const merged = { ...(existing ?? {}) } as MsCalendarDeltaEvent;
+  for (const [key, value] of Object.entries(delta)) {
+    if (value !== undefined) {
+      (merged as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function completeDeltaEvent(
+  accessToken: string,
+  existing: MsCalendarEvent | null,
+  delta: MsCalendarDeltaEvent,
+): Promise<MsCalendarDeltaEvent> {
+  let merged = mergeCalendarDelta(existing, delta);
+  const needsAuthoritative =
+    !merged.start?.dateTime ||
+    !merged.end?.dateTime ||
+    merged.subject === undefined ||
+    merged.subject === null;
+  if (needsAuthoritative) {
+    try {
+      const authoritative = await getCalendarEvent(accessToken, delta.id);
+      merged = mergeCalendarDelta(merged, authoritative);
+    } catch (e) {
+      console.warn(
+        `[mscal] could not hydrate event ${delta.id}: ${String(e).slice(0, 160)}`,
+      );
+    }
+  }
+  // Some Graph occurrence shapes still omit the inherited series subject.
+  // Resolve it from the master for this occurrence only; never mutate by UID.
+  if (
+    (merged.subject === undefined || merged.subject === null) &&
+    merged.seriesMasterId
+  ) {
+    try {
+      const master = await getCalendarEvent(accessToken, merged.seriesMasterId);
+      if (master.subject !== undefined && master.subject !== null) {
+        merged.subject = master.subject;
+      }
+    } catch (e) {
+      console.warn(
+        `[mscal] could not resolve series subject for ${delta.id}: ${String(e).slice(0, 160)}`,
+      );
+    }
+  }
+  return merged;
 }
 
 // ------------------------------------------------------------------
@@ -547,7 +604,10 @@ export async function runCalendarDeltaSync(
     });
     const now = new Date();
     const rows: (typeof atelierMsCalEvents.$inferInsert)[] = [];
-    for (const ev of page.events) {
+    for (const delta of page.events) {
+      const ev = delta["@removed"] || delta.isCancelled
+        ? delta
+        : await completeDeltaEvent(accessToken, null, delta);
       if (ev["@removed"] || ev.isCancelled) continue;
       const startAt = eventTime(ev, "start");
       const endAt = eventTime(ev, "end");
@@ -654,17 +714,33 @@ export async function runCalendarDeltaSync(
         });
         continue;
       }
-      const startAt = eventTime(ev, "start");
-      const endAt = eventTime(ev, "end");
+      const [existing] = await db
+        .select({ payload: atelierMsCalEvents.payload })
+        .from(atelierMsCalEvents)
+        .where(
+          and(
+            eq(atelierMsCalEvents.userId, userId),
+            eq(atelierMsCalEvents.msEventId, ev.id),
+            eq(atelierMsCalEvents.source, "calendar"),
+          ),
+        )
+        .limit(1);
+      const complete = await completeDeltaEvent(
+        accessToken,
+        (existing?.payload as unknown as MsCalendarEvent | undefined) ?? null,
+        ev,
+      );
+      const startAt = eventTime(complete, "start");
+      const endAt = eventTime(complete, "end");
       if (!startAt || !endAt) continue;
       // Outside the cached window (delta can emit series masters etc.) —
       // ignore, the live path covers out-of-window reads.
       if (endAt < state.windowStart || startAt > state.windowEnd) continue;
       const values = {
-        iCalUid: ev.iCalUId ?? null,
+        iCalUid: complete.iCalUId ?? null,
         startAt,
         endAt,
-        payload: ev as unknown as Record<string, unknown>,
+        payload: complete as unknown as Record<string, unknown>,
         updatedAt: new Date(),
       };
       const res = await db
@@ -689,7 +765,7 @@ export async function runCalendarDeltaSync(
         });
       }
       changed += 1;
-      updated.push({ msEventId: ev.id, iCalUid: ev.iCalUId ?? null, startAt, endAt });
+      updated.push({ msEventId: ev.id, iCalUid: complete.iCalUId ?? null, startAt, endAt });
     }
 
     await reconcileInternalMeetings({ orgId: conn.orgId, userId, removed, updated });

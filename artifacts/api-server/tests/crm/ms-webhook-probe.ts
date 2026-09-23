@@ -78,6 +78,7 @@ async function main() {
   let fullSyncCalls = 0;
   let incrementalCalls = 0;
   let liveCalendarViewCalls = 0;
+  const authoritativeEvents = new Map<string, Record<string, unknown>>();
   const seedEvents = [
     {
       id: "evt-keep",
@@ -97,7 +98,40 @@ async function main() {
       attendees: [],
       organizer: { emailAddress: { address: "me@cognirise.ai" } },
     },
+    {
+      id: "friday-1",
+      iCalUId: "uid-friday-series",
+      seriesMasterId: "friday-master",
+      type: "occurrence",
+      start: { dateTime: iso(4 * 86400e3), timeZone: "UTC" },
+      end: { dateTime: iso(4 * 86400e3 + 3600e3), timeZone: "UTC" },
+      attendees: [],
+    },
+    {
+      id: "friday-2",
+      iCalUId: "uid-friday-series",
+      seriesMasterId: "friday-master",
+      type: "occurrence",
+      subject: "Friday leadership sync",
+      start: { dateTime: iso(11 * 86400e3), timeZone: "UTC" },
+      end: { dateTime: iso(11 * 86400e3 + 3600e3), timeZone: "UTC" },
+      attendees: [],
+    },
   ];
+  authoritativeEvents.set("friday-master", {
+    id: "friday-master",
+    type: "seriesMaster",
+    subject: "Friday leadership sync",
+  });
+  authoritativeEvents.set("friday-1", {
+    id: "friday-1",
+    iCalUId: "uid-friday-series",
+    seriesMasterId: "friday-master",
+    type: "occurrence",
+    start: { dateTime: iso(4 * 86400e3), timeZone: "UTC" },
+    end: { dateTime: iso(4 * 86400e3 + 3600e3), timeZone: "UTC" },
+    attendees: [],
+  });
   const stub = http.createServer((req, res) => {
     const url = req.url ?? "";
     const json = (body: unknown) => {
@@ -152,6 +186,17 @@ async function main() {
     }
     if (url.startsWith("/me/calendars")) {
       json({ value: [] }); // no holiday calendars in this probe
+      return;
+    }
+    if (url.startsWith("/me/events/")) {
+      const id = decodeURIComponent(url.slice("/me/events/".length).split("?")[0] ?? "");
+      const event = authoritativeEvents.get(id);
+      if (!event) {
+        res.statusCode = 404;
+        json({ error: { code: "ErrorItemNotFound" } });
+      } else {
+        json(event);
+      }
       return;
     }
     if (url.startsWith("/me/calendarView")) {
@@ -263,9 +308,9 @@ async function main() {
       .from(atelierMsCalEvents)
       .where(eq(atelierMsCalEvents.userId, userId));
     check(
-      "both seed events cached",
-      cached.length === 2 &&
-        new Set(cached.map((c) => c.msEventId)).size === 2 &&
+      "seed events and recurring occurrences cached",
+      cached.length === 4 &&
+        new Set(cached.map((c) => c.msEventId)).size === 4 &&
         cached.every((c) => c.source === "calendar"),
       cached.map((c) => c.msEventId),
     );
@@ -277,6 +322,12 @@ async function main() {
       "sync state has deltaLink + changedAt",
       Boolean(state1?.deltaLink?.includes("$deltatoken=t1")) && Boolean(state1?.changedAt),
       state1,
+    );
+    const fridayInitial = cached.find((c) => c.msEventId === "friday-1");
+    check(
+      "full sync resolves recurring occurrence subject from series master",
+      (fridayInitial?.payload as any)?.subject === "Friday leadership sync",
+      fridayInitial?.payload,
     );
 
     // ---- 4. GET /me/calendar served from cache ----
@@ -305,7 +356,8 @@ async function main() {
       ch1,
     );
 
-    // ---- 6. webhook notification → incremental sync: tombstone removes
+    // ---- 6. webhook notification → incremental sync: tombstone removes,
+    // sparse updates preserve fields, and one occurrence changes in isolation
     //         cached row + soft-cancels the Atelier internal meeting ----
     await db.insert(atelierMeetings).values({
       id: meetingId,
@@ -331,11 +383,16 @@ async function main() {
           {
             id: "evt-keep",
             iCalUId: "uid-keep",
-            subject: "Client sync (moved)",
             start: { dateTime: iso(2 * 3600e3), timeZone: "UTC" },
             end: { dateTime: iso(3 * 3600e3), timeZone: "UTC" },
-            attendees: [],
-            organizer: { emailAddress: { address: "me@cognirise.ai" } },
+          },
+          {
+            id: "friday-1",
+            iCalUId: "uid-friday-series",
+            seriesMasterId: "friday-master",
+            subject: "Friday leadership sync — revised",
+            start: { dateTime: iso(4 * 86400e3 + 2 * 3600e3), timeZone: "UTC" },
+            end: { dateTime: iso(4 * 86400e3 + 3 * 3600e3), timeZone: "UTC" },
           },
         ],
       },
@@ -384,11 +441,36 @@ async function main() {
         and(eq(atelierMsCalEvents.userId, userId), eq(atelierMsCalEvents.msEventId, "evt-keep")),
       );
     check(
-      "updated event re-cached with new time",
+      "partial update preserves subject and other existing details",
       Boolean(kept) &&
-        (kept.payload as any)?.subject === "Client sync (moved)" &&
+        (kept.payload as any)?.subject === "Client sync" &&
+        (kept.payload as any)?.organizer?.emailAddress?.address === "me@cognirise.ai" &&
         kept.startAt.getTime() === NOW + 2 * 3600e3,
       kept?.payload,
+    );
+    const fridayRows = await db
+      .select()
+      .from(atelierMsCalEvents)
+      .where(eq(atelierMsCalEvents.userId, userId));
+    const friday1 = fridayRows.find((r) => r.msEventId === "friday-1");
+    const friday2 = fridayRows.find((r) => r.msEventId === "friday-2");
+    check(
+      "single occurrence update does not alter its sibling",
+      (friday1?.payload as any)?.subject === "Friday leadership sync — revised" &&
+        friday1?.startAt.getTime() === NOW + 4 * 86400e3 + 2 * 3600e3 &&
+        (friday2?.payload as any)?.subject === "Friday leadership sync" &&
+        friday2?.startAt.getTime() === NOW + 11 * 86400e3,
+      { friday1: friday1?.payload, friday2: friday2?.payload },
+    );
+    const calAfter = await api("GET", "/me/calendar");
+    const wireKeep = calAfter.body?.meetings?.find((m: any) => m.id === "evt-keep");
+    const wireFriday1 = calAfter.body?.meetings?.find((m: any) => m.id === "friday-1");
+    check(
+      "shared calendar response exposes preserved and revised subjects",
+      wireKeep?.subject === "Client sync" &&
+        wireFriday1?.subject === "Friday leadership sync — revised" &&
+        new Date(wireFriday1.start).getTime() === NOW + 4 * 86400e3 + 2 * 3600e3,
+      { wireKeep, wireFriday1 },
     );
     const [state2] = await db
       .select()
@@ -404,7 +486,26 @@ async function main() {
       incrementalCalls,
     });
 
-    // ---- 7. wrong clientState → dropped ----
+    // ---- 7. cancelling one occurrence leaves its sibling intact ----
+    deltaQueue = [{ value: [{ id: "friday-1", "@removed": { reason: "deleted" } }] }];
+    const cancelOne = await sync.runCalendarDeltaSync(userId, "probe-cancel-occurrence");
+    const afterCancel = await db
+      .select()
+      .from(atelierMsCalEvents)
+      .where(eq(atelierMsCalEvents.userId, userId));
+    check(
+      "single occurrence cancellation removes only that occurrence",
+      (cancelOne as any).ok === true &&
+        !afterCancel.some((r) => r.msEventId === "friday-1") &&
+        afterCancel.some(
+          (r) =>
+            r.msEventId === "friday-2" &&
+            (r.payload as any)?.subject === "Friday leadership sync",
+        ),
+      afterCancel.map((r) => ({ id: r.msEventId, subject: (r.payload as any)?.subject })),
+    );
+
+    // ---- 8. wrong clientState → dropped ----
     const incBefore = incrementalCalls;
     const forged = await fetch(`${ROOT}/api/ms/calendar/webhook`, {
       method: "POST",
@@ -422,7 +523,7 @@ async function main() {
       { status: forged.status, incBefore, incrementalCalls },
     );
 
-    // ---- 8. cleanup path ----
+    // ---- 9. cleanup path ----
     await sync.removeCalendarSubscription(userId);
     const [subGone] = await db
       .select()

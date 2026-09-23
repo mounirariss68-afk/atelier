@@ -120,9 +120,38 @@ async function main() {
               end: { dateTime: endIso, timeZone: "UTC" },
               attendees: [],
             },
+            {
+              id: "evt-friday",
+              iCalUId: "uid-friday",
+              seriesMasterId: "series-friday",
+              type: "occurrence",
+              start: { dateTime: startIso, timeZone: "UTC" },
+              end: { dateTime: endIso, timeZone: "UTC" },
+              attendees: [],
+            },
           ],
         }),
       );
+      return;
+    }
+    if (url.startsWith("/me/events/evt-friday")) {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        id: "evt-friday",
+        seriesMasterId: "series-friday",
+        type: "occurrence",
+        start: { dateTime: startIso, timeZone: "UTC" },
+        end: { dateTime: endIso, timeZone: "UTC" },
+      }));
+      return;
+    }
+    if (url.startsWith("/me/events/series-friday")) {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        id: "series-friday",
+        type: "seriesMaster",
+        subject: "Friday leadership sync",
+      }));
       return;
     }
     if (url.startsWith("/me")) {
@@ -297,6 +326,12 @@ async function main() {
     );
     const evt2 = (cal.body?.meetings ?? []).find((m: any) => m.id === "evt2");
     check("internal meeting has no matches", evt2 && evt2.matches.length === 0, evt2?.matches);
+    const friday = (cal.body?.meetings ?? []).find((m: any) => m.id === "evt-friday");
+    check(
+      "live recurring occurrence inherits the series subject",
+      friday?.subject === "Friday leadership sync",
+      friday,
+    );
 
     // ---- refresh-token rotation persisted ----
     const [row2] = await db

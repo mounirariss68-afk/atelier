@@ -45,7 +45,7 @@ const at = (h: number, min = 0) =>
 const meetings = [
   {
     id: "mtg-1",
-    subject: "Overlapping A",
+    subject: "Friday leadership sync — revised",
     start: at(10),
     end: at(11),
     isAllDay: false,
@@ -121,6 +121,8 @@ check("prev/next day buttons", dayHtml.includes("button-meetings-prev-day") && d
 check("timeline container renders", dayHtml.includes("meetings-day-timeline"));
 check("now line renders for today", dayHtml.includes("meetings-now-line"));
 check("timed meeting block A", dayHtml.includes("meeting-block-mtg-1"));
+check("shared API subject renders unchanged", dayHtml.includes("Friday leadership sync — revised"));
+check("shared API updated schedule is used", dayHtml.includes("10:00"));
 check("timed meeting block B", dayHtml.includes("meeting-block-mtg-2"));
 check("overlap splits into 50% lanes", dayHtml.includes("width:50%"));
 // Task #960 — internal meetings render light pink, external light blue.
