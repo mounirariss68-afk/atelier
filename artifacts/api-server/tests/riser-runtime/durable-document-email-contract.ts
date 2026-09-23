@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { MsGraphError } from "../../src/lib/msGraph.js";
 import {
+  documentEmailReplayDisposition,
   executingDocumentEmailState,
   isAmbiguousTransportError,
 } from "../../src/lib/assistant/durable-document-email.js";
@@ -38,6 +39,36 @@ assert.equal(
   ),
   "stale",
   "a crashed worker eventually becomes eligible for conservative unknown recovery",
+);
+
+const future = new Date("2026-09-23T08:10:00.000Z");
+assert.deepEqual(
+  documentEmailReplayDisposition([
+    { id: "a1", state: "failed", stateVersion: 8, result: { outcome: "unknown" }, expiresAt: future },
+  ], now),
+  { kind: "blocked", reason: "provider_outcome_unknown" },
+  "a new-turn replay must stay blocked until an unknown Graph outcome is reconciled",
+);
+assert.deepEqual(
+  documentEmailReplayDisposition([
+    { id: "a2", state: "executing", stateVersion: 5, result: null, expiresAt: future },
+  ], now),
+  { kind: "blocked", reason: "execution_in_progress" },
+  "a concurrent new-turn replay must not create a second provider action",
+);
+assert.deepEqual(
+  documentEmailReplayDisposition([
+    { id: "a3", state: "awaiting_confirmation", stateVersion: 3, result: null, expiresAt: future },
+  ], now),
+  { kind: "reuse", actionId: "a3", stateVersion: 3 },
+  "an identical pending preview is reused instead of duplicated",
+);
+assert.deepEqual(
+  documentEmailReplayDisposition([
+    { id: "a4", state: "succeeded", stateVersion: 7, result: { outcome: "succeeded" }, expiresAt: future },
+  ], now),
+  { kind: "new" },
+  "a completed request may be intentionally repeated with fresh confirmation",
 );
 
 console.log("durable document email transport contract passed");

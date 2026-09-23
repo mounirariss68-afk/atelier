@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   atelierAssistantActions,
@@ -13,7 +13,8 @@ import {
   claimDurableAction,
   completeDurableAction,
   confirmDurableAction,
-  createDurableActionPreview,
+  createDurableActionPreviewTx,
+  digestAssistantValue,
   encryptAssistantValue,
   withAssistantRlsTransaction,
 } from "./action-runtime.js";
@@ -82,6 +83,42 @@ export function isAmbiguousTransportError(error: unknown): boolean {
     return error.status === 408 || error.status >= 500;
   }
   return true;
+}
+
+type ReplayCandidate = Pick<
+  typeof atelierAssistantActions.$inferSelect,
+  "id" | "state" | "stateVersion" | "result" | "expiresAt"
+>;
+
+export function documentEmailReplayDisposition(
+  candidates: ReplayCandidate[],
+  nowMs = Date.now(),
+):
+  | { kind: "new" }
+  | { kind: "reuse"; actionId: string; stateVersion: number }
+  | { kind: "blocked"; reason: "provider_outcome_unknown" | "execution_in_progress" } {
+  for (const candidate of candidates) {
+    if (
+      candidate.state === "failed" &&
+      (candidate.result as { outcome?: string } | null)?.outcome === "unknown"
+    ) {
+      return { kind: "blocked", reason: "provider_outcome_unknown" };
+    }
+    if (candidate.state === "executing") {
+      return { kind: "blocked", reason: "execution_in_progress" };
+    }
+    if (
+      (candidate.state === "awaiting_confirmation" || candidate.state === "confirmed") &&
+      candidate.expiresAt.getTime() > nowMs
+    ) {
+      return {
+        kind: "reuse",
+        actionId: candidate.id,
+        stateVersion: candidate.stateVersion,
+      };
+    }
+  }
+  return { kind: "new" };
 }
 
 async function exactTargetsCurrent(orgId: string, targets: unknown[]): Promise<boolean> {
@@ -198,7 +235,7 @@ export async function createDurableDocumentEmailPreview(args: {
       updatedAt: "",
     } as never);
   }
-  const created = await createDurableActionPreview({
+  const previewArgs = {
     orgId: args.persona.orgId,
     requesterId: args.persona.id,
     conversationId: args.conversationId,
@@ -231,6 +268,48 @@ export async function createDurableDocumentEmailPreview(args: {
     },
     expiresAt: new Date(Date.now() + EXPIRY_MS),
     idempotencyKey: `durable:${args.turnId}:${args.step}:document-email`,
+  };
+  const inputDigest = digestAssistantValue(canonicalInput);
+  const created = await withAssistantRlsTransaction({
+    orgId: args.persona.orgId,
+    requesterId: args.persona.id,
+  }, async (tx) => {
+    // Graph does not offer exactly-once draft creation. Serialize identical
+    // requests and refuse a fresh action while an earlier provider outcome is
+    // unknown or still executing, even when the replay arrives in a new turn.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(
+      hashtext(${"document-email-replay"}),
+      hashtext(${`${args.persona.orgId}:${args.persona.id}:${inputDigest}`})
+    )`);
+    const candidates = await tx
+      .select({
+        id: atelierAssistantActions.id,
+        state: atelierAssistantActions.state,
+        stateVersion: atelierAssistantActions.stateVersion,
+        result: atelierAssistantActions.result,
+        expiresAt: atelierAssistantActions.expiresAt,
+      })
+      .from(atelierAssistantActions)
+      .where(and(
+        eq(atelierAssistantActions.orgId, args.persona.orgId),
+        eq(atelierAssistantActions.requesterId, args.persona.id),
+        eq(atelierAssistantActions.capabilityId, CAPABILITY_ID),
+        eq(atelierAssistantActions.inputDigest, inputDigest),
+      ))
+      .orderBy(desc(atelierAssistantActions.updatedAt))
+      .limit(20);
+    const disposition = documentEmailReplayDisposition(candidates);
+    if (disposition.kind === "blocked") {
+      throw new Error(`durable-document-email-${disposition.reason}`);
+    }
+    if (disposition.kind === "reuse") {
+      return {
+        actionId: disposition.actionId,
+        preview: null,
+        stateVersion: disposition.stateVersion,
+      };
+    }
+    return createDurableActionPreviewTx(tx, previewArgs);
   });
   return { actionId: created.actionId, stateVersion: created.stateVersion };
 }

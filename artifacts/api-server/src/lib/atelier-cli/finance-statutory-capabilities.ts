@@ -104,12 +104,16 @@ async function registrationEvidence(orgId: string, entity: typeof atelierLegalEn
   const liveVersions = versionIds.length ? await db.select({
     id: atelierDocumentVersions.id,
     documentId: atelierDocumentVersions.documentId,
+    blobRef: atelierDocumentVersions.blobRef,
   })
     .from(atelierDocumentVersions).where(and(
       eq(atelierDocumentVersions.orgId, orgId),
       inArray(atelierDocumentVersions.id, versionIds),
     )) : [];
-  const liveVersionPointers = new Set(liveVersions.map((v) => `${v.documentId}:${v.id}`));
+  const liveVersionPointers = new Set(
+    liveVersions.filter((version) => !!version.blobRef)
+      .map((version) => `${version.documentId}:${version.id}`),
+  );
   const docById = new Map(docs.map((d) => [d.id, d]));
   return regs.map((r) => {
     const doc = r.certificateDocumentId ? docById.get(r.certificateDocumentId) : undefined;
