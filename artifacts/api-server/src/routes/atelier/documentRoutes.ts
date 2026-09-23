@@ -25,7 +25,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import multer from "multer";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -90,6 +90,105 @@ export async function canSeeDocument(me: Me, access: EngAccess, doc: DocRow): Pr
   if (doc.accountId) return canSeeAccount(access, me, doc.accountId);
   // Org-level document: explicit grant required.
   return hasDocumentGrant(doc.id, me.id);
+}
+
+const TAX_DOCUMENT_KINDS = new Set(["tax_registration_ct", "tax_registration_vat"]);
+
+/**
+ * Tax certificate pointers are owned by the legal-entity registry.  A generic
+ * document PATCH must not be able to create a second, untracked pointer (or
+ * silently move a certificate between entities).
+ */
+async function validateTaxDocumentMutation(args: {
+  me: Me;
+  document: DocRow;
+  nextEntityId: string | null;
+  nextDocKind: string | null;
+}): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const currentIsTax = TAX_DOCUMENT_KINDS.has(args.document.docKind ?? "");
+  const nextIsTax = TAX_DOCUMENT_KINDS.has(args.nextDocKind ?? "");
+  if (!currentIsTax && !nextIsTax) return { ok: true };
+
+  const currentEntityId = args.document.entityId;
+  const ids = [currentEntityId, args.nextEntityId].filter((id): id is string => !!id);
+  const entities = ids.length
+    ? await db
+        .select({
+          id: atelierLegalEntities.id,
+          status: atelierLegalEntities.status,
+          registrations: atelierLegalEntities.registrations,
+        })
+        .from(atelierLegalEntities)
+        .where(and(eq(atelierLegalEntities.orgId, args.me.orgId), inArray(atelierLegalEntities.id, ids)))
+    : [];
+  const byId = new Map(entities.map((entity) => [entity.id, entity]));
+  const currentEntity = currentEntityId ? byId.get(currentEntityId) : undefined;
+  const currentRegistrations = (currentEntity?.registrations ?? []) as unknown as Array<{
+    type: string;
+    certificateDocumentId?: string | null;
+  }>;
+  const currentPointer = currentRegistrations.some(
+    (registration) =>
+      registration.type === args.document.docKind &&
+      registration.certificateDocumentId === args.document.id,
+  ) ?? false;
+
+  if (currentIsTax && currentPointer && (args.nextEntityId !== currentEntityId || args.nextDocKind !== args.document.docKind)) {
+    return {
+      ok: false,
+      status: 409,
+      error: "tax-certificate-pointer-owned",
+    };
+  }
+  if (!nextIsTax) return { ok: true };
+
+  const nextEntity = args.nextEntityId ? byId.get(args.nextEntityId) : undefined;
+  const nextRegistrations = (nextEntity?.registrations ?? []) as unknown as Array<{
+    type: string;
+    certificateDocumentId?: string | null;
+  }>;
+  const nextPointer = nextRegistrations.some(
+    (registration) =>
+      registration.type === args.nextDocKind &&
+      registration.certificateDocumentId === args.document.id,
+  ) ?? false;
+  if (!nextEntity || nextEntity.status === "archived" || !nextPointer) {
+    return {
+      ok: false,
+      status: 409,
+      error: "tax-certificate-must-be-linked-through-entity-registry",
+    };
+  }
+  return { ok: true };
+}
+
+async function currentTaxCertificatePointer(args: {
+  orgId: string;
+  documentId: string;
+}): Promise<{ entityId: string; type: string } | null> {
+  const entities = await db
+    .select({
+      id: atelierLegalEntities.id,
+      registrations: atelierLegalEntities.registrations,
+    })
+    .from(atelierLegalEntities)
+    .where(and(
+      eq(atelierLegalEntities.orgId, args.orgId),
+      ne(atelierLegalEntities.status, "archived"),
+    ));
+  for (const entity of entities) {
+    const registrations = (entity.registrations ?? []) as unknown as Array<{
+      type?: string;
+      certificateDocumentId?: string | null;
+    }>;
+    const registration = registrations.find(
+      (item) =>
+        TAX_DOCUMENT_KINDS.has(item.type ?? "") &&
+        item.certificateDocumentId === args.documentId,
+    );
+    if (registration?.type) return { entityId: entity.id, type: registration.type };
+  }
+  return null;
 }
 
 const upload = multer({
@@ -233,6 +332,12 @@ router.post("/documents", uploadSingle, async (req, res) => {
       return;
     }
     docKind = req.body.docKind as LegalDocKind;
+    if (TAX_DOCUMENT_KINDS.has(docKind)) {
+      res.status(409).json({
+        error: "tax-certificate-must-be-linked-through-entity-registry",
+      });
+      return;
+    }
   }
 
   if (entityId) {
@@ -465,6 +570,18 @@ router.patch("/documents/:id", async (req, res) => {
     patch.docKind = nextKind;
     changes.docKind = nextKind;
   }
+  if (req.body?.entityId !== undefined || req.body?.docKind !== undefined) {
+    const taxMutation = await validateTaxDocumentMutation({
+      me,
+      document: doc,
+      nextEntityId: patch.entityId !== undefined ? (patch.entityId as string | null) : doc.entityId,
+      nextDocKind: patch.docKind !== undefined ? (patch.docKind as string | null) : doc.docKind,
+    });
+    if (!taxMutation.ok) {
+      res.status(taxMutation.status).json({ error: taxMutation.error });
+      return;
+    }
+  }
   if (Object.keys(patch).length > 0) {
     patch.updatedAt = new Date();
     await db.update(atelierDocuments).set(patch).where(eq(atelierDocuments.id, doc.id));
@@ -496,13 +613,18 @@ router.delete("/documents/:id", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
+  if (await currentTaxCertificatePointer({ orgId: me.orgId, documentId: doc.id })) {
+    res.status(409).json({ error: "tax-certificate-pointer-owned" });
+    return;
+  }
   const result = await purgeDocument({
     orgId: me.orgId,
     documentId: doc.id,
     actor: { id: me.id, name: me.name },
   });
   if (!result.ok) {
-    res.status(404).json({ error: result.reason ?? "not-found" });
+    res.status(result.reason === "tax-certificate-pointer-owned" ? 409 : 404)
+      .json({ error: result.reason ?? "not-found" });
     return;
   }
   res.json({ status: "deleted", id: doc.id });
@@ -513,6 +635,16 @@ router.post("/documents/:id/versions", uploadSingle, async (req, res) => {
   const ctx = await loadVisibleDoc(req, res);
   if (!ctx) return;
   const { me, doc } = ctx;
+  // Visibility is not mutation authority: a user may read an account or
+  // explicitly granted document without being allowed to supersede it.
+  if (!docPrivileged(me.role) && doc.uploaderUserId !== me.id) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (await currentTaxCertificatePointer({ orgId: me.orgId, documentId: doc.id })) {
+    res.status(409).json({ error: "tax-certificate-pointer-owned" });
+    return;
+  }
   const file = (req as Request & { file?: Express.Multer.File }).file;
   if (!file) {
     res.status(400).json({ error: "no-file" });

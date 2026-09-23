@@ -137,6 +137,7 @@ async function resolveCounterpartyByName(
   orgId: string,
   name: string,
   kind?: string | null,
+  actor?: { id: string; orgId: string; role: string },
 ): Promise<{
   match: Counterparty | null;
   candidates: Array<{ kind: string; id: string; label: string }>;
@@ -205,12 +206,12 @@ async function resolveCounterpartyByName(
     }
   }
   if (wants("contact")) {
-    for (const c of await hybridResolveEntity("contact", q, orgId)) {
+    for (const c of await hybridResolveEntity("contact", q, orgId, {}, actor)) {
       candidates.push({ kind: "contact", id: c.id, label: c.label, score: c.score });
     }
   }
   if (wants("account")) {
-    for (const a of await hybridResolveEntity("account", q, orgId)) {
+    for (const a of await hybridResolveEntity("account", q, orgId, {}, actor)) {
       candidates.push({ kind: "account", id: a.id, label: a.label, score: a.score });
     }
   }
@@ -339,6 +340,7 @@ defineCapability({
       orgId,
       String(input.counterparty ?? ""),
       input.counterpartyKind ? String(input.counterpartyKind) : null,
+      ctx.persona,
     );
     let counterparty = resolved.match;
     // Task #967 — roster auto-add for non-equity partner agreements: when

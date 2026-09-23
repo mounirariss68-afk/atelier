@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -32,6 +32,7 @@ import { extractBankLetterFields } from "../../lib/atelier-finance-docs.js";
 import { ensureStatutoryFilings } from "../../lib/atelier-payroll/payrollRun.js";
 // Task #1092 — ownership type → recommended settlement treatment.
 import { recommendedTreatment } from "../../lib/atelier-preformation.js";
+import { duplicateTaxCertificateKind } from "../../lib/finance-tax-certificate-policy.js";
 
 const router: IRouter = Router();
 
@@ -297,6 +298,14 @@ async function validateTaxRegistrations(args: {
   | { ok: true; documents: Array<typeof atelierDocuments.$inferSelect> }
   | { ok: false; error: string; message: string }
 > {
+  const duplicateKind = duplicateTaxCertificateKind(args.registrations);
+  if (duplicateKind) {
+    return {
+      ok: false,
+      error: `${duplicateKind}-duplicate`,
+      message: `Only one ${TAX_REGISTRATION_KINDS[duplicateKind]} registration is allowed per legal entity.`,
+    };
+  }
   const byType = new Map(args.registrations.map((r) => [r.type, r]));
   const ct = byType.get("tax_registration_ct");
   if (args.requireCorporateTax && !ct?.number) {
@@ -360,6 +369,33 @@ async function linkTaxCertificates(
   entityId: string,
   registrations: ReturnType<typeof normalizeRegistrations>,
 ): Promise<void> {
+  const certificateId = (registration: { certificateDocumentId?: string | null } | undefined) =>
+    registration?.certificateDocumentId ?? null;
+  const nextByType = new Map(
+    Object.keys(TAX_REGISTRATION_KINDS).map((type) => [
+      type,
+      certificateId(
+        registrations.find((r) => r.type === type) as unknown as
+          | { certificateDocumentId?: string | null }
+          | undefined,
+      ),
+    ]),
+  );
+  // A replacement must release the old pointer in the same transaction as
+  // the entity update.  Keep the document row (and its blob/version history)
+  // intact: it is historical evidence, not an orphan to be deleted.
+  for (const type of Object.keys(TAX_REGISTRATION_KINDS)) {
+    const replacement = nextByType.get(type);
+    await tx.update(atelierDocuments).set({
+      entityId: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(atelierDocuments.orgId, orgId),
+      eq(atelierDocuments.entityId, entityId),
+      eq(atelierDocuments.docKind, type),
+      replacement ? ne(atelierDocuments.id, replacement) : sql`true`,
+    ));
+  }
   for (const [type] of Object.entries(TAX_REGISTRATION_KINDS)) {
     const docId = registrations.find((r) => r.type === type)?.certificateDocumentId;
     if (!docId) continue;
@@ -953,8 +989,10 @@ router.patch("/finance/entities/:id", async (req, res) => {
       taxRegistrationSignature(registrations) !==
         taxRegistrationSignature(normalizeRegistrations(existing.registrations));
     const statusChanged = b.status !== undefined && b.status !== existing.status;
-    const existingCt = existing.registrations.find((registration) => registration.type === "tax_registration_ct");
-    const existingVat = existing.registrations.find((registration) => registration.type === "tax_registration_vat");
+    const existingCt = existing.registrations.find((registration) => registration.type === "tax_registration_ct") as unknown as
+      { number?: string | null; certificateDocumentId?: string | null } | undefined;
+    const existingVat = existing.registrations.find((registration) => registration.type === "tax_registration_vat") as unknown as
+      { number?: string | null; certificateDocumentId?: string | null } | undefined;
     const existingTaxComplete =
       !!existingCt?.number &&
       !!existingCt?.certificateDocumentId &&
@@ -1059,11 +1097,22 @@ router.post("/finance/entities/:id/archive", async (req, res) => {
     res.json({ entity: entityShape(existing), alreadyArchived: true });
     return;
   }
-  const [row] = await db
-    .update(atelierLegalEntities)
-    .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
-    .where(eq(atelierLegalEntities.id, existing.id))
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [archived] = await tx
+      .update(atelierLegalEntities)
+      .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierLegalEntities.id, existing.id))
+      .returning();
+    await tx.update(atelierDocuments).set({
+      entityId: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(atelierDocuments.orgId, me.orgId),
+      eq(atelierDocuments.entityId, existing.id),
+      inArray(atelierDocuments.docKind, Object.keys(TAX_REGISTRATION_KINDS)),
+    ));
+    return archived;
+  });
   await auditEntity({
     entityId: existing.id,
     actor: me,

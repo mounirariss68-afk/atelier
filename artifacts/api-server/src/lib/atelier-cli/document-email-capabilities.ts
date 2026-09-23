@@ -53,6 +53,7 @@ import { resolveEmailRecipients, recipientLabel } from "./email-recipient-resolv
 import { resolveAccount } from "./resolvers/index.js";
 import { rankNearestNames } from "./nearest-suggestions.js";
 import type { ToolResult } from "./index.js";
+import { createDurableDocumentEmailPreview } from "../assistant/durable-document-email.js";
 
 const MAIL_ATTACH_MAX_BYTES = 3 * 1024 * 1024;
 
@@ -445,6 +446,31 @@ defineCapability({
 
     // ---- two-phase confirm ----------------------------------------------
     if (input.confirm !== true) {
+      let durable: { actionId: string; stateVersion: number };
+      try {
+        durable = await createDurableDocumentEmailPreview({
+          persona: ctx.persona,
+          conversationId: ctx.sessionId,
+          turnId: ctx.turnId,
+          step: ctx.stepIdx,
+          input: {
+            documentIds: selected.map(({ doc }) => doc.id),
+            versionIds: selected.map(({ version }) => version.id),
+            to: recipients,
+            mode,
+            ...(input.subject !== undefined ? { subject: String(input.subject) } : {}),
+            ...(input.message !== undefined ? { message: String(input.message) } : {}),
+          },
+          selected,
+          recipientLabels,
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          errorCode: "durable_execution_unavailable",
+          errorMessage: "This email action cannot be prepared safely right now. No Outlook request was made.",
+        };
+      }
       const diff: Record<string, unknown> =
         mode === "send"
           ? {
@@ -490,14 +516,49 @@ defineCapability({
               mode,
               ...(input.subject !== undefined ? { subject: String(input.subject) } : {}),
               ...(input.message !== undefined ? { message: String(input.message) } : {}),
+              __durableActionId: durable.actionId,
+              __durableStateVersion: durable.stateVersion,
               confirm: true,
             },
           },
+          durableAction: durable,
         },
       };
     }
 
     // ---- commit: token + scope, load bytes, call Graph -------------------
+    // Company-document email is now durable-only. The legacy direct Graph
+    // path is intentionally fail-closed so a confirmation cannot bypass the
+    // action claim, source revalidation, outbox record, or unknown outcome.
+    if (typeof input.__durableActionId !== "string") {
+      return {
+        ok: false,
+        errorCode: "durable_execution_required",
+        errorMessage: "This email action must be previewed again before it can execute.",
+      };
+    }
+    const { confirmAndExecuteDurableDocumentEmail } = await import("../assistant/durable-document-email.js");
+    const durableOutcome = await confirmAndExecuteDurableDocumentEmail({
+      actionId: input.__durableActionId,
+      orgId: ctx.persona.orgId,
+      requesterId: ctx.persona.id,
+      persona: ctx.persona,
+      expectedStateVersion:
+        typeof input.__durableStateVersion === "number" ? input.__durableStateVersion : undefined,
+    });
+    if (durableOutcome.state !== "succeeded") {
+      return {
+        ok: false,
+        errorCode: `durable_action_${durableOutcome.state}`,
+        errorMessage:
+          durableOutcome.state === "unknown"
+            ? "Outlook may have accepted this request. It is blocked from retry until the provider outcome is reconciled."
+            : "The email action could not be completed safely.",
+        data: durableOutcome.result,
+      };
+    }
+    return { ok: true, data: durableOutcome.result };
+    /*
     const RECONNECT: ToolResult = {
       ok: false,
       errorCode: "ms_reconnect_required",
@@ -627,6 +688,7 @@ defineCapability({
         navigateTo: null,
       },
     };
+    */
   },
 });
 

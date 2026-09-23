@@ -12,6 +12,7 @@ import { attachPersona, rejectClientRealm } from "./atelier/personaCookie.js";
 import { attachRls, withRls } from "./atelier/rls.js";
 import { cancelDurableAction } from "../lib/assistant/action-runtime.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../lib/assistant/durable-account-update-confirmation.js";
+import { confirmAndExecuteDurableDocumentEmail } from "../lib/assistant/durable-document-email.js";
 import { durableAccountUpdateEnabled } from "../lib/assistant/durable-account-update-canary.js";
 import { mergeAssistantReplayEvents } from "../lib/assistant/legacy-event-reader.js";
 import {
@@ -185,6 +186,36 @@ router.post("/actions/:id/confirm", async (req, res, next) => {
         res.status(409).json({
           code: "action_not_confirmable",
           message: "This action could not be confirmed safely.",
+        });
+      }
+      return;
+    }
+    if (action.capabilityId === "document.email") {
+      try {
+        const outcome = await confirmAndExecuteDurableDocumentEmail({
+          actionId: action.id,
+          orgId: me.orgId,
+          requesterId: me.id,
+          persona: me as never,
+          expectedStateVersion:
+            typeof req.body?.stateVersion === "number" ? req.body.stateVersion : undefined,
+        });
+        res.json({
+          ok: outcome.state === "succeeded",
+          state: outcome.state,
+          result: outcome.result,
+          ...(outcome.state === "succeeded"
+            ? {}
+            : { code: `durable_action_${outcome.state}` }),
+        });
+      } catch (error) {
+        req.log?.warn?.(
+          { actionId: action.id, errorClass: error instanceof Error ? error.name : "unknown" },
+          "durable document email confirmation failed",
+        );
+        res.status(409).json({
+          code: "action_not_confirmable",
+          message: "This email action could not be confirmed safely.",
         });
       }
       return;

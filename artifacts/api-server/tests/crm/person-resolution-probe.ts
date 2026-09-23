@@ -20,14 +20,15 @@ function check(name: string, ok: boolean, extra?: unknown) {
 
 async function main() {
   // 1. Fuzzy resolve finds an internal employee under kind "contact".
-  const c1 = await hybridResolveEntity("contact", "Mounir Ariss", ORG);
+  const actor = { id: "fp_demo", orgId: ORG, role: "founding_partner" };
+  const c1 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, {}, actor);
   const empHit = c1.find((c) => c.id.startsWith("emp_"));
   check("employee found via person search", !!empHit, c1);
   check("employee candidate labelled as Employee", !!empHit?.secondary?.startsWith("Employee"), empHit);
 
   // 2. Exact-id lookup for an employee id resolves too.
   if (empHit) {
-    const byId = await hybridResolveEntity("contact", empHit.id, ORG);
+    const byId = await hybridResolveEntity("contact", empHit.id, ORG, {}, actor);
     check("employee exact-id resolves", byId.length === 1 && byId[0].via === "id", byId);
   }
 
@@ -37,7 +38,7 @@ async function main() {
     (await import("drizzle-orm")).sql`SELECT full_name FROM atelier_partner_firm_resources WHERE org_id = ${ORG} AND deleted_at IS NULL LIMIT 1`
   ).then((r: any) => r.rows as Array<{ full_name: string }>);
   if (pr) {
-    const c2 = await hybridResolveEntity("contact", pr.full_name, ORG);
+    const c2 = await hybridResolveEntity("contact", pr.full_name, ORG, {}, actor);
     check("partner-firm person found via person search", c2.some((c) => c.secondary?.startsWith("Partner resource")), c2);
   } else {
     console.log("SKIP — no partner-firm resources in DB");
@@ -55,7 +56,7 @@ async function main() {
     } as any).onConflictDoNothing();
 
     // Scoped search with NO same-named contact still finds the employee.
-    const s1 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT });
+    const s1 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT }, actor);
     const s1emp = s1.find((c) => c.id.startsWith("emp_"));
     check("account-scoped search finds employee", !!s1emp, s1);
     check("scoped employee keeps Employee roster tag", !!s1emp?.secondary?.startsWith("Employee"), s1emp);
@@ -64,7 +65,7 @@ async function main() {
     await db.insert(atelierContacts).values({
       id: CONTACT, orgId: ORG, accountId: ACCT, fullName: "Mounir Ariss",
     } as any).onConflictDoNothing();
-    const s2 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT });
+    const s2 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT }, actor);
     const contactIdx = s2.findIndex((c) => c.id === CONTACT);
     const empIdx = s2.findIndex((c) => c.id.startsWith("emp_"));
     check("same-named scoped contact present", contactIdx !== -1, s2);
@@ -79,7 +80,7 @@ async function main() {
       id: CONTACT2, orgId: ORG, accountId: ACCT, fullName: "Mounir Arissano El-Khoury",
     } as any).onConflictDoNothing();
     await db.delete(atelierContacts).where(eq(atelierContacts.id, CONTACT));
-    const s3 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT });
+    const s3 = await hybridResolveEntity("contact", "Mounir Ariss", ORG, { accountId: ACCT }, actor);
     const c2Idx = s3.findIndex((c) => c.id === CONTACT2);
     const emp3Idx = s3.findIndex((c) => c.id.startsWith("emp_"));
     const c2Score = s3[c2Idx]?.score ?? 0;

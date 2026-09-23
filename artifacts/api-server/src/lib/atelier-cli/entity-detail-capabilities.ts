@@ -176,7 +176,7 @@ export function listDetailProviders(): readonly EntityDetailProvider[] {
 /** Resolver-backed search shared by most providers. */
 function resolverSearch(kind: Parameters<typeof hybridResolveEntity>[0]) {
   return async (q: string, ctx: ToolContext): Promise<DetailCandidate[]> => {
-    const c: ResolverCandidate[] = await hybridResolveEntity(kind, q, ctx.persona.orgId);
+    const c: ResolverCandidate[] = await hybridResolveEntity(kind, q, ctx.persona.orgId, {}, ctx.persona);
     return c.map((r) => ({ id: r.id, label: r.label, secondary: r.secondary, score: r.score }));
   };
 }
@@ -1373,7 +1373,7 @@ defineCapability({
         return { ok: false, errorCode: "invalid_input", errorMessage: "Provide accountId or accountQuery." };
       }
       const access = await engAclFor(ctx.persona);
-      const cands = await hybridResolveEntity("account", q, ctx.persona.orgId);
+      const cands = await hybridResolveEntity("account", q, ctx.persona.orgId, {}, ctx.persona);
       const visFlags = await Promise.all(
         cands.map((c) => canSeeAccount(access, { id: ctx.persona.id }, c.id).catch(() => false)),
       );
@@ -1515,8 +1515,8 @@ defineCapability({
       // A disambiguation pick re-enters through `query` holding the raw id
       // sometimes — accept exact ids transparently.
       const [accCands, engCands] = await Promise.all([
-        hybridResolveEntity("account", q, ctx.persona.orgId),
-        hybridResolveEntity("engagement", q, ctx.persona.orgId),
+        hybridResolveEntity("account", q, ctx.persona.orgId, {}, ctx.persona),
+        hybridResolveEntity("engagement", q, ctx.persona.orgId, {}, ctx.persona),
       ]);
       const [accFlags, engFlags] = await Promise.all([
         Promise.all(accCands.map((c) => canSeeAccount(access, me, c.id).catch(() => false))),

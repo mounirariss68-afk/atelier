@@ -23,6 +23,7 @@ import {
   atelierDocumentVersions,
   atelierDocumentAccess,
   atelierAuditEvents,
+  atelierDocumentChunkEmbeddings,
 } from "@workspace/db";
 import { objectStorageClient } from "./objectStorage.js";
 import { extractAttachment, intakeRejection } from "./atelier-cli/attachments/extractors.js";
@@ -544,50 +545,95 @@ export async function purgeDocument(args: {
   /** Suppress the per-document audit row (bulk scope purges write their own). */
   silent?: boolean;
 }): Promise<{ ok: boolean; reason?: string }> {
-  const [doc] = await db
-    .select()
-    .from(atelierDocuments)
-    .where(
-      and(eq(atelierDocuments.id, args.documentId), eq(atelierDocuments.orgId, args.orgId)),
+  const outcome = await db.transaction(async (tx) => {
+    // This is the same lock used by the legal-entity registration trigger.
+    // It must be acquired before any version/chunk deletion so a concurrent
+    // registry claim either finishes first (and blocks this purge) or
+    // revalidates after this purge commits (and rejects the deleted source).
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`atelier-tax-certificates:${args.orgId}`}))`,
     );
-  if (!doc) return { ok: false, reason: "not_found" };
-  if (doc.status === "deleted") return { ok: true };
+    const [doc] = await tx
+      .select()
+      .from(atelierDocuments)
+      .where(
+        and(eq(atelierDocuments.id, args.documentId), eq(atelierDocuments.orgId, args.orgId)),
+      )
+      .for("update");
+    if (!doc) return { ok: false as const, reason: "not_found" };
+    if (doc.status === "deleted") return { ok: true as const, alreadyDeleted: true as const };
 
-  const versions = await db
-    .select()
-    .from(atelierDocumentVersions)
-    .where(eq(atelierDocumentVersions.documentId, doc.id));
-  const versionIds = versions.map((v) => v.id);
+    const pointer = await tx.execute<{ exists: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM atelier_legal_entities entity,
+             jsonb_array_elements(COALESCE(entity.registrations, '[]'::jsonb)) registration
+        WHERE entity.org_id = ${args.orgId}
+          AND entity.status <> 'archived'
+          AND registration->>'type' IN ('tax_registration_ct', 'tax_registration_vat')
+          AND registration->>'certificateDocumentId' = ${doc.id}
+      ) AS exists
+    `);
+    if (pointer.rows[0]?.exists) {
+      return { ok: false as const, reason: "tax-certificate-pointer-owned" };
+    }
 
-  let purgedChunks = 0;
-  for (const vid of versionIds) purgedChunks += await purgeChunkEmbeddings(vid);
+    const versions = await tx
+      .select()
+      .from(atelierDocumentVersions)
+      .where(eq(atelierDocumentVersions.documentId, doc.id));
+    const versionIds = versions.map((version) => version.id);
+    const uniqueBlobs = [...new Set(versions.map((version) => version.blobRef))];
+    const purgedChunks = versionIds.length
+      ? (await tx
+          .delete(atelierDocumentChunkEmbeddings)
+          .where(inArray(atelierDocumentChunkEmbeddings.attachmentId, versionIds))
+          .returning({ id: atelierDocumentChunkEmbeddings.chunkId })).length
+      : 0;
+    if (versionIds.length > 0) {
+      await tx
+        .delete(atelierDocumentVersions)
+        .where(inArray(atelierDocumentVersions.id, versionIds));
+    }
+    await tx
+      .update(atelierDocumentAccess)
+      .set({ status: "revoked" })
+      .where(eq(atelierDocumentAccess.documentId, doc.id));
+    await tx
+      .update(atelierDocuments)
+      .set({ status: "deleted", deletedAt: new Date(), currentVersionId: null })
+      .where(eq(atelierDocuments.id, doc.id));
+    return {
+      ok: true as const,
+      alreadyDeleted: false as const,
+      doc,
+      versionIds,
+      uniqueBlobs,
+      purgedChunks,
+    };
+  });
+  if (!outcome.ok) return outcome;
+  if (outcome.alreadyDeleted) return { ok: true };
 
-  const uniqueBlobs = [...new Set(versions.map((v) => v.blobRef))];
-  if (versionIds.length > 0) {
-    await db
-      .delete(atelierDocumentVersions)
-      .where(inArray(atelierDocumentVersions.id, versionIds));
+  // Object storage is cleaned only after the authoritative DB transaction
+  // commits. A crash can leave an orphan blob for later cleanup, but can
+  // never leave a live canonical pointer whose bytes were removed.
+  for (const blobRef of outcome.uniqueBlobs) {
+    await dropBlobIfUnreferenced(blobRef, outcome.versionIds);
   }
-  for (const blobRef of uniqueBlobs) {
-    await dropBlobIfUnreferenced(blobRef, versionIds);
-  }
-  await db
-    .update(atelierDocumentAccess)
-    .set({ status: "revoked" })
-    .where(eq(atelierDocumentAccess.documentId, doc.id));
-  await db
-    .update(atelierDocuments)
-    .set({ status: "deleted", deletedAt: new Date(), currentVersionId: null })
-    .where(eq(atelierDocuments.id, doc.id));
 
   if (!args.silent) {
     await auditDocument({
-      documentId: doc.id,
+      documentId: outcome.doc.id,
       actorId: args.actor.id,
       actorLabel: args.actor.name,
       action: "document.delete",
-      payload: { title: doc.title, versions: versionIds.length, purgedChunks },
-      summary: `Deleted document "${doc.title}" (${versionIds.length} versions, ${purgedChunks} chunks purged)`,
+      payload: {
+        title: outcome.doc.title,
+        versions: outcome.versionIds.length,
+        purgedChunks: outcome.purgedChunks,
+      },
+      summary: `Deleted document "${outcome.doc.title}" (${outcome.versionIds.length} versions, ${outcome.purgedChunks} chunks purged)`,
     });
   }
   return { ok: true };

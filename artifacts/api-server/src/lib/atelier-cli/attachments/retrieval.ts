@@ -52,6 +52,36 @@ function toVectorLiteral(vec: number[]): string {
 }
 
 /**
+ * Embedding rows are derived data and may outlive their source. Keep the
+ * source-of-truth check in every retrieval query so an archive, replacement,
+ * deletion, or AI opt-out takes effect immediately even when invalidation is
+ * delayed. CLI attachments and Document Library version ids share this table.
+ */
+function currentSourcePredicate(orgId: string) {
+  return sql`(
+    EXISTS (
+      SELECT 1
+        FROM atelier_cli_attachments ca
+       WHERE ca.id = attachment_id
+         AND ca.org_id = ${orgId}
+         AND ca.status = 'extracted'
+         AND ca.deleted_at IS NULL
+    )
+    OR EXISTS (
+      SELECT 1
+        FROM atelier_document_versions dv
+        JOIN atelier_documents d ON d.id = dv.document_id
+       WHERE dv.id = attachment_id
+         AND dv.org_id = ${orgId}
+         AND d.current_version_id = dv.id
+         AND d.status = 'active'
+         AND d.deleted_at IS NULL
+         AND d.ai_retrieval = true
+    )
+  )`;
+}
+
+/**
  * Embed and persist all chunks for one attachment. Re-ingest safe:
  * existing rows for the attachment are removed first so there is never a
  * stale/duplicate chunk set. Embedding is batched; the pgvector column
@@ -362,6 +392,7 @@ export async function searchDocumentChunks(args: {
    */
   contextHint?: string;
 }): Promise<RetrievedChunk[]> {
+  if (process.env.ATELIER_SEMANTIC_RETRIEVAL_ENABLED === "false") return [];
   const q = (args.query ?? "").trim();
   if (!q) return [];
   const k = Math.min(Math.max(args.limit ?? 8, 1), 50);
@@ -396,7 +427,8 @@ export async function searchDocumentChunks(args: {
       WHERE org_id = ${args.persona.orgId}
         AND provider = ${provider}
         AND retrievable = true
-        AND embedding IS NOT NULL${aclSql}${attClause}
+        AND embedding IS NOT NULL
+        AND ${currentSourcePredicate(args.persona.orgId)}${aclSql}${attClause}
       ORDER BY embedding <=> ${lit}::vector
       LIMIT ${k * 3}
     `);
@@ -426,7 +458,8 @@ export async function searchDocumentChunks(args: {
       WHERE org_id = ${args.persona.orgId}
         AND provider = ${provider}
         AND retrievable = true
-        AND text % ${q}${aclSql}${attClause}
+        AND text % ${q}
+        AND ${currentSourcePredicate(args.persona.orgId)}${aclSql}${attClause}
       ORDER BY score DESC
       LIMIT ${k * 3}
     `);
@@ -486,7 +519,8 @@ async function bruteForceCosine(args: {
     FROM atelier_document_chunk_embeddings
     WHERE org_id = ${args.persona.orgId}
       AND provider = ${args.provider}
-      AND retrievable = true${args.aclSql}${args.attClause}
+      AND retrievable = true
+      AND ${currentSourcePredicate(args.persona.orgId)}${args.aclSql}${args.attClause}
   `);
   return res.rows
     .map((r) => {

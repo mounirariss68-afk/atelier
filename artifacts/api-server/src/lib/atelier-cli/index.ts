@@ -133,6 +133,7 @@ import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
 import { durableAccountUpdateEnabled } from "../assistant/durable-account-update-canary.js";
 import { createDurableAccountUpdatePreview } from "../assistant/durable-account-update-preview.js";
 import { confirmAndExecuteDurableAccountUpdate } from "../assistant/durable-account-update-confirmation.js";
+import { confirmAndExecuteDurableDocumentEmail } from "../assistant/durable-document-email.js";
 import type { Response } from "express";
 
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
@@ -3640,6 +3641,8 @@ export async function runTurn(
                 det.kind as never,
                 hint,
                 persona.orgId,
+                {},
+                persona,
               );
               return pickConfident(candidates);
             } catch {
@@ -4807,6 +4810,8 @@ export async function runTurn(
           typedIntent.kind as ResolverKind,
           typedIntent.entityHints[0],
           persona.orgId,
+          {},
+          persona,
         );
         const top = pickConfident(candidates);
         await recordRiserObservation({
@@ -7432,12 +7437,35 @@ export async function confirmPendingWrite(
       : undefined;
   if (
     durableActionId &&
-    (pending.tool !== "account_update" || !durableAccountUpdateEnabled(persona.orgId))
+    !(
+      (pending.tool === "account_update" && durableAccountUpdateEnabled(persona.orgId)) ||
+      pending.tool === "email_company_documents"
+    )
   ) {
     return fail("durable_action_disabled", "This durable action is currently disabled.");
   }
   const result: ToolResult = durableActionId
-    ? await confirmAndExecuteDurableAccountUpdate({
+    ? pending.tool === "email_company_documents"
+      ? await confirmAndExecuteDurableDocumentEmail({
+          actionId: durableActionId,
+          orgId: persona.orgId,
+          requesterId: persona.id,
+          persona: persona as never,
+          expectedStateVersion: durableStateVersion,
+        }).then((outcome) => ({
+          ok: outcome.state === "succeeded",
+          data: outcome.result,
+          ...(outcome.state === "succeeded"
+            ? {}
+            : {
+                errorCode: `durable_action_${outcome.state}`,
+                errorMessage:
+                  outcome.state === "unknown"
+                    ? "Outlook may have accepted the request; retry is blocked until it is reconciled."
+                    : "The email action could not be completed safely.",
+              }),
+        }))
+      : await confirmAndExecuteDurableAccountUpdate({
         actionId: durableActionId,
         orgId: persona.orgId,
         requesterId: persona.id,

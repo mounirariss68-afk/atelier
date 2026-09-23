@@ -48,6 +48,7 @@ import {
   atelierExpenses,
   atelierEmployees,
   atelierPartnerFirmResources,
+  atelierContract,
 } from "@workspace/db";
 import { cosine, embedText } from "./embeddings.js";
 import { foldRosterName } from "./chat-normalizers.js";
@@ -100,9 +101,20 @@ export interface ResolverScopes {
   engagementId?: string | null;
 }
 
+/** The resolver must never be used without the authenticated persona. */
+export interface ResolverActor {
+  id: string;
+  orgId: string;
+  role: string;
+}
+
 const TRGM_THRESHOLD = 0.25;
 const VECTOR_THRESHOLD = 0.6;
 const TOP_K = 5;
+
+function semanticRetrievalEnabled(): boolean {
+  return process.env.ATELIER_SEMANTIC_RETRIEVAL_ENABLED !== "false";
+}
 
 /**
  * Run the cascade. Returns up to TOP_K candidates ordered by score.
@@ -116,14 +128,21 @@ export async function hybridResolveEntity(
   query: string,
   orgId: string,
   scopes: ResolverScopes = {},
+  actor?: ResolverActor,
 ): Promise<ResolverCandidate[]> {
+  // Legacy callers that do not provide an actor are deliberately fail-closed.
+  // Entity labels are disclosure, even when the caller only asks for a
+  // disambiguation card.
+  if (!actor || actor.orgId !== orgId) return [];
   const q = (query ?? "").trim();
   if (!q) return [];
 
   // 1. Exact-id short-circuit. Cheap and unambiguous.
   if (/^[a-z]{2,8}_[a-z0-9_]{4,}$/i.test(q)) {
     const idRow = await tryIdLookup(kind, q, orgId);
-    if (idRow) return [{ ...idRow, score: 1, via: "id" }];
+    if (idRow && (await authorizedCandidate(kind, idRow.id, actor, scopes))) {
+      return [{ ...idRow, score: 1, via: "id" }];
+    }
   }
 
   const out = new Map<string, ResolverCandidate>();
@@ -136,7 +155,7 @@ export async function hybridResolveEntity(
   // Skip the embedding cost when the trgm pass already produced
   // confident hits (≥0.6 sim) — that's the common case.
   const trgmConfident = trgm.some((c) => c.score >= 0.6);
-  if (!trgmConfident) {
+  if (!trgmConfident && semanticRetrievalEnabled()) {
     const vec = await vectorPass(kind, q, orgId);
     for (const c of vec) {
       const prev = out.get(c.id);
@@ -144,21 +163,115 @@ export async function hybridResolveEntity(
     }
   }
 
+  // Apply the actor policy before the final score sort (and re-check vector
+  // mirrors against their authoritative source rows). The embedding table is
+  // intentionally treated as an untrusted, stale index.
+  const authorized = await filterAuthorizedCandidates(kind, Array.from(out.values()), actor, scopes);
+
   // Account-scoped person search: contacts on the scoped account always
   // rank ahead of internal-roster people (employees / partner-firm),
   // regardless of similarity score — the scope was set because the user
   // most likely means a client contact. Enforced HERE (final merge) so
   // no later score sort can reorder them.
   if (kind === "contact" && scopes.accountId) {
-    const merged = Array.from(out.values());
+    const merged = authorized;
     const contacts = merged.filter((c) => !c.roster).sort((a, b) => b.score - a.score);
     const internal = merged.filter((c) => c.roster).sort((a, b) => b.score - a.score);
     return [...contacts, ...internal].slice(0, TOP_K);
   }
 
-  return Array.from(out.values())
+  return authorized
     .sort((a, b) => b.score - a.score)
     .slice(0, TOP_K);
+}
+
+const ORG_WIDE_RESOLVER_ROLES = new Set([
+  "founding_partner", "partner", "senior_manager", "finance", "hr",
+]);
+
+export async function contactBelongsToScopedAccount(args: {
+  contactId: string;
+  orgId: string;
+  accountId: string;
+}): Promise<boolean> {
+  const [contact] = await db
+    .select({ accountId: atelierContacts.accountId })
+    .from(atelierContacts)
+    .where(and(
+      eq(atelierContacts.id, args.contactId),
+      eq(atelierContacts.orgId, args.orgId),
+      isNull(atelierContacts.deletedAt),
+    ))
+    .limit(1);
+  return contact?.accountId === args.accountId;
+}
+
+async function authorizedCandidate(
+  kind: ResolverKind,
+  id: string,
+  actor: ResolverActor,
+  scopes: ResolverScopes,
+): Promise<boolean> {
+  if (ORG_WIDE_RESOLVER_ROLES.has(actor.role)) return true;
+  // Account and engagement visibility are delegated to their existing
+  // policy helpers. Do not reproduce CRM ACL rules in the index.
+  if (kind === "account") {
+    const { canSeeAccount } = await import("../../routes/atelier/accountRoutes.js");
+    const { accessibleEngagementIds } = await import("../../routes/atelier/engagementRoutes.js");
+    const access = await accessibleEngagementIds({ id: actor.id, role: actor.role } as never);
+    return canSeeAccount(access, { id: actor.id, role: actor.role, orgId: actor.orgId } as never, id);
+  }
+  if (kind === "engagement") {
+    const { accessibleEngagementIds } = await import("../../routes/atelier/engagementRoutes.js");
+    const access = await accessibleEngagementIds({ id: actor.id, role: actor.role } as never);
+    return access.all === true || access.ids.has(id);
+  }
+  // A contact is only safe for a restricted persona when it is explicitly
+  // scoped to an account they can see, or is the caller's own roster row.
+  if (kind === "contact") {
+    const [own] = await db.select({ id: atelierEmployees.id }).from(atelierEmployees)
+      .where(and(eq(atelierEmployees.id, id), eq(atelierEmployees.orgId, actor.orgId), eq(atelierEmployees.userId, actor.id), isNull(atelierEmployees.deletedAt))).limit(1);
+    if (own) return true;
+    if (!scopes.accountId) return false;
+    if (!(await contactBelongsToScopedAccount({
+      contactId: id,
+      orgId: actor.orgId,
+      accountId: scopes.accountId,
+    }))) return false;
+    const { canSeeAccount } = await import("../../routes/atelier/accountRoutes.js");
+    const { accessibleEngagementIds } = await import("../../routes/atelier/engagementRoutes.js");
+    const access = await accessibleEngagementIds({ id: actor.id, role: actor.role } as never);
+    return canSeeAccount(access, { id: actor.id, role: actor.role, orgId: actor.orgId } as never, scopes.accountId);
+  }
+  // Unknown domain ACLs are not guessed from an embedding. Existing
+  // privileged personas retain the established behavior above.
+  return false;
+}
+
+export async function filterAuthorizedCandidates(
+  kind: ResolverKind,
+  candidates: ResolverCandidate[],
+  actor: ResolverActor,
+  scopes: ResolverScopes,
+): Promise<ResolverCandidate[]> {
+  const checked = await Promise.all(candidates.map(async (candidate) => {
+    // Every vector hit must still exist in its authoritative table. This
+    // removes orphaned rows after archive/delete before any disclosure.
+    // Replace projection labels with current source labels as well: a stale
+    // embedding may rank a row, but it must never disclose stale source text.
+    let current = candidate;
+    if (candidate.via === "vector") {
+      const source = await tryIdLookup(kind, candidate.id, actor.orgId);
+      if (!source) return null;
+      current = {
+        ...candidate,
+        label: source.label,
+        secondary: source.secondary,
+      };
+    }
+    return (await authorizedCandidate(kind, current.id, actor, scopes)) ? current : null;
+  }));
+  return checked.filter((candidate): candidate is ResolverCandidate => candidate !== null);
 }
 
 async function tryIdLookup(
@@ -235,15 +348,9 @@ async function tryIdLookup(
       .limit(1);
     return r ? { id: r.id, label: r.name, secondary: r.status ?? undefined } : null;
   }
-  // Non-trigram kinds: try the embedding mirror first (cheap), then
-  // fall back to a direct table lookup so an exact id always
-  // resolves even when the embedding row hasn't been backfilled.
-  const [er] = await db
-    .select({ id: atelierEntityEmbeddings.targetId, label: atelierEntityEmbeddings.label })
-    .from(atelierEntityEmbeddings)
-    .where(and(eq(atelierEntityEmbeddings.kind, kind), eq(atelierEntityEmbeddings.targetId, id), eq(atelierEntityEmbeddings.orgId, orgId)))
-    .limit(1);
-  if (er) return { id: er.id, label: er.label };
+  // Non-trigram kinds must be checked against their authoritative source
+  // first. An embedding mirror is never sufficient proof that an exact id
+  // is live (or even that its source was not archived).
   return await directIdLookup(kind, id, orgId);
 }
 
@@ -262,6 +369,24 @@ export async function directIdLookup(
   const probe = async <T extends { id: string }>(rows: T[], label: (r: T) => string, secondary?: (r: T) => string | null | undefined) =>
     rows[0] ? { id: rows[0].id, label: label(rows[0]), secondary: secondary?.(rows[0]) ?? undefined } : null;
   switch (kind) {
+    case "contact":
+      return probe(
+        await db
+          .select({
+            id: atelierContacts.id,
+            fullName: atelierContacts.fullName,
+            title: atelierContacts.title,
+          })
+          .from(atelierContacts)
+          .where(and(
+            eq(atelierContacts.id, id),
+            eq(atelierContacts.orgId, orgId),
+            isNull(atelierContacts.deletedAt),
+          ))
+          .limit(1),
+        (row) => row.fullName,
+        (row) => row.title,
+      );
     case "invoice":
       return probe(
         await db.select({ id: atelierInvoice.id, status: atelierInvoice.status }).from(atelierInvoice)
@@ -373,10 +498,12 @@ export async function directIdLookup(
         (r) => `expense ${r.id}`,
       );
     case "contract":
-      // Contracts live on the codex tables — no single source-of-truth
-      // table importable here without pulling the codex schema. Fall
-      // back to the embedding mirror only.
-      return null;
+      return probe(
+        await db.select({ id: atelierContract.id, title: atelierContract.title, status: atelierContract.status })
+          .from(atelierContract)
+          .where(and(eq(atelierContract.id, id), eq(atelierContract.orgId, orgId), isNull(atelierContract.deletedAt))).limit(1),
+        (r) => r.title || `contract ${r.id}`, (r) => r.status,
+      );
     default:
       return null;
   }
