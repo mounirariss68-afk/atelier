@@ -1,8 +1,8 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "f3cee5d7eb8f1e159e4e2dc1dac8c6bac66286fbdd25c97a00683bd71380b2fc",
-  "entryCount": 329,
+  "manifestVersion": "86212eaa33536f5000511a46dfcc795873b3f5df1ebc4da5f4a4e51fcdbb4579",
+  "entryCount": 331,
   "entries": [
     {
       "capabilityId": "account.archive",
@@ -6932,6 +6932,49 @@
       ]
     },
     {
+      "capabilityId": "finance.procurement_relationships",
+      "toolName": "finance_procurement_relationships",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "8a5d451bbcb8",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "effectiveRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "role_restricted_read",
+      "implementationVersion": "28a8ef43af00",
+      "approverRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "ranked_list",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "finance.statement_of_account",
       "toolName": "statement_of_account",
       "source": "cli-only",
@@ -7720,6 +7763,49 @@
       },
       "presentation": {
         "cardType": "ranked_list",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
+      "capabilityId": "ledger.finance_statutory_close_status",
+      "toolName": "finance_statutory_close_status",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "cc71132e4175",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "effectiveRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "policyClass": "role_restricted_read",
+      "implementationVersion": "6e0b0ee02ce7",
+      "approverRoles": [
+        "finance",
+        "founding_partner",
+        "partner"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "entity_card",
         "contractVersion": 1,
         "renderer": "legacy-native-v1",
         "minimumDataVersion": 1

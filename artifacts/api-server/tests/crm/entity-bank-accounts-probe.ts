@@ -131,6 +131,7 @@ async function main() {
       country: "ae",
       legalForm: "LLC",
       baseCurrency: "AED",
+      status: "in_formation",
     });
     check("entity create 201", created.status === 201, created);
     const entityId = created.body?.entity?.id as string;
@@ -222,7 +223,7 @@ async function main() {
 
     // Document linked to a DIFFERENT entity → 409
     const other = await api(fpId, "POST", "/finance/entities", {
-      legalNameEn: `Probe1065 Other LLC ${runTag}`, country: "ae", legalForm: "LLC", baseCurrency: "AED",
+      legalNameEn: `Probe1065 Other LLC ${runTag}`, country: "ae", legalForm: "LLC", baseCurrency: "AED", status: "in_formation",
     });
     const otherId = other.body?.entity?.id as string;
     entityIds.push(otherId);

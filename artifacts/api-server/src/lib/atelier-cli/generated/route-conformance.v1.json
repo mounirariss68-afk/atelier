@@ -3,7 +3,7 @@
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
   "routeCount": 1218,
-  "capabilityCount": 329,
+  "capabilityCount": 331,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
   "routes": [
@@ -35639,6 +35639,15 @@
       ]
     },
     {
+      "capabilityId": "finance.procurement_relationships",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "28a8ef43af00",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "finance.statement_of_account",
       "source": "cli-only",
       "executionStatus": "executable",
@@ -35805,6 +35814,15 @@
       "source": "cli-only",
       "executionStatus": "executable",
       "implementationVersion": "280afa8c3b79",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
+      "capabilityId": "ledger.finance_statutory_close_status",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "6e0b0ee02ce7",
       "divergenceIds": [
         "cli-only-route-parity-v1"
       ]
@@ -37122,5 +37140,5 @@
       ]
     }
   ],
-  "conformanceVersion": "b51c1251a40c325a3c1b76a9a5ce286e14c81d06d7ab62a06d420058657438b2"
+  "conformanceVersion": "cd0ccf8703eafa9496f48c6b47665fe53d6c520d3763b6ad4932be61546ae5ae"
 }

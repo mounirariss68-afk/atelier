@@ -102,6 +102,8 @@
     "test:crm-aliases": "tsx ./tests/crm/crm-aliases.ts",
     "test:crm-alias-routes": "tsx ./tests/crm/crm-alias-routes.ts",
     "test:crm-relationships": "tsx ./tests/crm/crm-relationship-capabilities.ts",
+    "test:finance-procurement-semantics": "tsx ./tests/crm/finance-procurement-relationship-capabilities.ts",
+    "test:finance-statutory-semantics": "tsx ./tests/finance-statutory-close/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts",
     "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts",
     "test:self-billing": "tsx ./tests/self-billing/run.ts",

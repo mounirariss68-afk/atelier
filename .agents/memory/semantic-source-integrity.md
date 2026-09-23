@@ -9,6 +9,12 @@ Semantic indexes are disposable, untrusted projections. They may rank candidates
 
 **How to apply:** Join retrieval back to the current authoritative source and apply actor ACL before ranking or returning labels. New projection tables need tenant RLS even though application authorization remains authoritative.
 
+Semantic validity filters belong before every scan/result cap, not only before display. This includes source-backed relationships: exclude unauthorized, archived, unlinked, replaced, or otherwise non-current rows in the query (or continue deterministic pagination) before taking the public limit.
+
+**Why:** A fixed pre-filter scan can let invalid or invisible rows consume the window, causing authorized current records later in order to disappear.
+
+**How to apply:** Prefer authoritative joins and currentness predicates before `LIMIT`. For row-specific ACLs that cannot be expressed in SQL, require a canonical ID or paginate until the authorized cap is filled; never cap first and filter afterward.
+
 Tax-certificate currentness belongs to the legal-entity registry pointer. Registry claims and destructive document lifecycle changes must share a database serialization boundary, with blob deletion deferred until after the authoritative transaction commits.
 
 **Why:** Route-level check-then-mutate guards leave a race where a document can become canonical while versions or bytes are being removed.

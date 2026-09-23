@@ -80,6 +80,10 @@ import "./me-ea-assist-capabilities.js";
 // entity expiries, win/loss knowledge, manager-scoped leave queues, and
 // contract/template browsing. Mirrors REST ACLs with explicit refusals.
 import "./finance-ops-capabilities.js";
+// Task #1412 — source-backed statutory/close and procurement relationship
+// semantics. Read-only adapters preserve existing finance authority.
+import "./finance-statutory-capabilities.js";
+import "./finance-procurement-relationship-capabilities.js";
 // Task #404 — read-only people / contact / meeting / document /
 // opportunity / engagement / expense chat reads (ACL-parity with REST).
 import "./people-read-capabilities.js";
