@@ -2077,6 +2077,20 @@ export const atelierPrototypes = pgTable(
     buildPlan: jsonb("build_plan").notNull().default([]),
     demoStoryboard: jsonb("demo_storyboard").notNull().default([]),
     status: text("status").notNull().default("draft"), // draft|lead_approved|partner_approved|sent
+    // Task #1422 — operating record for the 48-hour prototype promise. The
+    // legacy approval status above remains authoritative for the two gates;
+    // lifecycleStatus tracks delivery independently.
+    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+    dueAt: timestamp("due_at").notNull().defaultNow(),
+    ownerId: text("owner_id"),
+    lifecycleStatus: text("lifecycle_status").notNull().default("requested"),
+    deadlineChangeReason: text("deadline_change_reason"),
+    buildUrl: text("build_url"),
+    demoUrl: text("demo_url"),
+    repositoryUrl: text("repository_url"),
+    deliveredAt: timestamp("delivered_at"),
+    slaOutcome: text("sla_outcome"),
+    handoffEngagementId: text("handoff_engagement_id"),
     leadApprovedAt: timestamp("lead_approved_at"),
     leadApprovedByUserId: text("lead_approved_by_user_id"),
     partnerApprovedAt: timestamp("partner_approved_at"),
@@ -4693,6 +4707,9 @@ export const atelierVendorProjectMap = pgTable(
     projectLabel: text("project_label").notNull(),
     bucketType: text("bucket_type").notNull().$type<VendorCostBucketType>(),
     bucketRef: text("bucket_ref"),
+    // Optional attribution dimension; bucketType/bucketRef remain the
+    // accounting authority and are never replaced by this pointer.
+    prototypeId: text("prototype_id"),
     createdByUserId: text("created_by_user_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -4751,6 +4768,7 @@ export const atelierVendorCostSplits = pgTable(
     projectLabel: text("project_label").notNull(),
     bucketType: text("bucket_type").notNull().$type<VendorCostBucketType>(),
     bucketRef: text("bucket_ref"),
+    prototypeId: text("prototype_id"),
     currency: text("currency").notNull().default("USD"),
     grossAmount: doublePrecision("gross_amount").notNull().default(0),
     creditAmount: doublePrecision("credit_amount").notNull().default(0),

@@ -137,6 +137,7 @@ import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
 // Task #1251 — vendor tooling cost allocation.
 import ToolingSpend from "@/pages/finance/ToolingSpend";
+import Prototypes from "@/pages/Prototypes";
 import BillingWorklist from "@/pages/finance/BillingWorklist";
 import FinancePayroll from "@/pages/finance/FinancePayroll";
 import FinanceNepComp from "@/pages/finance/FinanceNepComp";
@@ -314,6 +315,8 @@ function SelfOnlyRouteGuard({ children }: { children: React.ReactNode }) {
     location.startsWith("/clients/accounts/") ||
     location === "/clients/opportunities" ||
     location.startsWith("/clients/opportunities/") ||
+             location === "/prototypes" ||
+             location.startsWith("/prototypes/") ||
     location.startsWith("/accounts/") ||
     location.startsWith("/opportunities/");
   const allowed =
@@ -377,6 +380,7 @@ function Router() {
         {/* Listing-level redirects move to the lens; detail routes
             (workspaces) stay canonical at their existing paths. */}
         <Route path="/opportunities">{() => <Redirect to="/clients/opportunities" />}</Route>
+        <Route path="/prototypes" component={Prototypes} />
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/opportunities/:oppId/win-loss" component={WinLoss} />
         <Route path="/opportunities/:oppId" component={Opportunity} />

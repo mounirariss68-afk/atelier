@@ -140,6 +140,7 @@
 - [GL needs-attention proposals](atelier-gl-needs-attention.md) — invoice/cp/bank-txn proposals live in allocProposedEntityId, legalEntityId only on human decide (Bookkeeper posts on legalEntityId alone).
 - [Pre-formation cost pools](atelier-preformation-pools.md) — quarantine keyed on UNSETTLED pool (not status); Dr 1500 on HOME entity; IC recharge = 1550 (1150 is salary advances).
 - [Vendor tooling cost splits](atelier-tooling-splits.md) — mined items are POST-credit net (never re-subtract credits); flat vendors use __vendor_default__ + % rules; recon gate quarantines, never scales.
+- [Prototype tooling attribution](atelier-prototype-tooling-attribution.md) — prototype is optional traceability only; opportunity/engagement bucket and finance approval remain accounting authority.
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
 - [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.
 - [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.

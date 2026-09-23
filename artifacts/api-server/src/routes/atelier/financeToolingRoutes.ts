@@ -34,6 +34,7 @@ import {
   atelierEngagements,
   atelierOpportunities,
   atelierAccounts,
+  atelierPrototypes,
   type VendorInvoiceExtraction,
   type VendorCostBucketType,
   type VendorAllocSplit,
@@ -364,18 +365,32 @@ const MapSchema = z.object({
   projectKey: z.string().min(1).max(200),
   bucketType: z.enum(BUCKET_ENUM),
   bucketRef: z.string().max(200).nullable().optional(),
+  prototypeId: z.string().max(200).nullable().optional(),
 });
 // @cli-skip: UI-workflow finance-leadership write; mapping requires the console's queue context
 router.post("/finance/tooling/map", async (req, res) => {
   const me = deny(req, res); if (!me) return;
   const parsed = MapSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
-  const { vendorKey, projectKey, bucketType } = parsed.data;
+  const { vendorKey, projectKey, bucketType, prototypeId: prototypeIdIn } = parsed.data;
   const bucketRefIn = parsed.data.bucketRef ?? null;
 
   const v = await validateBucketRef(me.orgId, bucketType, bucketRefIn);
   if (!v.ok) return res.status(400).json({ error: v.error });
   const bucketRef = v.ref;
+  let prototypeId: string | null = prototypeIdIn ?? null;
+  if (prototypeId) {
+    const [p] = await db.select({ id: atelierPrototypes.id, opportunityId: atelierPrototypes.opportunityId, engagementId: atelierPrototypes.engagementId })
+      .from(atelierPrototypes).where(and(eq(atelierPrototypes.id, prototypeId), eq(atelierPrototypes.orgId, me.orgId), isNull(atelierPrototypes.deletedAt)));
+    if (!p) return res.status(400).json({ error: "prototype-not-found" });
+    if (bucketType === "opportunity" && p.opportunityId !== bucketRef) return res.status(400).json({ error: "prototype-opportunity-mismatch" });
+    if (bucketType === "engagement" && p.engagementId !== bucketRef) return res.status(400).json({ error: "prototype-engagement-mismatch" });
+    if (bucketType === "account" && p.opportunityId) {
+      const [o] = await db.select({ accountId: atelierOpportunities.accountId }).from(atelierOpportunities)
+        .where(and(eq(atelierOpportunities.id, p.opportunityId), eq(atelierOpportunities.orgId, me.orgId)));
+      if (!o || o.accountId !== bucketRef) return res.status(400).json({ error: "prototype-account-mismatch" });
+    }
+  }
 
   // Resolve a display label for the project from any reconciled invoice.
   let projectLabel = projectKey;
@@ -405,20 +420,20 @@ router.post("/finance/tooling/map", async (req, res) => {
   if (existing) {
     finalMappingId = existing.id;
     await db.update(atelierVendorProjectMap).set({
-      projectLabel, bucketType, bucketRef, deletedAt: null,
+      projectLabel, bucketType, bucketRef, prototypeId, deletedAt: null,
       createdByUserId: me.id, updatedAt: now,
     }).where(eq(atelierVendorProjectMap.id, existing.id));
   } else {
     await db.insert(atelierVendorProjectMap).values({
       id: mappingId, orgId: me.orgId, vendorKey, projectKey, projectLabel,
-      bucketType, bucketRef, createdByUserId: me.id, createdAt: now, updatedAt: now,
+       bucketType, bucketRef, prototypeId, createdByUserId: me.id, createdAt: now, updatedAt: now,
     });
   }
 
   await audit({
     entityType: "vendor_project_map", entityId: finalMappingId, actor: me,
     action: "tooling.project_mapped",
-    payload: { vendorKey, projectKey, projectLabel, bucketType, bucketRef },
+     payload: { vendorKey, projectKey, projectLabel, bucketType, bucketRef, prototypeId },
     summary: `${me.name} mapped ${vendorLabel(vendorKey)} project "${projectLabel}" → ${bucketType}${bucketRef ? ` (${bucketRef})` : ""}.`,
   });
 
@@ -602,6 +617,13 @@ router.get("/finance/tooling/targets", async (req, res) => {
     eq(atelierAccounts.orgId, me.orgId),
     isNull(atelierAccounts.deletedAt),
   )).orderBy(desc(atelierAccounts.createdAt)).limit(500);
+  const prototypeRows = await db.select({
+    id: atelierPrototypes.id, name: atelierPrototypes.name,
+    opportunityId: atelierPrototypes.opportunityId, engagementId: atelierPrototypes.engagementId,
+    lifecycleStatus: atelierPrototypes.lifecycleStatus,
+  }).from(atelierPrototypes).where(and(
+    eq(atelierPrototypes.orgId, me.orgId), isNull(atelierPrototypes.deletedAt),
+  )).orderBy(desc(atelierPrototypes.createdAt)).limit(500);
 
   return res.json({
     ok: true,
@@ -609,6 +631,7 @@ router.get("/finance/tooling/targets", async (req, res) => {
       engagements: engagements.map((e) => ({ id: e.id, name: e.name })),
       opportunities: oppRows.map((o) => ({ id: o.id, name: o.name, accountName: accName.get(o.accountId) ?? "" })),
       accounts: accountRows.map((a) => ({ id: a.id, name: a.name })),
+      prototypes: prototypeRows,
     },
   });
 });
@@ -640,6 +663,7 @@ router.get("/finance/tooling/invoices/:id", async (req, res) => {
       projectLabel: s.projectLabel,
       bucketType: s.bucketType,
       bucketRef: s.bucketRef,
+      prototypeId: s.prototypeId,
       bucketLabel: await bucketLabelFor(me.orgId, s.bucketType, s.bucketRef),
       grossUsd: round2(Number(s.grossAmount || 0)),
       creditUsd: round2(Number(s.creditAmount || 0)),
@@ -818,6 +842,7 @@ router.get("/finance/tooling/mappings", async (req, res) => {
       projectLabel: m.projectLabel,
       bucketType: m.bucketType,
       bucketRef: m.bucketRef,
+      prototypeId: m.prototypeId,
       bucketLabel: await bucketLabelFor(me.orgId, m.bucketType, m.bucketRef),
       createdByName: (m.createdByUserId && userName.get(m.createdByUserId)) || null,
       updatedAt: m.updatedAt ? m.updatedAt.toISOString() : null,

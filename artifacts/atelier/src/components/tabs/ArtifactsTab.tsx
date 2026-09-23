@@ -22,6 +22,15 @@ export function ArtifactsTab({ engId }: { engId: string }) {
   const [title, setTitle] = React.useState("");
   const [body, setBody] = React.useState("");
   const [source, setSource] = React.useState<"upload" | "synthesis" | "external">("upload");
+  const [handoffPrototypes, setHandoffPrototypes] = React.useState<Array<{ id: string; name: string; engagementId?: string | null; lifecycleStatus?: string; deliveredAt?: string; demoUrl?: string; buildUrl?: string }>>([]);
+  React.useEffect(() => {
+    const base = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
+    void fetch(`${base}/prototypes`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then((body: { items?: typeof handoffPrototypes; data?: typeof handoffPrototypes } | typeof handoffPrototypes) =>
+        setHandoffPrototypes((Array.isArray(body) ? body : body.items ?? body.data ?? []).filter((p) => p.engagementId === engId && (!p.lifecycleStatus || p.lifecycleStatus === "delivered"))))
+      .catch(() => setHandoffPrototypes([]));
+  }, [engId]);
 
   function inv() {
     qc.invalidateQueries({ queryKey: getAtelierListArtifactsQueryKey(engId) });
@@ -46,6 +55,27 @@ export function ArtifactsTab({ engId }: { engId: string }) {
 
   return (
     <div className="space-y-4">
+      {handoffPrototypes.length > 0 && (
+        <Card className="p-5 space-y-3 border-gold/30" data-testid="engagement-prototype-handoffs">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">Prototype handoff</div>
+            <h3 className="text-lg font-semibold">Delivered prototypes</h3>
+            <p className="text-xs text-text-mute">Preserved from the opportunity record after contract — delivery state remains with the prototype.</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {handoffPrototypes.map((p) => (
+              <div key={p.id} className="rounded border border-border-soft p-3">
+                <div className="font-medium text-sm">{p.name}</div>
+                <div className="text-[11px] font-mono text-text-faint mt-1">Delivered {p.deliveredAt ? new Date(p.deliveredAt).toLocaleString() : "—"}</div>
+                <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                  {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noreferrer" className="text-gold hover:underline">Demo ↗</a>}
+                  {p.buildUrl && <a href={p.buildUrl} target="_blank" rel="noreferrer" className="text-gold hover:underline">Build ↗</a>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <div className="flex items-center justify-between">
         <div className="text-xs font-mono uppercase tracking-wide text-text-mute">
           {(items ?? []).length} artifact{(items ?? []).length === 1 ? "" : "s"}

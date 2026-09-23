@@ -33,7 +33,6 @@ import { PovTab } from "@/components/tabs/PovTab";
 import { MeetingsTab } from "@/components/tabs/MeetingsTab";
 import { ProposalTab } from "@/components/tabs/ProposalTab";
 import { CommercialsTab } from "@/components/tabs/CommercialsTab";
-import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { OpportunityEditDialog } from "@/components/OpportunityEditDialog";
@@ -57,6 +56,7 @@ import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialo
 import { OpportunityAgreements } from "@/components/esign/OpportunityAgreements";
 import { NepAccessCard } from "@/components/NepAccessCard";
 import { OpportunityPartnerTags } from "@/components/OpportunityPartnerPicker";
+import { PrototypesTab } from "@/components/tabs/PrototypesTab";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -65,6 +65,7 @@ const TABS = [
   { id: "meetings", label: "Meetings" },
   { id: "proposal", label: "Proposal" },
   { id: "commercials", label: "Commercials" },
+  { id: "prototypes", label: "Prototypes" },
   { id: "artifacts", label: "Artifacts" },
   { id: "audit", label: "Audit Trail" },
 ] as const;
@@ -249,7 +250,6 @@ export default function Opportunity() {
                 </span>
               </PillButton>
             )}
-            <PrototypeButton oppId={opp.id} oppName={opp.name} />
           </div>
           {/* Quiet lifecycle controls — secondary to the pill actions. */}
           <div className="flex flex-wrap items-center gap-3">
@@ -307,6 +307,7 @@ export default function Opportunity() {
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "proposal" && <ProposalTab oppId={opp.id} />}
           {activeTab === "commercials" && <CommercialsTab oppId={opp.id} />}
+          {activeTab === "prototypes" && <PrototypesTab oppId={opp.id} oppName={opp.name} />}
           {activeTab === "artifacts" && (() => {
             const evidence = (Array.isArray(history) ? history : []).flatMap((t) =>
               (t.evidenceArtifactIds ?? []).map((artId) => ({

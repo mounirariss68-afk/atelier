@@ -32,6 +32,8 @@ import {
   atelierAccounts,
   atelierFirmProfile,
   atelierProposalRecipients,
+  atelierVendorCostSplits,
+  atelierPartnerFirmInvoices,
 } from "@workspace/db";
 import { renderProposalHtml, orderSectionsBySpine } from "../../lib/atelier-proposal-html.js";
 import { randomBytes } from "node:crypto";
@@ -51,6 +53,7 @@ import { createHash } from "node:crypto";
 import { ensureEngAccess, audit } from "./engagementRoutes.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { recordOutcomeForRun } from "../../lib/atelier-agents/outcome-ledger.js";
+import { isPrototypeTransitionAllowed, prototypeTransitionFields } from "../../lib/atelier-prototype-tracker.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -387,7 +390,7 @@ router.get("/opportunities/:oppId/prototypes", async (req, res) => {
     .from(atelierPrototypes)
     .where(and(eq(atelierPrototypes.opportunityId, opp.id), isNull(atelierPrototypes.deletedAt)))
     .orderBy(desc(atelierPrototypes.createdAt));
-  res.json(rows);
+  res.json(await enrichPrototypeRows(rows, me));
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -449,6 +452,7 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
     .insert(atelierPrototypes)
     .values({
       id: rid("proto"),
+      orgId: me.orgId,
       opportunityId: opp.id,
       runId,
       name: brief.name,
@@ -457,6 +461,10 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
       buildPlan: output.buildPlan,
       demoStoryboard: output.demoStoryboard,
       status: "draft",
+      requestedAt: new Date(),
+      dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      ownerId: me.id,
+      lifecycleStatus: "requested",
       createdByUserId: me.id,
     })
     .returning();
@@ -469,6 +477,242 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
     summary: `${me.name} forged prototype "${brief.name}"`,
   });
   res.status(201).json({ prototype: proto, runId });
+});
+
+// =============================================================
+// PROTOTYPE TRACKER (Task #1422)
+// =============================================================
+const prototypeWriterRoles = new Set(["founding_partner", "partner", "senior_manager"]);
+const prototypeStatuses = new Set(["requested", "scoping", "approved", "building", "ready", "delivered", "cancelled"]);
+async function getPrototypeForOrg(id: string, orgId: string) {
+  const [row] = await db.select().from(atelierPrototypes).where(and(
+    eq(atelierPrototypes.id, id), eq(atelierPrototypes.orgId, orgId), isNull(atelierPrototypes.deletedAt),
+  ));
+  return row ?? null;
+}
+function canPrototypeWrite(me: typeof atelierUsers.$inferSelect) {
+  return prototypeWriterRoles.has(me.role);
+}
+async function ownerInOrg(ownerId: string | null | undefined, orgId: string) {
+  if (!ownerId) return true;
+  const [owner] = await db.select({ id: atelierUsers.id }).from(atelierUsers).where(and(
+    eq(atelierUsers.id, ownerId), eq(atelierUsers.orgId, orgId), isNull(atelierUsers.deletedAt),
+  ));
+  return !!owner;
+}
+
+async function enrichPrototypeRows(
+  rows: (typeof atelierPrototypes.$inferSelect)[],
+  me: typeof atelierUsers.$inferSelect,
+) {
+  const oppIds = [...new Set(rows.map((r) => r.opportunityId).filter((x): x is string => !!x))];
+  const opps = oppIds.length ? await db.select({
+    id: atelierOpportunities.id, name: atelierOpportunities.name,
+    accountId: atelierOpportunities.accountId, partnerOwnerId: atelierOpportunities.partnerOwnerId,
+    engagementLeadId: atelierOpportunities.engagementLeadId,
+  }).from(atelierOpportunities).where(and(inArray(atelierOpportunities.id, oppIds), eq(atelierOpportunities.orgId, me.orgId))) : [];
+  const visible = new Map(opps.filter((o) => me.role === "partner" || me.role === "founding_partner" ||
+    o.partnerOwnerId === me.id || o.engagementLeadId === me.id).map((o) => [o.id, o]));
+  const accountIds = [...new Set(opps.map((o) => o.accountId))];
+  const accounts = accountIds.length ? await db.select({ id: atelierAccounts.id, name: atelierAccounts.name })
+    .from(atelierAccounts).where(and(inArray(atelierAccounts.id, accountIds), eq(atelierAccounts.orgId, me.orgId))) : [];
+  const owners = [...new Set(rows.map((r) => r.ownerId).filter((x): x is string => !!x))];
+  const users = owners.length ? await db.select({ id: atelierUsers.id, name: atelierUsers.name })
+    .from(atelierUsers).where(and(inArray(atelierUsers.id, owners), eq(atelierUsers.orgId, me.orgId))) : [];
+  const costs = new Map<string, { approved: number; pending: number }>();
+  if (rows.length) {
+    const splitRows = await db.select().from(atelierVendorCostSplits).where(and(
+      eq(atelierVendorCostSplits.orgId, me.orgId),
+      inArray(atelierVendorCostSplits.prototypeId, rows.map((r) => r.id)),
+      isNull(atelierVendorCostSplits.deletedAt),
+    ));
+    for (const s of splitRows) {
+      if (!s.prototypeId) continue;
+      const c = costs.get(s.prototypeId) ?? { approved: 0, pending: 0 };
+      if (s.status === "approved") c.approved += Number(s.usdAmount || 0);
+      else c.pending += Number(s.usdAmount || 0);
+      costs.set(s.prototypeId, c);
+    }
+  }
+  const accountName = new Map(accounts.map((a) => [a.id, a.name]));
+  const ownerName = new Map(users.map((u) => [u.id, u.name]));
+  return rows.filter((r) => !r.opportunityId || visible.has(r.opportunityId)).map((r) => {
+    const o = r.opportunityId ? visible.get(r.opportunityId) : undefined;
+    const c = costs.get(r.id) ?? { approved: 0, pending: 0 };
+    return { ...r, accountName: o ? accountName.get(o.accountId) ?? null : null,
+      opportunityName: o?.name ?? null, ownerName: r.ownerId ? ownerName.get(r.ownerId) ?? null : null,
+      approvedCostUsd: Math.round(c.approved * 100) / 100, pendingCostUsd: Math.round(c.pending * 100) / 100 };
+  });
+}
+
+// @cli-skip: prototype tracker list is a console-only operating workflow; no CLI capability parity
+router.get("/prototypes", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  const where = [eq(atelierPrototypes.orgId, me.orgId), isNull(atelierPrototypes.deletedAt)];
+  if (typeof req.query.status === "string") where.push(eq(atelierPrototypes.lifecycleStatus, req.query.status));
+  if (typeof req.query.ownerId === "string") where.push(eq(atelierPrototypes.ownerId, req.query.ownerId));
+  const rows = await db.select().from(atelierPrototypes).where(and(...where)).orderBy(desc(atelierPrototypes.dueAt));
+  res.json(await enrichPrototypeRows(rows, me));
+});
+
+// @cli-skip: prototype tracker detail is a console-only operating workflow; no CLI capability parity
+router.get("/prototypes/:prototypeId", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  const splits = await db.select().from(atelierVendorCostSplits).where(and(
+    eq(atelierVendorCostSplits.orgId, me.orgId), eq(atelierVendorCostSplits.prototypeId, proto.id),
+    isNull(atelierVendorCostSplits.deletedAt),
+  ));
+  const invoiceIds = [...new Set(splits.map((s) => s.invoiceId))];
+  const invoices = invoiceIds.length ? await db.select({
+    id: atelierPartnerFirmInvoices.id, supplier: atelierPartnerFirmInvoices.partnerFirmName,
+    reference: atelierPartnerFirmInvoices.reference,
+  }).from(atelierPartnerFirmInvoices).where(inArray(atelierPartnerFirmInvoices.id, invoiceIds)) : [];
+  const invoiceMap = new Map(invoices.map((i) => [i.id, i]));
+  const approved = splits.filter((s) => s.status === "approved");
+  const pending = splits.filter((s) => s.status !== "approved");
+  res.json({
+    prototype: proto,
+    costs: {
+      approvedUsd: approved.reduce((n, s) => n + Number(s.usdAmount || 0), 0),
+      pendingUsd: pending.reduce((n, s) => n + Number(s.usdAmount || 0), 0),
+      approved: approved.map((s) => ({ ...s, invoice: invoiceMap.get(s.invoiceId) ?? null })),
+      pending: pending.map((s) => ({ ...s, invoice: invoiceMap.get(s.invoiceId) ?? null })),
+    },
+  });
+});
+
+// @cli-skip: prototype tracker creation is a console-only operating workflow; no CLI capability parity
+router.post("/prototypes", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const body = req.body as Record<string, unknown>;
+  const opportunityId = typeof body.opportunityId === "string" ? body.opportunityId : null;
+  if (!opportunityId) { res.status(400).json({ error: "opportunityId-required" }); return; }
+  const opp = await ensureOppAccess(res, me, opportunityId); if (!opp) return;
+  const now = new Date();
+  const due = body.dueAt ? new Date(String(body.dueAt)) : new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  if (Number.isNaN(due.getTime())) { res.status(400).json({ error: "invalid-dueAt" }); return; }
+  const ownerId = typeof body.ownerId === "string" ? body.ownerId : me.id;
+  if (!(await ownerInOrg(ownerId, me.orgId))) { res.status(400).json({ error: "owner-not-found" }); return; }
+  const [proto] = await db.insert(atelierPrototypes).values({
+    id: rid("proto"), orgId: me.orgId, opportunityId: opp.id,
+    name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : `Prototype — ${opp.name}`,
+    brief: (body.brief && typeof body.brief === "object" ? body.brief : {}) as Record<string, unknown>,
+    replitPromptMd: typeof body.replitPromptMd === "string" ? body.replitPromptMd : "",
+    buildPlan: Array.isArray(body.buildPlan) ? body.buildPlan : [],
+    demoStoryboard: Array.isArray(body.demoStoryboard) ? body.demoStoryboard : [],
+    requestedAt: now, dueAt: due, ownerId,
+    lifecycleStatus: "requested", status: "draft", createdByUserId: me.id,
+  }).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.created",
+    payload: { opportunityId: opp.id, dueAt: due.toISOString() }, summary: `${me.name} requested prototype "${proto.name}"` });
+  res.status(201).json(proto);
+});
+
+// @cli-skip: prototype tracker is a console-only operating workflow; no CLI capability parity
+router.patch("/prototypes/:prototypeId", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  const b = req.body as Record<string, unknown>;
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  for (const key of ["name", "ownerId", "buildUrl", "demoUrl", "repositoryUrl", "deadlineChangeReason"] as const) {
+    if (key in b && (typeof b[key] === "string" || b[key] === null)) set[key] = b[key];
+  }
+  if ("ownerId" in b && !(await ownerInOrg(typeof b.ownerId === "string" ? b.ownerId : null, me.orgId))) {
+    res.status(400).json({ error: "owner-not-found" }); return;
+  }
+  if (b.brief && typeof b.brief === "object") set.brief = b.brief;
+  const [updated] = await db.update(atelierPrototypes).set(set).where(eq(atelierPrototypes.id, proto.id)).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.updated",
+    payload: { fields: Object.keys(set).filter((k) => k !== "updatedAt") }, summary: `${me.name} updated prototype "${proto.name}"` });
+  res.json(updated);
+});
+
+// @cli-skip: prototype delivery links are a console-only operating workflow; no CLI capability parity
+router.patch("/prototypes/:prototypeId/links", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  const b = req.body as Record<string, unknown>;
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  for (const key of ["buildUrl", "demoUrl", "repositoryUrl"] as const) {
+    if (key in b && (typeof b[key] === "string" || b[key] === null)) set[key] = b[key];
+  }
+  const [updated] = await db.update(atelierPrototypes).set(set).where(eq(atelierPrototypes.id, proto.id)).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.links_updated",
+    payload: { fields: Object.keys(set).filter((k) => k !== "updatedAt") }, summary: `${me.name} updated links for "${proto.name}"` });
+  res.json(updated);
+});
+
+// @cli-skip: prototype lifecycle transitions are a console-only operating workflow; no CLI capability parity
+router.post("/prototypes/:prototypeId/transition", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  const status = (req.body as { status?: string }).status;
+  if (!status || !prototypeStatuses.has(status)) { res.status(400).json({ error: "invalid-lifecycle-status" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  if (!isPrototypeTransitionAllowed(proto.lifecycleStatus, status)) {
+    res.status(409).json({ error: "invalid-lifecycle-transition", from: proto.lifecycleStatus, to: status }); return;
+  }
+  const now = new Date();
+  const set: Record<string, unknown> = {
+    lifecycleStatus: status,
+    updatedAt: now,
+    ...prototypeTransitionFields(status, proto.deliveredAt, proto.dueAt),
+  };
+  const [updated] = await db.update(atelierPrototypes).set(set).where(eq(atelierPrototypes.id, proto.id)).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.transitioned",
+    payload: { from: proto.lifecycleStatus, to: status, slaOutcome: set.slaOutcome ?? null }, summary: `${me.name} moved prototype "${proto.name}" to ${status}` });
+  res.json(updated);
+});
+
+// @cli-skip: prototype deadline changes are a console-only operating workflow; no CLI capability parity
+router.post("/prototypes/:prototypeId/deadline", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  if (proto.lifecycleStatus === "delivered" || proto.lifecycleStatus === "cancelled") {
+    res.status(409).json({ error: "prototype-lifecycle-terminal" }); return;
+  }
+  const b = req.body as { dueAt?: string; reason?: string };
+  const dueAt = b.dueAt ? new Date(b.dueAt) : null;
+  if (!dueAt || Number.isNaN(dueAt.getTime()) || !b.reason?.trim()) { res.status(400).json({ error: "deadline-and-reason-required" }); return; }
+  const [updated] = await db.update(atelierPrototypes).set({ dueAt, deadlineChangeReason: b.reason.trim(), updatedAt: new Date() }).where(eq(atelierPrototypes.id, proto.id)).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.deadline_changed",
+    payload: { from: proto.dueAt.toISOString(), to: dueAt.toISOString(), reason: b.reason.trim() }, summary: `${me.name} changed deadline for "${proto.name}"` });
+  res.json(updated);
+});
+
+// @cli-skip: prototype handoff is a console-only operating workflow; no CLI capability parity
+router.post("/prototypes/:prototypeId/handoff", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (!canPrototypeWrite(me)) { res.status(403).json({ error: "prototype-write-forbidden" }); return; }
+  const proto = await getPrototypeForOrg(req.params.prototypeId, me.orgId);
+  if (!proto) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (proto.opportunityId && !(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  const engagementId = (req.body as { engagementId?: string }).engagementId;
+  if (!engagementId) { res.status(400).json({ error: "engagementId-required" }); return; }
+  const accessibleEngagement = await ensureEngAccess(res, me, engagementId);
+  if (!accessibleEngagement) return;
+  const [eng] = await db.select({ id: atelierEngagements.id, opportunityId: atelierEngagements.opportunityId, orgId: atelierEngagements.orgId })
+    .from(atelierEngagements).where(and(eq(atelierEngagements.id, engagementId), eq(atelierEngagements.orgId, me.orgId), isNull(atelierEngagements.deletedAt)));
+  if (!eng || eng.opportunityId !== proto.opportunityId || accessibleEngagement.id !== eng.id) { res.status(400).json({ error: "engagement-not-linked-to-opportunity" }); return; }
+  const [updated] = await db.update(atelierPrototypes).set({ engagementId, handoffEngagementId: engagementId, updatedAt: new Date() }).where(eq(atelierPrototypes.id, proto.id)).returning();
+  await audit({ entityType: "prototype", entityId: proto.id, actor: me, action: "prototype.handed_off",
+    payload: { engagementId }, summary: `${me.name} handed prototype "${proto.name}" to engagement ${engagementId}` });
+  res.json(updated);
 });
 
 // =============================================================

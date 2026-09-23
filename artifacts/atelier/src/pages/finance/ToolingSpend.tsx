@@ -108,6 +108,7 @@ interface TargetsResp {
     engagements: Array<{ id: string; name: string }>;
     opportunities: Array<{ id: string; name: string; accountName: string }>;
     accounts: Array<{ id: string; name: string }>;
+    prototypes: Array<{ id: string; name: string; opportunityId?: string | null; engagementId?: string | null; lifecycleStatus?: string }>;
   };
 }
 interface MappingListRow {
@@ -121,6 +122,8 @@ interface MappingListRow {
   bucketLabel: string;
   createdByName: string | null;
   updatedAt: string | null;
+  prototypeId?: string | null;
+  prototypeName?: string | null;
 }
 interface MappingsResp {
   ok: boolean;
@@ -161,6 +164,8 @@ interface InvoiceDetailResp {
         };
     splits: Array<{
       id: string;
+      prototypeId?: string | null;
+      prototypeName?: string | null;
       projectKey: string;
       projectLabel: string;
       bucketType: string;
@@ -275,7 +280,7 @@ export default function ToolingSpend(): React.JSX.Element {
     t.internalUsd + t.bdUsd + t.deliveryUsd + t.overheadUsd + (t.clientUsd ?? 0) + (t.ipDevUsd ?? 0) + t.unallocatedUsd;
   const targets = targetsQ.data?.ok
     ? { ...targetsQ.data.data, accounts: targetsQ.data.data.accounts ?? [] }
-    : { engagements: [], opportunities: [], accounts: [] };
+    : { engagements: [], opportunities: [], accounts: [], prototypes: [] };
 
   const nothingMined = totalMined === 0 && ov.pendingInvoices.length === 0 && ov.unmappedCount === 0;
 
@@ -424,6 +429,8 @@ function BucketPicker({
   targets,
   onType,
   onRef,
+  prototypeId,
+  onPrototype,
 }: {
   idPrefix: string;
   bucketType: BucketType;
@@ -431,7 +438,13 @@ function BucketPicker({
   targets: TargetsResp["data"];
   onType: (b: BucketType) => void;
   onRef: (ref: string | null) => void;
+  prototypeId: string | null;
+  onPrototype: (id: string | null) => void;
 }): React.JSX.Element {
+  const compatiblePrototypes = targets.prototypes.filter((p) =>
+    bucketType === "opportunity" && bucketRef ? p.opportunityId === bucketRef :
+    bucketType === "engagement" && bucketRef ? p.engagementId === bucketRef : true,
+  );
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex flex-wrap gap-1">
@@ -497,6 +510,17 @@ function BucketPicker({
               {a.name}
             </option>
           ))}
+        </select>
+      )}
+      {(bucketType === "opportunity" || bucketType === "engagement") && bucketRef && (
+        <select
+          className="bg-bg-deep border border-border-soft rounded px-2 py-1 text-xs"
+          value={prototypeId ?? ""}
+          onChange={(e) => onPrototype(e.target.value || null)}
+          data-testid={`${idPrefix}-prototype-select`}
+        >
+          <option value="">No prototype (optional)</option>
+          {compatiblePrototypes.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id.slice(0, 8)}</option>)}
         </select>
       )}
     </div>
@@ -566,6 +590,7 @@ function MappingRow({
   const { toast } = useToast();
   const [bucketType, setBucketType] = React.useState<BucketType>("engagement");
   const [bucketRef, setBucketRef] = React.useState<string | null>(null);
+  const [prototypeId, setPrototypeId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const needsRef = bucketNeedsRef(bucketType);
   const canSubmit = canWrite && (!needsRef || !!bucketRef) && !busy;
@@ -582,6 +607,7 @@ function MappingRow({
           projectKey: row.projectKey,
           bucketType,
           bucketRef: needsRef ? bucketRef : null,
+          prototypeId: prototypeId || null,
         }),
       });
       if (!r.ok) throw new Error(`http_${r.status}`);
@@ -617,8 +643,11 @@ function MappingRow({
           onType={(b) => {
             setBucketType(b);
             setBucketRef(null);
+            setPrototypeId(null);
           }}
           onRef={setBucketRef}
+          prototypeId={prototypeId}
+          onPrototype={setPrototypeId}
         />
         <PillButton
           onClick={submit}
@@ -685,6 +714,7 @@ function SavedMappingRow({
   const [editing, setEditing] = React.useState(false);
   const [bucketType, setBucketType] = React.useState<BucketType>(row.bucketType as BucketType);
   const [bucketRef, setBucketRef] = React.useState<string | null>(row.bucketRef);
+  const [prototypeId, setPrototypeId] = React.useState<string | null>(row.prototypeId ?? null);
   const [busy, setBusy] = React.useState<null | "save" | "delete">(null);
   const needsRef = bucketNeedsRef(bucketType);
   const canSave = canWrite && (!needsRef || !!bucketRef) && busy === null;
@@ -701,6 +731,7 @@ function SavedMappingRow({
           projectKey: row.projectKey,
           bucketType,
           bucketRef: needsRef ? bucketRef : null,
+          prototypeId: prototypeId || null,
         }),
       });
       if (!r.ok) throw new Error(`http_${r.status}`);
@@ -741,6 +772,7 @@ function SavedMappingRow({
           <span className="ml-2 font-mono text-[11px] text-gold">
             → {BUCKET_LABEL[row.bucketType] ?? row.bucketType}
             {row.bucketRef ? ` · ${row.bucketLabel}` : ""}
+            {row.prototypeId ? ` · Prototype: ${row.prototypeName ?? targets.prototypes.find((p) => p.id === row.prototypeId)?.name ?? row.prototypeId} (${row.prototypeId})` : ""}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -783,8 +815,11 @@ function SavedMappingRow({
             onType={(b) => {
               setBucketType(b);
               setBucketRef(null);
+              setPrototypeId(null);
             }}
             onRef={setBucketRef}
+            prototypeId={prototypeId}
+            onPrototype={setPrototypeId}
           />
           <PillButton onClick={save} disabled={!canSave} data-testid={`tooling-mapping-save-${row.id}`}>
             {busy === "save" ? "Saving…" : "Save"}
@@ -918,6 +953,8 @@ function VendorRuleCard({
               targets={targets}
               onType={(b) => setSplit(i, { bucketType: b, bucketRef: null })}
               onRef={(ref) => setSplit(i, { bucketRef: ref })}
+              prototypeId={null}
+              onPrototype={() => undefined}
             />
             <input
               type="number"
@@ -1150,6 +1187,7 @@ function InvoicePanel({
                         <td className="py-1 pr-3">
                           <span>{s.bucketLabel || BUCKET_LABEL[s.bucketType] || s.bucketType}</span>
                           <span className="ml-1 text-text-faint">· {s.projectLabel}</span>
+                          {s.prototypeName && <span className="ml-1 text-gold">· {s.prototypeName}</span>}
                         </td>
                         <td className="py-1 pr-3 text-right font-mono">{fmtUsd(s.grossUsd)}</td>
                         <td className="py-1 pr-3 text-right font-mono">{fmtUsd(s.creditUsd)}</td>

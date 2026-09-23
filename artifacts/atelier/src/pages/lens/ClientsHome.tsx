@@ -256,6 +256,14 @@ export default function ClientsHome() {
       />
 
       <div className="container-atelier py-10 space-y-10">
+        <Card className="p-5 flex flex-wrap items-center justify-between gap-4" data-testid="clients-prototypes-card">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">Delivery promise</div>
+            <h3 className="mt-1 text-lg font-semibold">Prototype portfolio</h3>
+            <p className="mt-1 text-sm text-text-mute">Track client prototype requests, deadlines, evidence, and approved tooling cost.</p>
+          </div>
+          <Link href="/prototypes" className="text-xs font-mono uppercase tracking-widest text-gold hover:underline">Open prototypes →</Link>
+        </Card>
         {/* KPI row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiTile

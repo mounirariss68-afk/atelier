@@ -911,6 +911,7 @@ interface ResolvedItem {
   bucketType: VendorCostBucketType;
   bucketRef: string | null;
   gross: number;
+  prototypeId: string | null;
 }
 
 /**
@@ -967,6 +968,7 @@ async function resolveItems(args: {
           bucketType: s.bucketType,
           bucketRef: s.bucketRef,
           gross: grosses[i],
+          prototypeId: null,
         });
       });
       continue;
@@ -979,6 +981,7 @@ async function resolveItems(args: {
       bucketType: m.bucketType,
       bucketRef: m.bucketRef,
       gross: round2(item.amount),
+      prototypeId: m.prototypeId ?? null,
     });
   }
   return resolved;
@@ -1117,6 +1120,7 @@ export async function proposeSplitsForInvoice(args: {
         projectLabel: r.projectLabel,
         bucketType: r.bucketType,
         bucketRef: r.bucketRef,
+        prototypeId: r.prototypeId,
         currency: payload.currency,
         grossAmount: gross,
         creditAmount: credit,

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1218,
+  "routeCount": 1226,
   "capabilityCount": 336,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
@@ -2355,6 +2355,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "reference dropdown data; UI-driven (Task #509)",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "0f20d6ad12dd6a89",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "get",
+      "path": "/prototypes/:prototypeId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype tracker detail is a console-only operating workflow; no CLI capability parity",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -16500,6 +16528,34 @@
       }
     },
     {
+      "routeId": "81526b706a31a5bc",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "post",
+      "path": "/prototypes/:prototypeId/deadline",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype deadline changes are a console-only operating workflow; no CLI capability parity",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "815b9543f9853372",
       "file": "artifacts/api-server/src/routes/atelier/pricingRoutes.ts",
       "method": "patch",
@@ -16999,6 +17055,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "84401f3b3fbd0f18",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "patch",
+      "path": "/prototypes/:prototypeId/links",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype delivery links are a console-only operating workflow; no CLI capability parity",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -17671,6 +17755,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "UI-workflow write; CLI write parity needs confirm-flow capability design before exposure",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "899f1f485ed2b32c",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "post",
+      "path": "/prototypes/:prototypeId/handoff",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype handoff is a console-only operating workflow; no CLI capability parity",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -18992,6 +19104,34 @@
       }
     },
     {
+      "routeId": "92b3ad41ac3869e8",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "get",
+      "path": "/prototypes",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype tracker list is a console-only operating workflow; no CLI capability parity",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "92fb4b8ea4067c66",
       "file": "artifacts/api-server/src/routes/arcelik.ts",
       "method": "get",
@@ -20308,6 +20448,34 @@
       }
     },
     {
+      "routeId": "9b3a1e746da95d81",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "patch",
+      "path": "/prototypes/:prototypeId",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype tracker is a console-only operating workflow; no CLI capability parity",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "9b44cf0083a7cc47",
       "file": "artifacts/api-server/src/routes/atelier/cliAdminRoutes.ts",
       "method": "post",
@@ -21171,6 +21339,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "finance comp administration; read-parity handled by the finance NEP-comp web surface",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "a255c1cc13f45dd5",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "post",
+      "path": "/prototypes",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype tracker creation is a console-only operating workflow; no CLI capability parity",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -33188,6 +33384,34 @@
       }
     },
     {
+      "routeId": "f919121c1b4283e4",
+      "file": "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+      "method": "post",
+      "path": "/prototypes/:prototypeId/transition",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "prototype lifecycle transitions are a console-only operating workflow; no CLI capability parity",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "f9332b7b45152b43",
       "file": "artifacts/api-server/src/routes/atelier/expenseTaxonomyRoutes.ts",
       "method": "get",
@@ -37185,5 +37409,5 @@
       ]
     }
   ],
-  "conformanceVersion": "b14958409b18cb1051146799ebcbe3facf73a01f6d92f237e2afdca5bb0277b7"
+  "conformanceVersion": "6efce4108b95aae163570b75c9f5cc3fae46f6980df668e34116364b7813a285"
 }
