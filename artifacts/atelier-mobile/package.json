@@ -15,7 +15,8 @@
     "test:push-route": "tsx ./tests/push-route-probe.ts",
     "test:doc-refresh": "tsx ./tests/doc-refresh-probe.ts",
     "test:display-currency-client": "tsx ./tests/display-currency-probe.ts",
-    "test:calendar-consumer": "tsx ./tests/calendar-consumer-probe.ts"
+    "test:calendar-consumer": "tsx ./tests/calendar-consumer-probe.ts",
+    "test:me-polish": "tsx ./tests/me-polish-probe.ts"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

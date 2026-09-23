@@ -4,6 +4,6 @@
 // device picked up a new bundle.
 import Constants from "expo-constants";
 
-export const BUILD_MARKER = "2026-08-15 tabs-v3";
+export const BUILD_MARKER = "2026-09-22 me-polish";
 
 export const BUILD_STAMP = `v${Constants.expoConfig?.version ?? "?"} · ${BUILD_MARKER}`;

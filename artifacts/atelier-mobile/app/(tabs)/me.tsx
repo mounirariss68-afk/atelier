@@ -35,6 +35,7 @@ import QRCode from "react-native-qrcode-svg";
 import { BUILD_STAMP } from "@/constants/buildInfo";
 
 import {
+  ActionPill,
   Button,
   Card,
   Chip,
@@ -541,47 +542,19 @@ function MyTasksSection() {
 
   return (
     <>
-      {/* Task #1178 — header outside the card, mirroring the documents pane. */}
       <View
         style={{
           flexDirection: rtl.row,
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           marginTop: 4,
         }}
       >
-        <Text
-          style={{
-            color: c.foreground,
-            fontFamily: "Comfortaa_700Bold",
-            fontSize: 17,
-            letterSpacing: -0.2,
-            textAlign: rtl.textAlign,
-          }}
-        >
-          {t("me.tabTasks")}
-        </Text>
-        <PressScale onPress={() => setAddOpen(true)}>
-          <View
-            style={{
-              flexDirection: rtl.row,
-              alignItems: "center",
-              gap: 6,
-              paddingHorizontal: 12,
-              paddingVertical: 7,
-              borderRadius: 999,
-              backgroundColor: c.tint08,
-              borderWidth: 1,
-              borderColor: c.tint25,
-            }}
-            testID="button-mobile-task-add-open"
-          >
-            <Feather name="plus" size={14} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
-              {t("me.addTask")}
-            </Text>
-          </View>
-        </PressScale>
+        <ActionPill
+          label={t("me.addTask")}
+          onPress={() => setAddOpen(true)}
+          testID="button-mobile-task-add-open"
+        />
       </View>
       <Card style={{ gap: 10 }}>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
@@ -818,14 +791,17 @@ function MyTimeSection() {
 
   return (
     <View style={{ gap: 12, marginTop: 4 }}>
-      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: c.foreground, fontFamily: "Comfortaa_700Bold", fontSize: 17 }}>Time</Text>
-        <PressScale onPress={() => { setEditing(null); setWorkDate(week?.weekStartDate ?? ""); setFormOpen(true); }} disabled={!canEdit}>
-          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: c.tint08, borderWidth: 1, borderColor: c.tint25 }}>
-            <Feather name="plus" size={14} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Add entry</Text>
-          </View>
-        </PressScale>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "flex-end" }}>
+        <ActionPill
+          label="Add entry"
+          testID="button-mobile-time-entry-add-open"
+          disabled={!canEdit}
+          onPress={() => {
+            setEditing(null);
+            setWorkDate(week?.weekStartDate ?? "");
+            setFormOpen(true);
+          }}
+        />
       </View>
       {loading ? <Card><ActivityIndicator color={c.primary} /></Card> : week ? (
         <>
@@ -1061,32 +1037,16 @@ function LettersSection() {
 
   return (
     <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-        <Text
-          style={{
-            color: c.foreground,
-            fontFamily: "Comfortaa_700Bold",
-            fontSize: 17,
-            letterSpacing: -0.2,
-            textAlign: rtl.textAlign,
-          }}
-        >
-          Official letters
-        </Text>
-        <PressScale
+      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "flex-end", marginTop: 4 }}>
+        <ActionPill
+          label="Request"
+          testID="button-mobile-letter-request-open"
           onPress={() => {
             setPreview(null);
             setPreviewErr(null);
             setFormOpen(true);
           }}
-        >
-          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
-            <Feather name="plus" size={15} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
-              Request
-            </Text>
-          </View>
-        </PressScale>
+        />
       </View>
       {data.letters.length === 0 ? (
         <Card>
@@ -1677,7 +1637,9 @@ export default function MeScreen() {
   // Expenses remains the dedicated bottom tab. Keep the
   // profile card above this switcher so the complete profile/photo/contact
   // experience stays available on every Me tab.
-  const [meTab, setMeTab] = useState<"profile" | "documents" | "pay" | "time">("profile");
+  const [meTab, setMeTab] = useState<
+    "profile" | "tasks" | "documents" | "letters" | "pay" | "time"
+  >("profile");
 
   const refetchDocs = docs.refetch;
   const focusedOnceRef = React.useRef(false);
@@ -2134,11 +2096,11 @@ export default function MeScreen() {
         )}
 
         {/* Task #1036 — segmented switcher directly below the QR card. */}
-        <View
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: rtl.row, gap: 6, padding: 4 }}
           style={{
-            flexDirection: rtl.row,
-            gap: 6,
-            padding: 4,
             borderRadius: 999,
             backgroundColor: c.tint08,
             borderWidth: 1,
@@ -2148,7 +2110,9 @@ export default function MeScreen() {
           {(
             [
               { key: "profile", label: t("me.profile") },
+              { key: "tasks", label: t("me.tabTasks") },
               { key: "documents", label: t("me.tabDocuments") },
+              { key: "letters", label: t("me.tabLetters") },
               { key: "time", label: "Time" },
               { key: "pay", label: isContractor ? t("me.tabPayContractor") : t("me.tabPay") },
             ] as const
@@ -2159,9 +2123,8 @@ export default function MeScreen() {
                 key={tab.key}
                 onPress={() => setMeTab(tab.key)}
                 style={{
-                  flex: 1,
                   paddingVertical: 8,
-                  paddingHorizontal: 4,
+                  paddingHorizontal: 14,
                   borderRadius: 999,
                   backgroundColor: active ? c.primary : "transparent",
                   alignItems: "center",
@@ -2181,7 +2144,7 @@ export default function MeScreen() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* Task #1176 — build stamp: identifies the bundle this device is running. */}
         <Text
@@ -2203,41 +2166,15 @@ export default function MeScreen() {
           style={{
             flexDirection: rtl.row,
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             marginTop: 4,
           }}
         >
-          <Text
-            style={{
-              color: c.foreground,
-              fontFamily: "Comfortaa_700Bold",
-              fontSize: 17,
-              letterSpacing: -0.2,
-              textAlign: rtl.textAlign,
-            }}
-          >
-            {t("me.documents")}
-          </Text>
-          <PressScale onPress={() => setAddOpen(true)}>
-            <View
-              style={{
-                flexDirection: rtl.row,
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: c.tint08,
-                borderWidth: 1,
-                borderColor: c.tint25,
-              }}
-            >
-              <Feather name="plus" size={14} color={c.primary} />
-              <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
-                {t("me.addDocument")}
-              </Text>
-            </View>
-          </PressScale>
+          <ActionPill
+            label={t("me.addDocument")}
+            onPress={() => setAddOpen(true)}
+            testID="button-mobile-document-add-open"
+          />
         </View>
 
         {docs.isLoading ? (
@@ -2345,6 +2282,8 @@ export default function MeScreen() {
             {isContractor ? <SelfBillingSection /> : null}
           </>
         ) : null}
+        {meTab === "tasks" ? <MyTasksSection /> : null}
+        {meTab === "letters" ? <LettersSection /> : null}
         {meTab === "time" ? <MyTimeSection /> : null}
       </ScrollView>
 

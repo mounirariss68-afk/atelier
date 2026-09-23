@@ -74,6 +74,8 @@ export function PressScale({
   style,
   scaleTo = 0.97,
   haptic = true,
+  testID,
+  accessibilityLabel,
 }: {
   onPress?: () => void;
   disabled?: boolean;
@@ -81,6 +83,8 @@ export function PressScale({
   style?: ViewStyle | ViewStyle[];
   scaleTo?: number;
   haptic?: boolean;
+  testID?: string;
+  accessibilityLabel?: string;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const animate = (to: number) =>
@@ -100,11 +104,66 @@ export function PressScale({
       disabled={disabled}
       onPressIn={() => animate(scaleTo)}
       onPressOut={() => animate(1)}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
     >
       <Animated.View style={[style, { transform: [{ scale }] }]}>
         {children}
       </Animated.View>
     </Pressable>
+  );
+}
+
+/** Shared outlined action used in Me section headers. */
+export function ActionPill({
+  label,
+  onPress,
+  testID,
+  icon = "plus",
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  testID: string;
+  icon?: FeatherName;
+  disabled?: boolean;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+
+  return (
+    <PressScale
+      onPress={onPress}
+      disabled={disabled}
+      testID={testID}
+      accessibilityLabel={label}
+      style={[
+        {
+          flexDirection: rtl.row,
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 12,
+          paddingVertical: 7,
+          borderRadius: 999,
+          backgroundColor: c.tint08,
+          borderWidth: 1,
+          borderColor: c.tint25,
+        },
+        disabled ? { opacity: 0.5 } : {},
+      ]}
+    >
+      <Feather name={icon} size={14} color={c.primary} />
+      <Text
+        style={{
+          color: c.primary,
+          fontFamily: "Inter_600SemiBold",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </PressScale>
   );
 }
 
