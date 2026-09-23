@@ -29,6 +29,8 @@ import {
   atelierEngagements,
   atelierRaidItems,
   atelierAgentRuns,
+  atelierAgentRunSnapshots,
+  atelierAgentOutcomeEvents,
   atelierTimesheetWeeks,
   atelierTimesheetEntries,
   atelierExpenses,
@@ -36,10 +38,16 @@ import {
   atelierComplianceRecords,
   atelierUsers,
 } from "@workspace/db";
+import { getAgent } from "@workspace/agents";
 import {
   CATALOG_SCHEMA_VERSION,
+  capabilitiesForPersona,
   defineCapability,
 } from "./capability-catalog.js";
+import {
+  reviewedCapabilityManifestDocument,
+} from "./capability-manifest.js";
+import reviewedAgentManifest from "../atelier-agents/generated/crm-agent-manifest.v1.json";
 import {
   SALES_STAGES,
   resolveSalesStage,
@@ -50,6 +58,7 @@ import {
   canSeeAccount,
   readAccountDossier,
 } from "../../routes/atelier/accountRoutes.js";
+import { canAccessAgentRunTarget } from "../atelier-agents/agent-run-access.js";
 import {
   isRestrictedPersona,
   isBoardObserver,
@@ -75,6 +84,24 @@ function daysAgo(n: number): Date {
 
 function denyForbidden(reason: string): ToolResult {
   return { ok: false, errorCode: "forbidden", errorMessage: reason };
+}
+
+const AGENT_OPERATIONS_ROLES = [
+  "founding_partner",
+  "partner",
+  "senior_manager",
+] as const;
+
+function canInspectAgentOperations(role: string): boolean {
+  return (AGENT_OPERATIONS_ROLES as readonly string[]).includes(role);
+}
+
+function reviewedSpecialistEntry(agentId: string) {
+  const canonicalId = agentId.startsWith("ag_") ? agentId : `ag_${agentId}`;
+  const entry = reviewedAgentManifest.entries.find((candidate) => candidate.id === canonicalId);
+  if (!entry || entry.id === "ag_riser_orchestrator") return undefined;
+  if (entry.classification !== "executable" && entry.classification !== "advisory") return undefined;
+  return entry;
 }
 
 async function engAclOk(
@@ -1344,6 +1371,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  requiredRoles: [...AGENT_OPERATIONS_ROLES],
   promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show agent runs that failed yesterday", "Any blocked agent runs?"],
@@ -1351,6 +1379,9 @@ defineCapability({
     fr: ["Runs d'agent en échec hier"],
   },
   async run(input, ctx) {
+    if (!canInspectAgentOperations(ctx.persona.role)) {
+      return denyForbidden("Agent operations are available to firm leaders and senior managers.");
+    }
     const status = String(input.status ?? "").trim().toLowerCase();
     const agentId = String(input.agentId ?? "").trim();
     const sinceDays = Math.max(1, Math.min(90, Number(input.sinceDays ?? 7)));
@@ -1366,27 +1397,32 @@ defineCapability({
       if (status === "running") where.push(agentRunIsFresh());
     }
     if (agentId) where.push(eq(atelierAgentRuns.agentId, agentId));
-    const rows = await db
-      .select({
-        id: atelierAgentRuns.id,
-        agentId: atelierAgentRuns.agentId,
-        status: atelierAgentRuns.status,
-        confidence: atelierAgentRuns.confidence,
-        statusMessage: atelierAgentRuns.statusMessage,
-        targetType: atelierAgentRuns.targetType,
-        targetLabel: atelierAgentRuns.targetLabel,
-        createdAt: atelierAgentRuns.createdAt,
-        updatedAt: atelierAgentRuns.updatedAt,
-      })
+    // Fetch beyond the public limit because target ACL is applied before
+    // labels and counts become observable.  The DB org predicate remains the
+    // first boundary; canonical target authorization is the second.
+    const candidates = await db
+      .select()
       .from(atelierAgentRuns)
       .where(and(...where))
       .orderBy(desc(atelierAgentRuns.createdAt))
-      .limit(limit);
+      .limit(Math.min(500, limit * 5));
+    const rows = [];
+    for (const row of candidates) {
+      if (!reviewedSpecialistEntry(row.agentId)) continue;
+      if (await canAccessAgentRunTarget(
+        ctx.persona as Parameters<typeof canAccessAgentRunTarget>[0],
+        row,
+      )) {
+        rows.push(row);
+        if (rows.length === limit) break;
+      }
+    }
     return {
       ok: true,
       data: {
         items: rows.map((r) => ({
           id: r.id,
+          recordType: "specialist_agent_run",
           label: `${r.agentId} · ${r.targetLabel ?? r.targetType ?? "—"}`,
           // Task #1046 — stale "running" rows (dead process) render as error.
           status: effectiveAgentRunStatus(r),
@@ -1395,6 +1431,300 @@ defineCapability({
           startedAt: r.createdAt.toISOString(),
         })),
         total: rows.length,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// agent.operational_lookup — capability_list
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "agent.operational_lookup",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "agent",
+  toolName: "agent_operational_lookup",
+  description:
+    "Identify reviewed capabilities or specialist agents that handle a task. This is descriptive and cannot launch an agent.",
+  slashAliases: { en: ["/agent-capability", "/who-handles"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", minLength: 2, maxLength: 200 },
+      limit: { type: "integer", minimum: 1, maximum: 20 },
+    },
+    required: ["query"],
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "capability_list",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: ["Which capability handles proposal drafting?", "Who handles meeting transcripts?"],
+    ar: ["ما القدرة التي تتعامل مع مسودات العروض؟"],
+    fr: ["Quelle capacité gère les comptes rendus de réunion ?"],
+  },
+  async run(input, ctx) {
+    const query = String(input.query ?? "").trim().toLowerCase();
+    if (query.length < 2) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "query is required" };
+    }
+    const limit = Math.max(1, Math.min(20, Number(input.limit ?? 8)));
+    const terms = query.split(/\s+/).filter((term) => term.length > 1);
+    const score = (values: Array<string | null | undefined>) => {
+      const haystack = values.filter(Boolean).join(" ").toLowerCase();
+      if (haystack.includes(query)) return 100 + query.length;
+      return terms.reduce((total, term) => total + (haystack.includes(term) ? 10 + term.length : 0), 0);
+    };
+
+    // Effective roles come from the live catalogue gate, but every returned
+    // contract is projected from the reviewed manifest.  A graph/RAG hit can
+    // therefore describe a capability but cannot grant or dispatch it.
+    const authorizedIds = new Set(
+      capabilitiesForPersona(ctx.persona).map((entry) => entry.id),
+    );
+    const capabilityMatches = reviewedCapabilityManifestDocument().entries
+      .filter((entry) => authorizedIds.has(entry.capabilityId))
+      .map((entry) => ({
+        entry,
+        score: score([entry.capabilityId, entry.toolName, entry.policyClass, entry.effectClass]),
+      }))
+      .filter((match) => match.score > 0)
+      .sort((a, b) => b.score - a.score || a.entry.capabilityId.localeCompare(b.entry.capabilityId))
+      .slice(0, limit)
+      .map(({ entry }) => ({
+        recordType: "riser_capability" as const,
+        capabilityId: entry.capabilityId,
+        toolName: entry.toolName,
+        effect: entry.effect,
+        executionStatus: entry.executionStatus,
+        policyClass: entry.policyClass,
+        confirmation: entry.confirmation,
+        implementationVersion: entry.implementationVersion,
+        inputSchemaVersion: entry.inputSchemaVersion,
+        inputSchemaHash: entry.inputSchemaHash,
+        resultSchemaHash: entry.resultSchemaHash,
+        manifestVersion: reviewedCapabilityManifestDocument().manifestVersion,
+        authorizedForCurrentRole: true,
+      }));
+
+    const agentMatches = reviewedAgentManifest.entries
+      // Only reviewed executable/advisory specialists may be described as
+      // operational handlers. Unsupported placeholders and utility
+      // guardrails are manifest evidence, not agents that handle user work.
+      .filter((entry) =>
+        entry.id === "ag_riser_orchestrator" ||
+        entry.classification === "executable" ||
+        entry.classification === "advisory")
+      .map((entry) => ({
+        entry,
+        score: score([
+          entry.id,
+          entry.name,
+          ...entry.aliases,
+          entry.classification,
+          entry.operationalStatus,
+        ]),
+      }))
+      .filter((match) => match.score > 0)
+      .sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id))
+      .slice(0, limit)
+      .map(({ entry }) => {
+        const runtime = entry.registryId ? getAgent(entry.registryId) : undefined;
+        return {
+          recordType: entry.id === "ag_riser_orchestrator"
+            ? "riser_orchestrator" as const
+            : "specialist_agent" as const,
+          agentId: entry.id,
+          name: entry.name,
+          purpose: runtime?.purpose ?? null,
+          classification: entry.classification,
+          operationalStatus: entry.operationalStatus,
+          registryBacked: !!runtime,
+          capabilityType: runtime?.capabilityType ?? "generic",
+          operationalHref: runtime?.operationalHref ?? null,
+          promptRef: entry.promptRef,
+          promptHash: entry.promptHash,
+          inputSchemaHash: entry.inputSchemaHash,
+          outputSchemaHash: entry.outputSchemaHash,
+          manifestVersion: reviewedAgentManifest.manifestVersion,
+          // This lookup never claims route-level launch authorization. The
+          // owned route must re-check role, target, policy and confirmation.
+          launchAuthority: "owned_route_only" as const,
+        };
+      });
+
+    return {
+      ok: true,
+      data: {
+        query,
+        capabilities: capabilityMatches,
+        agents: agentMatches,
+        authority: {
+          source: "reviewed_runtime_manifests",
+          retrievalCanExecute: false,
+          retrievalCanWidenPolicy: false,
+        },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// agent.run_evidence — agent_run
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "agent.run_evidence",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "agent",
+  toolName: "agent_run_evidence",
+  description:
+    "Inspect evidence, decisions, outcomes and immutable provenance for one authorized specialist-agent run.",
+  slashAliases: { en: ["/agent-run-evidence", "/run-evidence"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      runId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["runId"],
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "agent_run",
+  requiredRoles: [...AGENT_OPERATIONS_ROLES],
+  promoteAsSuggestion: false,
+  examplePhrases: {
+    en: ["Show evidence for agent run run_123", "Why did this specialist run reach its outcome?"],
+    ar: ["اعرض أدلة تنفيذ الوكيل"],
+    fr: ["Afficher les preuves de cette exécution d'agent"],
+  },
+  async run(input, ctx) {
+    if (!canInspectAgentOperations(ctx.persona.role)) {
+      return denyForbidden("Agent run evidence is available to firm leaders and senior managers.");
+    }
+    const runId = String(input.runId ?? "").trim();
+    if (!runId) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "runId is required" };
+    }
+    const [run] = await db.select().from(atelierAgentRuns).where(and(
+      eq(atelierAgentRuns.id, runId),
+      eq(atelierAgentRuns.orgId, ctx.persona.orgId),
+      isNull(atelierAgentRuns.deletedAt),
+    )).limit(1);
+    const reviewed = run ? reviewedSpecialistEntry(run.agentId) : undefined;
+    if (!run || !reviewed || !(await canAccessAgentRunTarget(
+      ctx.persona as Parameters<typeof canAccessAgentRunTarget>[0],
+      run,
+    ))) {
+      // Deliberately indistinguishable: callers cannot enumerate foreign or
+      // target-inaccessible run IDs.
+      return { ok: false, errorCode: "not_found", errorMessage: "run not found" };
+    }
+
+    const [[snapshot], outcomes] = await Promise.all([
+      db.select().from(atelierAgentRunSnapshots).where(and(
+        eq(atelierAgentRunSnapshots.runId, run.id),
+        eq(atelierAgentRunSnapshots.orgId, ctx.persona.orgId),
+      )).limit(1),
+      db.select({
+        id: atelierAgentOutcomeEvents.id,
+        occurredAt: atelierAgentOutcomeEvents.occurredAt,
+        outcomeKind: atelierAgentOutcomeEvents.outcomeKind,
+        outcomeStatus: atelierAgentOutcomeEvents.outcomeStatus,
+        priorState: atelierAgentOutcomeEvents.priorState,
+        currentState: atelierAgentOutcomeEvents.currentState,
+        supersedesEventId: atelierAgentOutcomeEvents.supersedesEventId,
+        missingLinks: atelierAgentOutcomeEvents.missingLinks,
+        dataQualityFlags: atelierAgentOutcomeEvents.dataQualityFlags,
+        metadata: atelierAgentOutcomeEvents.metadata,
+      }).from(atelierAgentOutcomeEvents).where(and(
+        eq(atelierAgentOutcomeEvents.runId, run.id),
+        eq(atelierAgentOutcomeEvents.orgId, ctx.persona.orgId),
+      )).orderBy(desc(atelierAgentOutcomeEvents.occurredAt)),
+    ]);
+    const runtime = getAgent(run.agentId);
+    const toolCalls = Array.isArray(run.toolCalls)
+      ? run.toolCalls.map((raw) => {
+        const call = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+        return {
+          id: typeof call.id === "string" ? call.id : null,
+          tool: typeof call.tool === "string" ? call.tool : "unknown",
+          startedAt: typeof call.startedAt === "string" ? call.startedAt : null,
+          endedAt: typeof call.endedAt === "string" ? call.endedAt : null,
+          succeeded: !call.error,
+          error: typeof call.error === "string" ? call.error : null,
+        };
+      })
+      : [];
+
+    return {
+      ok: true,
+      data: {
+        recordType: "specialist_agent_run",
+        run: {
+          id: run.id,
+          agentId: runtime?.id ?? run.agentId,
+          status: effectiveAgentRunStatus(run),
+          statusMessage: run.statusMessage,
+          progressPct: run.progressPct,
+          confidence: run.confidence,
+          targetType: run.targetType,
+          targetId: run.targetId,
+          targetLabel: run.targetLabel,
+          createdAt: run.createdAt.toISOString(),
+          updatedAt: run.updatedAt.toISOString(),
+          costUsd: run.costUsd,
+          durationMs: run.durationMs,
+        },
+        identity: {
+          name: runtime?.name ?? reviewed?.name ?? run.agentId,
+          purpose: runtime?.purpose ?? null,
+          registryBacked: !!runtime,
+          classification: reviewed?.classification ?? null,
+          operationalStatus: reviewed?.operationalStatus ?? null,
+        },
+        evidence: {
+          output: run.output,
+          steps: Array.isArray(run.steps) ? run.steps : [],
+          toolCalls,
+          sourcesCount: run.sourcesCount,
+        },
+        decisions: Array.isArray(run.humanDecisions) ? run.humanDecisions : [],
+        outcomes: outcomes.map((outcome) => ({
+          ...outcome,
+          occurredAt: outcome.occurredAt.toISOString(),
+        })),
+        provenance: snapshot ? {
+          agentVersion: snapshot.agentVersion,
+          registryVersion: snapshot.registryVersion,
+          promptVersion: snapshot.promptVersion,
+          promptHash: snapshot.promptHash,
+          model: snapshot.model,
+          entryPath: snapshot.entryPath,
+          dataQualityFlags: snapshot.dataQualityFlags,
+          recordedAt: snapshot.recordedAt.toISOString(),
+        } : {
+          agentVersion: "unknown",
+          registryVersion: "unknown",
+          promptVersion: "unknown",
+          promptHash: null,
+          model: "unknown",
+          entryPath: "unknown",
+          dataQualityFlags: ["run-snapshot-missing"],
+          recordedAt: null,
+        },
+        activityNamespace: {
+          kind: "specialist_agent_run",
+          riserTurnId: null,
+          riserActionId: null,
+          metrics: "agent_run_only",
+        },
       },
     };
   },

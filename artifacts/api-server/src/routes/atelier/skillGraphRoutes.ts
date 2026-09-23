@@ -927,6 +927,9 @@ async function runSkillMapper(
   proposalsInserted: number;
   proposalsSkipped: number;
 }> {
+  if (!triggeredBy) {
+    throw new Error("skill mapper requires an authoritative tenant actor");
+  }
   // Load employees with their linked user id.
   const employees = await db
     .select({
@@ -1206,7 +1209,10 @@ async function runSkillMapper(
       triggeredByUserId: atelierAgentRuns.triggeredByUserId,
     })
     .from(atelierAgentRuns)
-    .where(isNull(atelierAgentRuns.deletedAt));
+    .where(and(
+      eq(atelierAgentRuns.orgId, triggeredBy.orgId),
+      isNull(atelierAgentRuns.deletedAt),
+    ));
   const agentIds = Array.from(new Set(agentRunRows.map((r) => r.agentId)));
   const agentRows = agentIds.length
     ? await db
@@ -1217,7 +1223,10 @@ async function runSkillMapper(
           purpose: atelierAgents.purpose,
         })
         .from(atelierAgents)
-        .where(inArray(atelierAgents.id, agentIds))
+        .where(and(
+          eq(atelierAgents.orgId, triggeredBy.orgId),
+          inArray(atelierAgents.id, agentIds),
+        ))
     : [];
   const agentMap = new Map(agentRows.map((a) => [a.id, a]));
   for (const r of agentRunRows) {

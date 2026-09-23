@@ -26,7 +26,7 @@ import {
   AtelierUpdateAdminSettingsBody,
   AtelierListAgentRunsResponse,
 } from "@workspace/api-zod";
-import { canAccessAgentRunTarget } from "./agentRoutes.js";
+import { canAccessAgentRunTarget } from "../../lib/atelier-agents/agent-run-access.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 
 function ensurePersona(

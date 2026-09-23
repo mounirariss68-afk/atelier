@@ -1,8 +1,8 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "4dc844b368b3798bb54c4865f7b10b900f00e63b93431c578ae684138b9c7f22",
-  "entryCount": 333,
+  "manifestVersion": "701679ee86348a996ff35d794cbf7f1b7191bd16a9eea2c9fd7a2ef94366824d",
+  "entryCount": 335,
   "entries": [
     {
       "capabilityId": "account.archive",
@@ -3049,12 +3049,12 @@
       ]
     },
     {
-      "capabilityId": "agent.runs_status",
-      "toolName": "agent_runs_status",
+      "capabilityId": "agent.operational_lookup",
+      "toolName": "agent_operational_lookup",
       "source": "cli-only",
       "catalogVersion": 3,
       "inputSchemaVersion": 3,
-      "inputSchemaHash": "35a9570c9634",
+      "inputSchemaHash": "d29e10afd18d",
       "resultSchemaHash": "94c64f190712",
       "effect": "read",
       "effectClass": "read",
@@ -3072,8 +3072,94 @@
         "senior_manager"
       ],
       "policyClass": "authenticated_read",
-      "implementationVersion": "4fedab17056f",
+      "implementationVersion": "14883eaa6a0f",
       "approverRoles": [],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "capability_list",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
+      "capabilityId": "agent.run_evidence",
+      "toolName": "agent_run_evidence",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "59b7a5ad0b2e",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "effectiveRoles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "policyClass": "role_restricted_read",
+      "implementationVersion": "ba35f57d7dc8",
+      "approverRoles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "agent_run",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
+      "capabilityId": "agent.runs_status",
+      "toolName": "agent_runs_status",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "35a9570c9634",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "effectiveRoles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
+      "policyClass": "role_restricted_read",
+      "implementationVersion": "1344122cfc54",
+      "approverRoles": [
+        "founding_partner",
+        "partner",
+        "senior_manager"
+      ],
       "confirmation": {
         "required": false,
         "irreversible": false,

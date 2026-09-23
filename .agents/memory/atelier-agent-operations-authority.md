@@ -14,3 +14,9 @@ Registry visibility and generic dispatch are separate contracts. Every non-gener
 **Why:** Account research agents and Riser need catalogue visibility, but projecting them as generic runs would bypass account access, proposal approval, workflow persistence, or orchestrator policy controls.
 
 **How to apply:** Default legacy entries to generic. For account-scoped and orchestrator entries, keep the real bespoke entry point, expose its operational link in the catalogue, and fail closed in generic dispatch even when a valid registry record exists.
+
+Reviewed capability and CRM manifests authorize operational descriptions; persisted specialist runs provide historical evidence only. Riser turns/actions and specialist runs are separate record types and metric namespaces. Retrieval, graph, and RAG projections may describe relationships but must never create executability, widen roles or confirmation policy, or launch work.
+
+**Why:** Persisted rows and semantic projections can be stale, malformed, or adversarial. Treating them as authority can misclassify Riser or an unknown agent as a reviewed specialist and leak labels, counts, evidence, or provenance before authorization.
+
+**How to apply:** For specialist run reads, apply org scope first, then require a reviewed executable/advisory specialist identity, caller role, and canonical target-record ACL before exposing labels or counts. Unknown/partial targets fail closed; targetless and firm-wide runs are firm-leader-only. Include immutable prompt/catalog/model provenance when available and use explicit unknown/data-quality flags otherwise.
