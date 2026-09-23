@@ -24,6 +24,12 @@ export interface EntityRegistration {
   issuedOn: string | null;
   expiresOn: string | null;
   notes: string | null;
+  /**
+   * Optional vault document backing this registration. Tax registrations use
+   * this to bind the number to its exact CT/VAT certificate without changing
+   * the existing document storage model. Absent on legacy registrations.
+   */
+  certificateDocumentId?: string | null;
 }
 
 export interface EntityActivity {

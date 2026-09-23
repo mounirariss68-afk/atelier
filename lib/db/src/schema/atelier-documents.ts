@@ -49,7 +49,8 @@ export const atelierDocuments = pgTable(
      * Task #287 — detected/overridden document kind for entity-linked
      * documents (trade_license | memorandum_of_association | ejari_tenancy |
      * establishment_card | commercial_register | chamber_membership |
-     * initial_approval | follow_up_receipt | tax_registration | other).
+     * initial_approval | follow_up_receipt | tax_registration |
+     * tax_registration_ct | tax_registration_vat | other).
      * Null = unclassified (surfaced, never hidden).
      */
     docKind: text("doc_kind"),

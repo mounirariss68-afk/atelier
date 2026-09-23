@@ -32,6 +32,7 @@
     "test:roster-person-form": "tsx --tsconfig tsconfig.test.json src/pages/roster/EditPersonForm.render.test.tsx",
     "test:roster-mvp": "tsx --tsconfig tsconfig.test.json src/pages/roster/RosterMvp.routing.test.ts",
     "test:mobilization-readiness": "tsx --tsconfig tsconfig.test.json src/components/mobilization/ReadinessPanel.deriveIssues.test.ts"
+    ,"test:entity-tax-registrations": "tsx --tsconfig tsconfig.test.json src/pages/finance/entityTaxRegistrations.test.tsx"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

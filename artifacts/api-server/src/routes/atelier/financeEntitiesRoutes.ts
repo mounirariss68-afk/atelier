@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -23,7 +23,6 @@ import {
   atelierAuditEvents,
   atelierBankAccount,
 } from "@workspace/db";
-import { isNull } from "drizzle-orm";
 import { isFoundingPartner, isPartner } from "./personaRoles";
 import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
 import { extractAttachment } from "../../lib/atelier-cli/attachments/extractors.js";
@@ -108,6 +107,7 @@ const registrationSchema = z.object({
   issuedOn: optStr(20),
   expiresOn: optStr(20),
   notes: optStr(600),
+  certificateDocumentId: optStr(80),
 });
 
 const activitySchema = z.object({
@@ -279,7 +279,109 @@ function normalizeRegistrations(regs: EntityBody["registrations"]) {
     issuedOn: r.issuedOn ?? null,
     expiresOn: r.expiresOn ?? null,
     notes: r.notes ?? null,
+    certificateDocumentId: r.certificateDocumentId ?? null,
   }));
+}
+
+const TAX_REGISTRATION_KINDS = {
+  tax_registration_ct: "Corporate Tax",
+  tax_registration_vat: "VAT",
+} as const;
+
+async function validateTaxRegistrations(args: {
+  orgId: string;
+  entityId: string;
+  registrations: ReturnType<typeof normalizeRegistrations>;
+  requireCorporateTax: boolean;
+}): Promise<
+  | { ok: true; documents: Array<typeof atelierDocuments.$inferSelect> }
+  | { ok: false; error: string; message: string }
+> {
+  const byType = new Map(args.registrations.map((r) => [r.type, r]));
+  const ct = byType.get("tax_registration_ct");
+  if (args.requireCorporateTax && !ct?.number) {
+    return { ok: false, error: "corporate-tax-number-required", message: "Corporate Tax number is required for an active legal entity." };
+  }
+  if (args.requireCorporateTax && !ct?.certificateDocumentId) {
+    return { ok: false, error: "corporate-tax-certificate-required", message: "Corporate Tax certificate is required for an active legal entity." };
+  }
+  for (const [type, label] of Object.entries(TAX_REGISTRATION_KINDS)) {
+    const reg = byType.get(type);
+    const hasNumber = !!reg?.number;
+    const hasCertificate = !!reg?.certificateDocumentId;
+    if (hasNumber !== hasCertificate) {
+      return {
+        ok: false,
+        error: `${type}-pair-incomplete`,
+        message: `${label} number and certificate must be provided together.`,
+      };
+    }
+  }
+  const ids = args.registrations
+    .map((r) => r.certificateDocumentId)
+    .filter((id): id is string => !!id);
+  if (new Set(ids).size !== ids.length) {
+    return { ok: false, error: "duplicate-tax-certificate", message: "Corporate Tax and VAT must use different certificate documents." };
+  }
+  if (ids.length === 0) return { ok: true, documents: [] };
+  const documents = await db.select().from(atelierDocuments).where(and(
+    eq(atelierDocuments.orgId, args.orgId),
+    inArray(atelierDocuments.id, ids),
+    eq(atelierDocuments.status, "active"),
+  ));
+  if (documents.length !== ids.length) {
+    return { ok: false, error: "tax-certificate-not-found", message: "A selected tax certificate is missing or unavailable." };
+  }
+  if (documents.some((document) => document.entityId && document.entityId !== args.entityId)) {
+    return {
+      ok: false,
+      error: "tax-certificate-already-linked",
+      message: "A selected tax certificate belongs to another legal entity.",
+    };
+  }
+  return { ok: true, documents };
+}
+
+function taxRegistrationSignature(registrations: ReturnType<typeof normalizeRegistrations>): string {
+  return JSON.stringify(
+    registrations
+      .filter((registration) => registration.type === "tax_registration_ct" || registration.type === "tax_registration_vat")
+      .map((registration) => ({
+        ...registration,
+        certificateDocumentId: registration.certificateDocumentId ?? null,
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type)),
+  );
+}
+
+async function linkTaxCertificates(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  orgId: string,
+  entityId: string,
+  registrations: ReturnType<typeof normalizeRegistrations>,
+): Promise<void> {
+  for (const [type] of Object.entries(TAX_REGISTRATION_KINDS)) {
+    const docId = registrations.find((r) => r.type === type)?.certificateDocumentId;
+    if (!docId) continue;
+    const claimed = await tx.update(atelierDocuments).set({
+      entityId,
+      category: "corporate_legal",
+      docKind: type,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(atelierDocuments.id, docId),
+      eq(atelierDocuments.orgId, orgId),
+      eq(atelierDocuments.status, "active"),
+      or(isNull(atelierDocuments.entityId), eq(atelierDocuments.entityId, entityId)),
+    )).returning({ id: atelierDocuments.id });
+    if (claimed.length !== 1) throw new TaxCertificateClaimError();
+  }
+}
+
+class TaxCertificateClaimError extends Error {
+  constructor() {
+    super("A selected tax certificate was linked to another legal entity before this save completed.");
+  }
 }
 
 function normalizeOwners(owners: EntityBody["owners"]) {
@@ -733,7 +835,9 @@ function inferDocKindFromTitle(title: string, fileName: string | null): string |
   if (/follow ?up|payment receipt|\breceipt\b/.test(t)) return "follow_up_receipt";
   if (/commercial regist/.test(t)) return "commercial_register";
   if (/chamber/.test(t)) return "chamber_membership";
-  if (/tax registration|\btrn\b|vat certificate|corporate tax/.test(t)) return "tax_registration";
+  if (/corporate tax|corporate.*trn|\bct certificate/.test(t)) return "tax_registration_ct";
+  if (/vat certificate|vat registration|vat.*trn/.test(t)) return "tax_registration_vat";
+  if (/tax registration|\btrn\b/.test(t)) return "tax_registration";
   return null;
 }
 
@@ -750,9 +854,21 @@ router.post("/finance/entities", async (req, res) => {
   }
   const b = parsed.data;
   const id = rid("lent");
-  const [row] = await db
-    .insert(atelierLegalEntities)
-    .values({
+  const registrations = normalizeRegistrations(b.registrations);
+  const taxValidation = await validateTaxRegistrations({
+    orgId: me.orgId,
+    entityId: id,
+    registrations,
+    requireCorporateTax: b.status === "active",
+  });
+  if (!taxValidation.ok) {
+    res.status(400).json({ error: taxValidation.error, message: taxValidation.message });
+    return;
+  }
+  let row: EntityRow;
+  try {
+    row = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(atelierLegalEntities).values({
       id,
       orgId: me.orgId,
       legalNameEn: b.legalNameEn,
@@ -769,7 +885,7 @@ router.post("/finance/entities", async (req, res) => {
       officeAddress: b.officeAddress,
       governingLaw: b.governingLaw,
       courts: b.courts,
-      registrations: normalizeRegistrations(b.registrations),
+      registrations,
       activities: normalizeActivities(b.activities),
       owners: normalizeOwners(b.owners),
       premises: nullishObj(b.premises ?? null) as EntityRow["premises"],
@@ -779,8 +895,17 @@ router.post("/finance/entities", async (req, res) => {
       statutory: normalizeStatutory(b.statutory),
       isHeadEntity: b.isHeadEntity ?? false,
       notes: b.notes ?? null,
-    })
-    .returning();
+      }).returning();
+      await linkTaxCertificates(tx, me.orgId, id, registrations);
+      return created;
+    });
+  } catch (error) {
+    if (error instanceof TaxCertificateClaimError) {
+      res.status(409).json({ error: "tax-certificate-already-linked", message: error.message });
+      return;
+    }
+    throw error;
+  }
   if (b.isHeadEntity === true) {
     // At most one head entity per org — the newest flag wins.
     await db.update(atelierLegalEntities)
@@ -821,6 +946,32 @@ router.patch("/finance/entities/:id", async (req, res) => {
     return;
   }
   const b = parsed.data;
+  if (b.registrations !== undefined || b.status !== undefined) {
+    const registrations = normalizeRegistrations(b.registrations ?? existing.registrations);
+    const taxRegistrationChanged =
+      b.registrations !== undefined &&
+      taxRegistrationSignature(registrations) !==
+        taxRegistrationSignature(normalizeRegistrations(existing.registrations));
+    const statusChanged = b.status !== undefined && b.status !== existing.status;
+    const existingCt = existing.registrations.find((registration) => registration.type === "tax_registration_ct");
+    const existingVat = existing.registrations.find((registration) => registration.type === "tax_registration_vat");
+    const existingTaxComplete =
+      !!existingCt?.number &&
+      !!existingCt?.certificateDocumentId &&
+      (!!existingVat?.number === !!existingVat?.certificateDocumentId);
+    const taxValidation = await validateTaxRegistrations({
+      orgId: me.orgId,
+      entityId: existing.id,
+      registrations,
+      requireCorporateTax:
+        (b.status ?? existing.status) === "active" &&
+        (existingTaxComplete || taxRegistrationChanged || statusChanged),
+    });
+    if (!taxValidation.ok && (existingTaxComplete || taxRegistrationChanged || statusChanged)) {
+      res.status(400).json({ error: taxValidation.error, message: taxValidation.message });
+      return;
+    }
+  }
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   const changes: Record<string, unknown> = {};
   const assign = (key: string, value: unknown) => {
@@ -858,11 +1009,25 @@ router.patch("/finance/entities/:id", async (req, res) => {
     res.json({ entity: entityShape(existing) });
     return;
   }
-  const [row] = await db
-    .update(atelierLegalEntities)
-    .set(patch)
-    .where(eq(atelierLegalEntities.id, existing.id))
-    .returning();
+  let row: EntityRow;
+  try {
+    row = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(atelierLegalEntities)
+        .set(patch)
+        .where(eq(atelierLegalEntities.id, existing.id))
+        .returning();
+      if (b.registrations !== undefined) {
+        await linkTaxCertificates(tx, me.orgId, existing.id, normalizeRegistrations(b.registrations));
+      }
+      return updated;
+    });
+  } catch (error) {
+    if (error instanceof TaxCertificateClaimError) {
+      res.status(409).json({ error: "tax-certificate-already-linked", message: error.message });
+      return;
+    }
+    throw error;
+  }
   if (b.isHeadEntity === true) {
     // At most one head entity per org — the newest flag wins.
     await db.update(atelierLegalEntities)

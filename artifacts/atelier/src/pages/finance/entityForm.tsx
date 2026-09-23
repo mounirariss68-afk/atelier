@@ -96,6 +96,7 @@ export interface RegDraft {
   issuer: string;
   issuedOn: string;
   expiresOn: string;
+  certificateDocumentId: string;
 }
 export interface ActDraft { code: string; nameEn: string; nameAr: string }
 export interface OwnerDraft {
@@ -207,6 +208,7 @@ export function draftFromEntity(e: LegalEntityRow): EntityDraft {
     registrations: (e.registrations ?? []).map((r) => ({
       id: r.id, type: r.type, label: r.label, number: r.number,
       issuer: r.issuer ?? "", issuedOn: r.issuedOn ?? "", expiresOn: r.expiresOn ?? "",
+      certificateDocumentId: r.certificateDocumentId ?? "",
     })),
     activities: (e.activities ?? []).map((a) => ({ code: a.code, nameEn: a.nameEn, nameAr: a.nameAr ?? "" })),
     owners: (e.owners ?? []).map((o) => ({
@@ -306,6 +308,7 @@ export function draftToBody(d: EntityDraft): Record<string, unknown> {
         type: r.type || "other", label: r.label.trim(), number: r.number.trim(),
         issuer: nn(r.issuer), issuedOn: nn(r.issuedOn), expiresOn: nn(r.expiresOn),
         notes: null,
+        certificateDocumentId: nn(r.certificateDocumentId),
       })),
     activities: d.activities
       .filter((a) => a.nameEn.trim())
@@ -403,7 +406,7 @@ export function mergeProposalIntoDraft(base: EntityDraft, fields: Record<string,
       if (!numStr) continue;
       const existing = d.registrations.find((x) => x.number === numStr);
       const patch: RegDraft = {
-        ...(existing ?? { type: "other", label: "", number: "", issuer: "", issuedOn: "", expiresOn: "" }),
+        ...(existing ?? { type: "other", label: "", number: "", issuer: "", issuedOn: "", expiresOn: "", certificateDocumentId: "" }),
         type: typeof r.type === "string" && r.type ? r.type : (existing?.type ?? "other"),
         label: typeof r.label === "string" && r.label ? r.label : (existing?.label ?? ""),
         number: numStr,
@@ -473,7 +476,35 @@ function isNumericStr(s: string): boolean {
   return Number.isFinite(Number(s.replace(/,/g, "")));
 }
 
-export function validateDraft(d: EntityDraft): Record<string, string> {
+function taxRegistrationSignature(registrations: RegDraft[]): string {
+  return JSON.stringify(
+    registrations
+      .filter((registration) => registration.type === "tax_registration_ct" || registration.type === "tax_registration_vat")
+      .map((registration) => ({
+        ...registration,
+        certificateDocumentId: registration.certificateDocumentId || "",
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type)),
+  );
+}
+
+export function allowsUnchangedLegacyTaxRegistration(draft: EntityDraft, editing: LegalEntityRow | null): boolean {
+  if (!editing || editing.status !== "active" || draft.status !== editing.status) return false;
+  const existingCt = editing.registrations.find((registration) => registration.type === "tax_registration_ct");
+  const existingVat = editing.registrations.find((registration) => registration.type === "tax_registration_vat");
+  const existingTaxComplete =
+    !!existingCt?.number &&
+    !!existingCt.certificateDocumentId &&
+    (!!existingVat?.number === !!existingVat?.certificateDocumentId);
+  if (existingTaxComplete) return false;
+  return taxRegistrationSignature(draft.registrations) ===
+    taxRegistrationSignature(draftFromEntity(editing).registrations);
+}
+
+export function validateDraft(
+  d: EntityDraft,
+  options: { allowUnchangedLegacyTax?: boolean } = {},
+): Record<string, string> {
   const errs: Record<string, string> = {};
   const date = (key: string, v: string, label: string) => {
     if (v.trim() && !isValidDate(v.trim())) errs[key] = `${label} must be a valid date (YYYY-MM-DD).`;
@@ -492,6 +523,21 @@ export function validateDraft(d: EntityDraft): Record<string, string> {
     date(`registrations.${i}.issuedOn`, r.issuedOn, "Issued date");
     date(`registrations.${i}.expiresOn`, r.expiresOn, "Expiry date");
   });
+  if (d.status === "active" && !options.allowUnchangedLegacyTax) {
+    const ct = d.registrations.find((r) => r.type === "tax_registration_ct");
+    if (!ct?.number.trim()) errs["registrations.ct.number"] = "Corporate Tax number is required for an active entity.";
+    if (!ct?.certificateDocumentId) errs["registrations.ct.certificate"] = "Corporate Tax certificate is required for an active entity.";
+  }
+  for (const [type, key, label] of [
+    ["tax_registration_ct", "ct", "Corporate Tax"],
+    ["tax_registration_vat", "vat", "VAT"],
+  ] as const) {
+    const reg = d.registrations.find((r) => r.type === type);
+    if (!options.allowUnchangedLegacyTax && !!reg?.number.trim() !== !!reg?.certificateDocumentId) {
+      if (!reg?.number.trim()) errs[`registrations.${key}.number`] = `${label} number is required when a certificate is attached.`;
+      if (!reg?.certificateDocumentId) errs[`registrations.${key}.certificate`] = `${label} certificate is required when a number is entered.`;
+    }
+  }
   d.owners.forEach((o, i) => {
     if (o.sharePct.trim()) {
       if (!isNumericStr(o.sharePct.trim())) errs[`owners.${i}.sharePct`] = "Share must be a number.";
@@ -800,6 +846,8 @@ export function EntityFormDialog(props: {
   const [touched, setTouched] = React.useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = React.useState(false);
   const [openSections, setOpenSections] = React.useState<string[]>(["identity"]);
+  const [taxFiles, setTaxFiles] = React.useState<Partial<Record<"tax_registration_ct" | "tax_registration_vat", File>>>({});
+  const [certificateOptions, setCertificateOptions] = React.useState<Array<{ id: string; title: string; docKind: string | null }>>([]);
 
   React.useEffect(() => {
     if (props.open) {
@@ -808,12 +856,33 @@ export function EntityFormDialog(props: {
       setTouched({});
       setSubmitted(false);
       setOpenSections(["identity"]);
+      setTaxFiles({});
+      void jsonReq<{ documents?: Array<{ id: string; title: string; docKind: string | null; category: string }> }>(
+        "GET",
+        "/documents?category=corporate_legal",
+      ).then((result) => {
+        setCertificateOptions(
+          (result.documents ?? []).filter((document) =>
+            !document.docKind ||
+            document.docKind === "tax_registration" ||
+            document.docKind === "tax_registration_ct" ||
+            document.docKind === "tax_registration_vat"
+          ),
+        );
+      }).catch(() => setCertificateOptions([]));
     }
   }, [props.open, props.editing, props.initialDraft]);
 
   const up = (patch: Partial<EntityDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  const errors = React.useMemo(() => validateDraft(draft), [draft]);
+  const allowUnchangedLegacyTax = React.useMemo(
+    () => allowsUnchangedLegacyTaxRegistration(draft, props.editing),
+    [draft, props.editing],
+  );
+  const errors = React.useMemo(
+    () => validateDraft(draft, { allowUnchangedLegacyTax }),
+    [draft, allowUnchangedLegacyTax],
+  );
   const ctx: FieldCtx = React.useMemo(
     () => ({
       errFor: (key) => (submitted || touched[key] ? errors[key] : undefined),
@@ -835,7 +904,7 @@ export function EntityFormDialog(props: {
 
   async function save() {
     setSubmitted(true);
-    const errs = validateDraft(draft);
+    const errs = validateDraft(draft, { allowUnchangedLegacyTax });
     const keys = Object.keys(errs);
     if (keys.length > 0) {
       const sections = Array.from(new Set(keys.map(sectionForKey)));
@@ -848,7 +917,26 @@ export function EntityFormDialog(props: {
     setBusy(true);
     setError(null);
     try {
-      const body = draftToBody(draft);
+      let savingDraft = draft;
+      for (const [type, file] of Object.entries(taxFiles) as Array<["tax_registration_ct" | "tax_registration_vat", File]>) {
+        if (!file) continue;
+        const fd = new FormData();
+        fd.set("title", `${type === "tax_registration_ct" ? "Corporate Tax" : "VAT"} certificate — ${file.name.replace(/\.[^.]+$/, "")}`);
+        fd.set("category", "corporate_legal");
+        fd.set("docKind", type);
+        fd.set("aiRetrieval", "false");
+        fd.set("file", file);
+        const response = await fetch(`${API_BASE}/documents`, { method: "POST", credentials: "include", body: fd });
+        const uploaded = await response.json().catch(() => ({})) as { document?: { id?: string }; error?: string; message?: string };
+        if (!response.ok || !uploaded.document?.id) {
+          throw new Error(uploaded.message ?? uploaded.error ?? `Could not upload ${file.name}.`);
+        }
+        const regs = [...savingDraft.registrations];
+        const index = regs.findIndex((r) => r.type === type);
+        if (index >= 0) regs[index] = { ...regs[index], certificateDocumentId: uploaded.document.id };
+        savingDraft = { ...savingDraft, registrations: regs };
+      }
+      const body = draftToBody(savingDraft);
       if (props.editing) {
         await jsonReq("PATCH", `/finance/entities/${props.editing.id}`, body);
         toast({ title: "Entity updated" });
@@ -866,6 +954,24 @@ export function EntityFormDialog(props: {
   }
 
   const regRows = (rs: RegDraft[]) => up({ registrations: rs });
+  const taxReg = (type: "tax_registration_ct" | "tax_registration_vat") =>
+    draft.registrations.find((r) => r.type === type) ?? {
+      type,
+      label: type === "tax_registration_ct" ? "Corporate Tax registration" : "VAT registration",
+      number: "",
+      issuer: "Federal Tax Authority",
+      issuedOn: "",
+      expiresOn: "",
+      certificateDocumentId: "",
+    };
+  const setTaxReg = (type: "tax_registration_ct" | "tax_registration_vat", patch: Partial<RegDraft>) => {
+    const current = taxReg(type);
+    const index = draft.registrations.findIndex((r) => r.type === type);
+    const next = { ...current, ...patch };
+    regRows(index >= 0
+      ? draft.registrations.map((r, i) => i === index ? next : r)
+      : [...draft.registrations, next]);
+  };
   const actRows = (as_: ActDraft[]) => up({ activities: as_ });
   const ownerRows = (os: OwnerDraft[]) => up({ owners: os });
 
@@ -960,7 +1066,73 @@ export function EntityFormDialog(props: {
               </AccordionTrigger>
               <AccordionContent className="pb-5">
                 <div className="space-y-3 pt-1">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {([
+                      ["tax_registration_ct", "Corporate Tax", true],
+                      ["tax_registration_vat", "VAT", false],
+                    ] as const).map(([type, label, required]) => {
+                      const r = taxReg(type);
+                      const certError = ctx.errFor(`registrations.${type === "tax_registration_ct" ? "ct" : "vat"}.certificate`);
+                      return (
+                        <div key={type} className="rounded-md border border-border-soft bg-bg-elevate/40 p-3 space-y-3" data-testid={`tax-section-${type}`}>
+                          <div>
+                            <div className="text-sm font-medium text-text">{label}</div>
+                            <p className="text-[11px] text-text-faint mt-0.5">
+                              {required ? "Required for active entities." : "Optional until registered; number and certificate are required together."}
+                            </p>
+                          </div>
+                          <VText
+                            ctx={ctx}
+                            fieldKey={`registrations.${type === "tax_registration_ct" ? "ct" : "vat"}.number`}
+                            label={`${label} number`}
+                            required={required || !!r.certificateDocumentId}
+                            value={r.number}
+                            onChange={(v) => setTaxReg(type, { number: v })}
+                            testid={`input-${type}-number`}
+                          />
+                          <FieldShell label={`${label} certificate`} required={required || !!r.number.trim()} error={certError}>
+                            <select
+                              className={`${inputCls} mb-2 ${certError ? errInputCls : ""}`}
+                              value={r.certificateDocumentId.startsWith("pending:") ? "" : r.certificateDocumentId}
+                              onChange={(event) => {
+                                setTaxFiles((files) => ({ ...files, [type]: undefined }));
+                                setTaxReg(type, { certificateDocumentId: event.target.value });
+                              }}
+                              data-testid={`select-${type}-certificate`}
+                            >
+                              <option value="">Choose an existing vault certificate…</option>
+                              {certificateOptions.map((document) => (
+                                <option key={document.id} value={document.id}>
+                                  {document.title}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[11px] text-text-faint mb-2">Or upload a new certificate:</p>
+                            <Input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) {
+                                  setTaxFiles((files) => ({ ...files, [type]: file }));
+                                  setTaxReg(type, { certificateDocumentId: `pending:${file.name}` });
+                                }
+                              }}
+                              className={certError ? errInputCls : ""}
+                              data-testid={`input-${type}-certificate`}
+                            />
+                            {(taxFiles[type] || (r.certificateDocumentId && !r.certificateDocumentId.startsWith("pending:"))) && (
+                              <p className="text-[11px] text-success mt-1">
+                                {taxFiles[type]?.name ?? "Certificate already linked"}
+                              </p>
+                            )}
+                          </FieldShell>
+                        </div>
+                      );
+                    })}
+                  </div>
                   {draft.registrations.map((r, i) => {
+                    if (r.type === "tax_registration_ct" || r.type === "tax_registration_vat") return null;
                     const set = (patch: Partial<RegDraft>) => {
                       const rs = [...draft.registrations];
                       rs[i] = { ...r, ...patch };
@@ -995,7 +1167,7 @@ export function EntityFormDialog(props: {
                   <AddRowButton
                     label="Add registration"
                     testid="button-add-registration"
-                    onClick={() => regRows([...draft.registrations, { type: "other", label: "", number: "", issuer: "", issuedOn: "", expiresOn: "" }])}
+                    onClick={() => regRows([...draft.registrations, { type: "other", label: "", number: "", issuer: "", issuedOn: "", expiresOn: "", certificateDocumentId: "" }])}
                   />
                 </div>
               </AccordionContent>

@@ -204,9 +204,9 @@ async function main() {
       },
     ] as any);
 
-    // ---- CRUD gating ----
+    // ---- CRUD gating + paired tax registrations ----
     const entityName = `Probe265 Ventures LLC ${runTag}`;
-    const createBody = {
+    const baseCreateBody = {
       legalNameEn: entityName,
       country: "ae",
       legalForm: "LLC",
@@ -220,11 +220,60 @@ async function main() {
       ],
     };
 
-    const conCreate = await api(conId, "POST", "/finance/entities", createBody);
+    const conCreate = await api(conId, "POST", "/finance/entities", baseCreateBody);
     check("consultant entity create -> 403", conCreate.status === 403, conCreate);
     const recList = await api(recId, "GET", "/finance/entities");
     check("recruiter entity list -> 403", recList.status === 403, recList);
 
+    const missingCt = await api(fpId, "POST", "/finance/entities", baseCreateBody);
+    check(
+      "active entity without Corporate Tax pair -> 400",
+      missingCt.status === 400 && missingCt.body?.error === "corporate-tax-number-required",
+      missingCt,
+    );
+
+    const ctUpload = await uploadDoc(
+      fpId,
+      {
+        title: `Corporate Tax certificate ${runTag}`,
+        category: "corporate_legal",
+        docKind: "tax_registration_ct",
+        aiRetrieval: "false",
+      },
+      Buffer.from("CORPORATE TAX CERTIFICATE", "utf8"),
+      "corporate-tax.txt",
+      "text/plain",
+    );
+    check("Corporate Tax certificate upload -> 201", ctUpload.status === 201, ctUpload);
+    const ctDocumentId = ctUpload.body?.document?.id;
+    if (ctDocumentId) docIds.push(ctDocumentId);
+    if (!ctDocumentId) throw new Error("no Corporate Tax certificate id");
+
+    const numberOnly = await api(fpId, "POST", "/finance/entities", {
+      ...baseCreateBody,
+      registrations: [
+        ...baseCreateBody.registrations,
+        { type: "tax_registration_ct", label: "Corporate Tax registration", number: "CT-1001" },
+      ],
+    });
+    check(
+      "Corporate Tax number without certificate -> 400",
+      numberOnly.status === 400 && numberOnly.body?.error === "corporate-tax-certificate-required",
+      numberOnly,
+    );
+
+    const createBody = {
+      ...baseCreateBody,
+      registrations: [
+        ...baseCreateBody.registrations,
+        {
+          type: "tax_registration_ct",
+          label: "Corporate Tax registration",
+          number: "CT-1001",
+          certificateDocumentId: ctDocumentId,
+        },
+      ],
+    };
     const created = await api(fpId, "POST", "/finance/entities", createBody);
     check("fp entity create -> 201", created.status === 201, created);
     const entity = created.body?.entity;
@@ -234,12 +283,96 @@ async function main() {
       entity?.country === "AE" &&
         entity?.status === "active" &&
         Array.isArray(entity?.registrations) &&
-        entity.registrations.length === 1 &&
+        entity.registrations.length === 2 &&
         typeof entity.registrations[0].id === "string" &&
         entity.registrations[0].id.length > 0,
       entity,
     );
     if (!entity?.id) throw new Error("no entity id — aborting");
+
+    const detailWithCt = await api(fpId, "GET", `/finance/entities/${entity.id}`);
+    const linkedCt = (detailWithCt.body?.documents ?? []).find((d: any) => d.id === ctDocumentId);
+    check(
+      "Corporate Tax certificate linked and classified to created entity",
+      linkedCt?.docKind === "tax_registration_ct" &&
+        entity.registrations.find((r: any) => r.type === "tax_registration_ct")?.certificateDocumentId === ctDocumentId,
+      { linkedCt, registrations: entity.registrations },
+    );
+
+    const sharedUpload = await uploadDoc(
+      fpId,
+      { title: `Concurrent CT certificate ${runTag}`, category: "corporate_legal", docKind: "tax_registration_ct", aiRetrieval: "false" },
+      Buffer.from("CONCURRENT CORPORATE TAX CERTIFICATE", "utf8"),
+      "concurrent-ct.txt",
+      "text/plain",
+    );
+    const sharedDocumentId = sharedUpload.body?.document?.id;
+    if (sharedDocumentId) docIds.push(sharedDocumentId);
+    if (!sharedDocumentId) throw new Error("no concurrent Corporate Tax certificate id");
+    const concurrentBody = (suffix: string) => ({
+      ...baseCreateBody,
+      legalNameEn: `Concurrent Claim ${suffix} ${runTag}`,
+      registrations: [{
+        type: "tax_registration_ct",
+        label: "Corporate Tax registration",
+        number: `CT-CONCURRENT-${suffix}`,
+        certificateDocumentId: sharedDocumentId,
+      }],
+    });
+    const concurrentClaims = await Promise.all([
+      api(fpId, "POST", "/finance/entities", concurrentBody("A")),
+      api(fpId, "POST", "/finance/entities", concurrentBody("B")),
+    ]);
+    for (const claim of concurrentClaims) {
+      if (claim.status === 201 && claim.body?.entity?.id) entityIds.push(claim.body.entity.id);
+    }
+    check(
+      "concurrent certificate claim permits exactly one entity",
+      concurrentClaims.filter((claim) => claim.status === 201).length === 1 &&
+        concurrentClaims.filter((claim) =>
+          claim.status === 409 || (claim.status === 400 && claim.body?.error === "tax-certificate-already-linked")
+        ).length === 1,
+      concurrentClaims,
+    );
+
+    const vatNumberOnly = await api(fpId, "PATCH", `/finance/entities/${entity.id}`, {
+      registrations: [
+        ...entity.registrations,
+        { type: "tax_registration_vat", label: "VAT registration", number: "VAT-2002" },
+      ],
+    });
+    check(
+      "optional VAT number without certificate -> 400",
+      vatNumberOnly.status === 400 && vatNumberOnly.body?.error === "tax_registration_vat-pair-incomplete",
+      vatNumberOnly,
+    );
+
+    const vatUpload = await uploadDoc(
+      fpId,
+      { title: `VAT certificate ${runTag}`, category: "corporate_legal", docKind: "tax_registration_vat", aiRetrieval: "false" },
+      Buffer.from("VAT CERTIFICATE", "utf8"),
+      "vat.txt",
+      "text/plain",
+    );
+    const vatDocumentId = vatUpload.body?.document?.id;
+    if (vatDocumentId) docIds.push(vatDocumentId);
+    const vatPatched = await api(fpId, "PATCH", `/finance/entities/${entity.id}`, {
+      registrations: [
+        ...entity.registrations,
+        {
+          type: "tax_registration_vat",
+          label: "VAT registration",
+          number: "VAT-2002",
+          certificateDocumentId: vatDocumentId,
+        },
+      ],
+    });
+    check(
+      "optional complete VAT pair saves",
+      vatPatched.status === 200 &&
+        vatPatched.body?.entity?.registrations.some((r: any) => r.type === "tax_registration_vat" && r.certificateDocumentId === vatDocumentId),
+      vatPatched,
+    );
 
     const conPatch = await api(conId, "PATCH", `/finance/entities/${entity.id}`, {
       shortName: "Nope",
@@ -257,6 +390,24 @@ async function main() {
         patched.body?.entity?.notes === "Patched by probe265",
       patched,
     );
+
+    // Legacy rows can still be read and receive unrelated partial updates.
+    const legacyId = `lent_${runTag}_legacy`;
+    await db.insert(atelierLegalEntities).values({
+      id: legacyId,
+      orgId: "aico",
+      legalNameEn: "Legacy Entity Without Tax Registration",
+      country: "AE",
+      status: "active",
+    } as any);
+    entityIds.push(legacyId);
+    const legacyRead = await api(fpId, "GET", `/finance/entities/${legacyId}`);
+    check("legacy active entity without tax pair remains readable", legacyRead.status === 200, legacyRead);
+    const legacyPatch = await api(fpId, "PATCH", `/finance/entities/${legacyId}`, {
+      ...legacyRead.body.entity,
+      notes: "Full form-style unrelated maintenance remains possible",
+    });
+    check("legacy full form-style unrelated patch remains compatible", legacyPatch.status === 200, legacyPatch);
 
     // ---- corporate_legal document linking ----
     const bogus = await uploadDoc(

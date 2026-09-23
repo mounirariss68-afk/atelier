@@ -65,8 +65,7 @@
 - [Self-billing (RCTI) invariants](atelier-self-billing.md) — clerk reruns skip approved/disputed/paid; run builds take approved-only; harness now auto-creates pgvector before push (stale-scratch-schema failures fixed).
 - [Atelier self-only shell gating](atelier-selfonly-shell-gating.md) — guard holds org routes unmounted until /me loads; app-wide dialogs gate queries on open; polls/tabs gated on role or employees 403-flood.
 - [Atelier pricing structures](atelier-pricing-structures.md) — 0.2/0.6/0.2 blend, run status "complete", opp seeds need slug/lead/etc; fit-scorecard recompute only via computeFitTotals ([atelier-qualify-fit-scorecard.md](atelier-qualify-fit-scorecard.md)).
-- [Durable deferred-retry for locked runs](billing-event-rescan.md) — skipped event launches need a durable, CAS-acked pending signal consumed on completion/failure/boot; never in-memory timers or timestamp windows.
-- [Billing trigger draft concurrency](billing-trigger-concurrency.md) — invoice-from-trigger paths must FOR UPDATE-claim the trigger row in a tx; overlapping runs otherwise draft duplicates.
+- [Billing concurrency](billing-event-rescan.md) — locked-run retries need durable signals; trigger drafts need [row claims](billing-trigger-concurrency.md), never timers/windows.
 - [Chat titles & timesheet tools](chat-session-titles.md) — Haiku title after first turn (title IS NULL); timesheet writes resolve person+ISO week server-side ([atelier-chat-timesheet.md](atelier-chat-timesheet.md)).
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock; isDefault dunning ladders only; close-stack quirks in [atelier-finance-654.md](atelier-finance-654.md).
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
@@ -81,9 +80,7 @@
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
 - [Atelier structured person names](atelier-structured-names.md) — name updates go through writePersonAndSync (mirrors!); signer snapshots upgrade to legal name; parser keeps underscores; Me self-edit preferredName-only.
 - [Meeting-chat clarification hardening](atelier-meeting-chat-clarify.md) — never raw ILIKE for people names (foldRosterName handles Turkish ı/İ); fixed-choice answers normalize before enum check; mobile preserves needs_disambiguation.
-- [Atelier internal meetings](atelier-internal-meetings.md) — internal rows merge into /me/calendar even without MS connected; iCalUId dedupe; reschedule/cancel via shared internalMeetingLifecycle (Graph-first on organizer token).
-- [Atelier chat meeting tools](atelier-chat-meetings.md) — client-meeting parents only opp/eng, email-required real invites, Graph stub pattern; title-miss time-lookup rules in [atelier-meeting-time-lookup.md](atelier-meeting-time-lookup.md).
-- [Mobile meetings](atelier-mobile-meetings-dayview.md) — day view cards, raw-fetch lifecycle; device-local reminders in [atelier-mobile-meeting-reminders.md](atelier-mobile-meeting-reminders.md).
+- [Meetings stack](atelier-internal-meetings.md) — internal lifecycle, [chat tools](atelier-chat-meetings.md), and [mobile behavior](atelier-mobile-meetings-dayview.md).
 - [Chat write-capability contract](chat-write-capability-contract.md) — isWrite tools must return navigateTo on commit-success (validator throws); self-only writes are selector-free + attachment.userId ownership; refusals scrubbed.
 - [Atelier leave OOO & holidays](atelier-leave-ooo.md) — revoke/shorten share one route (clears Outlook OOF); on-leave-today is leadership-gated; calendar `kind` needs a cast (not in orval type).
 - [Holiday override review layer](atelier-holiday-overrides.md) — tentative holiday dates confirmed/adjusted via org override rows merged at read time; new consumers must pass overrides through, filter ranges AFTER adjustment.
@@ -146,14 +143,12 @@
 - [Prep-card talking-points cache](prepcard-talking-points-cache.md) — derived caches in shared jsonb must jsonb_set only their own key (stale-snapshot re-save clobbers concurrent rewrites); Riser byline, no logo guessing.
 - [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.
 - [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.
-- [Riser explicit presentation](riser-explicit-presentation.md) — server-owned, versioned presentation triples; raw tool evidence persists for audit but never crosses client boundaries.
-- [Riser semantic frame authority](riser-semantic-frame-authority.md) — current mode trusts validated envelopes only; replay preflights mode; recovery never resends writes.
-- [Riser reviewed manifest authority](riser-reviewed-manifest-authority.md) — runtime catalog must exactly match the checked-in 326-entry manifest; durable work pins its hash and stale pins fail closed.
-- [Riser route conformance](riser-route-conformance.md) — annotation inventories are baselines, not equivalence; C16 needs shared executors plus behavioral evidence for every claimed dimension.
-- [Riser protocol compatibility](riser-protocol-compatibility.md) — canonical APIs require explicit negotiation; semantic retries preserve one turn sequence domain and the stored terminal outcome.
+- [Riser authority](riser-semantic-frame-authority.md) — validated envelopes and [reviewed manifests](riser-reviewed-manifest-authority.md) govern runtime; recovery never resends writes.
+- [Riser presentation & compatibility](riser-explicit-presentation.md) — server-owned triples; [protocol](riser-protocol-compatibility.md) and [route conformance](riser-route-conformance.md) stay explicit.
 - [Account enrichment approval boundary](account-enrichment-governance.md) — base create saves reviewed inputs only; every later AI enrichment uses one locked, expiring proposal queue.
 - [Group ownership economics](atelier-group-ownership.md) — ownership, control, profit rights, and commercial rights stay separate, effective-dated, stable-ID-linked, and maker-checker approved.
 - [Won-deal commercial baseline](atelier-commercial-baseline.md) — Contract entry atomically freezes saved pricing basis/provenance and materializes the signed SOW plus billing handoff.
 - [Engagement mobilization safety](atelier-mobilization-safety.md) — activation and staffing writes share locks; only mobilization-derived access may be revoked by assignment lifecycle.
 - [Finance MVP operating record](finance-mvp-operating-record.md) — funding is append-only; summaries separate currencies; bank exceptions must be approved before close.
 - [Agent prompt overrides](atelier-agent-prompt-overrides.md) — canonical IDs unify profile edits with runner loads; prompt files affect generated CRM manifest hashes.
+- [Entity tax-registration pairs](atelier-entity-tax-registration.md) — active entities require CT number+certificate; VAT is optional but paired; legacy partial edits remain compatible.

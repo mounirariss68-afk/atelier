@@ -272,6 +272,8 @@ export const DOC_KINDS = [
   "memorandum_of_association",
   "ejari_tenancy",
   "tax_registration",
+  "tax_registration_ct",
+  "tax_registration_vat",
   "other",
 ] as const;
 export type LegalDocKind = (typeof DOC_KINDS)[number];

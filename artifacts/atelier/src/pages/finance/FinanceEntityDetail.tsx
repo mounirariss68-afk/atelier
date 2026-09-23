@@ -135,6 +135,8 @@ const KIND_LABEL: Record<string, string> = {
   memorandum_of_association: "Memorandum of Association",
   ejari_tenancy: "Ejari tenancy",
   tax_registration: "Tax registration",
+  tax_registration_ct: "Corporate Tax certificate",
+  tax_registration_vat: "VAT certificate",
   other: "Other",
 };
 
@@ -157,6 +159,8 @@ function docTier(doc: LegalEntityLinkedDoc, hasTradeLicense: boolean): Tier {
     case "establishment_card":
     case "ejari_tenancy":
     case "tax_registration":
+    case "tax_registration_ct":
+    case "tax_registration_vat":
       return "compliance";
     case "initial_approval":
       return hasTradeLicense ? "history" : "compliance";
@@ -373,7 +377,8 @@ export default function FinanceEntityDetail() {
 
   const hasTradeLicense = e.registrations.some((r) => r.type === "trade_license");
 
-  // Registration ↔ document join: each card shows the number of ONE
+  // Registration ↔ document join: explicit certificate references win;
+  // legacy records continue to use the stable kind-based fallback.
   // registration of its type (moa_contract is the registration-side name
   // for the MoA document). The join consumes registrations one-to-one in
   // stable order, so repeated types (e.g. two initial approvals) never
@@ -386,6 +391,12 @@ export default function FinanceEntityDetail() {
   const consumedRegIds = new Set<string>();
   for (const d of [...documents].sort((a, b) => a.id.localeCompare(b.id))) {
     if (!d.docKind) continue;
+    const explicitlyLinked = e.registrations.find((r) => r.certificateDocumentId === d.id);
+    if (explicitlyLinked?.number) {
+      consumedRegIds.add(explicitlyLinked.id);
+      regNumberByDocId.set(d.id, explicitlyLinked.number);
+      continue;
+    }
     const type = REG_TYPE_FOR_KIND[d.docKind] ?? d.docKind;
     const reg = e.registrations.find((r) => r.type === type && r.number && !consumedRegIds.has(r.id));
     if (reg?.number) {

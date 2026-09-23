@@ -70,6 +70,7 @@ export interface LegalEntityRegistration {
   issuedOn: string | null;
   expiresOn: string | null;
   notes: string | null;
+  certificateDocumentId?: string | null;
 }
 export interface LegalEntityActivity {
   code: string;
