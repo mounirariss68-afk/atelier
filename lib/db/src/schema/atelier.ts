@@ -77,6 +77,36 @@ export const atelierPersons = pgTable(
   ],
 );
 
+/** Governed, org-scoped CRM aliases. Targets are intentionally polymorphic:
+ * the authoritative account/person rows remain the source of truth and the
+ * alias table never creates a cross-domain foreign key. Duplicate aliases are
+ * allowed across targets so callers can present an explicit ambiguity. */
+export const atelierCrmAliases = pgTable(
+  "atelier_crm_aliases",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    alias: text("alias").notNull(),
+    normalizedAlias: text("normalized_alias").notNull(),
+    status: text("status").notNull().default("active"),
+    sourceKind: text("source_kind").notNull().default("manual"),
+    sourceRef: text("source_ref"),
+    createdBy: text("created_by").notNull(),
+    retiredBy: text("retired_by"),
+    retiredAt: timestamp("retired_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_crm_aliases_lookup").on(t.orgId, t.targetKind, t.normalizedAlias),
+    index("idx_atelier_crm_aliases_target").on(t.orgId, t.targetKind, t.targetId),
+    uniqueIndex("uniq_atelier_crm_alias_active_target").on(
+      t.orgId, t.targetKind, t.targetId, t.normalizedAlias,
+    ).where(sql`${t.status} = 'active'`),
+  ],
+);
+
 // ============================================================
 // USERS / PERSONAS
 // ============================================================

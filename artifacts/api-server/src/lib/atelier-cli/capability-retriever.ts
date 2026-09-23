@@ -119,6 +119,7 @@ export const CORE_TOOLS_BY_KIND: Readonly<
     "schedule_client_meeting",
     "meeting_list",
     "check_availability",
+    "crm_relationships",
   ],
   expense: ["create_my_expense", "my_expenses", "submit_my_expense", "expense_list"],
   timesheet_entry: [
@@ -144,7 +145,7 @@ export const CORE_TOOLS_BY_KIND: Readonly<
     "email_company_documents",
     "email_my_documents",
   ],
-  account: ["account_lookup", "account_list", "account_dossier", "entity_detail", "statement_of_account", "pending_invoices"],
+  account: ["account_lookup", "account_list", "account_dossier", "entity_detail", "crm_relationships", "statement_of_account", "pending_invoices"],
   // Task #853 — AR / invoice asks route to the universal detail tool +
   // the two rollup capabilities (statement of account, pending invoices).
   invoice: ["entity_detail", "statement_of_account", "pending_invoices"],
@@ -153,9 +154,9 @@ export const CORE_TOOLS_BY_KIND: Readonly<
   // eliminating the silent stage="convert" default that drove the model to
   // brute-force iterate stage-by-stage. opportunity_list_by_stage stays
   // registered (slash command, explicit stage) but exits the floor.
-  opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage", "entity_detail"],
-  contact: ["contact_detail", "contact_list", "entity_detail"],
-  engagement: ["engagement_detail", "engagement_list_active", "entity_detail", "pending_invoices"],
+  opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage", "entity_detail", "crm_relationships"],
+  contact: ["contact_detail", "contact_list", "entity_detail", "crm_relationships"],
+  engagement: ["engagement_detail", "engagement_list_active", "entity_detail", "crm_relationships", "pending_invoices"],
   deliverable: ["engagement_create_deliverable", "deliverable_update"],
   raid_item: ["raid_open_list", "raid_add", "raid_close"],
   proposal: [
@@ -175,7 +176,7 @@ export const CORE_TOOLS_BY_KIND: Readonly<
     "change_order_dispatch",
     "change_order_record_acceptance",
   ],
-  contract: ["contract_prepare", "contract_status"],
+  contract: ["contract_prepare", "contract_status", "crm_relationships"],
   rate_card: ["rate_card_create", "rate_card_update"],
   renewal: ["renewal_list", "renewal_open", "renewal_create", "renewal_update"],
   partner_firm: ["partner_firm_create", "partner_firm_update"],

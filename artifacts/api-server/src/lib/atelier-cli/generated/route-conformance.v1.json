@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
-  "routeCount": 1215,
-  "capabilityCount": 328,
+  "routeCount": 1218,
+  "capabilityCount": 329,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
   "routes": [
@@ -6084,6 +6084,34 @@
       }
     },
     {
+      "routeId": "2df8421d875156bd",
+      "file": "artifacts/api-server/src/routes/atelier/crmAliasRoutes.ts",
+      "method": "post",
+      "path": "/crm/aliases/:id/retire",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated CRM alias governance; semantic reads consume approved aliases",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "2dfa787842900ecd",
       "file": "artifacts/api-server/src/routes/arcelik.ts",
       "method": "post",
@@ -9243,6 +9271,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "acceptance withdrawal is an audited external workflow transition; assistant parity is unproven",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "47ba07485e142cbd",
+      "file": "artifacts/api-server/src/routes/atelier/crmAliasRoutes.ts",
+      "method": "post",
+      "path": "/crm/aliases",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated CRM alias governance; semantic reads consume approved aliases",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -29436,6 +29492,34 @@
       }
     },
     {
+      "routeId": "dc9b6bee17aa4402",
+      "file": "artifacts/api-server/src/routes/atelier/crmAliasRoutes.ts",
+      "method": "get",
+      "path": "/crm/aliases",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "partner-gated CRM alias governance; semantic reads consume approved aliases",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
       "routeId": "dcb1be4c667081fd",
       "file": "artifacts/api-server/src/routes/atelier/financeEntitiesRoutes.ts",
       "method": "patch",
@@ -35402,6 +35486,15 @@
       ]
     },
     {
+      "capabilityId": "crm.relationships",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "6e64ed3c050f",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "deliverable_acceptance.create",
       "source": "cli-only",
       "executionStatus": "executable",
@@ -37029,5 +37122,5 @@
       ]
     }
   ],
-  "conformanceVersion": "3f57eb81e775b4cd0f31342062ea2100dcd8871ca42e07960076738bee005965"
+  "conformanceVersion": "b51c1251a40c325a3c1b76a9a5ce286e14c81d06d7ab62a06d420058657438b2"
 }

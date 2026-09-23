@@ -153,3 +153,4 @@
 - [Agent prompt overrides](atelier-agent-prompt-overrides.md) — canonical IDs unify profile edits with runner loads; prompt files affect generated CRM manifest hashes.
 - [Entity tax-registration pairs](atelier-entity-tax-registration.md) — active entities require CT number+certificate; VAT is optional but paired; legacy partial edits remain compatible.
 - [Semantic source authority](semantic-source-integrity.md) — projections never authorize; current source rows and fenced provider outcomes govern disclosure and writes.
+- [CRM relationship semantics](crm-relationship-semantics.md) — aliases preserve ambiguity; relationship reads are live-source, ACL-first, bounded, and evidence-aware.

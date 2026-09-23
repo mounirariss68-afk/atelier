@@ -269,6 +269,22 @@ registerDetailProvider({
   selfOnlyAllowed: true,
   search: resolverSearch("account"),
   async visible(id, ctx, access) {
+    const [account] = await db
+      .select({ status: atelierAccounts.status })
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.id, id),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    // Account archive is status-based (not deletedAt-based). Treat archived
+    // rows as non-live at the shared disclosure boundary so aliases, vectors,
+    // and direct ids cannot resurrect them. Restore makes the same alias
+    // resolvable again without rewriting identity history.
+    if (!account || account.status === "archived") return false;
     if (isSelfOnly(ctx)) {
       return (await staffedAccountIds(ctx, access)).has(id);
     }

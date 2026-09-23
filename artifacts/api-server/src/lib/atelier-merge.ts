@@ -41,6 +41,7 @@ import {
   atelierCredentials,
   atelierAuditEvents,
   atelierAgentRuns,
+  atelierCrmAliases,
 } from "@workspace/db";
 
 export interface MergeActor {
@@ -221,6 +222,47 @@ export async function mergeAccounts(
     // this they dangle at the soft-deleted duplicate and vanish from the
     // survivor's credential library.
     await repoint("credentials", atelierCredentials);
+
+    // Governed CRM aliases follow the surviving account. A duplicate alias
+    // already owned by the survivor is retired (rather than merged silently)
+    // so ambiguity and provenance remain auditable without violating the
+    // per-target active uniqueness constraint. Contact merges deliberately do
+    // not touch canonical-person aliases.
+    const duplicateAliases = await tx
+      .select()
+      .from(atelierCrmAliases)
+      .where(and(
+        eq(atelierCrmAliases.orgId, actor.orgId),
+        eq(atelierCrmAliases.targetKind, "account"),
+        eq(atelierCrmAliases.targetId, duplicateId),
+        eq(atelierCrmAliases.status, "active"),
+      ));
+    for (const alias of duplicateAliases) {
+      const [survivorAlias] = await tx
+        .select({ id: atelierCrmAliases.id })
+        .from(atelierCrmAliases)
+        .where(and(
+          eq(atelierCrmAliases.orgId, actor.orgId),
+          eq(atelierCrmAliases.targetKind, "account"),
+          eq(atelierCrmAliases.targetId, survivorId),
+          eq(atelierCrmAliases.normalizedAlias, alias.normalizedAlias),
+          eq(atelierCrmAliases.status, "active"),
+        ))
+        .limit(1);
+      if (survivorAlias) {
+        await tx.update(atelierCrmAliases).set({
+          status: "retired",
+          retiredBy: actor.id,
+          retiredAt: now,
+        }).where(eq(atelierCrmAliases.id, alias.id));
+        counts.aliasesRetired = (counts.aliasesRetired ?? 0) + 1;
+      } else {
+        await tx.update(atelierCrmAliases).set({
+          targetId: survivorId,
+        }).where(eq(atelierCrmAliases.id, alias.id));
+        counts.aliasesMoved = (counts.aliasesMoved ?? 0) + 1;
+      }
+    }
 
     // Hierarchy: any account whose parent is the duplicate now points at the
     // survivor, so the family tree stays intact.

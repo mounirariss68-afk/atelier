@@ -121,6 +121,7 @@ import partnerPortalRoutes from "./partnerPortalRoutes";
 import partnerBillingRoutes from "./partnerBillingRoutes";
 import { partnerPortalThrottle } from "./portalFirmResolver";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
+import crmAliasRoutes from "./crmAliasRoutes";
 import shareholderFundingRoutes from "./shareholderFundingRoutes";
 import preformationRoutes from "./preformationRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
@@ -551,6 +552,7 @@ router.use(partnerPortalRoutes);
 // Task #875 — partner contracts & billing hub (portal + internal surfaces).
 router.use(partnerBillingRoutes);
 router.use(financeEntitiesRoutes);
+router.use(crmAliasRoutes);
 router.use(shareholderFundingRoutes);
 // Task #1092 — pre-formation entity cost pools (dashboard + settlement).
 router.use(preformationRoutes);

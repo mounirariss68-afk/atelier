@@ -112,6 +112,8 @@ import "./travel-preferences-db.js";
 // one generic `entity.detail` tool) + AR rollups (statement of account,
 // pending invoices by fuzzy project/account).
 import "./entity-detail-capabilities.js";
+// Task #1411 — ACL-first bounded CRM relationship reads.
+import "./crm-relationship-capabilities.js";
 // Task #939 — find_screen ("where do I find X?") over the shared screen catalog.
 import "./app-navigation-capabilities.js";
 // Task #873 — alliance-partner portal reads (the ONLY surface the

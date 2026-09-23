@@ -36,8 +36,8 @@ const parityCapabilitySource = await readFile(
   "utf8",
 );
 assert.deepEqual(checkedIn, document, "checked-in manifest must match runtime registry");
-assert.equal(manifest.length, 328);
-assert.equal(document.entryCount, 328);
+assert.equal(manifest.length, 329);
+assert.equal(document.entryCount, 329);
 assert.equal(document.manifestVersion, capabilityManifestVersion(manifest));
 assert.equal(new Set(manifest.map((entry) => entry.capabilityId)).size, manifest.length);
 assert.equal(new Set(manifest.map((entry) => entry.toolName)).size, manifest.length);
@@ -177,7 +177,7 @@ try {
 }
 const agents = capabilities.filter((entry) => entry.source === "agent");
 assert.equal(agents.length, 60);
-assert.equal(capabilities.filter((entry) => entry.source === "cli-only").length, 268);
+assert.equal(capabilities.filter((entry) => entry.source === "cli-only").length, 269);
 for (const agent of agents) {
   assert.equal(agent.executionStatus, "unsupported");
   assert.equal(agent.policyClass, "unsupported");

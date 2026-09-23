@@ -1,8 +1,8 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "0ae01da0cbb4cd41e517af599686adc20144cf9bc523af54a44d88a224a7ce54",
-  "entryCount": 328,
+  "manifestVersion": "f3cee5d7eb8f1e159e4e2dc1dac8c6bac66286fbdd25c97a00683bd71380b2fc",
+  "entryCount": 329,
   "entries": [
     {
       "capabilityId": "account.archive",
@@ -6205,6 +6205,48 @@
       "divergenceIds": [
         "cli-only-route-parity-v1",
         "legacy-confirmation-compat-v1"
+      ]
+    },
+    {
+      "capabilityId": "crm.relationships",
+      "toolName": "crm_relationships",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "4887e9c386fa",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [],
+      "effectiveRoles": [
+        "board_observer",
+        "compliance_officer",
+        "consultant",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "partner_firm_resource",
+        "recruiter",
+        "senior_manager"
+      ],
+      "policyClass": "authenticated_read",
+      "implementationVersion": "6e64ed3c050f",
+      "approverRoles": [],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "ranked_list",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
       ]
     },
     {
