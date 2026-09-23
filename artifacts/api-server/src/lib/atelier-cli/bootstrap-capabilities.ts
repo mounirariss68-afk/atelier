@@ -88,6 +88,9 @@ import "./finance-procurement-relationship-capabilities.js";
 // selector-free composition over the existing Me capability executors.
 import "./people-semantic-capabilities.js";
 import "./me-semantic-capabilities.js";
+// Task #1415 — governed, bounded cross-domain federation over reviewed
+// source adapters. This is a projection only; it cannot authorize or write.
+import "./enterprise-knowledge-capabilities.js";
 // Task #404 — read-only people / contact / meeting / document /
 // opportunity / engagement / expense chat reads (ACL-parity with REST).
 import "./people-read-capabilities.js";

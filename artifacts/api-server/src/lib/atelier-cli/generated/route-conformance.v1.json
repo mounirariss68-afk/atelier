@@ -3,7 +3,7 @@
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
   "routeCount": 1218,
-  "capabilityCount": 335,
+  "capabilityCount": 336,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
   "routes": [
@@ -35711,6 +35711,15 @@
       ]
     },
     {
+      "capabilityId": "knowledge.enterprise_query",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "6dfe5c78bded",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "knowledge.ingest_spreadsheet",
       "source": "cli-only",
       "executionStatus": "executable",
@@ -37176,5 +37185,5 @@
       ]
     }
   ],
-  "conformanceVersion": "d8510d57936e8e10a1ae3125d228c80c73a238efd598afae433a5e5e4c6c0d3f"
+  "conformanceVersion": "b14958409b18cb1051146799ebcbe3facf73a01f6d92f237e2afdca5bb0277b7"
 }
