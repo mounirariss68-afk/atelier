@@ -630,7 +630,7 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   }
 
   out.sort((a, b) => a.fullName.localeCompare(b.fullName));
-  await attachStructuredNames(out);
+  await attachStructuredNames(out, opts.orgId ?? "aico");
   const classifications = await Promise.all(out.map((p) => p.personId ? loadRelationshipClassification(opts.orgId ?? "aico", p.personId) : null));
   for (let i = out.length - 1; i >= 0; i--) {
     const c = classifications[i];
@@ -645,10 +645,16 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
  * onto roster wires (form prefill + display). Wires without a personId
  * are left untouched.
  */
-async function attachStructuredNames(wires: PersonWire[]): Promise<void> {
+async function attachStructuredNames(wires: PersonWire[], orgId: string): Promise<void> {
   const ids = [...new Set(wires.map((w) => w.personId).filter((v): v is string => !!v))];
   if (ids.length === 0) return;
-  const rows = await db.select().from(atelierPersons).where(inArray(atelierPersons.id, ids));
+  const rows = await db
+    .select()
+    .from(atelierPersons)
+    .where(and(
+      eq(atelierPersons.orgId, orgId),
+      inArray(atelierPersons.id, ids),
+    ));
   const byId = new Map(rows.map((p) => [p.id, p]));
   for (const w of wires) {
     const p = w.personId ? byId.get(w.personId) : undefined;
@@ -802,15 +808,16 @@ export async function getPerson(
   id: string,
   includeComp: boolean,
 ): Promise<PersonWire | null> {
-  const wire = await getPersonRaw(id, includeComp);
-  if (wire) await attachStructuredNames([wire]);
-  return wire;
+  const found = await getPersonRaw(id, includeComp);
+  if (!found) return null;
+  await attachStructuredNames([found.wire], found.orgId);
+  return found.wire;
 }
 
 async function getPersonRaw(
   id: string,
   includeComp: boolean,
-): Promise<PersonWire | null> {
+): Promise<{ wire: PersonWire; orgId: string } | null> {
   // Try each table by id.
   const [emp] = await db
     .select()
@@ -834,11 +841,14 @@ async function getPersonRaw(
             .limit(1)
         )[0] ?? null
       : null;
-    return employeeToWire(
-      emp,
-      includeComp,
-      entity ? employingEntityName(entity) : null,
-    );
+    return {
+      wire: employeeToWire(
+        emp,
+        includeComp,
+        entity ? employingEntityName(entity) : null,
+      ),
+      orgId: emp.orgId,
+    };
   }
 
   const [ct] = await db
@@ -847,7 +857,7 @@ async function getPersonRaw(
     .where(
       and(eq(atelierContractors.id, id), isNull(atelierContractors.deletedAt)),
     );
-  if (ct) return contractorToWire(ct, includeComp);
+  if (ct) return { wire: contractorToWire(ct, includeComp), orgId: ct.orgId };
 
   const [pr] = await db
     .select({
@@ -865,7 +875,12 @@ async function getPersonRaw(
         isNull(atelierPartnerFirmResources.deletedAt),
       ),
     );
-  if (pr) return partnerResourceToWire(pr.r, pr.firmName, includeComp);
+  if (pr) {
+    return {
+      wire: partnerResourceToWire(pr.r, pr.firmName, includeComp),
+      orgId: pr.r.orgId,
+    };
+  }
 
   return null;
 }

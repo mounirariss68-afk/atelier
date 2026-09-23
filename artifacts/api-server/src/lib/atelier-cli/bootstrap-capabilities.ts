@@ -84,6 +84,10 @@ import "./finance-ops-capabilities.js";
 // semantics. Read-only adapters preserve existing finance authority.
 import "./finance-statutory-capabilities.js";
 import "./finance-procurement-relationship-capabilities.js";
+// Task #1413 — source-backed internal-worker/reporting semantics plus a
+// selector-free composition over the existing Me capability executors.
+import "./people-semantic-capabilities.js";
+import "./me-semantic-capabilities.js";
 // Task #404 — read-only people / contact / meeting / document /
 // opportunity / engagement / expense chat reads (ACL-parity with REST).
 import "./people-read-capabilities.js";

@@ -2205,6 +2205,7 @@ defineCapability({
       .from(atelierPersonDocuments)
       .where(
         and(
+          eq(atelierPersonDocuments.orgId, subject.user.orgId),
           eq(atelierPersonDocuments.personType, person.workerType),
           eq(atelierPersonDocuments.personId, person.id),
           isNull(atelierPersonDocuments.deletedAt),

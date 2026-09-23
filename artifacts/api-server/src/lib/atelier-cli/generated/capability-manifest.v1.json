@@ -1,8 +1,8 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "86212eaa33536f5000511a46dfcc795873b3f5df1ebc4da5f4a4e51fcdbb4579",
-  "entryCount": 331,
+  "manifestVersion": "4dc844b368b3798bb54c4865f7b10b900f00e63b93431c578ae684138b9c7f22",
+  "entryCount": 333,
   "entries": [
     {
       "capabilityId": "account.archive",
@@ -9475,6 +9475,50 @@
       ]
     },
     {
+      "capabilityId": "me.semantic_summary",
+      "toolName": "my_semantic_summary",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "0ba6d9daa372",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [],
+      "effectiveRoles": [
+        "compliance_officer",
+        "consultant",
+        "contractor",
+        "employee",
+        "finance",
+        "founding_partner",
+        "hr",
+        "non_equity_partner",
+        "partner",
+        "partner_firm_resource",
+        "recruiter",
+        "senior_manager"
+      ],
+      "policyClass": "authenticated_read",
+      "implementationVersion": "ad2c873f0e89",
+      "approverRoles": [],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "section_card",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "me.task_complete",
       "toolName": "complete_my_task",
       "source": "cli-only",
@@ -12964,6 +13008,58 @@
         "cardType": "ranked_list",
         "contractVersion": 1,
         "renderer": "semantic-v1",
+        "minimumDataVersion": 1
+      },
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
+      "capabilityId": "roster.people_relationships",
+      "toolName": "people_relationships",
+      "source": "cli-only",
+      "catalogVersion": 3,
+      "inputSchemaVersion": 3,
+      "inputSchemaHash": "8bcd5ee7cf05",
+      "resultSchemaHash": "94c64f190712",
+      "effect": "read",
+      "effectClass": "read",
+      "executionStatus": "executable",
+      "roles": [
+        "consultant",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "senior_manager"
+      ],
+      "effectiveRoles": [
+        "consultant",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "senior_manager"
+      ],
+      "policyClass": "role_restricted_read",
+      "implementationVersion": "9ec1abc73ab1",
+      "approverRoles": [
+        "consultant",
+        "finance",
+        "founding_partner",
+        "hr",
+        "partner",
+        "senior_manager"
+      ],
+      "confirmation": {
+        "required": false,
+        "irreversible": false,
+        "outboundChannel": null
+      },
+      "presentation": {
+        "cardType": "ranked_list",
+        "contractVersion": 1,
+        "renderer": "legacy-native-v1",
         "minimumDataVersion": 1
       },
       "divergenceIds": [

@@ -3,7 +3,7 @@
   "reviewBy": "2027-03-31",
   "owner": "Agent Platform",
   "routeCount": 1218,
-  "capabilityCount": 331,
+  "capabilityCount": 333,
   "unexplainedRouteCount": 0,
   "unexplainedCapabilityCount": 0,
   "routes": [
@@ -36171,6 +36171,15 @@
       ]
     },
     {
+      "capabilityId": "me.semantic_summary",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "ad2c873f0e89",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "me.task_complete",
       "source": "cli-only",
       "executionStatus": "legacy_compat",
@@ -36897,6 +36906,15 @@
       ]
     },
     {
+      "capabilityId": "roster.people_relationships",
+      "source": "cli-only",
+      "executionStatus": "executable",
+      "implementationVersion": "9ec1abc73ab1",
+      "divergenceIds": [
+        "cli-only-route-parity-v1"
+      ]
+    },
+    {
       "capabilityId": "roster.person_detail",
       "source": "cli-only",
       "executionStatus": "executable",
@@ -37140,5 +37158,5 @@
       ]
     }
   ],
-  "conformanceVersion": "cd0ccf8703eafa9496f48c6b47665fe53d6c520d3763b6ad4932be61546ae5ae"
+  "conformanceVersion": "686589ee1ee0ea0dbc7d9cf29809af9b6dff1a5d4a4a8e69d46bc98fc3a9dd5e"
 }
