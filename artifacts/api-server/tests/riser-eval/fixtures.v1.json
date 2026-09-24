@@ -4,7 +4,7 @@
   "protocolVersion": 1,
   "presentationDataVersion": 1,
   "privacyPolicyVersion": "assistant-privacy/v1",
-  "catalogVersion": "8f03b0dce262145af766ddf7618f7e7abf0317fec098df8cbda4e189f47dcba1",
+  "catalogVersion": "5e54a4996ef7c0292fb565fb6437aaf4be2a0c7e613c58288e2593a036ebdd62",
   "routerVersion": "typed-intent/v1",
   "modelVersion": "claude-haiku-4-5",
   "promptVersion": "intent-router-prompt/v1",

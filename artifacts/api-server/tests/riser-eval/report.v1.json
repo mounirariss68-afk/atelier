@@ -2,7 +2,7 @@
   "version": "riser-eval/v1",
   "datasetVersion": "2026-09-20.2",
   "mode": "canary",
-  "catalogVersion": "8f03b0dce262145af766ddf7618f7e7abf0317fec098df8cbda4e189f47dcba1",
+  "catalogVersion": "5e54a4996ef7c0292fb565fb6437aaf4be2a0c7e613c58288e2593a036ebdd62",
   "routerVersion": "typed-intent/v1",
   "modelVersion": "claude-haiku-4-5",
   "promptVersion": "intent-router-prompt/v1",
@@ -23,7 +23,7 @@
     "protocol",
     "renderer"
   ],
-  "observationCount": 438,
+  "observationCount": 450,
   "metrics": {
     "policy_tenant_isolation": {
       "passed": 5,
@@ -58,17 +58,17 @@
       "gatePassed": true
     },
     "capability_top_1": {
-      "passed": 149,
-      "failed": 7,
-      "denominator": 156,
-      "rate": 0.9551282051282052,
+      "passed": 156,
+      "failed": 6,
+      "denominator": 162,
+      "rate": 0.9629629629629629,
       "threshold": 0.95,
       "gatePassed": true
     },
     "capability_top_3": {
-      "passed": 156,
+      "passed": 162,
       "failed": 0,
-      "denominator": 156,
+      "denominator": 162,
       "rate": 1,
       "threshold": 0.99,
       "gatePassed": true
@@ -143,7 +143,7 @@
       }
     },
     {
-      "id": "ranking.me.expense_submit.99.top1",
+      "id": "ranking.me.expense_submit.101.top1",
       "metric": "capability_top_1",
       "severity": "two",
       "expected": {
@@ -160,24 +160,7 @@
       }
     },
     {
-      "id": "ranking.me.expense_update.100.top1",
-      "metric": "capability_top_1",
-      "severity": "two",
-      "expected": {
-        "maxRank": 1
-      },
-      "actual": {
-        "prompt": "Change that taxi expense to 60 dollars",
-        "rank": 2,
-        "selected": [
-          "update_assist_item",
-          "update_my_expense",
-          "create_my_expense"
-        ]
-      }
-    },
-    {
-      "id": "ranking.me.profile_update.126.top1",
+      "id": "ranking.me.profile_update.128.top1",
       "metric": "capability_top_1",
       "severity": "two",
       "expected": {
@@ -189,12 +172,12 @@
         "selected": [
           "save_my_emergency_contact",
           "update_my_profile",
-          "contact_update"
+          "reschedule_my_task"
         ]
       }
     },
     {
-      "id": "ranking.me.task_create.133.top1",
+      "id": "ranking.me.task_create.137.top1",
       "metric": "capability_top_1",
       "severity": "two",
       "expected": {
@@ -211,7 +194,7 @@
       }
     },
     {
-      "id": "ranking.me.timesheet_remove.143.top1",
+      "id": "ranking.me.timesheet_remove.147.top1",
       "metric": "capability_top_1",
       "severity": "two",
       "expected": {
@@ -228,7 +211,7 @@
       }
     },
     {
-      "id": "ranking.me.timesheet_update.147.top1",
+      "id": "ranking.me.timesheet_update.151.top1",
       "metric": "capability_top_1",
       "severity": "two",
       "expected": {
