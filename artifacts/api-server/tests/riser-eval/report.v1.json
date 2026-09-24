@@ -1,7 +1,7 @@
 {
   "version": "riser-eval/v1",
   "datasetVersion": "2026-09-20.2",
-  "mode": "canary",
+  "mode": "ci",
   "catalogVersion": "5e54a4996ef7c0292fb565fb6437aaf4be2a0c7e613c58288e2593a036ebdd62",
   "routerVersion": "typed-intent/v1",
   "modelVersion": "claude-haiku-4-5",

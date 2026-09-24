@@ -145,6 +145,7 @@
 - [PDF password unlock flow](atelier-pdf-password-unlock.md) — unlock password is transient (never in partials/pins/logs); post-unlock continuations reuse the parse job via HMAC pin, never re-parse.
 - [Contractor rate resolution](contractor-rate-resolution.md) — price each work date; NEP plan wins unless override is explicit; split evidence buckets on rate/currency changes.
 - [Riser authority](riser-semantic-frame-authority.md) — validated envelopes and [reviewed manifests](riser-reviewed-manifest-authority.md) govern runtime; recovery never resends writes.
+- [Riser publish evaluation](riser-evaluation-publish-gate.md) — build runs live offline checks plus source-bound DB security evidence; full isolated evaluation refreshes the evidence.
 - [Riser presentation & compatibility](riser-explicit-presentation.md) — server-owned triples; [protocol](riser-protocol-compatibility.md) and [route conformance](riser-route-conformance.md) stay explicit.
 - [Account enrichment approval boundary](account-enrichment-governance.md) — base create saves reviewed inputs only; every later AI enrichment uses one locked, expiring proposal queue.
 - [Group ownership economics](atelier-group-ownership.md) — ownership, control, profit rights, and commercial rights stay separate, effective-dated, stable-ID-linked, and maker-checker approved.

@@ -22,6 +22,7 @@ import {
   collectPureRiserEvalObservations,
   type RiserEvalObservation,
 } from "./pure-observations.js";
+import { securitySourceDigest, type ReviewedSecurityEvidence } from "./security-evidence.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dataset = RiserEvalDatasetV1Schema.parse(
@@ -50,20 +51,30 @@ assert.deepEqual(
   ["catalog", "model", "policy", "prompt", "protocol", "renderer", "router"],
 );
 
-const securityReportPath = `/tmp/riser-eval-security-${process.pid}.json`;
-execFileSync("pnpm", ["exec", "tsx", "./tests/riser-eval/security-observations.ts"], {
-  cwd: resolve(here, "../.."),
-  env: {
-    ...process.env,
-    CRM_TEST_DB_NAME: "crm_test_riser_eval",
-    RISER_EVAL_SECURITY_REPORT: securityReportPath,
-    RISER_EVAL_SEED: String(dataset.seed),
-  },
-  stdio: "inherit",
-});
-const securityObservations = JSON.parse(
-  readFileSync(securityReportPath, "utf8"),
-) as RiserEvalObservation[];
+const isPublishCanary = process.env.RISER_EVAL_MODE === "canary";
+const securityEvidencePath = resolve(here, "security-evidence.v1.json");
+let securityObservations: RiserEvalObservation[];
+if (isPublishCanary) {
+  const reviewed = JSON.parse(readFileSync(securityEvidencePath, "utf8")) as ReviewedSecurityEvidence;
+  assert.equal(reviewed.sourceDigest, securitySourceDigest(), "Database security evidence is stale; run test:riser-eval with an isolated development database before publishing");
+  assert.equal(reviewed.catalogVersion, dataset.catalogVersion);
+  assert.equal(reviewed.datasetVersion, dataset.datasetVersion);
+  assert.ok(Array.isArray(reviewed.observations));
+  securityObservations = reviewed.observations;
+} else {
+  const securityReportPath = `/tmp/riser-eval-security-${process.pid}.json`;
+  execFileSync("pnpm", ["exec", "tsx", "./tests/riser-eval/security-observations.ts"], {
+    cwd: resolve(here, "../.."),
+    env: {
+      ...process.env,
+      CRM_TEST_DB_NAME: "crm_test_riser_eval",
+      RISER_EVAL_SECURITY_REPORT: securityReportPath,
+      RISER_EVAL_SEED: String(dataset.seed),
+    },
+    stdio: "inherit",
+  });
+  securityObservations = JSON.parse(readFileSync(securityReportPath, "utf8")) as RiserEvalObservation[];
+}
 const observations = [
   ...(await collectPureRiserEvalObservations(dataset.seed)),
   ...securityObservations,
@@ -158,7 +169,7 @@ const gatePassed =
 const report = {
   version: dataset.version,
   datasetVersion: dataset.datasetVersion,
-  mode: process.env.RISER_EVAL_MODE === "canary" ? "canary" : "ci",
+  mode: isPublishCanary ? "canary" : "ci",
   catalogVersion: dataset.catalogVersion,
   routerVersion: dataset.routerVersion,
   modelVersion: dataset.modelVersion,
@@ -179,14 +190,19 @@ const report = {
   namedFailures,
   gatePassed,
 };
-writeFileSync(
-  resolve(here, "report.v1.json"),
-  `${JSON.stringify(report, null, 2)}\n`,
-);
 if (!gatePassed) {
   console.error(JSON.stringify(report, null, 2));
   process.exitCode = 1;
 } else {
+  if (!isPublishCanary) {
+    writeFileSync(securityEvidencePath, `${JSON.stringify({
+      sourceDigest: securitySourceDigest(),
+      catalogVersion: dataset.catalogVersion,
+      datasetVersion: dataset.datasetVersion,
+      observations: securityObservations,
+    } satisfies ReviewedSecurityEvidence, null, 2)}\n`);
+    writeFileSync(resolve(here, "report.v1.json"), `${JSON.stringify(report, null, 2)}\n`);
+  }
   console.log(
     `riser-eval/v1: PASS (${observations.length} measured observations, ${capabilityRows.size} capability scopes)`,
   );

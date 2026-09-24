@@ -86,6 +86,15 @@ an unapproved side effect.
 7. Run `check:riser-manifest`, `check:route-conformance`, `test:riser-eval`, and
    the relevant runtime/client suites before release.
 
+The full `test:riser-eval` runs database-backed security and concurrency probes
+against an isolated scratch database and records source-bound security evidence.
+Review and commit `tests/riser-eval/security-evidence.v1.json` with the evaluation
+report after a passing run. The publish-time `test:riser-eval:canary` remeasures
+the database-free corpus and refuses stale security evidence if the covered
+runtime, route, test, or schema sources changed. It must not provision a
+scratch database in the publish builder; never refresh the evidence without
+running the full isolated evaluation.
+
 ## Migration guide
 
 All stages follow: expand → shadow/dual → backfill/verify → cohort canary →
