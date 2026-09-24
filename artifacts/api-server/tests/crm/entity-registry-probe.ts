@@ -249,6 +249,25 @@ async function main() {
     if (ctDocumentId) docIds.push(ctDocumentId);
     if (!ctDocumentId) throw new Error("no Corporate Tax certificate id");
 
+    const bypassUpload = await uploadDoc(
+      fpId,
+      {
+        title: `Invalid direct CT entity link ${runTag}`,
+        category: "corporate_legal",
+        docKind: "tax_registration_ct",
+        entityId: "lent_nope",
+      },
+      Buffer.from("CORPORATE TAX CERTIFICATE", "utf8"),
+      "direct-ct.txt",
+      "text/plain",
+    );
+    check(
+      "tax certificate cannot bypass the registry by linking directly",
+      bypassUpload.status === 409 &&
+        bypassUpload.body?.error === "tax-certificate-must-be-linked-through-entity-registry",
+      bypassUpload,
+    );
+
     const numberOnly = await api(fpId, "POST", "/finance/entities", {
       ...baseCreateBody,
       registrations: [

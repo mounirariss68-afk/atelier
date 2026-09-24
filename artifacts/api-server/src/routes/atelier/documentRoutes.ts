@@ -332,7 +332,13 @@ router.post("/documents", uploadSingle, async (req, res) => {
       return;
     }
     docKind = req.body.docKind as LegalDocKind;
-    if (TAX_DOCUMENT_KINDS.has(docKind)) {
+    // The entity form uploads the certificate *before* its registration PATCH
+    // can claim it. Permit only an unlinked, corporate-legal staging document;
+    // the registry transaction remains the sole path that links it to an entity.
+    if (
+      TAX_DOCUMENT_KINDS.has(docKind) &&
+      (category !== "corporate_legal" || entityId || accountId || engagementId)
+    ) {
       res.status(409).json({
         error: "tax-certificate-must-be-linked-through-entity-registry",
       });
