@@ -1,5 +1,5 @@
 {
-  "sourceDigest": "0a25853f1f8aa1564830fc4d1e4e4136a76f7594741be80fcd9e09b14742f064",
+  "sourceDigest": "5f1becf0492c8de244a1df900bfd81907aadead0634d80ea13468fe462828afa",
   "catalogVersion": "5e54a4996ef7c0292fb565fb6437aaf4be2a0c7e613c58288e2593a036ebdd62",
   "datasetVersion": "2026-09-20.2",
   "observations": [
@@ -207,6 +207,99 @@
         "name": "After evaluation 4"
       },
       "passed": true
+    },
+    {
+      "id": "vertical.cli.confirmed-source-truth-replay",
+      "metric": "exactly_once_concurrent_replay",
+      "capabilityId": "wallet.ingest_receipts",
+      "severity": "one",
+      "passed": true,
+      "expected": {
+        "turnStatus": "success",
+        "expenseCount": 1,
+        "amount": 1234.5,
+        "currency": "AED",
+        "confirmReplay": true,
+        "turnIdStable": true
+      },
+      "actual": {
+        "turnStatus": "success",
+        "expenseCount": 1,
+        "amount": 1234.5,
+        "currency": "AED",
+        "confirmReplay": true,
+        "turnIdStable": true,
+        "sourceDocumentPresent": true,
+        "sourceTurnAuditCount": 1,
+        "confirmedAuditCount": 1,
+        "expenseAuditCount": 1
+      }
+    },
+    {
+      "id": "vertical.cli.acl-denial",
+      "metric": "policy_tenant_isolation",
+      "capabilityId": "wallet.ingest_receipts",
+      "severity": "one",
+      "passed": true,
+      "expected": {
+        "foreignConfirmStatus": "error",
+        "noForeignExpense": true
+      },
+      "actual": {
+        "foreignConfirmStatus": "error",
+        "foreignConfirmError": true,
+        "foreignExpenseCount": 0
+      }
+    },
+    {
+      "id": "vertical.cli.forged-stale-denial",
+      "metric": "forged_unconfirmed_commits",
+      "capabilityId": "wallet.ingest_receipts",
+      "severity": "one",
+      "passed": true,
+      "expected": {
+        "forgedStatus": "error",
+        "staleStatus": "error",
+        "ownerExpenseCount": 1
+      },
+      "actual": {
+        "forgedStatus": "error",
+        "staleStatus": "error",
+        "ownerExpenseCount": 1
+      }
+    },
+    {
+      "id": "vertical.cli.role-capability-absence-honesty",
+      "metric": "unsupported_abstention",
+      "capabilityId": "wallet.ingest_receipts",
+      "severity": "one",
+      "passed": true,
+      "expected": {
+        "capabilityAdvertised": false,
+        "expenseCount": 0,
+        "honestAbstention": true
+      },
+      "actual": {
+        "capabilityAdvertised": false,
+        "expenseCount": 0,
+        "response": " Note: 1 attachment could not be loaded and was skipped. I cannot stage this expense: the available capabilities for this role do not include receipt-to-expense writes.  "
+      }
+    },
+    {
+      "id": "vertical.cli.provider-failure-no-write",
+      "metric": "provider_unrelated_capability",
+      "capabilityId": "wallet.ingest_receipts",
+      "severity": "one",
+      "passed": true,
+      "expected": {
+        "errorSurfaced": true,
+        "ownerExpenseCount": 1
+      },
+      "actual": {
+        "errorSurfaced": true,
+        "ownerExpenseCount": 1,
+        "providerRequests": 16
+      }
     }
   ]
 }

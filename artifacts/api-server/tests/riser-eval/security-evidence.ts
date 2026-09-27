@@ -11,11 +11,17 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 // to these authorities require a fresh full evaluation before publishing.
 const securitySources = [
   "artifacts/api-server/tests/riser-eval/security-observations.ts",
+  "artifacts/api-server/tests/riser-eval/vertical-cli-action.ts",
   "artifacts/api-server/src/lib/assistant/action-runtime.ts",
   "artifacts/api-server/src/lib/assistant/durable-account-update.ts",
   "artifacts/api-server/src/lib/assistant/durable-account-update-confirmation.ts",
   "artifacts/api-server/src/lib/assistant/control-runtime.ts",
   "artifacts/api-server/src/lib/atelier-cli/capability-catalog.ts",
+  "artifacts/api-server/src/lib/atelier-cli/index.ts",
+  "artifacts/api-server/src/lib/atelier-cli/attachment-capabilities.ts",
+  "artifacts/api-server/src/lib/atelier-cli/attachments/extractors.ts",
+  "artifacts/api-server/src/lib/atelier-cli/attachments/chunking.ts",
+  "artifacts/api-server/src/routes/atelier/cliRoutes.ts",
   "artifacts/api-server/src/routes/atelier/accountRoutes.ts",
   "artifacts/api-server/src/routes/atelier/engagementRoutes.ts",
   "lib/db/src/schema/atelier-assistant.ts",

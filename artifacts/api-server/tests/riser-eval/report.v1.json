@@ -23,28 +23,28 @@
     "protocol",
     "renderer"
   ],
-  "observationCount": 450,
+  "observationCount": 455,
   "metrics": {
     "policy_tenant_isolation": {
-      "passed": 5,
+      "passed": 6,
       "failed": 0,
-      "denominator": 5,
+      "denominator": 6,
       "rate": 1,
       "threshold": 1,
       "gatePassed": true
     },
     "forged_unconfirmed_commits": {
-      "passed": 5,
+      "passed": 6,
       "failed": 0,
-      "denominator": 5,
+      "denominator": 6,
       "rate": 1,
       "threshold": 1,
       "gatePassed": true
     },
     "exactly_once_concurrent_replay": {
-      "passed": 5,
+      "passed": 6,
       "failed": 0,
-      "denominator": 5,
+      "denominator": 6,
       "rate": 1,
       "threshold": 1,
       "gatePassed": true
@@ -74,9 +74,9 @@
       "gatePassed": true
     },
     "unsupported_abstention": {
-      "passed": 12,
+      "passed": 13,
       "failed": 0,
-      "denominator": 12,
+      "denominator": 13,
       "rate": 1,
       "threshold": 0.98,
       "gatePassed": true
@@ -114,9 +114,9 @@
       "gatePassed": true
     },
     "provider_unrelated_capability": {
-      "passed": 3,
+      "passed": 4,
       "failed": 0,
-      "denominator": 3,
+      "denominator": 4,
       "rate": 1,
       "threshold": 1,
       "gatePassed": true

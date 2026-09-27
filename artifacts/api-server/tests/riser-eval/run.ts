@@ -11,6 +11,7 @@ import {
   type RiserEvalMetricV1,
 } from "@workspace/assistant-protocol";
 import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
+import "./coverage.test.js";
 import { currentCapabilityManifestVersion } from "../../src/lib/atelier-cli/capability-manifest.js";
 import {
   INTENT_ROUTER_MODEL_VERSION,
@@ -63,6 +64,7 @@ if (isPublishCanary) {
   securityObservations = reviewed.observations;
 } else {
   const securityReportPath = `/tmp/riser-eval-security-${process.pid}.json`;
+  const verticalReportPath = `/tmp/riser-eval-vertical-${process.pid}.json`;
   execFileSync("pnpm", ["exec", "tsx", "./tests/riser-eval/security-observations.ts"], {
     cwd: resolve(here, "../.."),
     env: {
@@ -74,6 +76,18 @@ if (isPublishCanary) {
     stdio: "inherit",
   });
   securityObservations = JSON.parse(readFileSync(securityReportPath, "utf8")) as RiserEvalObservation[];
+  execFileSync("pnpm", ["exec", "tsx", "./tests/riser-eval/vertical-cli-action.ts"], {
+    cwd: resolve(here, "../.."),
+    env: {
+      ...process.env,
+      CRM_TEST_DB_NAME: "crm_test_riser_vertical",
+      RISER_EVAL_VERTICAL_REPORT: verticalReportPath,
+    },
+    stdio: "inherit",
+  });
+  securityObservations.push(
+    ...(JSON.parse(readFileSync(verticalReportPath, "utf8")) as RiserEvalObservation[]),
+  );
 }
 const observations = [
   ...(await collectPureRiserEvalObservations(dataset.seed)),
