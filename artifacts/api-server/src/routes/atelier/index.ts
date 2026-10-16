@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, count, desc, isNull, inArray, or, gte, type SQL } from "drizzle-orm";
 import { effectiveAgentRunStatus } from "../../lib/atelier-agents/run-staleness.js";
+import { loadStageAges, loadAccountCurrencies, projectDealMoney, sumWeightedUsd } from "../../lib/atelier-opportunity-facts.js";
+import { loadEngagementRollups, loadEngagementRollup } from "../../lib/atelier-engagement-rollups.js";
 import { ATELIER_AGENTS, getAgent } from "@workspace/agents";
 import {
   db,
@@ -44,6 +46,7 @@ import {
 } from "@workspace/api-zod";
 import {
   attachPersona,
+  personaOverrideAllowed,
   personaToWire,
   setPersonaCookie,
   rejectClientRealm,
@@ -679,6 +682,13 @@ router.get("/users", async (_req, res) => {
 });
 
 router.post("/personas/switch", async (req, res) => {
+  // Phase 0 (Oct 2026 audit): the switch is a dev-only convenience. On a
+  // published deployment the cookie is ignored anyway (personaCookie.ts),
+  // so refuse the request outright instead of setting a cookie that lies.
+  if (!personaOverrideAllowed()) {
+    res.status(403).json({ error: "persona-switch-disabled", reason: "Persona switching is disabled on published deployments." });
+    return;
+  }
   const parsed = AtelierSwitchPersonaBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
@@ -699,17 +709,18 @@ router.post("/personas/switch", async (req, res) => {
   }
   setPersonaCookie(res, target.id);
 
-  // Audit the switch.
+  // Audit the switch — the ACTOR is the signed-in user, not the target.
+  const actorId = req.authSession?.userId ?? req.atelierPersona?.id ?? target.id;
   await db.insert(atelierAuditEvents).values({
     id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     entityType: "session",
     entityId: target.id,
     actorType: "human",
-    actorId: target.id,
-    actorLabel: target.name,
+    actorId,
+    actorLabel: req.atelierPersona?.name ?? actorId,
     action: "persona.switch",
-    payload: { to: target.id },
-    payloadSummary: `Switched persona to ${target.name}`,
+    payload: { from: actorId, to: target.id },
+    payloadSummary: `${req.atelierPersona?.name ?? actorId} switched persona to ${target.name}`,
   });
 
   res.json(AtelierSwitchPersonaResponse.parse(personaToWire(target)));
@@ -881,16 +892,22 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
     );
   // Task #175 — group directly by the canonical 5-stage funnel (+3 terminals)
   // instead of the retired legacy Identify/Shape/Pursue buckets.
+  // Oct 2026 audit — weighted value converted to USD per account currency;
+  // stage age from the transition log (days_in_stage column is dead).
+  const [homeAges, homeCurrencies] = await Promise.all([
+    loadStageAges(opps),
+    loadAccountCurrencies(opps.map((o) => o.accountId)),
+  ]);
+  const homeDays = (o: { id: string }) => homeAges.get(o.id)?.days ?? 0;
   const pipeline = SALES_STAGES.map((stage) => {
     const list = opps.filter((o) => resolveSalesStage(o.salesStage) === stage);
     return {
       stage,
       count: list.length,
-      weightedValueUsd: list.reduce(
-        (acc, o) => acc + (o.dealSizeHypothesis * o.probabilityPct) / 100,
-        0,
-      ),
-      agedRedCount: list.filter((o) => o.daysInStage > 30).length,
+      weightedValueUsd: sumWeightedUsd(
+        list.map((o) => projectDealMoney(o.dealSizeHypothesis, o.probabilityPct, homeCurrencies.get(o.accountId))),
+      ).weightedValueUsd,
+      agedRedCount: list.filter((o) => homeDays(o) > 30).length,
     };
   });
 
@@ -903,14 +920,16 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
         isNull(atelierEngagements.deletedAt),
       ),
     );
+  // Oct 2026 audit — live RAID / deliverable rollups (the engagement
+  // columns are never written after seeding).
+  const homeActiveEngs = engs.filter((e) => e.plmStage !== "closed");
+  const homeRollups = await loadEngagementRollups(me.orgId, homeActiveEngs.map((e) => e.id));
+  const homeRolls = homeActiveEngs.map((e) => homeRollups.get(e.id)!);
   const engagements = {
-    activeCount: engs.filter((e) => e.plmStage !== "closed").length,
-    deliverablesDueThisWeek: engs.reduce(
-      (acc, e) => acc + (e.deliverablesDueThisWeek ?? 0),
-      0,
-    ),
-    raidAmberCount: engs.filter((e) => e.raidStatus === "amber").length,
-    raidRedCount: engs.filter((e) => e.raidStatus === "red").length,
+    activeCount: homeActiveEngs.length,
+    deliverablesDueThisWeek: homeRolls.reduce((acc, r) => acc + r.deliverablesDueThisWeek, 0),
+    raidAmberCount: homeRolls.filter((r) => r.raidStatus === "amber").length,
+    raidRedCount: homeRolls.filter((r) => r.raidStatus === "red").length,
   };
 
   // Pane C — recent atelier assets
@@ -955,7 +974,7 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
       winRatePct: closedCount > 0 ? Math.round((wonCount / closedCount) * 1000) / 10 : 0,
       wonCount,
       closedCount,
-      agedCount: openOpps.filter((o) => o.daysInStage > STALLED_THRESHOLD_DAYS).length,
+      agedCount: openOpps.filter((o) => homeDays(o) > STALLED_THRESHOLD_DAYS).length,
       openCount: openOpps.length,
     },
   };
@@ -1109,6 +1128,10 @@ async function buildOpportunityWire(
     .from(atelierUsers)
     .where(and(eq(atelierUsers.id, o.engagementLeadId), eq(atelierUsers.orgId, o.orgId)));
   const salesStage = resolveSalesStage(o.salesStage) as string;
+  // Oct 2026 audit — stage age from the transition log; the column is reset
+  // to 0 on every transition and never incremented.
+  const stageAge = (await loadStageAges([o])).get(o.id);
+  const daysInStage = stageAge?.days ?? 0;
   return {
     id: o.id,
     slug: o.slug,
@@ -1128,14 +1151,14 @@ async function buildOpportunityWire(
     currency: acct?.primaryCurrency ?? "USD",
     probabilityPct: o.probabilityPct,
     weightedValueUsd: (o.dealSizeHypothesis * o.probabilityPct) / 100,
-    daysInStage: o.daysInStage,
+    daysInStage,
     nextMilestone: o.nextMilestone,
     nextMilestoneDate: o.nextMilestoneDate ?? null,
     closeDate: o.closeDate ?? null,
     forecastCategory: o.forecastCategory,
     sourceLead: o.sourceLead,
     stalled:
-      o.daysInStage > STALLED_THRESHOLD_DAYS &&
+      daysInStage > STALLED_THRESHOLD_DAYS &&
       salesStage !== "contract" &&
       salesStage !== "lost" &&
       salesStage !== "no_decision" &&
@@ -1304,6 +1327,7 @@ async function buildEngagementWire(
     .select()
     .from(atelierUsers)
     .where(eq(atelierUsers.id, e.engagementLeadId));
+  const engRollup = await loadEngagementRollup(e.orgId, e.id);
   return {
     id: e.id,
     slug: e.slug,
@@ -1316,8 +1340,8 @@ async function buildEngagementWire(
     engagementLeadName: lead?.name ?? e.engagementLeadId,
     startDate: e.startDate,
     plannedEndDate: e.plannedEndDate,
-    raidStatus: e.raidStatus as "green" | "amber" | "red",
-    deliverablesDueThisWeek: e.deliverablesDueThisWeek,
+    raidStatus: engRollup.raidStatus,
+    deliverablesDueThisWeek: engRollup.deliverablesDueThisWeek,
     legalEntityId: e.legalEntityId ?? null,
     mobilizationStatus: mobilization.mobilizationStatus ?? "not_started",
     charterSeed: mobilization.charterSeed ?? null,

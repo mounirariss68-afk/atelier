@@ -121,6 +121,8 @@ import {
   ObjectNotFoundError,
 } from "../../lib/objectStorage.js";
 import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
+import { receiptFixturesEnabled } from "../../lib/atelier-receipt-fixtures.js";
+import { isChatReceiptRef, isObjectReceiptRef, serveChatReceipt } from "../../lib/atelier-expense-receipt.js";
 import { ObjectPermission } from "../../lib/objectAcl.js";
 // Task #602 — auto out-of-office on approved leave + curated holidays.
 import { applyLeaveOoo, clearLeaveOoo } from "../../lib/atelierLeaveOoo.js";
@@ -2490,7 +2492,7 @@ router.post("/me/expenses", async (req, res, next) => {
       accountId: ctxTag.accountId,
       internalProjectLabel: ctxTag.internalProjectLabel,
       receiptFileRef: receiptPath,
-       receiptFixtureKey: typeof b.receiptFixtureKey === "string" ? b.receiptFixtureKey : null,
+       receiptFixtureKey: receiptFixturesEnabled() && typeof b.receiptFixtureKey === "string" ? b.receiptFixtureKey : null,
       receiptEncryptedAtRest: !!receiptPath,
       summary: (typeof b.description === "string" && b.description.trim()) || merchant,
       businessPurpose,
@@ -2746,7 +2748,7 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       res.status(409).json({ error: "business-purpose-required", message: "Add a business purpose before submitting." });
       return;
     }
-    if (!row.receiptFileRef && !row.receiptFixtureKey && row.captureSource !== "mileage" && row.captureSource !== "per_diem") {
+    if (!row.receiptFileRef && !(receiptFixturesEnabled() && row.receiptFixtureKey) && row.captureSource !== "mileage" && row.captureSource !== "per_diem") {
       res.status(409).json({ error: "receipt-required", message: "Attach a receipt before submitting this claim." });
       return;
     }
@@ -2763,7 +2765,7 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       role: me.role,
       flightClass: null,
       submitterRole: me.role,
-      hasReceipt: !!row.receiptFileRef || !!row.receiptFixtureKey,
+      hasReceipt: !!row.receiptFileRef || (receiptFixturesEnabled() && !!row.receiptFixtureKey),
       businessPurpose: row.businessPurpose,
       personId: row.personId,
       expenseDate: row.expenseDate,
@@ -3038,7 +3040,14 @@ router.get("/me/expenses/:id/receipt", async (req, res, next) => {
           isNull(atelierExpenses.deletedAt),
         ),
       );
-    if (!row?.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
+    if (isChatReceiptRef(row?.receiptFileRef)) {
+      // Phase 0 — chat-created expenses keep their receipt as a CLI attachment.
+      if (!(await serveChatReceipt(res, row!.receiptFileRef!, me.orgId))) {
+        res.status(404).json({ error: "no-receipt" });
+      }
+      return;
+    }
+    if (!row?.receiptFileRef || !isObjectReceiptRef(row.receiptFileRef)) {
       res.status(404).json({ error: "no-receipt" });
       return;
     }

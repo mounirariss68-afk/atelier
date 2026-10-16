@@ -53,6 +53,8 @@ import {
   resolveSalesStage,
 } from "../atelier-agents/pipeline.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
+import { loadStageAges, loadAccountCurrencies, projectDealMoney, sumWeightedUsd } from "../atelier-opportunity-facts.js";
+import { loadEngagementRollups } from "../atelier-engagement-rollups.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import {
   canSeeAccount,
@@ -143,10 +145,11 @@ defineCapability({
     const opps = await db
       .select({
         id: atelierOpportunities.id,
+        accountId: atelierOpportunities.accountId,
         salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
-        days: atelierOpportunities.daysInStage,
+        createdAt: atelierOpportunities.createdAt,
       })
       .from(atelierOpportunities)
       .where(
@@ -155,21 +158,41 @@ defineCapability({
           isNull(atelierOpportunities.deletedAt),
         ),
       );
+    // Oct 2026 audit — deal money is in the account's currency and
+    // days-in-stage comes from the transition log (see atelier-opportunity-facts).
+    const [ages, currencies] = await Promise.all([
+      loadStageAges(opps),
+      loadAccountCurrencies(opps.map((o) => o.accountId)),
+    ]);
+    const projected = opps.map((o) => ({
+      o,
+      money: projectDealMoney(o.deal, o.prob, currencies.get(o.accountId)),
+      days: ages.get(o.id)?.days ?? 0,
+    }));
     const stages = PIPELINE_STAGES.map((stage) => {
-      const list = opps.filter(
-        (o) => resolveSalesStage(o.salesStage) === stage,
+      const list = projected.filter(
+        ({ o }) => resolveSalesStage(o.salesStage) === stage,
       );
+      const sum = sumWeightedUsd(list.map((x) => x.money));
       return {
         stage,
         count: list.length,
-        weightedValueUsd: list.reduce(
-          (acc, o) => acc + (o.deal * o.prob) / 100,
-          0,
-        ),
-        agedRedCount: list.filter((o) => o.days > 30).length,
+        weightedValueUsd: sum.weightedValueUsd,
+        currencies: sum.currencies,
+        unconvertedCount: sum.unconvertedCount,
+        agedRedCount: list.filter((x) => x.days > 30).length,
       };
     });
-    return { ok: true, data: { stages, totalOpps: opps.length } };
+    const all = sumWeightedUsd(projected.map((x) => x.money));
+    return {
+      ok: true,
+      data: {
+        stages,
+        totalOpps: opps.length,
+        currency: "USD",
+        note: `Weighted values converted to USD at the latest rate from each account's currency (${all.currencies.join(", ") || "USD"}).${all.unconvertedCount ? ` ${all.unconvertedCount} opportunit${all.unconvertedCount === 1 ? "y" : "ies"} excluded: no FX rate.` : ""}`,
+      },
+    };
   },
 });
 
@@ -231,7 +254,7 @@ defineCapability({
         salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
-        days: atelierOpportunities.daysInStage,
+        createdAt: atelierOpportunities.createdAt,
         nextMilestone: atelierOpportunities.nextMilestone,
       })
       .from(atelierOpportunities)
@@ -244,19 +267,30 @@ defineCapability({
     const inStage = rows.filter(
       (r) => resolveSalesStage(r.salesStage) === stage,
     );
+    const [ages, currencies] = await Promise.all([
+      loadStageAges(inStage),
+      loadAccountCurrencies(inStage.map((r) => r.accountId)),
+    ]);
     const items = inStage
-      .map((r) => ({
-        id: r.id,
-        label: r.name,
-        accountId: r.accountId,
-        weightedValueUsd: (r.deal * r.prob) / 100,
-        daysInStage: r.days,
-        nextMilestone: r.nextMilestone,
-        href: `/opportunities/${r.id}`,
-      }))
-      .sort((a, b) => b.weightedValueUsd - a.weightedValueUsd)
+      .map((r) => {
+        const money = projectDealMoney(r.deal, r.prob, currencies.get(r.accountId));
+        return {
+          id: r.id,
+          label: r.name,
+          accountId: r.accountId,
+          dealSize: money.dealSize,
+          currency: money.currency,
+          dealSizeUsd: money.dealSizeUsd,
+          weightedValue: money.weightedValue,
+          weightedValueUsd: money.weightedValueUsd,
+          daysInStage: ages.get(r.id)?.days ?? 0,
+          nextMilestone: r.nextMilestone,
+          href: `/opportunities/${r.id}`,
+        };
+      })
+      .sort((a, b) => (b.weightedValueUsd ?? 0) - (a.weightedValueUsd ?? 0))
       .slice(0, limit);
-    return { ok: true, data: { stage, items, total: inStage.length } };
+    return { ok: true, data: { stage, items, total: inStage.length, truncated: inStage.length > items.length } };
   },
 });
 
@@ -366,12 +400,16 @@ defineCapability({
         salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
-        days: atelierOpportunities.daysInStage,
+        createdAt: atelierOpportunities.createdAt,
         nextMilestone: atelierOpportunities.nextMilestone,
       })
       .from(atelierOpportunities)
       .where(and(...(conds as [Parameters<typeof and>[0]])))
       .limit(limitRaw);
+    const [ages, currencies] = await Promise.all([
+      loadStageAges(rows),
+      loadAccountCurrencies(rows.map((r) => r.accountId)),
+    ]);
 
     // Enrich with account names for multi-account result sets.
     const accIds = [...new Set(rows.map((r) => r.accountId))];
@@ -387,17 +425,24 @@ defineCapability({
     if (accountLabel && scopeAccountId) accMap.set(scopeAccountId, accountLabel);
 
     const items = rows
-      .map((r) => ({
-        id: r.id,
-        label: r.name,
-        accountName: accMap.get(r.accountId) ?? r.accountId,
-        stage: resolveSalesStage(r.salesStage),
-        weightedValueUsd: (r.deal * r.prob) / 100,
-        daysInStage: r.days,
-        nextMilestone: r.nextMilestone ?? null,
-        href: `/opportunities/${r.id}`,
-      }))
-      .sort((a, b) => b.weightedValueUsd - a.weightedValueUsd);
+      .map((r) => {
+        const money = projectDealMoney(r.deal, r.prob, currencies.get(r.accountId));
+        return {
+          id: r.id,
+          label: r.name,
+          accountName: accMap.get(r.accountId) ?? r.accountId,
+          stage: resolveSalesStage(r.salesStage),
+          dealSize: money.dealSize,
+          currency: money.currency,
+          dealSizeUsd: money.dealSizeUsd,
+          weightedValue: money.weightedValue,
+          weightedValueUsd: money.weightedValueUsd,
+          daysInStage: ages.get(r.id)?.days ?? 0,
+          nextMilestone: r.nextMilestone ?? null,
+          href: `/opportunities/${r.id}`,
+        };
+      })
+      .sort((a, b) => (b.weightedValueUsd ?? 0) - (a.weightedValueUsd ?? 0));
 
     return {
       ok: true,
@@ -459,23 +504,29 @@ defineCapability({
     const visible = rows.filter(
       (r) => r.plmStage !== "closed" && (acl.all === true || acl.ids.has(r.id)),
     );
+    // Oct 2026 audit — RAID colour and due-this-week from the live tables;
+    // the engagement columns are never written after seeding.
+    const rollups = await loadEngagementRollups(ctx.persona.orgId, visible.map((r) => r.id));
+    const live = visible.map((r) => ({ r, roll: rollups.get(r.id)! }));
     const sevRank = (s: string): number =>
       s === "red" ? 0 : s === "amber" ? 1 : 2;
-    visible.sort(
+    live.sort(
       (a, b) =>
-        sevRank(a.raidStatus) - sevRank(b.raidStatus) ||
-        a.plannedEndDate.localeCompare(b.plannedEndDate),
+        sevRank(a.roll.raidStatus) - sevRank(b.roll.raidStatus) ||
+        a.r.plannedEndDate.localeCompare(b.r.plannedEndDate),
     );
     return {
       ok: true,
       data: {
-        items: visible.map((r) => ({
+        items: live.map(({ r, roll }) => ({
           id: r.id,
           label: r.name,
           plmStage: r.plmStage,
-          raidStatus: r.raidStatus,
+          raidStatus: roll.raidStatus,
+          openRaidCount: roll.openRaidCount,
           plannedEndDate: r.plannedEndDate,
-          deliverablesDueThisWeek: r.deliverablesDueThisWeek,
+          deliverablesDueThisWeek: roll.deliverablesDueThisWeek,
+          deliverablesOverdue: roll.deliverablesOverdue,
           href: `/engagements/${r.id}`,
         })),
         total: visible.length,
@@ -513,6 +564,11 @@ defineCapability({
         type: "string",
         description: "Optional sector/industry filter (case-insensitive substring).",
       },
+      q: {
+        type: "string",
+        description:
+          "Optional name filter: case-insensitive substring of the account name or brand name (e.g. 'QIB', 'Tasama').",
+      },
     },
   },
   isWrite: false,
@@ -538,6 +594,7 @@ defineCapability({
         sector: atelierAccounts.sector,
         country: atelierAccounts.country,
         partnerOwnerId: atelierAccounts.partnerOwnerId,
+        brandName: atelierAccounts.brandName,
       })
       .from(atelierAccounts)
       .where(
@@ -549,6 +606,17 @@ defineCapability({
     // Same default as the REST /accounts list: archived accounts are
     // hidden unless explicitly requested.
     let filtered = rows;
+    // Oct 2026 audit — the model passed `q` ("accounts matching QIB") and
+    // the tool ignored it, returning every account under a card titled by
+    // the query. Match on name OR brand name, case-insensitive.
+    const qFilter = String(input.q ?? input.query ?? input.name ?? "").trim().toLowerCase();
+    if (qFilter) {
+      filtered = filtered.filter(
+        (r) =>
+          (r.name ?? "").toLowerCase().includes(qFilter) ||
+          (r.brandName ?? "").toLowerCase().includes(qFilter),
+      );
+    }
     if (statusFilter === "archived") {
       filtered = filtered.filter((r) => (r.status ?? "active") === "archived");
     } else if (statusFilter !== "all") {
@@ -591,9 +659,11 @@ defineCapability({
           tier: r.tier ?? null,
           sector: r.sector ?? null,
           country: r.country ?? null,
+          brandName: r.brandName ?? null,
           href: `/accounts/${r.id}`,
         })),
         total: visible.length,
+        ...(qFilter ? { query: qFilter } : {}),
       },
     };
   },
@@ -608,9 +678,19 @@ defineCapability({
   module: "ledger",
   toolName: "utilization_firm",
   description:
-    "Firm-wide utilisation snapshot derived from the most recent submitted timesheet weeks: total hours, billable hours, and % billable.",
+    "Firm-wide utilisation over a window of SUBMITTED or approved timesheet weeks (default: the last 4 complete weeks): billable hours ÷ available hours (40 per person-week), with the people and weeks counted. Draft weeks are excluded and reported separately.",
   slashAliases: { en: ["/utilization", "/util-firm"] },
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: {
+    type: "object",
+    properties: {
+      weeks: {
+        type: "integer",
+        minimum: 1,
+        maximum: 13,
+        description: "Number of most recent complete ISO weeks to include (default 4). Use 1 for 'this week' / 'last week' questions, 4 for 'this month'.",
+      },
+    },
+  },
   isWrite: false,
   irreversible: false,
   surfaceOn: ["ledger", "home", "global"],
@@ -623,7 +703,34 @@ defineCapability({
     ar: ["اعرض استخدام الفريق لهذا الأسبوع"],
     fr: ["Affiche l'utilisation du cabinet cette semaine"],
   },
-  async run(_input, ctx) {
+  async run(input, ctx) {
+    // Oct 2026 audit — the previous version took the single newest week in
+    // the table whatever its status, so a half-filled draft week for one
+    // person was presented as "firm utilisation 0%". Now: a window of
+    // complete ISO weeks, submitted/approved only, utilisation against
+    // available hours (40 per person-week, the same basis as the ledger
+    // route's utilisation snapshots), drafts counted but not included.
+    const SUBMITTED = new Set(["submitted", "lead_approved", "approved", "locked", "finance_approved"]);
+    const AVAILABLE_HOURS_PER_WEEK = 40;
+    const windowWeeks = Math.max(1, Math.min(13, Number(input.weeks ?? 4)));
+    // ISO weeks, newest first, starting from LAST week (the current week is
+    // never complete).
+    const isoWeeks: string[] = [];
+    for (let i = 1; i <= windowWeeks; i++) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i * 7);
+      const day = (d.getUTCDay() + 6) % 7;
+      const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+      const thursday = new Date(monday);
+      thursday.setUTCDate(thursday.getUTCDate() + 3);
+      const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+      const week =
+        1 +
+        Math.round(
+          ((thursday.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7,
+        );
+      isoWeeks.push(`${thursday.getUTCFullYear()}-W${String(week).padStart(2, "0")}`);
+    }
     const weeks = await db
       .select({
         id: atelierTimesheetWeeks.id,
@@ -638,22 +745,37 @@ defineCapability({
         and(
           eq(atelierTimesheetWeeks.orgId, ctx.persona.orgId),
           isNull(atelierTimesheetWeeks.deletedAt),
+          inArray(atelierTimesheetWeeks.weekIso, isoWeeks),
         ),
-      )
-      .orderBy(desc(atelierTimesheetWeeks.weekIso))
-      .limit(500);
-    const latestWeek = weeks[0]?.weekIso ?? null;
-    const focus = latestWeek ? weeks.filter((w) => w.weekIso === latestWeek) : [];
-    const total = focus.reduce((a, w) => a + (w.total ?? 0), 0);
-    const billable = focus.reduce((a, w) => a + (w.billable ?? 0), 0);
+      );
+    const counted = weeks.filter((w) => SUBMITTED.has(w.status));
+    const drafts = weeks.filter((w) => !SUBMITTED.has(w.status));
+    const people = new Set(counted.map((w) => w.personId));
+    const weeksCovered = new Set(counted.map((w) => w.weekIso));
+    const totalHours = counted.reduce((a, w) => a + (w.total ?? 0), 0);
+    const billableHours = counted.reduce((a, w) => a + (w.billable ?? 0), 0);
+    const availableHours = counted.length * AVAILABLE_HOURS_PER_WEEK;
+    const note =
+      counted.length === 0
+        ? drafts.length > 0
+          ? `No submitted timesheets in the last ${windowWeeks} week${windowWeeks === 1 ? "" : "s"}; ${drafts.length} draft week${drafts.length === 1 ? "" : "s"} not yet submitted. Utilisation cannot be stated.`
+          : `No timesheets recorded for the last ${windowWeeks} week${windowWeeks === 1 ? "" : "s"}.`
+        : `Based on ${counted.length} submitted person-week${counted.length === 1 ? "" : "s"} (${people.size} ${people.size === 1 ? "person" : "people"}, ${weeksCovered.size} of ${windowWeeks} weeks).${drafts.length ? ` ${drafts.length} draft week${drafts.length === 1 ? "" : "s"} excluded.` : ""}`;
     return {
       ok: true,
       data: {
-        weekIso: latestWeek,
-        peopleCount: focus.length,
-        totalHours: total,
-        billableHours: billable,
-        billablePct: total > 0 ? (billable / total) * 100 : 0,
+        window: { weeks: windowWeeks, from: isoWeeks[isoWeeks.length - 1], to: isoWeeks[0] },
+        weeksCovered: Array.from(weeksCovered).sort(),
+        peopleCount: people.size,
+        submittedPersonWeeks: counted.length,
+        draftPersonWeeks: drafts.length,
+        totalHours,
+        billableHours,
+        availableHours,
+        utilizationPct: availableHours > 0 ? Math.round((billableHours / availableHours) * 1000) / 10 : null,
+        billablePct: totalHours > 0 ? Math.round((billableHours / totalHours) * 1000) / 10 : null,
+        basis: `billable ÷ available (${AVAILABLE_HOURS_PER_WEEK}h per person-week); submitted or approved weeks only`,
+        note,
       },
     };
   },
@@ -2337,19 +2459,20 @@ defineCapability({
           ),
         ),
     ]);
+    const activeEngs = engs.filter((e) => e.plmStage !== "closed");
+    const rollups = await loadEngagementRollups(ctx.persona.orgId, activeEngs.map((e) => e.id));
+    const rolls = activeEngs.map((e) => rollups.get(e.id)!);
     return {
       ok: true,
       data: {
         openOpportunityCount: opps.filter(
           (o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage),
         ).length,
-        activeEngagementCount: engs.filter((e) => e.plmStage !== "closed").length,
-        raidAmberCount: engs.filter((e) => e.raidStatus === "amber").length,
-        raidRedCount: engs.filter((e) => e.raidStatus === "red").length,
-        deliverablesDueThisWeek: engs.reduce(
-          (a, e) => a + (e.deliverablesDueThisWeek ?? 0),
-          0,
-        ),
+        activeEngagementCount: activeEngs.length,
+        raidAmberCount: rolls.filter((r) => r.raidStatus === "amber").length,
+        raidRedCount: rolls.filter((r) => r.raidStatus === "red").length,
+        deliverablesDueThisWeek: rolls.reduce((a, r) => a + r.deliverablesDueThisWeek, 0),
+        deliverablesOverdue: rolls.reduce((a, r) => a + r.deliverablesOverdue, 0),
       },
     };
   },

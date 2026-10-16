@@ -154,6 +154,19 @@ async function queueExpiredAttachmentBlobs(args: {
     WHERE a.encrypted_ref <> ''
       AND ${args.userId ? sql`a.user_id = ${args.userId}` : sql`a.created_at < ${args.cutoff}`}
       AND NOT EXISTS (${activeHold("cli_attachment", sql`a.org_id`, sql`a.id`, args.now)})
+      -- Phase 0 (Oct 2026 audit): a chat attachment that became an expense
+      -- receipt is a financial record (VAT retention: years, not 395 days).
+      -- Expenses store the receipt as 'enc:cli:<attachmentId>'; EA pending
+      -- items can carry the same ref. Never queue those blobs for purge.
+      AND NOT EXISTS (
+        SELECT 1 FROM atelier_expenses e
+        WHERE e.receipt_file_ref = 'enc:cli:' || a.id
+          AND e.deleted_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM atelier_ea_pending_items p
+        WHERE p.receipt_file_ref = 'enc:cli:' || a.id
+      )
       AND (
         a.turn_id IS NULL OR NOT EXISTS (
           ${activeHold("cli_turn", sql`a.org_id`, sql`a.turn_id`, args.now)}
@@ -251,10 +264,36 @@ async function drainAttachmentBlobQueue(
   return completed;
 }
 
+/**
+ * Phase 0 follow-up (Oct 2026 audit): the attachment purge now checks
+ * `atelier_expenses` / `atelier_ea_pending_items` so a receipt that backs a
+ * live expense is never deleted, but the purge runs as the NOBYPASSRLS role
+ * `atelier_retention_executor`, whose grants (drizzle/0085) predate that
+ * check. Grant the two SELECTs idempotently from the connecting superuser
+ * before each run; the numbered SQL files are applied by hand in this repo,
+ * so a runtime grant is what guarantees the deploy carries it
+ * (lib/db/drizzle/0098_retention_receipt_grants.sql records the same change).
+ */
+let retentionGrantsEnsured = false;
+async function ensureRetentionExecutorGrants(): Promise<void> {
+  if (retentionGrantsEnsured) return;
+  await db.execute(sql.raw(`
+    DO $grant$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'atelier_retention_executor') THEN
+        GRANT SELECT ON atelier_expenses, atelier_ea_pending_items TO atelier_retention_executor;
+      END IF;
+    END
+    $grant$;
+  `));
+  retentionGrantsEnsured = true;
+}
+
 export async function runRetention(
   nowMs = Date.now(),
   orgId?: string,
 ): Promise<RetentionSummary> {
+  await ensureRetentionExecutorGrants();
   const now = new Date(nowMs);
   const ocrCutoff = new Date(nowMs - ASSISTANT_OCR_RETENTION_DAYS * DAY_MS);
   const payloadCutoff = new Date(nowMs - ASSISTANT_PAYLOAD_RETENTION_DAYS * DAY_MS);

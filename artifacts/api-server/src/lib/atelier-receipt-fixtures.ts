@@ -31,6 +31,18 @@ export interface OcrFixture {
   rawText: string;
 }
 
+/**
+ * Phase 0 (Oct 2026 audit): fixtures are a TEST aid. They may only take
+ * effect under the test harness or when a developer sets
+ * ATELIER_RECEIPT_FIXTURES=1 in a dev workspace — never on a published
+ * deployment, where a fixture key used to let an expense be submitted and
+ * auto-approved with an invented merchant and amount and no receipt.
+ */
+export function receiptFixturesEnabled(): boolean {
+  if (process.env.REPLIT_DEPLOYMENT) return false;
+  return process.env.NODE_ENV === "test" || process.env.ATELIER_RECEIPT_FIXTURES === "1";
+}
+
 export const RECEIPT_FIXTURES: Record<string, OcrFixture> = {
   riyadh_taxi_01: {
     merchant: "Careem KSA",

@@ -55,7 +55,7 @@ export interface FinanceMvpCurrencyBucket {
 export interface FinanceMvpMetric {
   /** Values are never summed across unlike currencies. */
   buckets: FinanceMvpCurrencyBucket[];
-  display?: { currency: string; amount: number; source: "fx_table" | "fallback" | "identity" };
+  display?: { currency: string; amount: number; source: "fx_table" | "peg" | "identity" };
 }
 
 export interface FinanceMvpSummary {

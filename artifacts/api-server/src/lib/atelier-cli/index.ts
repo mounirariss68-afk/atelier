@@ -409,6 +409,15 @@ export interface RunTurnInput {
    * model extraction involved.
    */
   disambigOptionId?: string | null;
+  /**
+   * Phase 1 (Oct 2026 audit) — how the client renders tool results.
+   * "legacy": every successful tool_result renders as a card from the
+   * capability's resultCard. "semantic": only results that carry a
+   * `presentation` frame render. The render note that tells the model "a
+   * card is already displayed" must follow the same rule, or the model
+   * stops narrating data the user never sees. Defaults to legacy.
+   */
+  clientWireMode?: "legacy" | "semantic";
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
   /**
@@ -1619,11 +1628,12 @@ const SYSTEM_PROMPT = [
   "  `check_availability` (specific time or whole-day busy blocks) or `find_free_slot`",
   "  (earliest common free slot). These check real Outlook calendars and book nothing.",
   "- WORKLOAD / capacity questions ('does X have bandwidth?', 'can X take on more",
-  "  work?') are staffing questions — call `person_workload` and lead your answer",
-  "  with the capacity signal from `totalAllocationPct` / `capacityStatus`: state the",
-  "  total allocation plainly (e.g. '120% allocated — overallocated by 20%' or '60%",
-  "  allocated — about 40% available'). If `hiddenAccountCount` > 0, note the visible",
-  "  total may understate their real load.",
+  "  work?') are staffing questions — call `person_workload`. When `allocationKnown`",
+  "  is true, lead with `totalAllocationPct` / `capacityStatus` (e.g. '120% allocated —",
+  "  overallocated by 20%'). When `capacityStatus` is 'unknown', NEVER quote a",
+  "  percentage or say they are available: use `capacityNote` and describe the load",
+  "  factually (engagements staffed, open opportunities owned). If `hiddenAccountCount`",
+  "  > 0, note the visible total may understate their real load.",
   "- If the question is about only ONE facet (e.g. just their profile or just one",
   "  engagement), keep using the focused single-entity read tool instead.",
   "",
@@ -1761,8 +1771,14 @@ async function modelStep(args: {
   const haikuModel = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
   const sonnetModel = process.env.ATELIER_CLI_MODEL ?? "claude-sonnet-4-5";
   const chosenModel = tier === "haiku" ? haikuModel : sonnetModel;
+  // Oct 2026 audit: Riser legitimately carries restricted-class data to the
+  // model (an IBAN in a vendor question, a 12+ digit invoice or Graph id in
+  // the prompt). Anthropic is allow-listed for RESTRICTED in
+  // ASSISTANT_PROVIDER_ALLOWLIST; declaring only CONFIDENTIAL made the
+  // provider guard end the turn ("AI temporarily unavailable") whenever such
+  // a value appeared. SECRET (bearer values, canaries) is still refused.
   const { anthropic } = await getPrivacyAuthorizedAnthropic({
-    dataClasses: ["confidential"],
+    dataClasses: ["confidential", "restricted"],
     orgId: args.orgId,
     capabilityId: "meta.orchestrate_turn",
     model: chosenModel,
@@ -1773,14 +1789,23 @@ async function modelStep(args: {
   // the input-token cost. Tools change per-turn via the retriever so
   // the cache prefix only matches when the surfaced set repeats; the
   // anthropic SDK silently ignores the marker when caching is off.
-  const systemText =
-    SYSTEM_PROMPT +
-    (args.contextBlock ? `\n\n${args.contextBlock}` : "") +
-    (args.intent ? `\n\nUser intent: ${args.intent}` : "");
+  // Oct 2026 audit: the cached block is the static SYSTEM_PROMPT only. The
+  // date/time, entity context and intent change every turn (the date block
+  // carries the wall-clock minute), so appending them to the cached block
+  // made every turn a cache MISS and the "amortised" cost was paid in full.
+  // They now travel in a second, uncached system block after the breakpoint.
+  const volatileSystemText =
+    (args.contextBlock ? args.contextBlock : "") +
+    (args.intent ? `${args.contextBlock ? "\n\n" : ""}User intent: ${args.intent}` : "");
   const systemBlocks = [
-    { type: "text" as const, text: systemText, cache_control: { type: "ephemeral" as const } },
+    { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
+    ...(volatileSystemText ? [{ type: "text" as const, text: volatileSystemText }] : []),
   ];
-  const toolsForCall = args.tools.map((t, i) => {
+  // Sort by name so an identical tool SET always yields an identical tool
+  // BLOCK (the retriever returns rank order, which varied per prompt and
+  // defeated the cache even when the same tools were selected).
+  const sortedTools = [...args.tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const toolsForCall = sortedTools.map((t, i) => {
     const base = {
       name: t.name,
       description: t.description,
@@ -1788,7 +1813,7 @@ async function modelStep(args: {
     };
     // Mark only the LAST tool with cache_control — that creates one
     // cache breakpoint covering the whole tool block.
-    return i === args.tools.length - 1
+    return i === sortedTools.length - 1
       ? { ...base, cache_control: { type: "ephemeral" as const } }
       : base;
   });
@@ -1803,6 +1828,10 @@ async function modelStep(args: {
         // here so we can attach `cache_control` to the system block.
         system: systemBlocks as MsgCreateParams["system"],
         tools: toolsForCall as MsgCreateParams["tools"],
+        // The turn loop executes ONE tool call per step (ClaudeStep.toolCall
+        // is a single value); a parallel tool_use response silently dropped
+        // the extra calls. Ask the model for one at a time.
+        tool_choice: toolsForCall.length > 0 ? { type: "auto", disable_parallel_tool_use: true } : undefined,
         messages: args.history as MsgCreateParams["messages"],
       },
       { signal: ac.signal },
@@ -1851,6 +1880,7 @@ async function modelStep(args: {
         max_tokens: MAX_TOKENS,
         system: systemBlocks as MsgCreateParams["system"],
         tools: toolsForCall as MsgCreateParams["tools"],
+        tool_choice: toolsForCall.length > 0 ? { type: "auto", disable_parallel_tool_use: true } : undefined,
         messages: args.history as MsgCreateParams["messages"],
         stream: true,
       },
@@ -6447,11 +6477,16 @@ export async function runTurn(
       const isOverCap =
         !tool.isWrite && toolResult.ok !== false && cardsEmitted >= MAX_CARDS_PER_TURN;
       if (toolResult.ok) {
-        if (
-          shapeHint &&
-          !isOverCap &&
-          (!managedPresentation || presentation)
-        ) {
+        // Phase 1 — the card is "displayed" only if THIS client renders it:
+        // semantic clients render presentation frames alone; legacy clients
+        // render every successful read result. Never claim a card the user
+        // cannot see, or the model clamps its prose to one sentence and the
+        // answer disappears (the Oct 2026 "silent Riser" root cause).
+        const clientRendersCard =
+          input.clientWireMode === "semantic"
+            ? presentation !== null
+            : !managedPresentation || presentation !== null;
+        if (shapeHint && !isOverCap && clientRendersCard) {
           lastCardShape = String(shapeHint);
           lastCardData = toolResult.data;
         }

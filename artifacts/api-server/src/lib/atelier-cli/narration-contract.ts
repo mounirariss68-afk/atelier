@@ -48,10 +48,25 @@ export function narrationRestatesCard(text: string, cardData: unknown): boolean 
 }
 
 /** First sentence of a prose block (fallback: first line / 200 chars). */
+const ABBREVIATION_BEFORE_PERIOD =
+  /(?:\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|No|Nos|vs|etc|approx|Inc|Ltd|Co|Corp|Eng|Sh|H\.E|e\.g|i\.e)|\b[A-Z])$/;
+
 export function firstSentence(text: string): string {
   const t = text.trim();
-  const m = t.match(/^[\s\S]*?[.!?](?=\s|$)/);
-  const s = (m ? m[0] : t.split("\n")[0] ?? t).trim();
+  // Oct 2026 audit — the old `[\s\S]*?[.!?]` match stopped at the first
+  // period, so "Mr. H. Hemani is the CFO." was clamped to "Mr." Walk the
+  // terminators and skip those that follow an initial or a title
+  // abbreviation.
+  const re = /[.!?]+(?=\s|$)/g;
+  let m: RegExpExecArray | null;
+  let s: string | null = null;
+  while ((m = re.exec(t))) {
+    const before = t.slice(0, m.index);
+    if (m[0] === "." && ABBREVIATION_BEFORE_PERIOD.test(before)) continue;
+    s = t.slice(0, m.index + m[0].length).trim();
+    break;
+  }
+  if (s === null) s = (t.split("\n")[0] ?? t).trim();
   return s.length > 200 ? `${s.slice(0, 200)}…` : s;
 }
 

@@ -31,6 +31,7 @@
  * everyone else can read.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import { usdPerUnitSync } from "../../lib/atelier-fx.js";
 import { desc } from "drizzle-orm";
 import { db, atelierUsers, atelierFinancePlanCommits } from "@workspace/db";
 import { listFinanceEntities, type FinanceEntityInfo } from "./financeEntitiesRoutes";
@@ -144,23 +145,21 @@ function periodById(id: string): Period | null {
 // FX. Per-month closing + average rates derived from a baseline.
 // Historical rate = first period in the 12-month window.
 // ──────────────────────────────────────────────────────────────
-const FX_BASE_TO_GBP: Record<string, number> = {
-  GBP: 1.0,
-  USD: 1 / 1.27,
-  AED: 0.272 / 1.27,
-  SAR: 0.267 / 1.27,
-  EUR: 1.08 / 1.27,
-};
-
-// Static reference rates — no fabricated per-month noise (Task #177).
+// Phase 0 (Oct 2026 audit): rates come from the single FX snapshot in
+// lib/atelier-fx (daily ECB import + pegs). `rateToGbp(c)` = GBP per 1 unit
+// of c. Closing, average and historical still share the latest rate; a
+// per-period rate history is a follow-up once the import has run long enough.
+function rateToGbp(currency: string): number {
+  return usdPerUnitSync("GBP") / usdPerUnitSync(currency);
+}
 function closingRateToGbp(currency: string, _period: Period): number {
-  return FX_BASE_TO_GBP[currency] ?? 1;
+  return rateToGbp(currency);
 }
 function averageRateToGbp(currency: string, _period: Period): number {
-  return FX_BASE_TO_GBP[currency] ?? 1;
+  return rateToGbp(currency);
 }
 function historicalRateToGbp(currency: string): number {
-  return FX_BASE_TO_GBP[currency] ?? 1;
+  return rateToGbp(currency);
 }
 
 function convert(amount: number, fromGbp: number, toCurrency: string, period: Period, kind: "closing" | "average" | "historical" = "closing"): number {
@@ -638,7 +637,7 @@ interface CubeRow {
 // vs contractor payments + billable expenses), translated USD → GBP at
 // the reference rate. Engagement type isn't tracked yet → "tm" default.
 function buildCube(_scopePeriods: Period[]): CubeRow[] {
-  const usdToGbp = FX_BASE_TO_GBP.USD ?? 1;
+  const usdToGbp = rateToGbp("USD");
   return (FACTS?.cube ?? []).map((r) => {
     const revenueGbp = round(r.revenueUsd * usdToGbp);
     const directCostGbp = round(r.directCostUsd * usdToGbp);
@@ -1479,6 +1478,14 @@ export async function cliFinanceReportSummary(
   const period = (opts.periodId ? periodById(opts.periodId) : null) ?? CURRENT_PERIOD;
   const periods = periodsForScope(scope, period);
   const ents = entitiesIn(null);
+  // Oct 2026 audit — the chat read model used to drop the honesty flags the
+  // REST routes carry (`preliminary`, `closedPeriods`) and to report every
+  // per-entity row in GBP under a header that said USD. Both fixed: flags
+  // come from the same preliminaryInfo(), per-entity figures are translated
+  // to the presentation currency with the same rates as the consolidation
+  // (average rate for flows, closing rate for stocks), and the key names
+  // carry the currency.
+  const honesty = preliminaryInfo(periods);
   const base = {
     period: period.id,
     periodLabel: period.label,
@@ -1486,7 +1493,15 @@ export async function cliFinanceReportSummary(
     currency,
     periodsCovered: periods.map((p) => p.id),
     entities: ents.map((e) => ({ id: e.id, name: e.shortName, baseCurrency: e.baseCurrency })),
+    preliminary: honesty.preliminary,
+    closedPeriods: honesty.closedPeriods,
+    note: honesty.preliminary
+      ? `Preliminary: ${periods.length - honesty.closedPeriods.length} of ${periods.length} periods in this window are not closed; figures may still change.`
+      : "All periods in this window are closed.",
+    perEntityCurrency: currency,
   };
+  const flow = (gbp: number) => convert(gbp, 1, currency, period, "average");
+  const stock = (gbp: number) => convert(gbp, 1, currency, period, "closing");
 
   if (kind === "pnl") {
     const pyPeriods = priorYearScope(scope, period);
@@ -1527,9 +1542,12 @@ export async function cliFinanceReportSummary(
       perEntity: perEntity.map((x) => ({
         entityId: x.entityId,
         entityName: x.entityName,
-        netRevenueGbp: x.actual.netRevenue,
-        ebitdaGbp: x.actual.ebitda,
-        netIncomeGbp: x.actual.netIncome,
+        currency,
+        netRevenue: flow(x.actual.netRevenue),
+        ebitda: flow(x.actual.ebitda),
+        netIncome: flow(x.actual.netIncome),
+        budgetNetRevenue: flow(x.budget.netRevenue),
+        priorYearNetRevenue: flow(x.priorYear.netRevenue),
       })),
     };
   }
@@ -1555,9 +1573,10 @@ export async function cliFinanceReportSummary(
       perEntity: perEntity.map((x) => ({
         entityId: x.entityId,
         entityName: x.entityName,
-        cashGbp: x.gbp.cash,
-        totalAssetsGbp: x.gbp.totalAssets,
-        totalEquityGbp: x.gbp.totalEquity,
+        currency,
+        cash: stock(x.gbp.cash),
+        totalAssets: stock(x.gbp.totalAssets),
+        totalEquity: stock(x.gbp.totalEquity),
       })),
     };
   }
@@ -1578,9 +1597,10 @@ export async function cliFinanceReportSummary(
       perEntity: perEntity.map((x) => ({
         entityId: x.entityId,
         entityName: x.entityName,
-        cashFromOpsGbp: x.gbp.cashFromOps,
-        netChangeInCashGbp: x.gbp.netChangeInCash,
-        closingCashGbp: x.gbp.closingCash,
+        currency,
+        cashFromOps: flow(x.gbp.cashFromOps),
+        netChangeInCash: flow(x.gbp.netChangeInCash),
+        closingCash: stock(x.gbp.closingCash),
       })),
     };
   }

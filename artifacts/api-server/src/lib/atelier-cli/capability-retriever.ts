@@ -67,8 +67,15 @@ const envInt = (name: string, fallback: number): number => {
   const v = Number(process.env[name]);
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
 };
-const BASE_CAP = () => envInt("ATELIER_CLI_TOOL_CAP", 12);
-const MAX_CAP = () => Math.max(BASE_CAP(), envInt("ATELIER_CLI_TOOL_CAP_MAX", 20));
+// Oct 2026 audit: the default menu is now the whole persona surface
+// (~280 tools, well under the 300 cap). The 12–20 tool menu produced the
+// near-miss failures the live tests showed ("Who is the CFO at QIB?" surfaced
+// roster tools but not contact_detail; "Let me try a different approach").
+// The cost is carried by prompt caching: with the menu identical and sorted
+// by name across turns (see modelStep), the tool block is a cache hit.
+// Set ATELIER_CLI_TOOL_CAP / ATELIER_CLI_TOOL_CAP_MAX to restore retrieval.
+const BASE_CAP = () => envInt("ATELIER_CLI_TOOL_CAP", 300);
+const MAX_CAP = () => Math.max(BASE_CAP(), envInt("ATELIER_CLI_TOOL_CAP_MAX", 300));
 /** Score-tie window for adaptive extension past the base cap. */
 const ADAPTIVE_EPSILON = 0.04;
 

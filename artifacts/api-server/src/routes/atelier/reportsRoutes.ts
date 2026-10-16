@@ -21,6 +21,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { loadStageAges, loadAccountCurrencies, projectDealMoney, sumWeightedUsd } from "../../lib/atelier-opportunity-facts.js";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { STALLED_THRESHOLD_DAYS } from "../../lib/atelier-agents/pipeline.js";
 import {
@@ -248,20 +249,25 @@ async function computeReport(
         .where(isNull(atelierOpportunities.deletedAt));
       const working = ["suspect", "prospect", "convert", "runner", "contract"] as const;
       const terminal = ["lost", "no_decision", "withdrawn"] as const;
+      // Oct 2026 audit — USD through each account's currency; stage age from
+      // the transition log.
+      const [wfAges, wfCurrencies] = await Promise.all([
+        loadStageAges(opps),
+        loadAccountCurrencies(opps.map((o) => o.accountId)),
+      ]);
       const stageRow = (stage: string, band: "funnel" | "terminal") => {
         const list = opps.filter((o) => (o.salesStage ?? "suspect") === stage);
         return {
           band,
           stage,
           count: list.length,
-          weightedValueUsd: list.reduce(
-            (a, o) => a + (o.dealSizeHypothesis * o.probabilityPct) / 100,
-            0,
-          ),
+          weightedValueUsd: sumWeightedUsd(
+            list.map((o) => projectDealMoney(o.dealSizeHypothesis, o.probabilityPct, wfCurrencies.get(o.accountId))),
+          ).weightedValueUsd,
           // Task #653 — one shared stalled-threshold constant (was a stray
           // hardcoded 30 here, which made the waterfall disagree with the
           // forecast/pipeline aging used everywhere else).
-          agedRedCount: list.filter((o) => o.daysInStage > STALLED_THRESHOLD_DAYS).length,
+          agedRedCount: list.filter((o) => (wfAges.get(o.id)?.days ?? 0) > STALLED_THRESHOLD_DAYS).length,
         };
       };
       const rows = [
@@ -291,6 +297,7 @@ async function computeReport(
       const accts = await db.select().from(atelierAccounts);
       const aMap = new Map(accts.map((a) => [a.id, a]));
       const now = Date.now();
+      const wfAgesRunner = await loadStageAges(opps);
       // Pull the latest Convert→Runner transition per opp so we can show
       // decider / signaturePath captured at the gate.
       const transitions = await db
@@ -305,7 +312,7 @@ async function computeReport(
       const rows = opps
         .map((o) => {
           const enteredAt = o.runnerEnteredAt?.getTime() ?? null;
-          const days = enteredAt === null ? o.daysInStage : Math.max(0, Math.floor((now - enteredAt) / 86_400_000));
+          const days = enteredAt === null ? (wfAgesRunner.get(o.id)?.days ?? 0) : Math.max(0, Math.floor((now - enteredAt) / 86_400_000));
           const tier = days >= 45 ? "red" : days >= 21 ? "amber" : "fresh";
           const t = lastByOpp.get(o.id);
           return {

@@ -7,6 +7,7 @@ const PROCESS_BOOT_TIME = new Date();
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
+import { purgeSyntheticFxRows, refreshFxRatesFromEcb, refreshFxSnapshot } from "./lib/atelier-fx";
 import { ensureAtelierSelfLinkage } from "./lib/atelier-self-linkage";
 import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
@@ -131,6 +132,17 @@ app.listen(port, (err) => {
         { err },
         "Auth credential seed failed — logins will not work",
       );
+    });
+    // Phase 0 (Oct 2026 audit) — single FX source: drop the synthetic seed
+    // rows, load today's ECB rates, and fill the synchronous snapshot the
+    // report modules read. Failure keeps the last imported rates in force.
+    await (async () => {
+      await purgeSyntheticFxRows();
+      await refreshFxRatesFromEcb();
+      const snap = await refreshFxSnapshot();
+      logger.info(snap, "FX snapshot ready");
+    })().catch((err) => {
+      logger.error({ err }, "FX boot refresh failed — conversions use the last imported rates and pegs");
     });
     // Task #50 — user↔person linkage repair so the Me lens resolves a roster
     // record for every existing user (data-only identity repair, not seeding).

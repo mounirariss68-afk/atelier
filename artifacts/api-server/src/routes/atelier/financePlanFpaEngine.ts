@@ -24,15 +24,15 @@
  */
 
 import type { FinanceEntityInfo } from "./financeEntitiesRoutes";
+import { toUsdSync, fromUsdSync } from "../../lib/atelier-fx.js";
 
-export const FX_TO_USD: Record<string, number> = {
-  USD: 1.0, GBP: 1.27, AED: 0.272, SAR: 0.267, EUR: 1.08,
-};
+// Phase 0 (Oct 2026 audit): rates come from the single FX snapshot in
+// lib/atelier-fx (daily ECB import + central-bank pegs), not a static table.
 export function toUsd(amount: number, currency: string): number {
-  return amount * (FX_TO_USD[currency] ?? 1);
+  return toUsdSync(amount, currency);
 }
 export function convertUsd(amountUsd: number, target: string): number {
-  return amountUsd / (FX_TO_USD[target] ?? 1);
+  return fromUsdSync(amountUsd, target);
 }
 
 // Plan "as of" anchors to today so real-data actuals prorate correctly.

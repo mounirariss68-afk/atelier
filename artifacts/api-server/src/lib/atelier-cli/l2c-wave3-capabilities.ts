@@ -23,7 +23,9 @@ import {
   atelierAuditEvents,
   atelierTimesheetEntries,
   atelierExpenses,
+  atelierAccounts,
 } from "@workspace/db";
+import { toUsdSync, FxRateMissingError } from "../atelier-fx.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import {
   channelForJurisdiction,
@@ -529,21 +531,54 @@ defineCapability({
       eq(atelierInvoice.orgId, ctx.persona.orgId),
       inArray(atelierInvoice.status, ["issued", "paid"]),
     ));
+    // Oct 2026 audit — (1) group by the invoice's ACCOUNT, not by the
+    // free-text `billTo.name` (null on most invoices → "Unknown customer");
+    // (2) sum in USD through the single FX source instead of adding QAR,
+    // SAR and GBP face values under a `totalUsd` label. Per-invoice rows
+    // keep their own currency and amount.
+    const accountIds = Array.from(new Set(rows.map((r) => r.accountId).filter((v): v is string => Boolean(v))));
+    const accountRows = accountIds.length
+      ? await db
+          .select({ id: atelierAccounts.id, name: atelierAccounts.name, brandName: atelierAccounts.brandName })
+          .from(atelierAccounts)
+          .where(inArray(atelierAccounts.id, accountIds))
+      : [];
+    const accountName = new Map(accountRows.map((a) => [a.id, a.brandName ? `${a.name} (${a.brandName})` : a.name]));
+    const fxMissing = new Set<string>();
+    const toUsd = (amount: number, currency: string | null | undefined): number => {
+      try {
+        return toUsdSync(amount, currency ?? "USD");
+      } catch (err) {
+        if (err instanceof FxRateMissingError) {
+          fxMissing.add(err.currency);
+          return amount; // surfaced via `fxMissing`, never silently dropped
+        }
+        throw err;
+      }
+    };
     const today = new Date();
     const buckets = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
     let revenue90d = 0;
     const ninetyAgo = today.getTime() - 90 * 86400_000;
-    type AgedRow = { invoice: typeof atelierInvoice.$inferSelect; daysOverdue: number; outstanding: number; bucket: keyof typeof buckets };
+    type AgedRow = {
+      invoice: typeof atelierInvoice.$inferSelect;
+      daysOverdue: number;
+      outstanding: number;
+      outstandingUsd: number;
+      currency: string;
+      bucket: keyof typeof buckets;
+    };
     const aged: AgedRow[] = [];
     for (const r of rows) {
       const outstanding = round2(r.total - r.amountPaid);
-      if (r.issuedAt && new Date(r.issuedAt).getTime() >= ninetyAgo) revenue90d += r.total;
+      if (r.issuedAt && new Date(r.issuedAt).getTime() >= ninetyAgo) revenue90d += toUsd(r.total, r.currency);
       if (outstanding <= 0 || r.status === "paid") continue;
+      const outstandingUsd = round2(toUsd(outstanding, r.currency));
       const due = r.dueDate ? new Date(r.dueDate) : today;
       const days = Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400_000));
       const k = days === 0 ? "current" : days <= 30 ? "d1_30" : days <= 60 ? "d31_60" : days <= 90 ? "d61_90" : "d90_plus";
-      buckets[k as keyof typeof buckets] += outstanding;
-      aged.push({ invoice: r, daysOverdue: days, outstanding, bucket: k as keyof typeof buckets });
+      buckets[k as keyof typeof buckets] += outstandingUsd;
+      aged.push({ invoice: r, daysOverdue: days, outstanding, outstandingUsd, currency: r.currency ?? "USD", bucket: k as keyof typeof buckets });
     }
     aged.sort((a, b) => b.daysOverdue - a.daysOverdue);
     type Group = { key: string; label: string; totalUsd: number; invoiceCount: number; oldestDays: number };
@@ -552,14 +587,16 @@ defineCapability({
       let key = "—", label = "—";
       if (groupBy === "customer") {
         const bt = a.invoice.billTo as { name?: string } | null;
-        key = bt?.name ?? "—"; label = bt?.name ?? "Unknown customer";
+        const acct = a.invoice.accountId ? accountName.get(a.invoice.accountId) : undefined;
+        key = a.invoice.accountId ?? bt?.name ?? "—";
+        label = acct ?? bt?.name ?? (a.invoice.accountId ? `Account ${a.invoice.accountId}` : "No account on invoice");
       } else if (groupBy === "engagement") {
         key = a.invoice.engagementId ?? "—"; label = a.invoice.engagementId ?? "No engagement";
       } else {
         key = a.invoice.createdByUserId ?? "—"; label = a.invoice.createdByUserId ?? "—";
       }
       const g = groups.get(key) ?? { key, label, totalUsd: 0, invoiceCount: 0, oldestDays: 0 };
-      g.totalUsd = round2(g.totalUsd + a.outstanding); g.invoiceCount += 1;
+      g.totalUsd = round2(g.totalUsd + a.outstandingUsd); g.invoiceCount += 1;
       g.oldestDays = Math.max(g.oldestDays, a.daysOverdue);
       groups.set(key, g);
     }
@@ -574,8 +611,11 @@ defineCapability({
         invoiceCount: aged.length,
         delinquentCount: aged.filter((a) => a.daysOverdue > 0).length,
         dso, groupBy,
+        currency: "USD",
+        ...(fxMissing.size ? { fxMissing: Array.from(fxMissing), note: `No FX rate for ${Array.from(fxMissing).join(", ")}; those amounts are included at face value.` } : {}),
         groups: Array.from(groups.values()).sort((a, b) => b.totalUsd - a.totalUsd),
         rows: includeRows ? aged.slice(0, 200) : [],
+        truncated: includeRows && aged.length > 200,
       },
       resultCardHint: "ar_aging_grid",
     };

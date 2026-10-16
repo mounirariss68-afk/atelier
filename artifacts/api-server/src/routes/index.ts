@@ -43,10 +43,17 @@ router.use(requireAuthSession);
 // pre-gate auth endpoints needed to log in and out (mounted above); even
 // /auth/change-password is blocked for this user inside the auth router.
 router.use(demoReadOnlyGuard);
-router.use("/assessments", assessmentsRouter);
-router.use("/chat", chatRouter);
-router.use("/arcelik", arcelikRouter);
-router.use("/tasama", tasamaRouter);
+// Phase 0 (Oct 2026 audit): the marketing-site backends (diagnostic
+// assessments, website chat, Arçelik pricing demo, Tasama demo PDFs) are
+// not part of Atelier. They sat behind requireAuthSession, so the public
+// site could not reach them anyway; they are mounted only when a deployment
+// opts in, pending removal of the code and its tables.
+if (process.env.ATELIER_DEMO_SITE_ROUTES === "1") {
+  router.use("/assessments", assessmentsRouter);
+  router.use("/chat", chatRouter);
+  router.use("/arcelik", arcelikRouter);
+  router.use("/tasama", tasamaRouter);
+}
 router.use("/atelier", atelierRouter);
 router.use("/assistant", assistantRouter);
 router.use("/workflows", workflowRouter);

@@ -172,8 +172,13 @@ export function deterministicClassify(prompt: string): {
 }
 
 function tierForVerb(verb: IntentVerb): IntentTier {
-  // Reads + trivial + reset → Haiku; everything that mutates → Sonnet.
-  if (verb === "read" || verb === "trivial" || verb === "reset" || verb === "other") return "haiku";
+  // Oct 2026 audit: every turn runs on Sonnet. Reads on Haiku were the
+  // source of the thin, wrong and "let me try another approach" answers the
+  // live tests showed; the read-side cost is recovered by prompt caching.
+  // ATELIER_CLI_READ_TIER=haiku restores the old split for experiments.
+  if (process.env.ATELIER_CLI_READ_TIER === "haiku") {
+    if (verb === "read" || verb === "trivial" || verb === "reset" || verb === "other") return "haiku";
+  }
   return "sonnet";
 }
 
@@ -245,7 +250,11 @@ export async function classifyIntentTyped(
     tokensOut,
     costUsd,
   });
-  if (opts?.deterministicOnly || !opts?.orgId) {
+  // Oct 2026 audit: ATELIER_CLI_CLASSIFIER=off skips the Haiku pre-call and
+  // uses the keyword classifier only. With the full tool menu and Sonnet on
+  // every turn the classifier's remaining job is the verb (read/write) and
+  // entity hints, which the deterministic path covers for most prompts.
+  if (opts?.deterministicOnly || !opts?.orgId || process.env.ATELIER_CLI_CLASSIFIER === "off") {
     return fallback(`${HAIKU_MODEL} (deterministic-only)`);
   }
   // Task #681 — the classifier is advisory bookkeeping; it must never
@@ -262,7 +271,9 @@ export async function classifyIntentTyped(
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
   try {
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
-      dataClasses: ["confidential"],
+      // Same declaration as modelStep (see index.ts): the user's prompt may
+      // hold a 12+ digit reference; Anthropic is allow-listed for RESTRICTED.
+      dataClasses: ["confidential", "restricted"],
       orgId: opts.orgId,
       capabilityId: "meta.intent_classifier",
       model: HAIKU_MODEL,

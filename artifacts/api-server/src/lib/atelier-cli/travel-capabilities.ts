@@ -147,27 +147,14 @@ function airportOptionLabel(p: AirportPlace): string {
 // ---------------------------------------------------------------------
 // Task #715 — AED display conversion.
 //
-// The firm's display currency is AED, but providers price offers in
-// their own settlement currencies (often USD/EUR). The travel tools are
-// deliberately DB-free (offline probe), so we do NOT use the finance FX
-// table here — a static approximate rate table with honest "approx."
-// labeling is used instead. Original amount + currency stay in the
-// payload.
+// The firm's display currency is AED; providers price in their own
+// settlement currencies. Phase 0 (Oct 2026 audit): the private rate table
+// that lived here is gone — conversion uses the single FX snapshot in
+// lib/atelier-fx (daily ECB import + pegs). The snapshot is in-memory, so
+// this module stays DB-free and the offline probe still runs; an unknown
+// currency shows the original amount, never an invented rate.
 // ---------------------------------------------------------------------
-const AED_PER_UNIT: Record<string, number> = {
-  AED: 1,
-  USD: 3.6725,
-  AUD: 2.41,
-  EUR: 3.98,
-  GBP: 4.65,
-  SAR: 0.979,
-  TRY: 0.093,
-  CAD: 2.68,
-  CHF: 4.12,
-  SGD: 2.72,
-  JPY: 0.0243,
-  INR: 0.0424,
-};
+import { convertSync, FxRateMissingError } from "../atelier-fx.js";
 
 /** Convert to AED for display. Returns null for unknown currencies —
  * callers then show the original amount honestly, never a fake rate. */
@@ -176,10 +163,13 @@ function toAed(
   currency: string,
 ): { amount: number; approx: boolean } | null {
   const cur = (currency || "").toUpperCase();
-  const rate = AED_PER_UNIT[cur];
-  if (rate === undefined) return null;
   if (cur === "AED") return { amount, approx: false };
-  return { amount: Math.round(amount * rate * 100) / 100, approx: true };
+  try {
+    return { amount: Math.round(convertSync(amount, cur, "AED") * 100) / 100, approx: true };
+  } catch (err) {
+    if (err instanceof FxRateMissingError) return null;
+    throw err;
+  }
 }
 
 /** Display price string: AED when convertible (approx-labeled), else

@@ -3,21 +3,6 @@ import { useLocation } from "wouter";
 import { BackLink, PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { WalletTabs } from "./walletTabs";
 
-const FIXTURE_KEYS = [
-  "riyadh_taxi_01",
-  "riyadh_hotel_01",
-  "riyadh_dinner_clientmeal",
-  "dubai_taxi_01",
-  "dubai_hotel_01",
-  "dubai_dinner_01",
-  "flight_riyadh_dubai_business",
-  "flight_dubai_london_first",
-  "software_chatgpt_team",
-  "software_figma_org",
-  "gift_client_riyadh",
-  "gift_excessive_dubai",
-];
-
 interface Engagement { id: string; name: string }
 interface CardOption {
   id: string;
@@ -54,7 +39,6 @@ interface CreateBody {
   merchant?: string;
   description?: string;
   vatCountry?: string | null;
-  receiptFixtureKey?: string | null;
   receiptFileName?: string | null;
   cardId?: string | null;
   km?: number;
@@ -97,7 +81,6 @@ export default function WalletNewExpense() {
   const [amount, setAmount] = React.useState<number>(0);
   const [currency, setCurrency] = React.useState("USD");
   const [vatCountry, setVatCountry] = React.useState("");
-  const [fixtureKey, setFixtureKey] = React.useState<string>("riyadh_taxi_01");
   const [receiptFileName, setReceiptFileName] = React.useState<string>("");
   const [cardId, setCardId] = React.useState<string>("");
   // Task #1095 — lightweight trip context feeding the entity-allocation
@@ -144,7 +127,6 @@ export default function WalletNewExpense() {
         body.merchant = merchant;
         body.description = description;
         body.vatCountry = vatCountry || null;
-        body.receiptFixtureKey = path === "manual" ? fixtureKey : null;
         body.receiptFileName = path === "manual" && receiptFileName ? receiptFileName : null;
         body.cardId = path === "card_feed" && cardId ? cardId : null;
       } else if (path === "mileage") {
@@ -335,12 +317,6 @@ export default function WalletNewExpense() {
                       {receiptFileName ? (
                         <p className="text-[10px] font-mono text-text-mute mt-1">attached: {receiptFileName}</p>
                       ) : null}
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelCls}>OCR fixture (deterministic preview when no real OCR runs)</label>
-                      <select className={inputCls} value={fixtureKey} onChange={(e) => setFixtureKey(e.target.value)} data-testid="select-fixture">
-                        {FIXTURE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
-                      </select>
                     </div>
                   </>
                 )}

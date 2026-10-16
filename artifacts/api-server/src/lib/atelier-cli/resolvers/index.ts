@@ -22,9 +22,11 @@ import {
   db,
   atelierAccounts,
   atelierContacts,
+  atelierCrmAliases,
   atelierEngagements,
   atelierUsers,
 } from "@workspace/db";
+import { normalizeCrmAlias as normalizeAlias } from "../crm-alias-normalization.js";
 import { accessibleEngagementIds } from "../../../routes/atelier/engagementRoutes.js";
 import { canSeeAccount } from "../../../routes/atelier/accountRoutes.js";
 import { foldRosterName } from "../chat-normalizers.js";
@@ -56,28 +58,64 @@ export async function resolveAccount(
 ): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
+  // Oct 2026 audit — match the legal name, the brand name ("QIB" for Qatar
+  // Islamic Bank) and governed CRM aliases, not the legal name alone. The
+  // pre-model trigram resolver already did this, so "contacts at QIB"
+  // resolved in the prelude and then failed inside contact_list.
+  const normalizedQ = normalizeAlias(q);
+  const aliasRows = normalizedQ
+    ? await db
+        .select({ targetId: atelierCrmAliases.targetId })
+        .from(atelierCrmAliases)
+        .where(
+          and(
+            eq(atelierCrmAliases.orgId, persona.orgId),
+            eq(atelierCrmAliases.targetKind, "account"),
+            eq(atelierCrmAliases.status, "active"),
+            or(
+              eq(atelierCrmAliases.normalizedAlias, normalizedQ),
+              ilike(atelierCrmAliases.alias, `%${q}%`),
+            ),
+          ),
+        )
+        .limit(MAX_CHOICES * 3)
+    : [];
+  const aliasTargetIds = Array.from(new Set(aliasRows.map((r) => r.targetId)));
   // Over-fetch so that after ACL filtering we still have enough
   // candidates to fill up to MAX_CHOICES choices.
   const rows = await db
-    .select({ id: atelierAccounts.id, name: atelierAccounts.name, country: atelierAccounts.country })
+    .select({ id: atelierAccounts.id, name: atelierAccounts.name, brandName: atelierAccounts.brandName, country: atelierAccounts.country })
     .from(atelierAccounts)
     .where(
       and(
-        ilike(atelierAccounts.name, `%${q}%`),
+        or(
+          ilike(atelierAccounts.name, `%${q}%`),
+          ilike(atelierAccounts.brandName, `%${q}%`),
+          ...(aliasTargetIds.length ? [sql`${atelierAccounts.id} IN (${sql.join(aliasTargetIds.map((id) => sql`${id}`), sql`, `)})`] : []),
+        ),
         eq(atelierAccounts.orgId, persona.orgId),
         isNull(atelierAccounts.deletedAt),
       ),
     )
     .limit(MAX_CHOICES * 3);
   if (rows.length === 0) return { kind: "none" };
+  // An exact brand-name or alias hit outranks substring matches on other
+  // accounts ("QIB" must not disambiguate against "Qibla Holdings").
+  const exact = rows.filter(
+    (r) =>
+      r.name.toLowerCase() === q.toLowerCase() ||
+      (r.brandName ?? "").toLowerCase() === q.toLowerCase() ||
+      aliasTargetIds.includes(r.id),
+  );
+  const ranked = exact.length === 1 ? exact : rows;
   // Apply canSeeAccount ACL before surfacing any candidates.
   const access = await accessibleEngagementIds({
     id: persona.id,
     role: persona.role,
   } as Parameters<typeof accessibleEngagementIds>[0]);
   const me = { id: persona.id };
-  const flags = await Promise.all(rows.map((r) => canSeeAccount(access, me, r.id)));
-  const visible = rows.filter((_, i) => flags[i]);
+  const flags = await Promise.all(ranked.map((r) => canSeeAccount(access, me, r.id)));
+  const visible = ranked.filter((_, i) => flags[i]);
   if (visible.length === 0) return { kind: "none" };
   if (visible.length === 1) {
     const r = visible[0]!;
@@ -88,7 +126,7 @@ export async function resolveAccount(
     prompt: `Which account did you mean by "${q}"?`,
     options: visible.slice(0, MAX_CHOICES).map((r) => ({
       id: r.id,
-      label: r.name,
+      label: r.brandName && r.brandName !== r.name ? `${r.name} (${r.brandName})` : r.name,
       secondary: r.country ?? undefined,
     })),
   };

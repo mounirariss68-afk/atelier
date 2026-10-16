@@ -1,7 +1,7 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "5e54a4996ef7c0292fb565fb6437aaf4be2a0c7e613c58288e2593a036ebdd62",
+  "manifestVersion": "8b4e61ed2a4303abc6ffdf5fdbc64527b6efcd2ddcb21f7e0a313c49b41a70bf",
   "entryCount": 336,
   "entries": [
     {
@@ -267,7 +267,7 @@
       "source": "cli-only",
       "catalogVersion": 3,
       "inputSchemaVersion": 3,
-      "inputSchemaHash": "79c4fc662f77",
+      "inputSchemaHash": "225cad7f1b43",
       "resultSchemaHash": "94c64f190712",
       "effect": "read",
       "effectClass": "read",
@@ -285,7 +285,7 @@
         "senior_manager"
       ],
       "policyClass": "authenticated_read",
-      "implementationVersion": "ed7dbc376a4b",
+      "implementationVersion": "e0ef902200e1",
       "approverRoles": [],
       "confirmation": {
         "required": false,
@@ -13685,7 +13685,7 @@
       "source": "cli-only",
       "catalogVersion": 3,
       "inputSchemaVersion": 3,
-      "inputSchemaHash": "efddc7bd8bbc",
+      "inputSchemaHash": "152be8ef594d",
       "resultSchemaHash": "94c64f190712",
       "effect": "read",
       "effectClass": "read",
@@ -13703,7 +13703,7 @@
         "senior_manager"
       ],
       "policyClass": "authenticated_read",
-      "implementationVersion": "58a3375d3822",
+      "implementationVersion": "990998044b13",
       "approverRoles": [],
       "confirmation": {
         "required": false,

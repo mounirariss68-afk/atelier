@@ -17,7 +17,7 @@ import {
   atelierContractors,
 } from "@workspace/db";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { runTimeSteward, startRun, completeRun } from "./runner.js";
+import { runTimeSteward, startRun, completeRun, failRun } from "./runner.js";
 import { runMarginSentinelTick } from "./marginSentinel.js";
 
 type NudgeKind = "submit_due" | "approve_due";
@@ -570,95 +570,103 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
     actorLabel: "Burn Sentinel",
     inputs: { force: !!opts.force },
   });
-  const burns = await computeEngagementBurns();
-  let alertsWritten = 0;
+  // Phase 0 (Oct 2026 audit): any failure after startRun used to leave the
+  // run in `running` until the 2-hour stale reaper. Fail the run explicitly.
+  try {
+    const burns = await computeEngagementBurns();
+    let alertsWritten = 0;
 
-  // Pull existing burn-threshold audit events so we can model
-  // `previousBurnPct` per engagement explicitly. A threshold is only
-  // "crossed" when the current burn ≥ threshold AND the highest
-  // previously-recorded threshold for this engagement was strictly less.
-  // This makes the contract auditable (the audit row IS the previous
-  // state) and gives us deterministic, single-fire-ever behavior per
-  // (engagement, band): once 60/80/100 has fired it will not fire again
-  // until prior audit rows are explicitly reset. Re-firing on plan
-  // revisions is intentionally NOT supported here; if that becomes a
-  // requirement, key the audit lookup off a pricing/plan version so a
-  // replanned engagement starts from a fresh threshold history.
-  const prevAuditRows = await db
-    .select({ entityId: atelierAuditEvents.entityId, payload: atelierAuditEvents.payload })
-    .from(atelierAuditEvents)
-    .where(and(eq(atelierAuditEvents.actorId, "ag_burn_sentinel"), eq(atelierAuditEvents.action, "ledger.burn.threshold_crossed")));
-  const prevHighestThreshold = new Map<string, number>();
-  for (const row of prevAuditRows) {
-    const tp = (row.payload as { thresholdPct?: number } | null)?.thresholdPct;
-    if (typeof tp !== "number") continue;
-    const prev = prevHighestThreshold.get(row.entityId) ?? 0;
-    if (tp > prev) prevHighestThreshold.set(row.entityId, tp);
-  }
+    // Pull existing burn-threshold audit events so we can model
+    // `previousBurnPct` per engagement explicitly. A threshold is only
+    // "crossed" when the current burn ≥ threshold AND the highest
+    // previously-recorded threshold for this engagement was strictly less.
+    // This makes the contract auditable (the audit row IS the previous
+    // state) and gives us deterministic, single-fire-ever behavior per
+    // (engagement, band): once 60/80/100 has fired it will not fire again
+    // until prior audit rows are explicitly reset. Re-firing on plan
+    // revisions is intentionally NOT supported here; if that becomes a
+    // requirement, key the audit lookup off a pricing/plan version so a
+    // replanned engagement starts from a fresh threshold history.
+    const prevAuditRows = await db
+      .select({ entityId: atelierAuditEvents.entityId, payload: atelierAuditEvents.payload })
+      .from(atelierAuditEvents)
+      .where(and(eq(atelierAuditEvents.actorId, "ag_burn_sentinel"), eq(atelierAuditEvents.action, "ledger.burn.threshold_crossed")));
+    const prevHighestThreshold = new Map<string, number>();
+    for (const row of prevAuditRows) {
+      const tp = (row.payload as { thresholdPct?: number } | null)?.thresholdPct;
+      if (typeof tp !== "number") continue;
+      const prev = prevHighestThreshold.get(row.entityId) ?? 0;
+      if (tp > prev) prevHighestThreshold.set(row.entityId, tp);
+    }
 
-  for (const b of burns) {
-    const previousHighestPct = prevHighestThreshold.get(b.engagementId) ?? 0;
-    // Only fire on bands strictly above the previously-recorded high.
-    const newCrossings = b.thresholds.filter((th) => Math.round(th * 100) > previousHighestPct);
-    for (const th of newCrossings) {
-      const id = `panea_burn_${b.engagementId}_${Math.round(th * 100)}`;
-      const severityLabel = th >= 1.0 ? "OVER PLAN" : `${Math.round(th * 100)}% burn`;
-      const priority = th >= 1.0 ? "high" : th >= 0.8 ? "high" : "medium";
-      const inserted = await db
-        .insert(atelierPaneAItems)
-        .values({
-          id,
-          userId: b.engagementLeadId,
-          title: `Burn Sentinel · ${b.engagementName} — ${severityLabel}`,
-          summary: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours (${b.actualHours.toFixed(0)} / ${b.plannedHours.toFixed(0)} hrs). Threshold crossed: ${Math.round(th * 100)}%.`,
-          priority,
-          hrefKind: "engagement_economics",
-          hrefTargetId: b.engagementId,
-          dueLabel: "Now",
-          sortKey: th >= 1.0 ? 100 : th >= 0.8 ? 80 : 60,
-        })
-        .onConflictDoNothing({ target: atelierPaneAItems.id })
-        .returning({ id: atelierPaneAItems.id });
-      if (inserted.length) {
-        alertsWritten++;
-        await db.insert(atelierAuditEvents).values({
-          id: `aud_burn_${b.engagementId}_${Math.round(th * 100)}`,
-          entityType: "engagement",
-          entityId: b.engagementId,
-          actorType: "agent",
-          actorId: "ag_burn_sentinel",
-          actorLabel: "Burn Sentinel",
-          action: "ledger.burn.threshold_crossed",
-          payload: { thresholdPct: Math.round(th * 100), burnPct: b.burnPct, plannedHours: b.plannedHours, actualHours: b.actualHours },
-          payloadSummary: `Burn Sentinel: ${b.engagementName} crossed ${Math.round(th * 100)}% of planned hours.`,
-        }).onConflictDoNothing({ target: atelierAuditEvents.id });
-        await db.insert(atelierNotifications).values({
-          id: `notif_burn_${b.engagementId}_${Math.round(th * 100)}`,
-          userId: b.engagementLeadId,
-          kind: "burn_alert",
-          payload: { engagementId: b.engagementId, thresholdPct: Math.round(th * 100), burnPct: b.burnPct },
-          subject: `Burn alert: ${b.engagementName} (${Math.round(th * 100)}%)`,
-          body: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours.`,
-          refType: "engagement",
-          refId: b.engagementId,
-          status: "queued",
-        }).onConflictDoNothing({ target: atelierNotifications.id });
+    for (const b of burns) {
+      const previousHighestPct = prevHighestThreshold.get(b.engagementId) ?? 0;
+      // Only fire on bands strictly above the previously-recorded high.
+      const newCrossings = b.thresholds.filter((th) => Math.round(th * 100) > previousHighestPct);
+      for (const th of newCrossings) {
+        const id = `panea_burn_${b.engagementId}_${Math.round(th * 100)}`;
+        const severityLabel = th >= 1.0 ? "OVER PLAN" : `${Math.round(th * 100)}% burn`;
+        const priority = th >= 1.0 ? "high" : th >= 0.8 ? "high" : "medium";
+        const inserted = await db
+          .insert(atelierPaneAItems)
+          .values({
+            id,
+            userId: b.engagementLeadId,
+            title: `Burn Sentinel · ${b.engagementName} — ${severityLabel}`,
+            summary: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours (${b.actualHours.toFixed(0)} / ${b.plannedHours.toFixed(0)} hrs). Threshold crossed: ${Math.round(th * 100)}%.`,
+            priority,
+            hrefKind: "engagement_economics",
+            hrefTargetId: b.engagementId,
+            dueLabel: "Now",
+            sortKey: th >= 1.0 ? 100 : th >= 0.8 ? 80 : 60,
+          })
+          .onConflictDoNothing({ target: atelierPaneAItems.id })
+          .returning({ id: atelierPaneAItems.id });
+        if (inserted.length) {
+          alertsWritten++;
+          await db.insert(atelierAuditEvents).values({
+            id: `aud_burn_${b.engagementId}_${Math.round(th * 100)}`,
+            entityType: "engagement",
+            entityId: b.engagementId,
+            actorType: "agent",
+            actorId: "ag_burn_sentinel",
+            actorLabel: "Burn Sentinel",
+            action: "ledger.burn.threshold_crossed",
+            payload: { thresholdPct: Math.round(th * 100), burnPct: b.burnPct, plannedHours: b.plannedHours, actualHours: b.actualHours },
+            payloadSummary: `Burn Sentinel: ${b.engagementName} crossed ${Math.round(th * 100)}% of planned hours.`,
+          }).onConflictDoNothing({ target: atelierAuditEvents.id });
+          await db.insert(atelierNotifications).values({
+            id: `notif_burn_${b.engagementId}_${Math.round(th * 100)}`,
+            userId: b.engagementLeadId,
+            kind: "burn_alert",
+            payload: { engagementId: b.engagementId, thresholdPct: Math.round(th * 100), burnPct: b.burnPct },
+            subject: `Burn alert: ${b.engagementName} (${Math.round(th * 100)}%)`,
+            body: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours.`,
+            refType: "engagement",
+            refId: b.engagementId,
+            status: "queued",
+          }).onConflictDoNothing({ target: atelierNotifications.id });
+        }
       }
     }
+    await completeRun({
+      runId,
+      output: { alertsWritten, engagementsScanned: burns.length },
+      confidence: alertsWritten > 0 ? "amber" : "green",
+      costUsd: 0,
+      durationMs: Date.now() - startedAt,
+      sourcesCount: burns.length,
+      actorLabel: "Burn Sentinel",
+      targetType: "ledger.burn_sentinel",
+      targetId: "firm",
+      targetLabel: "Firm-wide burn sweep",
+    });
+    return { alertsWritten, engagementsScanned: burns.length };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: "Burn Sentinel", targetType: "ledger.burn_sentinel", targetId: "firm" });
+    throw err;
   }
-  await completeRun({
-    runId,
-    output: { alertsWritten, engagementsScanned: burns.length },
-    confidence: alertsWritten > 0 ? "amber" : "green",
-    costUsd: 0,
-    durationMs: Date.now() - startedAt,
-    sourcesCount: burns.length,
-    actorLabel: "Burn Sentinel",
-    targetType: "ledger.burn_sentinel",
-    targetId: "firm",
-    targetLabel: "Firm-wide burn sweep",
-  });
-  return { alertsWritten, engagementsScanned: burns.length };
+
 }
 
 export async function getEngagementBurnSummary(engagementId: string): Promise<BurnRow | null> {

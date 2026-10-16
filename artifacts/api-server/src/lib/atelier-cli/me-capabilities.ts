@@ -29,6 +29,7 @@
  */
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { listMyUnreadNotifications } from "../atelier-my-notifications.js";
 import {
   isoWeekOf,
   isValidIsoDateStrict,
@@ -255,12 +256,23 @@ defineSelfCapability({
         .orderBy(desc(atelierLeaveRequests.createdAt))
         .limit(20),
     ]);
+    // Oct 2026 audit — when no entitlement is configured for the person or
+    // their employment type, computeLeaveBalance falls back to firm defaults
+    // and the card stated "22 days remaining" as fact. Surface the basis so
+    // the model says "no entitlement configured" instead.
+    const entitlementNote = balance.entitlementConfigured
+      ? null
+      : `No leave entitlement is configured for ${year} (neither for this person nor their employment type). The annual (${balance.annualDays}) and sick (${balance.sickDays}) day figures are firm defaults, not the person's entitlement; used and pending days are real. HR can set the entitlement under Roster → Leave.`;
     return {
       ok: true,
       data: {
         id: person.id,
         label: `Leave · ${year}`,
-        balance,
+        balance: {
+          ...balance,
+          basis: balance.entitlementConfigured ? "configured entitlement" : "firm default (entitlement not configured)",
+        },
+        ...(entitlementNote ? { note: entitlementNote, entitlementConfigured: false } : { entitlementConfigured: true }),
         requests: requests.map((r) => ({
           id: r.id,
           leaveType: r.leaveType,
@@ -891,19 +903,8 @@ defineSelfCapability({
     fr: ["Ai-je des notifications ?"],
   },
   async runSelf({ user }) {
-    const rows = await db
-      .select()
-      .from(atelierSelfNotifications)
-      .where(
-        and(
-          eq(atelierSelfNotifications.orgId, user.orgId),
-          eq(atelierSelfNotifications.userId, user.id),
-          eq(atelierSelfNotifications.status, "unread"),
-          isNull(atelierSelfNotifications.deletedAt),
-        ),
-      )
-      .orderBy(desc(atelierSelfNotifications.createdAt))
-      .limit(50);
+    // Phase 0 — same merged reader as GET /me/notifications.
+    const rows = await listMyUnreadNotifications({ orgId: user.orgId, userId: user.id, limit: 50 });
     return {
       ok: true,
       data: {
@@ -912,6 +913,7 @@ defineSelfCapability({
           label: n.title,
           kind: n.kind,
           body: n.body,
+          source: n.source,
           createdAt: n.createdAt.toISOString(),
           href: n.href ?? "/me",
         })),

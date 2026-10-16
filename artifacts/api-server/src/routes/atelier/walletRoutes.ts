@@ -59,19 +59,20 @@ import {
 import { resolveCategoryPair, policyKeyFor } from "../../lib/atelier-expense-taxonomy.js";
 // Task #1092 — attribution parity for wallet create (incl. pre-formation entities).
 import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
-import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
+import { convertToUsd, refreshFxRatesFromEcb, purgeSyntheticFxRows, fxSnapshotInfo } from "../../lib/atelier-fx.js";
 import { evaluateExpense, defaultPoliciesForOrg, ensureDefaultExpensePolicies, POLICY_PRINCIPLES } from "../../lib/atelier-expense-policy.js";
 import { assertAuditAction } from "./auditContract.js";
 // Task #53 — Me-home notification cards on expense status changes.
 import { emitSelfNotification } from "./meRoutes";
 import { invalidateFinanceFacts } from "./financeRealFacts";
-import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
+import { RECEIPT_FIXTURES, receiptFixturesEnabled, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
 import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
 import { runInvoiceComposer, expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
 // Task #76 — stream stored receipt images to approvers/finance.
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
 import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
+import { isChatReceiptRef, isObjectReceiptRef, serveChatReceipt } from "../../lib/atelier-expense-receipt.js";
 // Task #396 — shared receipt/invoice parse pipeline + merchant enrichment.
 import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
 import {
@@ -184,7 +185,7 @@ function buildOcrFromExpense(
       confidence: "green",
     };
   }
-  const fxKey = expense.receiptFixtureKey;
+  const fxKey = receiptFixturesEnabled() ? expense.receiptFixtureKey : null;
   if (fxKey && RECEIPT_FIXTURES[fxKey]) {
     const f = RECEIPT_FIXTURES[fxKey];
     return {
@@ -647,7 +648,14 @@ router.get("/wallet/expenses/:id/receipt", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  if (!row.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
+  if (isChatReceiptRef(row.receiptFileRef)) {
+    // Phase 0 — chat-created expenses keep their receipt as a CLI attachment.
+    if (!(await serveChatReceipt(res, row.receiptFileRef, me.orgId))) {
+      res.status(404).json({ error: "no-receipt" });
+    }
+    return;
+  }
+  if (!row.receiptFileRef || !isObjectReceiptRef(row.receiptFileRef)) {
     res.status(404).json({ error: "no-receipt" });
     return;
   }
@@ -881,7 +889,7 @@ router.post("/wallet/expenses", async (req, res) => {
     fxRateDate: fx.rateDate,
     usdAmount: +fx.usdAmount.toFixed(2),
     vatCountry: b.vatCountry ?? null,
-    receiptFixtureKey: b.receiptFixtureKey ?? null,
+    receiptFixtureKey: receiptFixturesEnabled() ? b.receiptFixtureKey ?? null : null,
     receiptFileRef,
     receiptEncryptedAtRest: !!receiptFileRef,
     summary: description ?? merchant,
@@ -1192,7 +1200,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     res.status(409).json({ error: "business-purpose-required", message: "Add a business purpose before submitting." });
     return;
   }
-  if (!existing.receiptFileRef && !existing.receiptFixtureKey && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
+  if (!existing.receiptFileRef && !(receiptFixturesEnabled() && existing.receiptFixtureKey) && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
     res.status(409).json({ error: "receipt-required", message: "Attach a receipt before submitting this claim." });
     return;
   }
@@ -1282,7 +1290,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     role: submitter?.role ?? null,
     flightClass: postPatch.category === "flight" ? (flightClassMatch?.[1] ?? null) : null,
     submitterRole: submitter?.role ?? null,
-    hasReceipt: !!postPatch.receiptFileRef || !!postPatch.receiptFixtureKey,
+    hasReceipt: !!postPatch.receiptFileRef || (receiptFixturesEnabled() && !!postPatch.receiptFixtureKey),
     businessPurpose: postPatch.businessPurpose,
     personId: postPatch.personId,
     expenseDate: postPatch.expenseDate,
@@ -1653,7 +1661,7 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     res.status(409).json({ error: "business-purpose-required" });
     return;
   }
-  if (!existing.receiptFileRef && !existing.receiptFixtureKey && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
+  if (!existing.receiptFileRef && !(receiptFixturesEnabled() && existing.receiptFixtureKey) && existing.captureSource !== "mileage" && existing.captureSource !== "per_diem") {
     res.status(409).json({ error: "receipt-required" });
     return;
   }
@@ -2261,20 +2269,20 @@ router.get("/wallet/vat", async (req, res) => {
   });
 });
 
-// -------
-// FX seed (ops)
-// -------
-// @cli-skip: pending Task #340 read-parity migration
-router.post("/wallet/fx/seed", async (req, res) => {
+// Phase 0 (Oct 2026 audit): the synthetic FX seeder and POST /wallet/fx/seed
+// are gone. Rates come from the daily ECB import (lib/atelier-fx.ts); ops can
+// trigger it with POST /wallet/fx/refresh.
+// @cli-skip: ops-only FX refresh; no CLI shape
+router.post("/wallet/fx/refresh", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if (!isPartnerOrOps(me)) {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const days = Number(req.body?.days ?? 60);
-  const written = await seedFxRates(days);
-  res.json({ ok: true, written });
+  const purged = await purgeSyntheticFxRows();
+  const result = await refreshFxRatesFromEcb();
+  res.json({ ok: result.written > 0, ...result, purgedSynthetic: purged, snapshot: fxSnapshotInfo() });
 });
 
 // @cli-skip: pending Task #340 read-parity migration

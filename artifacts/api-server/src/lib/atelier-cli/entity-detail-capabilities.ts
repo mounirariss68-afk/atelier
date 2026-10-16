@@ -67,6 +67,7 @@ import {
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
+import { loadStageAges, projectDealMoney } from "../atelier-opportunity-facts.js";
 import { searchDocumentChunks } from "./attachments/retrieval.js";
 import { wrapAttachment } from "./prompt-guard.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
@@ -401,7 +402,7 @@ registerDetailProvider({
       .limit(1);
     if (!opp) return null;
     const [[acc], [brief]] = await Promise.all([
-      db.select({ id: atelierAccounts.id, name: atelierAccounts.name }).from(atelierAccounts).where(eq(atelierAccounts.id, opp.accountId)).limit(1),
+      db.select({ id: atelierAccounts.id, name: atelierAccounts.name, primaryCurrency: atelierAccounts.primaryCurrency }).from(atelierAccounts).where(eq(atelierAccounts.id, opp.accountId)).limit(1),
       db
         .select()
         .from(atelierBriefs)
@@ -410,6 +411,9 @@ registerDetailProvider({
         .limit(1),
     ]);
     const fiveC = (brief?.fiveCDraft ?? {}) as Record<string, unknown>;
+    // Oct 2026 audit — currency-correct money and transition-based stage age.
+    const money = projectDealMoney(opp.dealSizeHypothesis, opp.probabilityPct, acc?.primaryCurrency);
+    const age = (await loadStageAges([opp])).get(opp.id);
     return {
       ok: true,
       data: {
@@ -419,9 +423,15 @@ registerDetailProvider({
           id: opp.id,
           name: opp.name,
           stage: resolveSalesStage(opp.salesStage),
-          dealSizeUsd: opp.dealSizeHypothesis,
+          dealSize: money.dealSize,
+          currency: money.currency,
+          dealSizeUsd: money.dealSizeUsd,
+          weightedValue: money.weightedValue,
+          weightedValueUsd: money.weightedValueUsd,
+          ...(money.fxNote ? { fxNote: money.fxNote } : {}),
           probabilityPct: opp.probabilityPct,
-          daysInStage: opp.daysInStage,
+          daysInStage: age?.days ?? 0,
+          stageEnteredAt: age?.enteredAt.toISOString().slice(0, 10) ?? null,
           nextMilestone: opp.nextMilestone ?? null,
         },
         account: acc ? { id: acc.id, name: acc.name } : null,

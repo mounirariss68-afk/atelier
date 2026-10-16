@@ -416,6 +416,7 @@ router.post("/cli/turn", async (req, res) => {
         prompt,
         attachmentIds: validatedAttachmentIds,
         pageContext: body.pageContext ?? null,
+        clientWireMode: wireMode,
         dryRun: body.dryRun === true,
         cancelInflight: body.cancelInflight === true,
         intent: body.intent ?? null,
@@ -1034,10 +1035,22 @@ router.get("/cli/capabilities", async (req, res) => {
     role: me.role,
     orgId: me.orgId,
   });
+  // Phase 1 (Oct 2026 audit) — do NOT advertise the semantic protocol by
+  // default. When it is advertised, web and mobile switch to "current" mode
+  // and render only results that carry a `presentation` frame, which the
+  // server emits for two capabilities; every other card is hidden. Until the
+  // presentation registry covers every read card (phase 2), clients fall
+  // back to legacy rendering from the capability's resultCard. Set
+  // RISER_ADVERTISE_PROTOCOL_V1=1 to turn the advertisement back on.
+  const advertiseProtocol = process.env.RISER_ADVERTISE_PROTOCOL_V1 === "1";
   res.json({
-    protocolVersion: ASSISTANT_PROTOCOL_VERSION,
-    minimumClientProtocolVersion: ASSISTANT_PROTOCOL_VERSION,
-    presentationDataVersions: [PRESENTATION_MINIMUM_DATA_VERSION],
+    ...(advertiseProtocol
+      ? {
+          protocolVersion: ASSISTANT_PROTOCOL_VERSION,
+          minimumClientProtocolVersion: ASSISTANT_PROTOCOL_VERSION,
+          presentationDataVersions: [PRESENTATION_MINIMUM_DATA_VERSION],
+        }
+      : {}),
     schemaVersion: CATALOG_SCHEMA_VERSION,
     capabilities: caps.map((c) => ({
       id: c.id,

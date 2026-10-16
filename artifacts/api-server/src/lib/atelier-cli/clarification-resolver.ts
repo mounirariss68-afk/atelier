@@ -521,7 +521,9 @@ export async function resolveWithModel(args: {
   if (!resolverLlmEnabled()) return null;
   try {
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
-      dataClasses: ["confidential"],
+      // Same declaration as modelStep (see index.ts): a clarification reply
+      // may hold a 12+ digit reference; Anthropic is allow-listed for RESTRICTED.
+      dataClasses: ["confidential", "restricted"],
       orgId: args.orgId,
       capabilityId: "meta.resolve_clarification",
       model: args.model,

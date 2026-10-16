@@ -16,7 +16,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -36,6 +36,7 @@ import { listJobsForUser } from "../../lib/background-jobs.js";
 import { agentRunIsFresh } from "../../lib/atelier-agents/run-staleness.js";
 import { listAgentLaunchesForUser } from "../../lib/atelier-agents/launch-visibility.js";
 import { mirrorSelfNotificationPush } from "../../lib/expoPush.js";
+import { listMyUnreadNotifications, dismissMyNotification, type MyNotification } from "../../lib/atelier-my-notifications.js";
 import {
   AtelierGetMyProfileResponse,
   AtelierListMyNotificationsResponse,
@@ -179,16 +180,24 @@ export interface SelfPersonWire {
 export async function resolveSelfPerson(
   me: typeof atelierUsers.$inferSelect,
 ): Promise<SelfPersonWire | null> {
-  const [emp] = await db
+  // Oct 2026 audit — this is THE self-resolution helper (Me lens, mobile,
+  // every `my_*` Riser tool). The employee branch matched on the userId
+  // link only, so a founder whose roster row was created before the login
+  // link existed resolved to "no roster record" while the contractor branch
+  // below already fell back to the login email. Both branches now resolve
+  // by link first, then by login email (case-insensitive).
+  const email = me.email.trim().toLowerCase();
+  const empRows = await db
     .select()
     .from(atelierEmployees)
     .where(
       and(
         eq(atelierEmployees.orgId, me.orgId),
-        eq(atelierEmployees.userId, me.id),
         isNull(atelierEmployees.deletedAt),
+        or(eq(atelierEmployees.userId, me.id), sql`lower(${atelierEmployees.email}) = ${email}`),
       ),
     );
+  const emp = empRows.find((e) => e.userId === me.id) ?? empRows.find((e) => e.email.trim().toLowerCase() === email);
   if (emp) {
     return {
       id: emp.id,
@@ -213,7 +222,6 @@ export async function resolveSelfPerson(
       avatarUrl: emp.avatarUrl ?? null,
     };
   }
-  const email = me.email.trim().toLowerCase();
   const cts = await db
     .select()
     .from(atelierContractors)
@@ -347,14 +355,14 @@ export async function resolveUserIdForPerson(
   return hit?.id ?? null;
 }
 
-function notifToWire(n: typeof atelierSelfNotifications.$inferSelect) {
+function notifToWire(n: MyNotification) {
   return {
     id: n.id,
     kind: n.kind,
     title: n.title,
     body: n.body,
     href: n.href,
-    status: n.status as "unread" | "dismissed",
+    status: n.status,
     createdAt: n.createdAt.toISOString(),
   };
 }
@@ -381,18 +389,8 @@ router.get("/me/notifications", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const rows = await db
-      .select()
-      .from(atelierSelfNotifications)
-      .where(
-        and(
-          eq(atelierSelfNotifications.orgId, me.orgId),
-          eq(atelierSelfNotifications.userId, me.id),
-          eq(atelierSelfNotifications.status, "unread"),
-          isNull(atelierSelfNotifications.deletedAt),
-        ),
-      )
-      .orderBy(desc(atelierSelfNotifications.createdAt));
+    // Phase 0 — merged reader over both notification tables (see lib/atelier-my-notifications).
+    const rows = await listMyUnreadNotifications({ orgId: me.orgId, userId: me.id });
     res.json(AtelierListMyNotificationsResponse.parse(rows.map(notifToWire)));
   } catch (err) {
     next(err);
@@ -405,18 +403,7 @@ router.post("/me/notifications/:id/dismiss", async (req, res, next) => {
     const me = ensurePersona(req, res);
     if (!me) return;
     // Ownership is part of the WHERE — a foreign id 404s, never leaks.
-    const [row] = await db
-      .update(atelierSelfNotifications)
-      .set({ status: "dismissed", dismissedAt: new Date(), updatedAt: new Date() })
-      .where(
-        and(
-          eq(atelierSelfNotifications.id, req.params.id),
-          eq(atelierSelfNotifications.orgId, me.orgId),
-          eq(atelierSelfNotifications.userId, me.id),
-          isNull(atelierSelfNotifications.deletedAt),
-        ),
-      )
-      .returning();
+    const row = await dismissMyNotification({ orgId: me.orgId, userId: me.id, id: req.params.id });
     if (!row) {
       res.status(404).json({ error: "not-found" });
       return;

@@ -7,7 +7,7 @@ import {
   atelierExpenses,
   atelierMeetings,
 } from "@workspace/db";
-import { and, eq, lt, ne } from "drizzle-orm";
+import { and, eq, isNull, lt, ne } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { hashPassword, verifyPassword } from "./auth/passwords";
 import { logger } from "./logger";
@@ -121,7 +121,16 @@ async function ensureFounderPersonLinks(): Promise<void> {
 // and mustChangePassword can never brick it.
 export const DEMO_EMAIL = "demo@cognirise.ai";
 export const DEMO_USER_ID = "p_demo_reviewer";
-const DEMO_PASSWORD = "demoact!23";
+// Phase 0 (Oct 2026 audit): the demo account is OFF unless the deployment
+// sets ATELIER_DEMO_ACCOUNT_ENABLED=1 and ATELIER_DEMO_PASSWORD. No
+// password lives in code any more. When disabled, the credential is
+// disabled and the showcase rows (demo user, roster row, expenses,
+// "Catch up" meetings) are soft-deleted so they stop appearing in real
+// users' lists and in Riser answers. App Store review needs both variables.
+const DEMO_ENABLED = process.env.ATELIER_DEMO_ACCOUNT_ENABLED === "1";
+const DEMO_PASSWORD = process.env.ATELIER_DEMO_PASSWORD ?? "";
+const DEMO_MEETING_IDS = ["mtg_demo_1", "mtg_demo_2", "mtg_demo_3"];
+const DEMO_EXPENSE_IDS = ["exp_demo_1", "exp_demo_2", "exp_demo_3"];
 // Per user request (2026-07-23): the demo account presents as a fictional
 // employee "Max Headrom" with a US phone so the Me page + vCard QR look real.
 const DEMO_NAME = "Max Headrom";
@@ -404,12 +413,64 @@ async function ensureDemoShowcaseData(orgId: string): Promise<void> {
   }
 }
 
+/**
+ * Disabled-state counterpart of ensureDemoAccount: lock the credential and
+ * soft-delete the demo rows. Idempotent; nothing is hard-deleted.
+ */
+async function retireDemoAccount(): Promise<void> {
+  const now = new Date();
+  const [cred] = await db
+    .select({ email: atelierAuthCredentials.email, disabled: atelierAuthCredentials.disabled })
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, DEMO_EMAIL));
+  if (cred && !cred.disabled) {
+    await db
+      .update(atelierAuthCredentials)
+      .set({ disabled: true, updatedAt: now })
+      .where(eq(atelierAuthCredentials.email, DEMO_EMAIL));
+    logger.info({ email: DEMO_EMAIL }, "demo credential disabled (ATELIER_DEMO_ACCOUNT_ENABLED is not 1)");
+  }
+  const [user] = await db
+    .select({ id: atelierUsers.id, deletedAt: atelierUsers.deletedAt })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, DEMO_USER_ID));
+  if (user && !user.deletedAt) {
+    await db.update(atelierUsers).set({ deletedAt: now, updatedAt: now }).where(eq(atelierUsers.id, DEMO_USER_ID));
+    await db
+      .update(atelierEmployees)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(atelierEmployees.userId, DEMO_USER_ID));
+    logger.info({ userId: DEMO_USER_ID }, "demo user and roster row soft-deleted");
+  }
+  for (const id of DEMO_MEETING_IDS) {
+    await db
+      .update(atelierMeetings)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(and(eq(atelierMeetings.id, id), isNull(atelierMeetings.deletedAt)));
+  }
+  for (const id of DEMO_EXPENSE_IDS) {
+    await db
+      .update(atelierExpenses)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(and(eq(atelierExpenses.id, id), isNull(atelierExpenses.deletedAt)));
+  }
+}
+
 export async function ensureAtelierAuthSeed(): Promise<void> {
   await ensureFounderTitles();
   await ensureFounderPersonLinks();
-  await ensureDemoAccount().catch((err) => {
-    logger.error({ err }, "demo account seed failed — App Store review login may not work");
-  });
+  if (DEMO_ENABLED && DEMO_PASSWORD) {
+    await ensureDemoAccount().catch((err) => {
+      logger.error({ err }, "demo account seed failed — App Store review login may not work");
+    });
+  } else {
+    if (DEMO_ENABLED && !DEMO_PASSWORD) {
+      logger.warn("ATELIER_DEMO_ACCOUNT_ENABLED=1 but ATELIER_DEMO_PASSWORD is unset — demo account stays disabled");
+    }
+    await retireDemoAccount().catch((err) => {
+      logger.error({ err }, "demo account retirement failed");
+    });
+  }
   for (const u of USERS) {
     const [existing] = await db
       .select()

@@ -30,7 +30,13 @@ declare global {
  * Dev/demo builds keep the persona switcher; production always binds the
  * request identity to the logged-in user.
  */
-function personaOverrideAllowed(): boolean {
+export function personaOverrideAllowed(): boolean {
+  // Phase 0 (Oct 2026 audit): never on a published deployment. Replit sets
+  // REPLIT_DEPLOYMENT on every published build, whatever NODE_ENV is, so the
+  // override cannot be opened by a missing or misspelled NODE_ENV. The
+  // explicit ATELIER_PERSONA_SWITCHER=true flag is honoured only outside
+  // deployments as well — the dev workspace is the only place it belongs.
+  if (process.env.REPLIT_DEPLOYMENT) return false;
   return (
     process.env.NODE_ENV !== "production" ||
     process.env.ATELIER_PERSONA_SWITCHER === "true"

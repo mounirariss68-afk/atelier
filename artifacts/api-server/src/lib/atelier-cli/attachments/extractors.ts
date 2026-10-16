@@ -27,7 +27,7 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { extractText as unpdfExtractText, getDocumentProxy } from "unpdf";
-import { RECEIPT_FIXTURES } from "../../atelier-receipt-fixtures.js";
+import { RECEIPT_FIXTURES, receiptFixturesEnabled } from "../../atelier-receipt-fixtures.js";
 import { parseReceiptDocViaCognidocs } from "../../cognidocs/receipt.js";
 import { isHeicPayload, convertHeicToJpeg } from "../../atelier-heic.js";
 
@@ -329,7 +329,7 @@ const VISION_MEDIA_TYPES = new Set([
 
 async function extractImage(fileName: string, mime: string, buf: Buffer): Promise<ExtractedDoc> {
   const stem = fileName.replace(/\.[^.]+$/, "").toLowerCase();
-  const fx = RECEIPT_FIXTURES[stem];
+  const fx = receiptFixturesEnabled() ? RECEIPT_FIXTURES[stem] : undefined;
   if (fx) {
     const text = [
       `merchant: ${fx.merchant}`,

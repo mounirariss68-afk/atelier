@@ -14,13 +14,11 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { db, atelierEmployees, atelierLegalEntities } from "@workspace/db";
+import { toUsdSync } from "./atelier-fx.js";
 
-// FX aligned with financePlanFpaEngine.FX_TO_USD / financeRealFacts.
-const FX_TO_USD: Record<string, number> = {
-  USD: 1.0, GBP: 1.27, AED: 0.272, SAR: 0.267, EUR: 1.08,
-};
+// Phase 0 (Oct 2026 audit): one FX source (lib/atelier-fx snapshot).
 function toUsd(amount: number, currency: string | null | undefined): number {
-  return amount * (FX_TO_USD[currency ?? "USD"] ?? 1);
+  return toUsdSync(amount, currency);
 }
 function round2(n: number): number {
   return Math.round(n * 100) / 100;

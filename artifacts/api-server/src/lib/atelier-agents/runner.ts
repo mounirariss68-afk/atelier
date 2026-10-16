@@ -25,6 +25,7 @@
 
 import { db, atelierAgentRuns, atelierAgentRunSnapshots, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities, atelierUsers } from "@workspace/db";
 import { eq, and, gte, isNull, inArray, desc } from "drizzle-orm";
+import { loadStageAges } from "../atelier-opportunity-facts.js";
 import { getAgent } from "@workspace/agents";
 import { loadEffectivePrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
@@ -4537,24 +4538,28 @@ export async function runPipelineForecaster(args: {
         ),
       );
     const TERMINAL = new Set(["contract", "lost", "no_decision", "withdrawn"]);
+    // Oct 2026 audit — the days_in_stage column is reset on transition and
+    // never incremented; the Pipeline Steward never flagged anything.
+    const stageAges = await loadStageAges(stalledRows);
     let flagged = 0;
     let miscalibrated = 0;
     for (const o of stalledRows) {
       if (TERMINAL.has(o.salesStage)) continue;
+      const daysInStage = stageAges.get(o.id)?.days ?? 0;
 
       // (a) Stalled deals — surface aging in-stage.
-      if (o.daysInStage > STALLED_THRESHOLD_DAYS) {
+      if (daysInStage > STALLED_THRESHOLD_DAYS) {
         try {
           await db.insert(atelierPaneAItems).values({
             id: fid("pa"),
             userId: args.actorId,
             title: `Stalled: ${o.name}`,
-            summary: `${o.daysInStage}d in ${o.salesStage} — ${o.nextMilestone || "no next milestone set"}.`,
-            priority: o.daysInStage > 45 ? "high" : "medium",
+            summary: `${daysInStage}d in ${o.salesStage} — ${o.nextMilestone || "no next milestone set"}.`,
+            priority: daysInStage > 45 ? "high" : "medium",
             hrefKind: "opportunity",
             hrefTargetId: o.id,
             dueLabel: "Stalled",
-            sortKey: 100 - Math.min(99, o.daysInStage),
+            sortKey: 100 - Math.min(99, daysInStage),
           });
           flagged += 1;
         } catch {

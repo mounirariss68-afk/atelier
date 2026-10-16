@@ -1,0 +1,247 @@
+{
+  "base": "https://587eca17-43f3-4691-865f-c3e4caf9e152-00-1qbciductjhf0.pike.replit.dev",
+  "mode": "semantic",
+  "ranAt": "2026-10-16T18:14:47.574Z",
+  "rows": [
+    {
+      "id": "leave-balance",
+      "pass": false,
+      "ms": 7730,
+      "tools": "my_leave",
+      "fails": [
+        "no presentation frame (card hidden)"
+      ],
+      "finding": "hidden card; entitlement defaults stated as fact"
+    },
+    {
+      "id": "qib-owes",
+      "pass": false,
+      "ms": 5042,
+      "tools": "statement_of_account",
+      "fails": [
+        "no presentation frame (card hidden)"
+      ],
+      "finding": "brand-name resolution through resolve_entity"
+    },
+    {
+      "id": "qib-contacts-list",
+      "pass": false,
+      "ms": 5492,
+      "tools": "contact_list",
+      "fails": [
+        "no presentation frame (card hidden)"
+      ],
+      "finding": "contact_list resolves accounts by name only, misses brand names"
+    },
+    {
+      "id": "qib-cfo",
+      "pass": false,
+      "ms": 12810,
+      "tools": "resolve_entity, entity_detail",
+      "fails": [
+        "text contains \"different approach\"",
+        "text contains \"Let me try\""
+      ],
+      "finding": "near-miss tools, leaked reasoning, truncated prose"
+    },
+    {
+      "id": "qib-cfo-followup",
+      "pass": true,
+      "ms": 9324,
+      "tools": "contact_detail, resolve_entity, contact_detail",
+      "fails": [],
+      "finding": "follow-up on a named entity"
+    },
+    {
+      "id": "qib-contacts-followup",
+      "pass": false,
+      "ms": 3506,
+      "tools": "",
+      "fails": [
+        "text contains \"clarify\""
+      ],
+      "finding": "follow-up on a fact that lived only in card data (redacted replay)"
+    },
+    {
+      "id": "pipeline-by-stage",
+      "pass": false,
+      "ms": 5153,
+      "tools": "pipeline_by_stage",
+      "fails": [
+        "no presentation frame (card hidden)",
+        "text contains \"$62.5K\"",
+        "result data lacks key currency"
+      ],
+      "finding": "deal money in account currency labelled USD"
+    },
+    {
+      "id": "pipeline-arabic",
+      "pass": true,
+      "ms": 38269,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "non-English routing"
+    },
+    {
+      "id": "ar-aging",
+      "pass": false,
+      "ms": 4495,
+      "tools": "wallet_ar_aging",
+      "fails": [
+        "no presentation frame (card hidden)",
+        "result data contains \"Unknown customer\""
+      ],
+      "finding": "customer grouping broken; cross-currency sums labelled USD"
+    },
+    {
+      "id": "utilisation",
+      "pass": false,
+      "ms": 14493,
+      "tools": "utilization_firm",
+      "fails": [
+        "no presentation frame (card hidden)",
+        "result data lacks key weeksCovered"
+      ],
+      "finding": "single draft week presented as firm utilisation"
+    },
+    {
+      "id": "days-in-stage",
+      "pass": true,
+      "ms": 4966,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "dead days_in_stage counter"
+    },
+    {
+      "id": "bandwidth",
+      "pass": false,
+      "ms": 5242,
+      "tools": "person_workload",
+      "fails": [
+        "text contains \"0% allocated\""
+      ],
+      "finding": "allocationPct default 0 reads as full availability"
+    },
+    {
+      "id": "pnl-ytd",
+      "pass": false,
+      "ms": 30279,
+      "tools": "finance_report_pnl",
+      "fails": [
+        "no presentation frame (card hidden)",
+        "result data lacks key preliminary",
+        "result data contains \"Gbp\""
+      ],
+      "finding": "GBP per-entity rows under USD header; honesty flags dropped"
+    },
+    {
+      "id": "long-number-prompt",
+      "pass": false,
+      "ms": 736,
+      "tools": "",
+      "fails": [
+        "error frame: {\"code\":\"temporarily_unavailable\",\"message\":\"AI temporarily unavailable \u2014 please retry shortly\",\"detail\":\"[REDACTED]:anthropic\",\"model\":null,\"__assistantEnvelop",
+        "expected tool search_documents, got []"
+      ],
+      "finding": "12-digit number in the prompt ends the turn"
+    },
+    {
+      "id": "card-links",
+      "pass": false,
+      "ms": 15137,
+      "tools": "opportunity_detail",
+      "fails": [
+        "result data contains \"[REDACTED]\""
+      ],
+      "finding": "hrefs over 32 characters redacted as secrets"
+    },
+    {
+      "id": "meetings-week",
+      "pass": false,
+      "ms": 5648,
+      "tools": "meeting_list",
+      "fails": [
+        "no presentation frame (card hidden)",
+        "result data contains \"[REDACTED]\"",
+        "result data contains \"mtg_demo_\""
+      ],
+      "finding": "Outlook ids redacted; seed meetings listed"
+    },
+    {
+      "id": "account-list-query",
+      "pass": false,
+      "ms": 7855,
+      "tools": "account_lookup, account_dossier",
+      "fails": [
+        "expected tool account_list, got [account_lookup, account_dossier]"
+      ],
+      "finding": "account_list ignores its query"
+    },
+    {
+      "id": "missing-account",
+      "pass": false,
+      "ms": 30450,
+      "tools": "entity_detail",
+      "fails": [
+        "failing read produced no visible failure frame"
+      ],
+      "finding": "failing reads hidden from the client"
+    },
+    {
+      "id": "weather-refusal",
+      "pass": true,
+      "ms": 3510,
+      "tools": "",
+      "fails": [],
+      "finding": "graceful refusal without tool calls"
+    },
+    {
+      "id": "letter-clarification",
+      "pass": true,
+      "ms": 4938,
+      "tools": "request_employment_letter",
+      "fails": [],
+      "finding": "structured clarification form must survive the repair"
+    },
+    {
+      "id": "write-preview-unknown-fields",
+      "pass": true,
+      "ms": 4991,
+      "tools": "propose_write",
+      "fails": [],
+      "finding": "confirm card shows fields the dispatch target cannot write"
+    },
+    {
+      "id": "task-write-commit",
+      "pass": false,
+      "ms": 8897,
+      "tools": "my_tasks, propose_write",
+      "fails": [
+        "after commit: neither card nor prose"
+      ],
+      "finding": "committed write shows neither card nor prose"
+    },
+    {
+      "id": "final-frame-telemetry",
+      "pass": false,
+      "ms": 10682,
+      "tools": "my_profile",
+      "fails": [
+        "final.tokensIn is [REDACTED]",
+        "final.tokensOut is [REDACTED]"
+      ],
+      "finding": "token counts redacted as secrets"
+    },
+    {
+      "id": "model-tier",
+      "pass": false,
+      "ms": 26874,
+      "tools": "my_profile",
+      "fails": [
+        "model(s) [claude-haiku-4-5-20251001] do not contain sonnet"
+      ],
+      "finding": "reads routed to Haiku"
+    }
+  ],
+  "note": "Baseline on the UNREPAIRED dev build (commit e107dd9c + nothing from the 16 Oct repair), recorded from a logged-in browser tab via tests/riser-live-eval (--replay). 6/24 pass."
+}

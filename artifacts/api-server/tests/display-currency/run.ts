@@ -32,7 +32,7 @@ async function main() {
     atelierExpenses, atelierAuditEvents,
   } = await import("@workspace/db");
   const { hashPassword } = await import("../../src/lib/auth/passwords.js");
-  const { seedFxRates } = await import("../../src/lib/atelier-fx.js");
+  const { refreshFxRatesFromEcb, refreshFxSnapshot } = await import("../../src/lib/atelier-fx.js");
   const app = (await import("../../src/app.js")).default;
 
   const server = app.listen(0);
@@ -50,7 +50,11 @@ async function main() {
   };
 
   try {
-    await seedFxRates(5);
+    // Phase 0: no synthetic seeder. Load rates from a fixed ECB payload so the
+    // probe stays offline and deterministic (pegs cover AED/SAR/QAR anyway).
+    const ecbFixture = `<gesmes:Envelope><Cube><Cube time="2026-10-15"><Cube currency="USD" rate="1.0870"/><Cube currency="GBP" rate="0.8590"/><Cube currency="TRY" rate="41.85"/></Cube></Cube></gesmes:Envelope>`;
+    await refreshFxRatesFromEcb(async () => new Response(ecbFixture, { status: 200 }));
+    await refreshFxSnapshot();
     const [anyOrg] = await db.select({ orgId: atelierUsers.orgId }).from(atelierUsers).limit(1);
     const orgId = anyOrg?.orgId ?? "aico";
     await db.insert(atelierUsers).values({

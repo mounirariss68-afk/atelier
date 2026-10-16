@@ -57,8 +57,24 @@ export const ASSISTANT_PROVIDER_ALLOWLIST = {
 
 export type AssistantProviderId = keyof typeof ASSISTANT_PROVIDER_ALLOWLIST;
 
+// Oct 2026 audit: `name` is no longer a sensitive key. It matched `name`,
+// `fileName`, `displayName`, `accountName`, `stageName`… and emptied every
+// persisted card and replayed transcript of the one field a follow-up
+// question needs ("what is the COO's title?" could not be answered because
+// the roster replay held `[REDACTED]` for every person). Names of accounts,
+// contacts and colleagues are the firm's working vocabulary, not secrets;
+// email, phone and address keep their CONFIDENTIAL class.
 const SENSITIVE_KEY =
-  /(password|passcode|secret|token|authorization|cookie|iban|swift|account.?number|national.?id|passport|visa|email|phone|address|name)/i;
+  /(password|passcode|secret|token|authorization|cookie|iban|swift|account.?number|national.?id|passport|visa|email|phone|address)/i;
+
+// Telemetry counters whose key contains "token" but which carry no secret.
+const TELEMETRY_TOKEN_KEY = /^(tokens?(In|Out|Used|Total|Count|Cached|Input|Output)|(input|output|total|cache[a-z_]*)_?tokens?|usage)$/i;
+
+// Keys whose values are protocol selectors or navigation targets, never
+// prose: opaque ids, hrefs, paths. Long alphanumeric runs there are the
+// app's own identifiers (and `/accounts/acct_…` paths are ≥32 chars), not
+// leaked secrets. Bearer values and canaries are still redacted inside them.
+const SELECTOR_KEY = /^(id|ids|href|url|path|link|ref|rejected|cursor|next|prev)$|(Id|Ids|Ref|Refs|Href|Url|Path|Link|Key)$/;
 
 const BEARER_VALUE = /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi;
 const EMAIL_VALUE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -66,16 +82,21 @@ const LONG_SECRET_VALUE = /\b[A-Za-z0-9+/=_-]{32,}\b/g;
 const PLANTED_CANARY_VALUE = /\bRISER_CANARY_SECRET_[A-Za-z0-9_-]+\b/g;
 const IBAN_VALUE = /\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/i;
 const LONG_NUMBER_VALUE = /\b\d{12,}\b/;
+const LONG_NUMBER_VALUE_G = /\b\d{12,}\b/g;
 const OPAQUE_ENTITY_ID = /^(?:[a-z][a-z0-9]*_)+[a-z0-9_-]+$/i;
+// A relative app path or absolute URL without a query string: nothing in it
+// is user-entered free text, so a long path segment is not a secret.
+const PLAIN_LOCATION_VALUE = /^(\/|https?:\/\/)[^?#\s]*$/i;
 
 export function classifyAssistantField(key: string): AssistantDataClass {
+  if (TELEMETRY_TOKEN_KEY.test(key)) return AssistantDataClass.INTERNAL;
   if (/password|passcode|secret|token|authorization|cookie/i.test(key)) {
     return AssistantDataClass.SECRET;
   }
   if (/iban|swift|account.?number|national.?id|passport|visa/i.test(key)) {
     return AssistantDataClass.RESTRICTED;
   }
-  if (/email|phone|address|name/i.test(key)) {
+  if (/email|phone|address/i.test(key)) {
     return AssistantDataClass.CONFIDENTIAL;
   }
   return AssistantDataClass.INTERNAL;
@@ -106,22 +127,34 @@ function redactAssistantValueToClass(
     // app's opaque id format so an option rendered to a client can be sent
     // back on the next turn. This exemption deliberately does not cover
     // canaries or bearer values, and it applies only to an exact `id` key.
-    const preserveOpaqueId =
-      (key === "id" || key === "rejected") &&
-      OPAQUE_ENTITY_ID.test(value) &&
-      !PLANTED_CANARY_VALUE.test(value) &&
-      !BEARER_VALUE.test(value);
+    //
+    // Oct 2026 audit widened the exemption: any selector-like key (`*Id`,
+    // `href`, `url`, `path`, …) and any plain location value (a relative app
+    // path or a URL without a query string) keep their long runs. The
+    // previous rule redacted every card link over 32 characters and every
+    // Outlook/Graph identifier, which broke navigation from cards.
     PLANTED_CANARY_VALUE.lastIndex = 0;
     BEARER_VALUE.lastIndex = 0;
+    const hasCanaryOrBearer = PLANTED_CANARY_VALUE.test(value) || BEARER_VALUE.test(value);
+    PLANTED_CANARY_VALUE.lastIndex = 0;
+    BEARER_VALUE.lastIndex = 0;
+    const preserveLongRuns =
+      !hasCanaryOrBearer &&
+      ((key !== undefined && SELECTOR_KEY.test(key) && (OPAQUE_ENTITY_ID.test(value) || PLAIN_LOCATION_VALUE.test(value) || /^[A-Za-z0-9_=-]+$/.test(value))) ||
+        PLAIN_LOCATION_VALUE.test(value));
     let redacted = value
       .replace(BEARER_VALUE, "[REDACTED]")
       .replace(PLANTED_CANARY_VALUE, "[REDACTED]")
       .replace(
         LONG_SECRET_VALUE,
-        preserveOpaqueId ? (match: string) => match : () => "[REDACTED]",
+        preserveLongRuns ? (match: string) => match : () => "[REDACTED]",
       );
     if (CLASS_RANK[maxClass] < CLASS_RANK[AssistantDataClass.RESTRICTED]) {
-      redacted = redacted.replace(IBAN_VALUE, "[REDACTED]");
+      // Redact rather than refuse: a 12+ digit run (an invoice reference, a
+      // phone number typed without separators, a Graph id) used to make the
+      // whole frame RESTRICTED and the sink throw, which ended the turn.
+      redacted = redacted.replace(IBAN_VALUE, "[REDACTED]").replace(LONG_NUMBER_VALUE_G, "[REDACTED]");
+      LONG_NUMBER_VALUE_G.lastIndex = 0;
     }
     if (CLASS_RANK[maxClass] < CLASS_RANK[AssistantDataClass.CONFIDENTIAL]) {
       redacted = redacted.replace(EMAIL_VALUE, "[REDACTED]");

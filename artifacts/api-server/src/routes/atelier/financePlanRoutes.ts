@@ -22,6 +22,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { toUsdSync, fromUsdSync, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits, atelierPayrollRuns, atelierSalaryAdvances, atelierEosbSettlements } from "@workspace/db";
 import { listFinanceEntities } from "./financeEntitiesRoutes";
@@ -64,20 +65,12 @@ function isFinanceLeadership(me: Me): boolean {
 // ──────────────────────────────────────────────────────────────
 // FX (presentation currency translation). Demo rates only.
 // ──────────────────────────────────────────────────────────────
-const FX_TO_USD: Record<string, number> = {
-  USD: 1.0,
-  GBP: 1.27,
-  AED: 0.272,
-  SAR: 0.267,
-  EUR: 1.08,
-};
+// Phase 0 (Oct 2026 audit): one FX source (lib/atelier-fx snapshot).
 function toUsd(amount: number, currency: string): number {
-  const r = FX_TO_USD[currency] ?? 1;
-  return amount * r;
+  return toUsdSync(amount, currency);
 }
 function convert(amountUsd: number, target: string): number {
-  const r = FX_TO_USD[target] ?? 1;
-  return amountUsd / r;
+  return fromUsdSync(amountUsd, target);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -959,7 +952,7 @@ export async function computeBacklogKpisForOrg(orgId: string): Promise<{
 // ──────────────────────────────────────────────────────────────
 function pickPresentation(req: Request): string {
   const c = String(req.query.currency ?? "USD").toUpperCase();
-  return FX_TO_USD[c] ? c : "USD";
+  return DISPLAY_CURRENCIES.includes(c) ? c : "USD";
 }
 function pickEntity(req: Request): string | null {
   const e = req.query.entity ? String(req.query.entity) : null;

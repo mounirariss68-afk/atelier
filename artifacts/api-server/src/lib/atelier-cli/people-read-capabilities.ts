@@ -56,6 +56,8 @@ import {
 import { isRestrictedPersona, isBoardObserver } from "../../routes/atelier/personaRoles.js";
 import { distillBriefView } from "../atelier-brief-view.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
+import { loadStageAges, projectDealMoney } from "../atelier-opportunity-facts.js";
+import { loadEngagementRollup } from "../atelier-engagement-rollups.js";
 import { freshAccessToken, fmtDubai } from "../msScheduling.js";
 import { foldRosterName } from "./chat-normalizers.js";
 import { rankNearestNames } from "./nearest-suggestions.js";
@@ -1838,7 +1840,7 @@ defineCapability({
     const ok = await canSeeAccount(access, me, opp.accountId);
     if (!ok) return denyForbidden("You don't have access to this opportunity's account.");
     const [acc] = await db
-      .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+      .select({ id: atelierAccounts.id, name: atelierAccounts.name, primaryCurrency: atelierAccounts.primaryCurrency })
       .from(atelierAccounts)
       .where(eq(atelierAccounts.id, opp.accountId))
       .limit(1);
@@ -1848,6 +1850,7 @@ defineCapability({
       .where(and(eq(atelierBriefs.opportunityId, opp.id), isNull(atelierBriefs.deletedAt)))
       .orderBy(desc(atelierBriefs.updatedAt))
       .limit(1);
+    const oppStageAge = (await loadStageAges([opp])).get(opp.id);
     return {
       ok: true,
       data: {
@@ -1855,10 +1858,21 @@ defineCapability({
           id: opp.id,
           name: opp.name,
           stage: resolveSalesStage(opp.salesStage),
-          dealSizeUsd: opp.dealSizeHypothesis,
+          // Oct 2026 audit — money in the account currency + USD; stage age
+          // from the transition log.
+          ...(() => {
+            const m = projectDealMoney(opp.dealSizeHypothesis, opp.probabilityPct, acc?.primaryCurrency);
+            return {
+              dealSize: m.dealSize,
+              currency: m.currency,
+              dealSizeUsd: m.dealSizeUsd,
+              weightedValue: m.weightedValue,
+              weightedValueUsd: m.weightedValueUsd,
+              ...(m.fxNote ? { fxNote: m.fxNote } : {}),
+            };
+          })(),
           probabilityPct: opp.probabilityPct,
-          weightedValueUsd: (opp.dealSizeHypothesis * opp.probabilityPct) / 100,
-          daysInStage: opp.daysInStage,
+          daysInStage: oppStageAge?.days ?? 0,
           nextMilestone: opp.nextMilestone ?? null,
         },
         account: acc ? { id: acc.id, name: acc.name } : null,
@@ -1951,6 +1965,7 @@ defineCapability({
           isNull(atelierRaidItems.deletedAt),
         ),
       );
+    const rollup = await loadEngagementRollup(ctx.persona.orgId, eng.id);
     return {
       ok: true,
       data: {
@@ -1958,10 +1973,11 @@ defineCapability({
           id: eng.id,
           name: eng.name,
           plmStage: eng.plmStage,
-          raidStatus: eng.raidStatus,
+          raidStatus: rollup.raidStatus,
           startDate: eng.startDate,
           plannedEndDate: eng.plannedEndDate,
-          deliverablesDueThisWeek: eng.deliverablesDueThisWeek,
+          deliverablesDueThisWeek: rollup.deliverablesDueThisWeek,
+          deliverablesOverdue: rollup.deliverablesOverdue,
           workstreams: (eng.workstreams ?? []).map((w) => ({ name: w.name, status: w.status })),
         },
         openRaid: {
@@ -2016,6 +2032,7 @@ defineCapability({
   async run(input, ctx) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));
     // Strictly self-scoped — expenses key on the calling user's id.
+    // Oct 2026 audit — soft-deleted claims were listed and summed.
     const rows = await db
       .select()
       .from(atelierExpenses)
@@ -2023,6 +2040,7 @@ defineCapability({
         and(
           eq(atelierExpenses.orgId, ctx.persona.orgId),
           eq(atelierExpenses.personId, ctx.persona.id),
+          isNull(atelierExpenses.deletedAt),
         ),
       )
       .orderBy(desc(atelierExpenses.expenseDate))
@@ -2106,10 +2124,22 @@ defineCapability({
       policyStatus: e.policyStatus,
       href: `/wallet`,
     }));
-    const totalUsd = filtered.reduce((acc, e) => acc + (e.usdAmount ?? 0), 0);
+    // Totals cover every matching claim, not only the page returned.
+    const totalUsd = Math.round(filtered.reduce((acc, e) => acc + (e.usdAmount ?? 0), 0) * 100) / 100;
+    const byCurrency: Record<string, number> = {};
+    for (const e of filtered) byCurrency[e.currency] = Math.round(((byCurrency[e.currency] ?? 0) + e.amount) * 100) / 100;
     return {
       ok: true,
-      data: { items, total: filtered.length, totalUsd },
+      data: {
+        items,
+        total: filtered.length,
+        truncated: filtered.length > items.length,
+        totalUsd,
+        totalsByCurrency: byCurrency,
+        ...(filtered.length > items.length
+          ? { note: `Showing ${items.length} of ${filtered.length} claims; totals cover all ${filtered.length}.` }
+          : {}),
+      },
     };
   },
 });
@@ -2313,7 +2343,7 @@ defineCapability({
         id: atelierOpportunities.id,
         name: atelierOpportunities.name,
         salesStage: atelierOpportunities.salesStage,
-        daysInStage: atelierOpportunities.daysInStage,
+        createdAt: atelierOpportunities.createdAt,
         nextMilestone: atelierOpportunities.nextMilestone,
       })
       .from(atelierOpportunities)
@@ -2324,13 +2354,14 @@ defineCapability({
           isNull(atelierOpportunities.deletedAt),
         ),
       );
+    const oppAges = await loadStageAges(opps);
     const openOpps = opps
       .filter((o) => !TERMINAL.has(resolveSalesStage(o.salesStage)))
       .map((o) => ({
         id: o.id,
         name: o.name,
         stage: resolveSalesStage(o.salesStage),
-        daysInStage: o.daysInStage,
+        daysInStage: oppAges.get(o.id)?.days ?? 0,
         nextMilestone: o.nextMilestone ?? null,
         href: `/opportunities/${o.id}`,
       }));
@@ -2712,16 +2743,33 @@ defineCapability({
     // means overallocated, under 100% means spare capacity. Note: if some
     // staffings were hidden by the caller's ACL, the visible total may
     // understate real load — surface that via hiddenAccountCount.
-    const totalAllocationPct = staffingsOut.reduce(
-      (acc, s) => acc + (typeof s.allocationPct === "number" ? s.allocationPct : 0),
-      0,
-    );
-    const capacityStatus =
-      totalAllocationPct > 100
-        ? "overallocated"
-        : totalAllocationPct === 100
-          ? "fully_allocated"
-          : "available";
+    // Oct 2026 audit — `allocation_pct` defaults to 0 and is rarely filled,
+    // so a founder staffed on four engagements and owning six opportunities
+    // read as "0% allocated, 100% available". A zero on a live staffing is
+    // "allocation not recorded", not "no load". The capacity signal is only
+    // stated when every visible staffing carries a recorded allocation; the
+    // engagement and opportunity counts are always returned so the model
+    // can describe the load factually instead of quoting a percentage.
+    const recorded = staffingsOut.filter((s) => typeof s.allocationPct === "number" && s.allocationPct > 0);
+    const unrecordedCount = staffingsOut.length - recorded.length;
+    const totalAllocationPct = recorded.reduce((acc, s) => acc + (s.allocationPct as number), 0);
+    const allocationKnown = staffingsOut.length > 0 && unrecordedCount === 0;
+    const capacityStatus: "overallocated" | "fully_allocated" | "available" | "unknown" =
+      !allocationKnown
+        ? "unknown"
+        : totalAllocationPct > 100
+          ? "overallocated"
+          : totalAllocationPct === 100
+            ? "fully_allocated"
+            : "available";
+    const capacityNote =
+      staffingsOut.length === 0
+        ? oppsOut.length > 0
+          ? `No active engagement staffing recorded; owns or leads ${oppsOut.length} open opportunit${oppsOut.length === 1 ? "y" : "ies"}.`
+          : "No active engagement staffing or open opportunities recorded."
+        : allocationKnown
+          ? `${totalAllocationPct}% allocated across ${staffingsOut.length} engagement${staffingsOut.length === 1 ? "" : "s"}.`
+          : `Staffed on ${staffingsOut.length} active engagement${staffingsOut.length === 1 ? "" : "s"}${oppsOut.length ? ` and ${oppsOut.length} open opportunit${oppsOut.length === 1 ? "y" : "ies"}` : ""}; allocation % not recorded on ${unrecordedCount} of them, so availability cannot be stated as a percentage.`;
 
     return {
       ok: true,
@@ -2735,9 +2783,12 @@ defineCapability({
         openOpportunities: oppsOut,
         openOpportunityCount: oppsOut.length,
         hiddenAccountCount: hiddenAccountIds.size,
-        totalAllocationPct,
+        allocationKnown,
+        unrecordedAllocationCount: unrecordedCount,
+        totalAllocationPct: allocationKnown ? totalAllocationPct : null,
         capacityStatus,
-        availablePct: Math.max(0, 100 - totalAllocationPct),
+        availablePct: allocationKnown ? Math.max(0, 100 - totalAllocationPct) : null,
+        capacityNote,
       },
     };
   },

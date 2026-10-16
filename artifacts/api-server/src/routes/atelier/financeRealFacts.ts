@@ -45,13 +45,11 @@ import {
   atelierRevenueMilestone,
 } from "@workspace/db";
 import { isExpenseEconomicallyActive } from "../../lib/atelier-expense-lifecycle.js";
+import { toUsdSync } from "../../lib/atelier-fx.js";
 
-// FX aligned with financePlanFpaEngine.FX_TO_USD.
-const FX_TO_USD: Record<string, number> = {
-  USD: 1.0, GBP: 1.27, AED: 0.272, SAR: 0.267, EUR: 1.08,
-};
+// Phase 0 (Oct 2026 audit): one FX source (lib/atelier-fx snapshot).
 function toUsd(amount: number, currency: string | null | undefined): number {
-  return amount * (FX_TO_USD[currency ?? "USD"] ?? 1);
+  return toUsdSync(amount, currency);
 }
 
 export const FIRM_ENTITY_ID = "firm";

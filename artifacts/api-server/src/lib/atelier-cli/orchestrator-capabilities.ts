@@ -180,6 +180,59 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
 // it can be unit-tested in isolation. Re-exported here for Task #499's
 // callers in attachment-capabilities and the entityNavPath helper below.
 import { resolveNavPath } from "./orchestrator-nav-path.js";
+import Ajv, { type ValidateFunction } from "ajv";
+
+// Oct 2026 audit — validate a proposed write against the dispatch target's
+// own input schema at PREVIEW time. Before this, the confirm card showed
+// whatever fields the model invented (`additionalProperties: true` on
+// `payload`), and the user confirmed a diff that the target then rejected
+// or silently ignored. Unknown fields are dropped from the diff and listed
+// as `ignoredFields`; schema violations fail the preview with the Ajv
+// message so the model corrects the payload instead of asking the user to
+// confirm something that cannot be applied.
+const PREVIEW_VALIDATOR = new Ajv({ allErrors: true, strict: false, coerceTypes: false });
+const PREVIEW_VALIDATOR_CACHE = new WeakMap<object, ValidateFunction>();
+
+export interface PreviewValidation {
+  ok: boolean;
+  payload: Record<string, unknown>;
+  ignoredFields: string[];
+  errors: string[];
+}
+
+export function validateProposedWritePayload(
+  targetSchema: Record<string, unknown>,
+  translatedPayload: Record<string, unknown>,
+): PreviewValidation {
+  const properties = (targetSchema.properties ?? null) as Record<string, unknown> | null;
+  const closed = properties !== null && targetSchema.additionalProperties !== true;
+  const ignoredFields: string[] = [];
+  const payload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(translatedPayload)) {
+    if (value === undefined) continue;
+    if (closed && key !== "confirm" && !(key in properties!)) {
+      ignoredFields.push(key);
+      continue;
+    }
+    payload[key] = value;
+  }
+  let validate = PREVIEW_VALIDATOR_CACHE.get(targetSchema);
+  if (!validate) {
+    try {
+      validate = PREVIEW_VALIDATOR.compile(targetSchema);
+      PREVIEW_VALIDATOR_CACHE.set(targetSchema, validate);
+    } catch {
+      // A schema Ajv cannot compile is not the model's fault; let the
+      // commit path report whatever the target reports.
+      return { ok: true, payload, ignoredFields, errors: [] };
+    }
+  }
+  const valid = validate({ ...payload, confirm: true });
+  const errors = valid
+    ? []
+    : (validate.errors ?? []).map((e) => `${e.instancePath || "payload"} ${e.message ?? "is invalid"}`.trim());
+  return { ok: Boolean(valid), payload, ignoredFields, errors };
+}
 export { resolveNavPath };
 
 // Task #499 — convenience wrapper for read-side capabilities that
@@ -270,223 +323,104 @@ defineCapability({
   surfaceOn: ["global"],
   source: "cli-only",
   async run(input, ctx) {
-    const verb = String(input.verb ?? "") as WriteVerb;
-    const kind = String(input.kind ?? "") as WriteKind;
-    const targetId = typeof input.targetId === "string" ? input.targetId : null;
-    const payload = (input.payload ?? {}) as Record<string, unknown>;
-    const summary =
-      typeof input.summary === "string" && input.summary.trim().length > 0
-        ? input.summary.trim()
-        : `${verb} ${kind}${targetId ? ` ${targetId}` : ""}`;
-    const route = ROUTE_HINTS[kind]?.[verb] ?? `(no route registered for ${verb} ${kind})`;
-    // Task #411 — resolve in-process dispatch target now so the
-    // preview card can warn when there is no registered backing tool.
-    const { dispatchTarget, translateDispatchPayload } = await import("./write-dispatch.js");
-    const dispatchToolName = dispatchTarget(verb as DispatchVerb, kind);
-
-    // Contract preparation owns a richer conversation than the generic
-    // dispatcher: it resolves the active template and counterparty, asks for
-    // missing template values, and builds the actual filled-value preview.
-    // Delegate before producing a generic propose_write card so even a model
-    // that selects the fallback dispatcher cannot bypass that conversation or
-    // turn a real prerequisite error into a false capability denial.
-    if (
-      input.confirm !== true &&
-      verb === "create" &&
-      kind === "contract" &&
-      dispatchToolName === "contract_prepare"
-    ) {
-      const { findToolByName } = await import("./index.js");
-      const prepareTool = findToolByName(dispatchToolName, ctx.persona);
-      if (!prepareTool) {
-        return {
-          ok: false,
-          errorCode: "dispatch_unregistered",
-          errorMessage:
-            "Contract preparation is unavailable for the current persona.",
-        };
-      }
-      return prepareTool.run({ ...payload, confirm: false }, ctx);
+    const orgId = ctx.persona.orgId;
+    const kind = String(input.kind ?? "") as ResolverKind;
+    const query = String(input.query ?? "").trim();
+    const scopeAccountId = typeof input.scopeAccountId === "string" ? input.scopeAccountId : null;
+    const scopeEngagementId =
+      typeof input.scopeEngagementId === "string" ? input.scopeEngagementId : null;
+    if (!query) {
+      return {
+        ok: false,
+        errorCode: "missing_query",
+        errorMessage: "resolve_entity requires a non-empty query string.",
+      };
     }
-
-    if (input.confirm !== true) {
-      if (!dispatchToolName) {
-        return {
-          ok: false,
-          errorCode: "unsupported_dispatch",
-          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
-          data: { stage: "failed", verb, kind, targetId, route },
-        };
-      }
-      // Task #495 — at proposal time, compute the context page the
-      // user should be looking at while reviewing the confirm card
-      // (e.g. the opportunity detail page when proposing a stage
-      // transition, or the timesheet edit screen when updating an
-      // entry). Skipped for `create` when no targetId/payload hints
-      // exist — there is no destination yet.
-      // Task #573 — deletes never auto-navigate on propose: the entity's
-      // own page disappears on commit, and pre-navigating there is just
-      // noise. Only non-delete verbs surface a review destination.
-      const proposeNavPath =
-        verb === "delete" ? null : resolveNavPath({ verb, kind, targetId, payload });
-      const navigateTo = proposeNavPath
-        ? { path: proposeNavPath, when: "on_propose" as const }
-        : null;
-      // Task #573 — dependency-impact check for destructive deletes.
-      const impact =
-        verb === "delete"
-          ? await computeDeleteImpact(kind, targetId, ctx.persona.orgId)
-          : null;
+    // Hybrid pg_trgm + pgvector resolver — single source of truth for
+    // every chat-owned kind. Returns up to 5 candidates ordered by
+    // score; this capability emits a disambiguation envelope when
+    // there is more than one.
+    const candidates = await hybridResolveEntity(kind, query, orgId, {
+      accountId: scopeAccountId,
+      engagementId: scopeEngagementId,
+    });
+    await recordRiserObservation({
+      orgId,
+      conversationId: ctx.sessionId,
+      turnId: ctx.turnId,
+      stage: "resolution",
+      outcome:
+        candidates.length === 0
+          ? "not_found"
+          : candidates.length === 1
+            ? "unique"
+            : "ambiguous",
+      dimensions: { candidate_count: candidates.length },
+    }).catch(() => null);
+    if (candidates.length === 0) {
+      // "contact" is really a person search — it spans client contacts,
+      // HR employees, and partner-firm people. Say so, so the user
+      // knows all three rosters were checked.
+      const contactRosterLabel = scopeAccountId
+        ? "client contacts on this account, employees, and partner-firm people"
+        : "client contacts, employees, and partner-firm people";
+      const kindLabel = kind === "contact" ? `person (searched ${contactRosterLabel})` : kind;
+      // Task #769 — "a opportunity" / "a engagement" are wrong; use the
+      // correct article and a natural plural for the question phrasing.
+      const displayKind = kind === "contact" ? "person" : kind;
+      const article = /^[aeiou]/i.test(displayKind) ? "an" : "a";
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: `No ${kindLabel} matched "${query}".`,
+        clarification: {
+          field: "query",
+          tool: "resolve_entity",
+          question: `I couldn't find ${article} ${displayKind} matching "${query}"${kind === "contact" ? (scopeAccountId ? " in this account's client contacts, the employee roster, or partner-firm people" : " in client contacts, the employee roster, or partner-firm people") : ""}. Try a different name or paste the id.`,
+          partial: { kind, scopeAccountId, scopeEngagementId },
+          suggestions: [],
+        },
+      };
+    }
+    if (candidates.length === 1) {
+      const c = candidates[0];
+      // Task #499 — single-match resolves should land the user on the
+      // entity's canonical page. Optional: null for kinds with no
+      // dedicated SPA route (helper returns null in that case).
+      const navPath = entityNavPath(kind, c.id);
+      const navigateTo = navPath ? { path: navPath, when: "on_commit" as const } : null;
       return {
         ok: true,
         data: {
-          stage: "preview",
-          verb,
-          kind,
-          targetId,
+          entity: { kind, id: c.id, label: c.label, secondary: c.secondary, score: c.score, via: c.via },
           navigateTo,
         },
-        confirmation: {
-          summary,
-          diff: {
-            verb,
-            kind,
-            targetId,
-            payload,
-            ...(navigateTo ? { navigateTo } : {}),
-            ...(impact ? { impact } : {}),
-          },
-          pending: {
-            tool: "propose_write",
-            input: { ...input, confirm: true },
-          },
-        },
       };
     }
-
-    // Task #411 — commit phase. Look up the typed write capability for
-    // (verb, kind) and run it in-process via the same executor the
-    // sync turn loop uses, so audit / RLS / writeStepCount stay
-    // consistent. When no dispatch is registered, fall back to the
-    // legacy "client should POST/PATCH the route" hint.
-    if (dispatchToolName) {
-      // Lazy import to avoid circular module load (index.ts imports
-      // bootstrap-capabilities.js which imports this file).
-      const { findToolByName } = await import("./index.js");
-      const { capabilitiesForPersona } = await import("./capability-catalog.js");
-      if (
-        !capabilitiesForPersona(ctx.persona).some(
-          (capability) => capability.toolName === dispatchToolName,
-        )
-      ) {
-        return {
-          ok: false,
-          errorCode: "dispatch_forbidden",
-          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
-        };
-      }
-      const tool = findToolByName(dispatchToolName, ctx.persona);
-      if (!tool) {
-        return {
-          ok: false,
-          errorCode: "dispatch_unregistered",
-          errorMessage: `propose_write commit dispatch target "${dispatchToolName}" is not registered for the current persona.`,
-        };
-      }
-      const seed: Record<string, unknown> = { ...payload };
-      if (targetId && !("id" in seed)) seed.id = targetId;
-      const translated = translateDispatchPayload(verb as DispatchVerb, kind, seed, targetId);
-      const targetPayload: Record<string, unknown> = { ...translated, confirm: true };
-      const out = await tool.run(targetPayload, ctx);
-      // Task #411 — mirror the resulting row into atelier_entity_embeddings
-      // so the hybrid resolver finds it on subsequent turns. Best-
-      // effort; failures here never block the write.
-      if (out.ok && out.data && typeof out.data === "object") {
-        const data = out.data as { id?: string; kind?: string };
-        const newId = typeof data.id === "string" ? data.id : targetId ?? undefined;
-        if (newId) {
-          const { mirrorEntityEmbedding } = await import("./entity-resolver.js");
-          const label =
-            (typeof payload.name === "string" && payload.name) ||
-            (typeof payload.summary === "string" && payload.summary) ||
-            `${kind} ${newId}`;
-          void mirrorEntityEmbedding(ctx.persona.orgId, kind, newId, label, summary);
-        }
-      }
-      // Task #495 — on a successful commit, compute the destination
-      // page so the chat client can auto-navigate. Falls back to null
-      // (no navigation) when the (verb, kind) has no known UI route.
-      const commitNavPath = out.ok
-        ? resolveNavPath({ verb, kind, targetId, payload, resultData: out.data })
-        : null;
-      return {
-        ok: out.ok,
-        data: out.ok
-          ? {
-              stage: "committed",
-              // Task #573 — drives the clean single-line success card on
-              // the client instead of the raw debug entity_card echo.
-              shape: "write_success",
-              verb,
-              kind,
-              summary,
-              result: out.data ?? null,
-              // Task #511 — inline the literal so the navigateTo
-              // contract test (which scans `run` source for the
-              // `{ path, when: "on_commit" }` shape) can see it.
-              navigateTo: commitNavPath
-                ? { path: commitNavPath, when: "on_commit" as const }
-                : null,
-            }
-          : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
-        errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",
-        errorMessage: out.ok ? undefined : out.errorMessage ?? `dispatch ${dispatchToolName} failed`,
-      };
-    }
-
-    // Engagement create/update is intentionally omitted from
-    // write-dispatch.ts: standing up (or amending) an engagement runs
-    // through the charter flow rather than a generic write. Instead of
-    // the opaque `unsupported_dispatch` error, hand the user the exact
-    // tool to use so they are not left guessing.
-    if (kind === "engagement" && (verb === "create" || verb === "update")) {
-      return {
-        ok: false,
-        errorCode: "use_charter_flow",
-        errorMessage:
-          `Engagements are not created or amended through propose_write. ` +
-          `Use engagement_open_charter to ${verb === "create" ? "stand up a new engagement" : "amend an existing engagement"}.`,
-        data: {
-          stage: "failed",
-          verb,
-          kind,
-          targetId,
-          payload,
-          route,
-          useTool: "engagement_open_charter",
-        },
-      };
-    }
-
-    // Task #411 — no in-process dispatcher mapping exists for this
-    // (verb, kind). Reviewer round-3 requires a hard failure here
-    // (the previous "dispatched" no-op silently dropped writes the
-    // user expected to commit). Surface a structured error so the
-    // confirm card can show the user a real problem.
+    const options = candidates.map((c) => ({
+      id: c.id,
+      label: c.label,
+      secondary: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
+      hint: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
+    }));
+    // Task #769 — natural plural for kind ("opportunities" not "opportunitys").
+    const kindPlural = (k: string): string => {
+      if (k === "opportunity") return "opportunities";
+      if (k === "delivery") return "deliveries";
+      if (k.endsWith("y")) return `${k.slice(0, -1)}ies`;
+      return `${k}s`;
+    };
     return {
-      ok: false,
-      errorCode: "unsupported_dispatch",
-      errorMessage:
-        `propose_write commit cannot apply ${verb} ${kind} in-process — no dispatch mapping is registered. ` +
-        `Use the typed route (${route}) directly, or extend write-dispatch.ts to cover this combination.`,
+      ok: true,
+      // Task #411 — flat top-level `options` so the EntityResolution
+      // renderer can pick it up directly (no nested envelope).
       data: {
-        stage: "failed",
-        verb,
         kind,
-        targetId,
-        payload,
-        route,
+        candidateCount: candidates.length,
+        options,
+        prompt: `Multiple ${kindPlural(kind)} match "${query}". Pick one.`,
       },
+      disambiguation: { kind, options },
     };
   },
 });
@@ -539,223 +473,498 @@ defineCapability({
   surfaceOn: ["global"],
   source: "cli-only",
   async run(input, ctx) {
-    const verb = String(input.verb ?? "") as WriteVerb;
-    const kind = String(input.kind ?? "") as WriteKind;
-    const targetId = typeof input.targetId === "string" ? input.targetId : null;
-    const payload = (input.payload ?? {}) as Record<string, unknown>;
-    const summary =
-      typeof input.summary === "string" && input.summary.trim().length > 0
-        ? input.summary.trim()
-        : `${verb} ${kind}${targetId ? ` ${targetId}` : ""}`;
-    const route = ROUTE_HINTS[kind]?.[verb] ?? `(no route registered for ${verb} ${kind})`;
-    // Task #411 — resolve in-process dispatch target now so the
-    // preview card can warn when there is no registered backing tool.
-    const { dispatchTarget, translateDispatchPayload } = await import("./write-dispatch.js");
-    const dispatchToolName = dispatchTarget(verb as DispatchVerb, kind);
+    const kind = String(input.kind ?? "");
+    const inp = (input.input ?? {}) as Record<string, unknown>;
 
-    // Contract preparation owns a richer conversation than the generic
-    // dispatcher: it resolves the active template and counterparty, asks for
-    // missing template values, and builds the actual filled-value preview.
-    // Delegate before producing a generic propose_write card so even a model
-    // that selects the fallback dispatcher cannot bypass that conversation or
-    // turn a real prerequisite error into a false capability denial.
-    if (
-      input.confirm !== true &&
-      verb === "create" &&
-      kind === "contract" &&
-      dispatchToolName === "contract_prepare"
-    ) {
-      const { findToolByName } = await import("./index.js");
-      const prepareTool = findToolByName(dispatchToolName, ctx.persona);
-      if (!prepareTool) {
+    const targetId = typeof input.targetId === "string" ? input.targetId : null;
+
+    if (kind === "account") {
+      // When targetId is provided (verb=update), actually dispatch
+      // Account Cartographer via runAgent so the orchestrator returns
+      // a real, freshly-derived prefill (firmographics + signals).
+      // Without targetId (verb=create) we degrade to an advisory hint
+      // because Cartographer requires an existing account row — the
+      // post-create accountRoutes flow handles that case.
+      if (targetId) {
+        try {
+          const [acct] = await db
+            .select({
+              id: atelierAccounts.id,
+              name: atelierAccounts.name,
+              brandName: atelierAccounts.brandName,
+              sector: atelierAccounts.sector,
+              country: atelierAccounts.country,
+            })
+            .from(atelierAccounts)
+            .where(
+              and(
+                eq(atelierAccounts.id, targetId),
+                eq(atelierAccounts.orgId, ctx.persona.orgId),
+                isNull(atelierAccounts.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!acct) {
+            return {
+              ok: false,
+              errorCode: "not_found",
+              errorMessage: `Account ${targetId} not found in this org.`,
+            };
+          }
+          // Task #1193 — Background Work bell visibility during the
+          // pre-run-row window. Cleared in the finally below.
+          noteAgentLaunch({
+            agentId: "account_cartographer",
+            targetId: acct.id,
+            targetLabel: acct.brandName ?? acct.name,
+            userId: ctx.persona.id,
+          });
+          let result: Awaited<ReturnType<typeof runAccountCartographer>>;
+          try {
+            result = await runAccountCartographer({
+              accountId: acct.id,
+              accountName: acct.brandName ?? acct.name,
+              accountSector: acct.sector ?? "",
+              accountCountry: acct.country ?? "",
+              triggeredByUserId: ctx.persona.id,
+              actorLabel: "Chat Orchestrator",
+            });
+          } finally {
+            clearAgentLaunch("account_cartographer", acct.id);
+          }
+          // Cartographer ran against a persisted account — chain the
+          // Executive Mapper (fire-and-forget), same as account creation
+          // and the manual refresh route. Research-only runs (no targetId)
+          // never reach this branch, so they never trigger the Mapper.
+          chainExecutiveMapperAfterCartographer(
+            acct.id,
+            ctx.persona.id,
+            acct.brandName ?? acct.name,
+          );
+          const out = result.output as unknown as Record<string, unknown> | null;
+          // Normalise into { draft, missingRequiredFields, ... }
+          // contract expected by the orchestrator policy.
+          const draft = out ?? {};
+          const required = ["sector", "country", "primaryCurrency", "primaryLanguage"];
+          const missingRequiredFields = required.filter(
+            (k) => !(k in draft) || draft[k] == null || draft[k] === "",
+          );
+          return {
+            ok: true,
+            data: {
+              specialist: {
+                id: "ag_account_cartographer",
+                name: "Account Cartographer",
+                runId: result.runId,
+                costUsd: result.costUsd,
+              },
+              draft,
+              missingRequiredFields,
+              missingOptionalFields: [],
+              lowConfidenceFields: [],
+            },
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            errorCode: "specialist_failed",
+            errorMessage: `Cartographer dispatch failed: ${(e as Error).message}`,
+          };
+        }
+      }
+      // Pre-create research mode. Dispatch Account Cartographer in
+      // research_only mode (no DB writes, no agent_runs row) using the
+      // user-provided fragment so the confirm card is pre-populated
+      // with real, web-search-grounded firmographics + signals + DMs.
+      const rawName =
+        typeof inp.name === "string" && inp.name.trim().length > 0
+          ? inp.name.trim()
+          : null;
+      if (!rawName) {
         return {
           ok: false,
-          errorCode: "dispatch_unregistered",
+          errorCode: "missing_input",
           errorMessage:
-            "Contract preparation is unavailable for the current persona.",
+            "prefill_from_specialist: input.name is required when targetId is absent (verb=create).",
         };
       }
-      return prepareTool.run({ ...payload, confirm: false }, ctx);
+      // Task #601 — when a prior turn paused on the branch-vs-HQ clarification,
+      // the full researched draft rides back in `input.__researchedDraft`, and
+      // the partner's HQ/branch answer in top-level `entityRole` (merged by the
+      // clarification continuation). Reuse the cached draft so we do NOT re-run
+      // the (slow, costly) Cartographer just to attach one answer.
+      const cachedDraft =
+        inp.__researchedDraft &&
+        typeof inp.__researchedDraft === "object" &&
+        !Array.isArray(inp.__researchedDraft)
+          ? (inp.__researchedDraft as Record<string, unknown>)
+          : null;
+      const entityRoleAnswerRaw =
+        typeof input.entityRole === "string"
+          ? input.entityRole
+          : typeof inp.entityRole === "string"
+            ? inp.entityRole
+            : "";
+      const VALID_ENTITY_ROLES = ["hq", "subsidiary", "branch", "office"];
+      const entityRoleAnswer = (() => {
+        const t = entityRoleAnswerRaw.trim().toLowerCase();
+        if (VALID_ENTITY_ROLES.includes(t)) return t;
+        // Tolerate free-text answers ("it's the headquarters", "a local branch").
+        if (/\b(hq|head ?quarter)/.test(t)) return "hq";
+        if (/\bsubsidiar/.test(t)) return "subsidiary";
+        if (/\bbranch\b/.test(t)) return "branch";
+        if (/\boffice\b/.test(t)) return "office";
+        return "";
+      })();
+      try {
+        let draft: Record<string, unknown>;
+        let costUsd = 0;
+        if (cachedDraft) {
+          draft = cachedDraft;
+        } else {
+          const result = await runAccountCartographer({
+            accountId: null,
+            accountName: rawName,
+            accountSector: typeof inp.sector === "string" ? inp.sector : "",
+            accountCountry: typeof inp.country === "string" ? inp.country : "",
+            accountHqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
+            triggeredByUserId: ctx.persona.id,
+            actorLabel: "Chat Orchestrator (prefill)",
+            mode: "research_only",
+          });
+          costUsd = result.costUsd;
+          const out = result.output;
+          const sourceSignals = (out.sourceSignals ?? []).slice(0, 6).map((s) => ({
+            kind: s.kind,
+            title: s.title,
+            url: s.url,
+            summary: s.summary,
+            publishedAt: s.publishedAt,
+            confidence: s.confidence ?? "amber",
+          }));
+          const decisionMakers = (out.decisionMakers ?? []).slice(0, 7).map((d) => ({
+            fullName: d.fullName,
+            title: d.title ?? null,
+            seniority: d.seniority ?? null,
+            buyerPersona: d.buyerPersona ?? null,
+            sourceUrl: d.sourceUrl ?? null,
+            confidence: d.confidence,
+          }));
+          draft = {
+            name: out.account.canonicalName || rawName,
+            // Task #601 — brand/display name defaults to the legal name when the
+            // firm has no distinct brand.
+            brandName:
+              out.account.brandName ||
+              out.account.canonicalName ||
+              rawName,
+            country:
+              out.account.country ||
+              (typeof inp.country === "string" ? inp.country : null),
+            sector: out.account.sector ?? null,
+            hqCity: out.account.hqCity ?? null,
+            tier: out.account.tier ?? null,
+            // Task #601 — firmographic enrichment carried onto the proposal card
+            // and through "Review & Create".
+            size: out.account.size ?? null,
+            employeeCount: out.account.employeeCount ?? null,
+            primaryCurrency: out.account.primaryCurrency ?? null,
+            annualRevenue: out.account.annualRevenue ?? null,
+            holdingStructure: out.account.holdingStructure ?? null,
+            countryPresence: out.account.countryPresence ?? [],
+            industryCode: out.account.industryCode ?? null,
+            subIndustryCode: out.account.subIndustryCode ?? null,
+            strategicPriorities: (out.account.strategicPriorities ?? [])
+              .slice(0, 5)
+              .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls })),
+            cogniriseHypothesis: out.account.cogniriseHypothesis ?? "",
+            refreshedSummary: out.account.refreshedSummary ?? "",
+            sourceSignals,
+            decisionMakers,
+            // Task #560 — full structured research brief carried onto the
+            // proposal card (display-only) and persisted post-create.
+            researchBrief: out.researchBrief,
+          };
+        }
+
+        // Task #601 — branch-vs-HQ conversational question. When the firm has a
+        // multinational footprint and the partner has not yet told us which
+        // entity they're onboarding, pause and ask. The full researched draft
+        // rides in `partial` so the answer turn skips the Cartographer.
+        const presence = Array.isArray(draft.countryPresence)
+          ? (draft.countryPresence as Array<Record<string, unknown>>)
+          : [];
+        const presenceCountries = presence
+          .map((p) => (typeof p?.country === "string" ? p.country.trim() : ""))
+          .filter((c) => c.length > 0);
+        const isMultinational =
+          presenceCountries.length > 1 ||
+          presence.some(
+            (p) =>
+              typeof p?.role === "string" &&
+              p.role.length > 0 &&
+              p.role !== "hq",
+          );
+        if (isMultinational && !entityRoleAnswer) {
+          const displayName =
+            (typeof draft.brandName === "string" && draft.brandName) ||
+            (typeof draft.name === "string" && draft.name) ||
+            rawName;
+          const countryList =
+            presenceCountries.length > 0
+              ? presenceCountries.slice(0, 6).join(", ")
+              : "multiple countries";
+          return {
+            ok: true,
+            data: { clarificationPending: true },
+            clarification: {
+              field: "entityRole",
+              tool: "prefill_from_specialist",
+              question:
+                `${displayName} has a presence across multiple markets (${countryList}). ` +
+                `Is the account you're creating the global headquarters, or a specific ` +
+                `branch/subsidiary? This sets the entity's role on the record.`,
+              partial: {
+                kind: "account",
+                input: { ...inp, __researchedDraft: draft },
+              },
+              suggestions: [
+                { id: "hq", label: "Global headquarters" },
+                { id: "subsidiary", label: "A subsidiary" },
+                { id: "branch", label: "A branch / local office" },
+              ],
+            },
+          };
+        }
+        // Stamp the resolved role (if any) onto the draft so it carries through
+        // "Review & Create" into the account record.
+        if (entityRoleAnswer) draft.entityRole = entityRoleAnswer;
+
+        const required = ["sector", "country"];
+        const missingRequiredFields = required.filter((k) => {
+          const v = draft[k];
+          return v == null || (typeof v === "string" && v.trim() === "");
+        });
+        // Task #560 — partnerOwnerId is NO LONGER forced onto
+        // missingRequiredFields. The chat flow now ends here by emitting an
+        // `account_proposal` card; the partner reviews the draft and clicks
+        // "Review & Create", which opens the pre-populated CreateAccountDialog
+        // (partner-owner defaulted to the acting partner) and writes the row
+        // through the standard POST /accounts route. There is no in-chat
+        // confirm card, so there is nothing to leave unsatisfied.
+        return {
+          ok: true,
+          data: {
+            // Drives the frontend ShapeBody renderer (overrides the
+            // capability default via the per-result shape hint).
+            shape: "account_proposal",
+            specialist: {
+              id: "ag_account_cartographer",
+              name: "Account Cartographer",
+              mode: "research_only",
+              costUsd,
+            },
+            draft,
+            missingRequiredFields,
+            missingOptionalFields: ["website", "size"],
+            lowConfidenceFields: [],
+          },
+        };
+      } catch (e) {
+        // The Cartographer prefill is ADVISORY — the partner always reviews and
+        // edits the draft on the `account_proposal` card before the account is
+        // actually written. A web-search/synthesis timeout (a heavy
+        // conglomerate that exhausts the research budget mid-synthesis surfaces
+        // as "Request was aborted") must therefore NOT block account creation.
+        // Degrade gracefully: emit the same proposal card pre-filled with
+        // whatever the partner already typed, flagged `degraded` so the UI and
+        // the orchestrator's final message make clear auto-enrichment couldn't
+        // finish and the remaining fields need manual entry on Review & Create.
+        const reason = (e as Error).message;
+        console.warn(
+          `[prefill_from_specialist] Account Cartographer failed for "${rawName}"; degrading to manual draft: ${reason}`,
+        );
+        const fallbackDraft: Record<string, unknown> = {
+          name: rawName,
+          brandName: rawName,
+          country: typeof inp.country === "string" ? inp.country : null,
+          sector: typeof inp.sector === "string" ? inp.sector : null,
+          hqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
+          strategicPriorities: [],
+          sourceSignals: [],
+          decisionMakers: [],
+        };
+        if (entityRoleAnswer) fallbackDraft.entityRole = entityRoleAnswer;
+        const required = ["sector", "country"];
+        const missingRequiredFields = required.filter((k) => {
+          const v = fallbackDraft[k];
+          return v == null || (typeof v === "string" && v.trim() === "");
+        });
+        return {
+          ok: true,
+          data: {
+            shape: "account_proposal",
+            degraded: true,
+            degradedReason: reason,
+            specialist: {
+              id: "ag_account_cartographer",
+              name: "Account Cartographer",
+              mode: "research_only",
+              costUsd: 0,
+            },
+            draft: fallbackDraft,
+            missingRequiredFields,
+            missingOptionalFields: ["website", "size"],
+            lowConfidenceFields: [],
+          },
+        };
+      }
     }
 
-    if (input.confirm !== true) {
-      if (!dispatchToolName) {
-        return {
-          ok: false,
-          errorCode: "unsupported_dispatch",
-          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
-          data: { stage: "failed", verb, kind, targetId, route },
-        };
+    if (kind === "opportunity") {
+      // Same pattern: real Pursuit Scout when targetId exists,
+      // advisory hint otherwise.
+      if (targetId) {
+        try {
+          const [opp] = await db
+            .select({
+              id: atelierOpportunities.id,
+              name: atelierOpportunities.name,
+              accountId: atelierOpportunities.accountId,
+            })
+            .from(atelierOpportunities)
+            .where(
+              and(
+                eq(atelierOpportunities.id, targetId),
+                eq(atelierOpportunities.orgId, ctx.persona.orgId),
+                isNull(atelierOpportunities.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!opp) {
+            return {
+              ok: false,
+              errorCode: "not_found",
+              errorMessage: `Opportunity ${targetId} not found in this org.`,
+            };
+          }
+          const [acct] = await db
+            .select({
+              name: atelierAccounts.name,
+              brandName: atelierAccounts.brandName,
+              sector: atelierAccounts.sector,
+              country: atelierAccounts.country,
+            })
+            .from(atelierAccounts)
+            .where(eq(atelierAccounts.id, opp.accountId))
+            .limit(1);
+          const result = await runPursuitScout({
+            opportunityId: opp.id,
+            accountName: acct?.brandName ?? acct?.name ?? "",
+            accountCountry: acct?.country ?? "",
+            accountSector: acct?.sector ?? "",
+            opportunityName: opp.name,
+            contextBlurb:
+              typeof inp.contextBlurb === "string" ? inp.contextBlurb : opp.name,
+            triggeredByUserId: ctx.persona.id,
+            actorLabel: "Chat Orchestrator",
+          });
+          const draft = (result.output as unknown as Record<string, unknown> | null) ?? {};
+          const required = ["qualify5c", "decisionMakers"];
+          const missingRequiredFields = required.filter(
+            (k) => !(k in draft) || draft[k] == null,
+          );
+          return {
+            ok: true,
+            data: {
+              specialist: {
+                id: "ag_pursuit_scout",
+                name: "Pursuit Scout",
+                runId: result.runId,
+                costUsd: result.costUsd,
+              },
+              draft,
+              missingRequiredFields,
+              missingOptionalFields: [],
+              lowConfidenceFields: [],
+            },
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            errorCode: "specialist_failed",
+            errorMessage: `Pursuit Scout dispatch failed: ${(e as Error).message}`,
+          };
+        }
       }
-      // Task #495 — at proposal time, compute the context page the
-      // user should be looking at while reviewing the confirm card
-      // (e.g. the opportunity detail page when proposing a stage
-      // transition, or the timesheet edit screen when updating an
-      // entry). Skipped for `create` when no targetId/payload hints
-      // exist — there is no destination yet.
-      // Task #573 — deletes never auto-navigate on propose: the entity's
-      // own page disappears on commit, and pre-navigating there is just
-      // noise. Only non-delete verbs surface a review destination.
-      const proposeNavPath =
-        verb === "delete" ? null : resolveNavPath({ verb, kind, targetId, payload });
-      const navigateTo = proposeNavPath
-        ? { path: proposeNavPath, when: "on_propose" as const }
-        : null;
-      // Task #573 — dependency-impact check for destructive deletes.
-      const impact =
-        verb === "delete"
-          ? await computeDeleteImpact(kind, targetId, ctx.persona.orgId)
-          : null;
       return {
         ok: true,
         data: {
-          stage: "preview",
-          verb,
-          kind,
-          targetId,
-          navigateTo,
-        },
-        confirmation: {
-          summary,
-          diff: {
-            verb,
-            kind,
-            targetId,
-            payload,
-            ...(navigateTo ? { navigateTo } : {}),
-            ...(impact ? { impact } : {}),
+          specialist: {
+            id: "ag_pursuit_scout",
+            name: "Pursuit Scout",
+            triggeredOn: "create",
+            note: "Pursuit Scout auto-runs post-create and writes a 5C draft + buyer landscape to the opportunity workspace.",
           },
-          pending: {
-            tool: "propose_write",
-            input: { ...input, confirm: true },
+          draft: {
+            stage: "suspect",
+            subStatus: "cold",
+            probabilityPct: 5,
+            accountName: typeof inp.accountName === "string" ? inp.accountName : null,
+            opportunityName:
+              typeof inp.opportunityName === "string" ? inp.opportunityName : null,
+            contextBlurb: typeof inp.contextBlurb === "string" ? inp.contextBlurb : null,
           },
+          missingRequiredFields: ["accountId", "opportunityName"],
+          missingOptionalFields: ["dealValueUsd", "expectedCloseDate"],
+          lowConfidenceFields: [],
         },
       };
     }
 
-    // Task #411 — commit phase. Look up the typed write capability for
-    // (verb, kind) and run it in-process via the same executor the
-    // sync turn loop uses, so audit / RLS / writeStepCount stay
-    // consistent. When no dispatch is registered, fall back to the
-    // legacy "client should POST/PATCH the route" hint.
-    if (dispatchToolName) {
-      // Lazy import to avoid circular module load (index.ts imports
-      // bootstrap-capabilities.js which imports this file).
-      const { findToolByName } = await import("./index.js");
-      const { capabilitiesForPersona } = await import("./capability-catalog.js");
-      if (
-        !capabilitiesForPersona(ctx.persona).some(
-          (capability) => capability.toolName === dispatchToolName,
-        )
-      ) {
-        return {
-          ok: false,
-          errorCode: "dispatch_forbidden",
-          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
-        };
-      }
-      const tool = findToolByName(dispatchToolName, ctx.persona);
-      if (!tool) {
-        return {
-          ok: false,
-          errorCode: "dispatch_unregistered",
-          errorMessage: `propose_write commit dispatch target "${dispatchToolName}" is not registered for the current persona.`,
-        };
-      }
-      const seed: Record<string, unknown> = { ...payload };
-      if (targetId && !("id" in seed)) seed.id = targetId;
-      const translated = translateDispatchPayload(verb as DispatchVerb, kind, seed, targetId);
-      const targetPayload: Record<string, unknown> = { ...translated, confirm: true };
-      const out = await tool.run(targetPayload, ctx);
-      // Task #411 — mirror the resulting row into atelier_entity_embeddings
-      // so the hybrid resolver finds it on subsequent turns. Best-
-      // effort; failures here never block the write.
-      if (out.ok && out.data && typeof out.data === "object") {
-        const data = out.data as { id?: string; kind?: string };
-        const newId = typeof data.id === "string" ? data.id : targetId ?? undefined;
-        if (newId) {
-          const { mirrorEntityEmbedding } = await import("./entity-resolver.js");
-          const label =
-            (typeof payload.name === "string" && payload.name) ||
-            (typeof payload.summary === "string" && payload.summary) ||
-            `${kind} ${newId}`;
-          void mirrorEntityEmbedding(ctx.persona.orgId, kind, newId, label, summary);
-        }
-      }
-      // Task #495 — on a successful commit, compute the destination
-      // page so the chat client can auto-navigate. Falls back to null
-      // (no navigation) when the (verb, kind) has no known UI route.
-      const commitNavPath = out.ok
-        ? resolveNavPath({ verb, kind, targetId, payload, resultData: out.data })
-        : null;
+    if (kind === "contact") {
       return {
-        ok: out.ok,
-        data: out.ok
-          ? {
-              stage: "committed",
-              // Task #573 — drives the clean single-line success card on
-              // the client instead of the raw debug entity_card echo.
-              shape: "write_success",
-              verb,
-              kind,
-              summary,
-              result: out.data ?? null,
-              // Task #511 — inline the literal so the navigateTo
-              // contract test (which scans `run` source for the
-              // `{ path, when: "on_commit" }` shape) can see it.
-              navigateTo: commitNavPath
-                ? { path: commitNavPath, when: "on_commit" as const }
-                : null,
-            }
-          : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
-        errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",
-        errorMessage: out.ok ? undefined : out.errorMessage ?? `dispatch ${dispatchToolName} failed`,
-      };
-    }
-
-    // Engagement create/update is intentionally omitted from
-    // write-dispatch.ts: standing up (or amending) an engagement runs
-    // through the charter flow rather than a generic write. Instead of
-    // the opaque `unsupported_dispatch` error, hand the user the exact
-    // tool to use so they are not left guessing.
-    if (kind === "engagement" && (verb === "create" || verb === "update")) {
-      return {
-        ok: false,
-        errorCode: "use_charter_flow",
-        errorMessage:
-          `Engagements are not created or amended through propose_write. ` +
-          `Use engagement_open_charter to ${verb === "create" ? "stand up a new engagement" : "amend an existing engagement"}.`,
+        ok: true,
         data: {
-          stage: "failed",
-          verb,
-          kind,
-          targetId,
-          payload,
-          route,
-          useTool: "engagement_open_charter",
+          specialist: {
+            id: "ag_contact_enricher",
+            name: "Contact Enricher (stub)",
+            triggeredOn: "create",
+            note: "Contact enrichment is not yet implemented; surface this prefill to the user as a starting point.",
+          },
+          prefill: {
+            name: typeof inp.name === "string" ? inp.name : null,
+            email: typeof inp.email === "string" ? inp.email : null,
+            title: typeof inp.title === "string" ? inp.title : null,
+            accountId: typeof inp.accountId === "string" ? inp.accountId : null,
+          },
         },
       };
     }
 
-    // Task #411 — no in-process dispatcher mapping exists for this
-    // (verb, kind). Reviewer round-3 requires a hard failure here
-    // (the previous "dispatched" no-op silently dropped writes the
-    // user expected to commit). Surface a structured error so the
-    // confirm card can show the user a real problem.
+    if (kind === "engagement") {
+      return {
+        ok: true,
+        data: {
+          specialist: {
+            id: "ag_engagement_planner",
+            name: "Engagement Planner (stub)",
+            triggeredOn: "create",
+            note: "Engagement planning is not yet implemented; Charter Architect will run on first signed instrument.",
+          },
+          prefill: {
+            name: typeof inp.name === "string" ? inp.name : null,
+            accountId: typeof inp.accountId === "string" ? inp.accountId : null,
+            startDate: typeof inp.startDate === "string" ? inp.startDate : null,
+          },
+        },
+      };
+    }
+
     return {
       ok: false,
-      errorCode: "unsupported_dispatch",
-      errorMessage:
-        `propose_write commit cannot apply ${verb} ${kind} in-process — no dispatch mapping is registered. ` +
-        `Use the typed route (${route}) directly, or extend write-dispatch.ts to cover this combination.`,
-      data: {
-        stage: "failed",
-        verb,
-        kind,
-        targetId,
-        payload,
-        route,
-      },
+      errorCode: "unknown_kind",
+      errorMessage: `prefill_from_specialist does not support kind "${kind}".`,
     };
   },
 });
@@ -835,222 +1044,431 @@ defineCapability({
   surfaceOn: ["opportunity_workspace", "global"],
   source: "cli-only",
   async run(input, ctx) {
-    const verb = String(input.verb ?? "") as WriteVerb;
-    const kind = String(input.kind ?? "") as WriteKind;
-    const targetId = typeof input.targetId === "string" ? input.targetId : null;
-    const payload = (input.payload ?? {}) as Record<string, unknown>;
-    const summary =
-      typeof input.summary === "string" && input.summary.trim().length > 0
-        ? input.summary.trim()
-        : `${verb} ${kind}${targetId ? ` ${targetId}` : ""}`;
-    const route = ROUTE_HINTS[kind]?.[verb] ?? `(no route registered for ${verb} ${kind})`;
-    // Task #411 — resolve in-process dispatch target now so the
-    // preview card can warn when there is no registered backing tool.
-    const { dispatchTarget, translateDispatchPayload } = await import("./write-dispatch.js");
-    const dispatchToolName = dispatchTarget(verb as DispatchVerb, kind);
+    const orgId = ctx.persona.orgId;
+    const kind = (typeof input.kind === "string" ? input.kind : "opportunity") as
+      | "opportunity"
+      | "engagement"
+      | "deliverable"
+      | "expense";
+    const toStage = String(input.toStage ?? "");
+    const proposed = (input.proposed ?? {}) as Record<string, unknown>;
+    // Role-aware override: only partner-grade personas may exercise
+    // partnerOverride on a gate. Surfacing this in the gate row so
+    // the LLM (and the user) doesn't see an "Override" affordance
+    // they cannot actually invoke.
+    const canOverride =
+      ctx.persona.role === "partner" || ctx.persona.role === "founding_partner";
 
-    // Contract preparation owns a richer conversation than the generic
-    // dispatcher: it resolves the active template and counterparty, asks for
-    // missing template values, and builds the actual filled-value preview.
-    // Delegate before producing a generic propose_write card so even a model
-    // that selects the fallback dispatcher cannot bypass that conversation or
-    // turn a real prerequisite error into a false capability denial.
-    if (
-      input.confirm !== true &&
-      verb === "create" &&
-      kind === "contract" &&
-      dispatchToolName === "contract_prepare"
-    ) {
-      const { findToolByName } = await import("./index.js");
-      const prepareTool = findToolByName(dispatchToolName, ctx.persona);
-      if (!prepareTool) {
+    // ----- Non-opportunity adapters (table-driven). The opportunity
+    // path stays as the canonical implementation that consumes
+    // validateStageTransition; the others are thin status-taxonomy
+    // checks until dedicated validators land (task spec lists them
+    // as "to be located/added").
+    if (kind !== "opportunity") {
+      const targetId = typeof input.targetId === "string" ? input.targetId : "";
+      if (!targetId || !toStage) {
         return {
           ok: false,
-          errorCode: "dispatch_unregistered",
-          errorMessage:
-            "Contract preparation is unavailable for the current persona.",
+          errorCode: "bad_input",
+          errorMessage: `evaluate_gate(${kind}) requires targetId and toStage.`,
         };
       }
-      return prepareTool.run({ ...payload, confirm: false }, ctx);
-    }
+      type GateRow = {
+        id: string;
+        label: string;
+        met: boolean;
+        missing?: string[];
+        reason?: string;
+        overrideAvailable: boolean;
+      };
+      const partnerOverride = proposed.partnerOverride === true;
+      let currentStage = "";
+      let entityName = "";
+      const rows: GateRow[] = [];
 
-    if (input.confirm !== true) {
-      if (!dispatchToolName) {
-        return {
-          ok: false,
-          errorCode: "unsupported_dispatch",
-          errorMessage: `Riser cannot ${verb} a ${kind} through this workflow. No compatible ${verb} implementation is registered; use the dedicated ${kind} workflow instead.`,
-          data: { stage: "failed", verb, kind, targetId, route },
+      if (kind === "engagement") {
+        const allowed: Record<string, string[]> = {
+          mobilize: ["deliver"],
+          deliver: ["compound", "closed"],
+          compound: ["closed"],
+          closed: [],
         };
+        const [row] = await db
+          .select({
+            id: atelierEngagements.id,
+            name: atelierEngagements.name,
+            plmStage: atelierEngagements.plmStage,
+          })
+          .from(atelierEngagements)
+          .where(
+            and(
+              eq(atelierEngagements.id, targetId),
+              eq(atelierEngagements.orgId, orgId),
+              isNull(atelierEngagements.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Engagement ${targetId} not found.` };
+        }
+        currentStage = row.plmStage;
+        entityName = row.name;
+        const validNext = (allowed[currentStage] ?? []).includes(toStage);
+        rows.push({
+          id: "engagement_phase_taxonomy",
+          label: `PLM phase advance ${currentStage} → ${toStage}`,
+          met: validNext || partnerOverride,
+          reason: validNext
+            ? undefined
+            : `Engagements in '${currentStage}' may transition only to: ${(allowed[currentStage] ?? []).join(", ") || "none"}.`,
+          overrideAvailable: canOverride,
+        });
+      } else if (kind === "deliverable") {
+        // Partner Authority Lock: critic readiness must be GREEN to
+        // publish (or partner override w/ rationale).
+        const [row] = await db
+          .select({
+            id: atelierDeliverables.id,
+            name: atelierDeliverables.name,
+            status: atelierDeliverables.status,
+            criticReadiness: atelierDeliverables.criticReadiness,
+            partnerApprovedAt: atelierDeliverables.partnerApprovedAt,
+          })
+          .from(atelierDeliverables)
+          .where(
+            and(
+              eq(atelierDeliverables.id, targetId),
+              eq(atelierDeliverables.orgId, orgId),
+              isNull(atelierDeliverables.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Deliverable ${targetId} not found.` };
+        }
+        currentStage = row.status;
+        entityName = row.name;
+        const isPublish = toStage === "published" || toStage === "final";
+        if (isPublish) {
+          rows.push({
+            id: "synthesis_critic_green",
+            label: "Synthesis Critic readiness is GREEN",
+            met: row.criticReadiness === "green" || partnerOverride,
+            reason:
+              row.criticReadiness === "green"
+                ? undefined
+                : `Critic readiness is '${row.criticReadiness ?? "unknown"}'. Resolve criticisms or record a partner override with rationale.`,
+            overrideAvailable: canOverride,
+          });
+          rows.push({
+            id: "partner_authority_lock",
+            label: "Partner Authority Lock satisfied",
+            met: !!row.partnerApprovedAt || partnerOverride,
+            reason: row.partnerApprovedAt
+              ? undefined
+              : "A partner must approve before publish (or override with logged rationale).",
+            overrideAvailable: canOverride,
+          });
+        } else {
+          rows.push({
+            id: "deliverable_status_taxonomy",
+            label: `Deliverable status advance ${currentStage} → ${toStage}`,
+            met: true,
+            overrideAvailable: false,
+          });
+        }
+      } else if (kind === "expense") {
+        const [row] = await db
+          .select({
+            id: atelierExpenses.id,
+            status: atelierExpenses.status,
+            policyStatus: atelierExpenses.policyStatus,
+            captureSource: atelierExpenses.captureSource,
+            merchant: atelierExpenses.merchant,
+          })
+          .from(atelierExpenses)
+          .where(
+            and(
+              eq(atelierExpenses.id, targetId),
+              eq(atelierExpenses.orgId, orgId),
+              isNull(atelierExpenses.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Expense ${targetId} not found.` };
+        }
+        currentStage = row.status;
+        entityName = row.merchant ?? targetId;
+        if (toStage === "approved") {
+          rows.push({
+            id: "expense_policy_green",
+            label: "Policy check is GREEN",
+            met: row.policyStatus === "green" || partnerOverride,
+            reason:
+              row.policyStatus === "green"
+                ? undefined
+                : `Policy status is '${row.policyStatus}'. Resolve flags or record an override.`,
+            overrideAvailable: canOverride,
+          });
+          rows.push({
+            id: "expense_must_be_submitted",
+            label: "Expense is in 'submitted' state",
+            met: row.status === "submitted",
+            reason:
+              row.status === "submitted"
+                ? undefined
+                : `Expense is currently '${row.status}'; only submitted expenses may be approved.`,
+            overrideAvailable: false,
+          });
+        } else if (toStage === "submitted") {
+          rows.push({
+            id: "expense_capture_present",
+            label: "Capture source recorded",
+            met: !!row.captureSource,
+            overrideAvailable: false,
+          });
+        } else {
+          rows.push({
+            id: "expense_status_taxonomy",
+            label: `Expense status advance ${currentStage} → ${toStage}`,
+            met: ["draft", "submitted", "approved", "rejected"].includes(toStage),
+            overrideAvailable: false,
+          });
+        }
       }
-      // Task #495 — at proposal time, compute the context page the
-      // user should be looking at while reviewing the confirm card
-      // (e.g. the opportunity detail page when proposing a stage
-      // transition, or the timesheet edit screen when updating an
-      // entry). Skipped for `create` when no targetId/payload hints
-      // exist — there is no destination yet.
-      // Task #573 — deletes never auto-navigate on propose: the entity's
-      // own page disappears on commit, and pre-navigating there is just
-      // noise. Only non-delete verbs surface a review destination.
-      const proposeNavPath =
-        verb === "delete" ? null : resolveNavPath({ verb, kind, targetId, payload });
-      const navigateTo = proposeNavPath
-        ? { path: proposeNavPath, when: "on_propose" as const }
-        : null;
-      // Task #573 — dependency-impact check for destructive deletes.
-      const impact =
-        verb === "delete"
-          ? await computeDeleteImpact(kind, targetId, ctx.persona.orgId)
-          : null;
+
+      const allMet = rows.every((r) => r.met);
+      const blockers = rows
+        .filter((r) => !r.met)
+        .map((r) => r.reason || (Array.isArray(r.missing) ? r.missing.join(", ") : "") || r.label);
+      const evidence = rows.map((r) => ({
+        code: r.id,
+        label: r.label,
+        value: r.met ? "met" : (r.reason || "missing"),
+      }));
       return {
         ok: true,
         data: {
-          stage: "preview",
-          verb,
+          // Task #411 — flat top-level shape consumed directly by the
+          // GateReport renderer (no nested wrapper).
           kind,
           targetId,
-          navigateTo,
-        },
-        confirmation: {
-          summary,
-          diff: {
-            verb,
-            kind,
-            targetId,
-            payload,
-            ...(navigateTo ? { navigateTo } : {}),
-            ...(impact ? { impact } : {}),
-          },
-          pending: {
-            tool: "propose_write",
-            input: { ...input, confirm: true },
-          },
+          entityName,
+          fromStage: currentStage,
+          toStage,
+          partnerOverride,
+          partnerOverrideAvailable: partnerOverride === true,
+          passed: allMet,
+          allMet,
+          blockers,
+          evidence,
+          gates: rows,
         },
       };
     }
 
-    // Task #411 — commit phase. Look up the typed write capability for
-    // (verb, kind) and run it in-process via the same executor the
-    // sync turn loop uses, so audit / RLS / writeStepCount stay
-    // consistent. When no dispatch is registered, fall back to the
-    // legacy "client should POST/PATCH the route" hint.
-    if (dispatchToolName) {
-      // Lazy import to avoid circular module load (index.ts imports
-      // bootstrap-capabilities.js which imports this file).
-      const { findToolByName } = await import("./index.js");
-      const { capabilitiesForPersona } = await import("./capability-catalog.js");
-      if (
-        !capabilitiesForPersona(ctx.persona).some(
-          (capability) => capability.toolName === dispatchToolName,
-        )
-      ) {
-        return {
-          ok: false,
-          errorCode: "dispatch_forbidden",
-          errorMessage: `You do not have permission to ${verb} this ${kind}.`,
-        };
-      }
-      const tool = findToolByName(dispatchToolName, ctx.persona);
-      if (!tool) {
-        return {
-          ok: false,
-          errorCode: "dispatch_unregistered",
-          errorMessage: `propose_write commit dispatch target "${dispatchToolName}" is not registered for the current persona.`,
-        };
-      }
-      const seed: Record<string, unknown> = { ...payload };
-      if (targetId && !("id" in seed)) seed.id = targetId;
-      const translated = translateDispatchPayload(verb as DispatchVerb, kind, seed, targetId);
-      const targetPayload: Record<string, unknown> = { ...translated, confirm: true };
-      const out = await tool.run(targetPayload, ctx);
-      // Task #411 — mirror the resulting row into atelier_entity_embeddings
-      // so the hybrid resolver finds it on subsequent turns. Best-
-      // effort; failures here never block the write.
-      if (out.ok && out.data && typeof out.data === "object") {
-        const data = out.data as { id?: string; kind?: string };
-        const newId = typeof data.id === "string" ? data.id : targetId ?? undefined;
-        if (newId) {
-          const { mirrorEntityEmbedding } = await import("./entity-resolver.js");
-          const label =
-            (typeof payload.name === "string" && payload.name) ||
-            (typeof payload.summary === "string" && payload.summary) ||
-            `${kind} ${newId}`;
-          void mirrorEntityEmbedding(ctx.persona.orgId, kind, newId, label, summary);
-        }
-      }
-      // Task #495 — on a successful commit, compute the destination
-      // page so the chat client can auto-navigate. Falls back to null
-      // (no navigation) when the (verb, kind) has no known UI route.
-      const commitNavPath = out.ok
-        ? resolveNavPath({ verb, kind, targetId, payload, resultData: out.data })
-        : null;
-      return {
-        ok: out.ok,
-        data: out.ok
-          ? {
-              stage: "committed",
-              // Task #573 — drives the clean single-line success card on
-              // the client instead of the raw debug entity_card echo.
-              shape: "write_success",
-              verb,
-              kind,
-              summary,
-              result: out.data ?? null,
-              // Task #511 — inline the literal so the navigateTo
-              // contract test (which scans `run` source for the
-              // `{ path, when: "on_commit" }` shape) can see it.
-              navigateTo: commitNavPath
-                ? { path: commitNavPath, when: "on_commit" as const }
-                : null,
-            }
-          : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
-        errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",
-        errorMessage: out.ok ? undefined : out.errorMessage ?? `dispatch ${dispatchToolName} failed`,
-      };
-    }
+    // Opportunity path (canonical) — uses validateStageTransition.
+    const opportunityId = String(input.opportunityId ?? input.targetId ?? "");
+    const toStageOpp = toStage as SalesStage;
 
-    // Engagement create/update is intentionally omitted from
-    // write-dispatch.ts: standing up (or amending) an engagement runs
-    // through the charter flow rather than a generic write. Instead of
-    // the opaque `unsupported_dispatch` error, hand the user the exact
-    // tool to use so they are not left guessing.
-    if (kind === "engagement" && (verb === "create" || verb === "update")) {
+    if (!opportunityId || !ALL_STAGES.includes(toStageOpp)) {
       return {
         ok: false,
-        errorCode: "use_charter_flow",
-        errorMessage:
-          `Engagements are not created or amended through propose_write. ` +
-          `Use engagement_open_charter to ${verb === "create" ? "stand up a new engagement" : "amend an existing engagement"}.`,
-        data: {
-          stage: "failed",
-          verb,
-          kind,
-          targetId,
-          payload,
-          route,
-          useTool: "engagement_open_charter",
-        },
+        errorCode: "bad_input",
+        errorMessage: "evaluate_gate(opportunity) requires opportunityId and a valid toStage.",
+      };
+    }
+    // Re-bind the opportunity-stage-typed local that the canonical
+    // block below uses (the outer `toStage` is the broader string
+    // shape that engagement/deliverable/expense also share).
+    const toStageNarrow: SalesStage = toStageOpp;
+
+    // Org-scoped + soft-delete-filtered load including persisted gate
+    // evidence — without this, suspect→prospect always reports "5C
+    // missing" even when the opportunity row already has a complete
+    // qualify_5c blob and a Go decision.
+    const [opp] = await db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        qualify5c: atelierOpportunities.qualify5c,
+        goNoGoDecision: atelierOpportunities.goNoGoDecision,
+      })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.id, opportunityId),
+          eq(atelierOpportunities.orgId, orgId),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!opp) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: `Opportunity ${opportunityId} not found in this org.`,
       };
     }
 
-    // Task #411 — no in-process dispatcher mapping exists for this
-    // (verb, kind). Reviewer round-3 requires a hard failure here
-    // (the previous "dispatched" no-op silently dropped writes the
-    // user expected to commit). Surface a structured error so the
-    // confirm card can show the user a real problem.
+    const fromStage = opp.salesStage as SalesStage;
+    const partnerOverride = proposed.partnerOverride === true;
+
+    // Merge persisted evidence with proposed overrides — proposed wins
+    // so the LLM can preview the gate result with hypothetical edits
+    // before propose_write is called.
+    const mergedQualify5c =
+      (proposed.qualify5c as StageGateInput["qualify5c"]) ?? opp.qualify5c ?? null;
+    const mergedGoNoGo =
+      (proposed.goNoGoDecision as StageGateInput["goNoGoDecision"]) ??
+      (opp.goNoGoDecision
+        ? { decision: opp.goNoGoDecision.decision }
+        : null);
+    const mergedEvidenceArtifactIds = Array.isArray(proposed.evidenceArtifactIds)
+      ? (proposed.evidenceArtifactIds as string[])
+      : null;
+
+    const gateInput: StageGateInput = {
+      fromStage,
+      toStage: toStageNarrow,
+      partnerOverride,
+      qualify5c: mergedQualify5c,
+      goNoGoDecision: mergedGoNoGo,
+      decider: typeof proposed.decider === "string" ? proposed.decider : null,
+      verbalCommitDate:
+        typeof proposed.verbalCommitDate === "string" ? proposed.verbalCommitDate : null,
+      signaturePath:
+        typeof proposed.signaturePath === "string" ? proposed.signaturePath : null,
+      signedInstrumentFileId:
+        typeof proposed.signedInstrumentFileId === "string"
+          ? proposed.signedInstrumentFileId
+          : null,
+      evidenceArtifactIds: mergedEvidenceArtifactIds,
+      reasonCode: typeof proposed.reasonCode === "string" ? proposed.reasonCode : null,
+      subStatus: typeof proposed.subStatus === "string" ? proposed.subStatus : null,
+    };
+
+    const err = validateStageTransition(gateInput);
+
+    // Synthesize one row per gate that applies to the move so the
+    // client can render a checklist. We always include the sub-status
+    // taxonomy row when a sub-status was proposed (it is enforced
+    // even with partnerOverride).
+    type GateRow = {
+      id: string;
+      label: string;
+      met: boolean;
+      missing?: string[];
+      reason?: string;
+      overrideAvailable: boolean;
+    };
+    const rows: GateRow[] = [];
+
+    const isSuspectToProspect = fromStage === "suspect" && toStageNarrow === "prospect";
+    const isConvertToRunner = fromStage === "convert" && toStageNarrow === "runner";
+    const isRunnerToContract = fromStage === "runner" && toStageNarrow === "contract";
+    const isTerminal =
+      toStageNarrow === "lost" || toStageNarrow === "no_decision" || toStageNarrow === "withdrawn";
+
+    if (isSuspectToProspect) {
+      const isThisGate = err?.gate === "suspect_to_prospect_5c";
+      rows.push({
+        id: "suspect_to_prospect_5c",
+        label: "Completed 5C qualifier with Go decision",
+        met: !isThisGate,
+        reason: isThisGate
+          ? "5C must be filled (client, competition, capability, capacity, contract) and Go/No-go decided."
+          : undefined,
+        overrideAvailable: canOverride,
+      });
+    }
+    if (isConvertToRunner) {
+      const isThisGate = err?.gate === "convert_to_runner";
+      rows.push({
+        id: "convert_to_runner",
+        label: "Named decider + verbal-commit date + signature path",
+        met: !isThisGate,
+        missing: isThisGate ? err?.missing ?? [] : [],
+        reason: isThisGate ? err?.reason : undefined,
+        overrideAvailable: canOverride,
+      });
+    }
+    if (isRunnerToContract) {
+      const isThisGate = err?.gate === "runner_to_contract";
+      rows.push({
+        id: "runner_to_contract",
+        label: "Signed instrument attached as artifact",
+        met: !isThisGate,
+        reason: isThisGate ? err?.reason : undefined,
+        overrideAvailable: canOverride,
+      });
+    }
+    if (isTerminal) {
+      const isThisGate = err?.gate?.startsWith("terminal_") ?? false;
+      rows.push({
+        id: `terminal_${toStage}`,
+        label: `Reason code required to enter ${toStage}`,
+        met: !isThisGate,
+        reason: isThisGate ? err?.reason : undefined,
+        overrideAvailable: false,
+      });
+    }
+    if (proposed.subStatus) {
+      const isSubGate = err?.gate === "invalid_sub_status";
+      rows.push({
+        id: "sub_status_taxonomy",
+        label: "Sub-status is in the published taxonomy",
+        met: !isSubGate,
+        reason: isSubGate ? err?.reason : undefined,
+        overrideAvailable: false,
+      });
+    }
+
+    const allMet = rows.every((r) => r.met);
+    const blockers = rows
+      .filter((r) => !r.met)
+      .map((r) => r.reason || (Array.isArray(r.missing) ? r.missing.join(", ") : "") || r.label);
+    const evidence = rows.map((r) => ({
+      code: r.id,
+      label: r.label,
+      value: r.met ? "met" : (r.reason || "missing"),
+    }));
+    const partnerOverrideAvailable = rows.some((r) => r.overrideAvailable === true);
+
+    // Task #499 — evaluate_gate resolves to a single opportunity; offer
+    // a navigateTo hint so the chat lands on the opportunity workspace
+    // while the partner reviews the gate report.
+    const oppNavPath = entityNavPath("opportunity", opp.id);
+    const oppNavigateTo = oppNavPath
+      ? { path: oppNavPath, when: "on_commit" as const }
+      : null;
     return {
-      ok: false,
-      errorCode: "unsupported_dispatch",
-      errorMessage:
-        `propose_write commit cannot apply ${verb} ${kind} in-process — no dispatch mapping is registered. ` +
-        `Use the typed route (${route}) directly, or extend write-dispatch.ts to cover this combination.`,
+      ok: true,
       data: {
-        stage: "failed",
-        verb,
-        kind,
-        targetId,
-        payload,
-        route,
+        // Task #411 — flat top-level shape consumed directly by the
+        // GateReport renderer (no nested wrapper).
+        kind: "opportunity",
+        targetId: opp.id,
+        opportunityId: opp.id,
+        opportunityName: opp.name,
+        entityName: opp.name,
+        fromStage,
+        toStage,
+        partnerOverride,
+        partnerOverrideAvailable,
+        passed: allMet,
+        allMet,
+        blockers,
+        evidence,
+        gates: rows,
+        evidenceSource: {
+          qualify5cFromOpportunity: !proposed.qualify5c && !!opp.qualify5c,
+          goNoGoFromOpportunity: !proposed.goNoGoDecision && !!opp.goNoGoDecision,
+        },
+        navigateTo: oppNavigateTo,
       },
     };
   },
@@ -1237,6 +1655,25 @@ defineCapability({
     }
 
     if (input.confirm !== true) {
+      // Oct 2026 audit (live baseline, case task-write-commit): with the
+      // small retrieved tool menu the model never saw `create_my_task` and
+      // wrapped "add a personal task" as a MEETING create with `isTask:
+      // true`; the user confirmed, meeting_create failed with
+      // parent_forbidden, and the failure frame was hidden. Refuse that
+      // shape at preview and name the right tool.
+      if (
+        verb === "create" &&
+        kind === "meeting" &&
+        (payload.isTask === true || /\b(personal task|reminder|remind me|to-?do)\b/i.test(summary))
+      ) {
+        return {
+          ok: false,
+          errorCode: "use_create_my_task",
+          errorMessage:
+            "A personal task or reminder is not a meeting. Use `create_my_task` (title, dueDate, dueTime, notes) instead of propose_write.",
+          data: { stage: "failed", verb, kind, useTool: "create_my_task" },
+        };
+      }
       if (!dispatchToolName) {
         return {
           ok: false,
@@ -1264,6 +1701,51 @@ defineCapability({
         verb === "delete"
           ? await computeDeleteImpact(kind, targetId, ctx.persona.orgId)
           : null;
+      // Oct 2026 audit — validate against the dispatch target's schema now,
+      // translated exactly as the commit path will translate it, so the
+      // confirm card only shows fields the target can actually write.
+      const { findToolByName } = await import("./index.js");
+      const targetTool = findToolByName(dispatchToolName, ctx.persona);
+      let previewPayload = payload;
+      let ignoredFields: string[] = [];
+      if (targetTool && verb !== "delete") {
+        const seed: Record<string, unknown> = { ...payload };
+        if (targetId && !("id" in seed)) seed.id = targetId;
+        const translated = translateDispatchPayload(verb as DispatchVerb, kind, seed, targetId);
+        const check = validateProposedWritePayload(
+          targetTool.input_schema as Record<string, unknown>,
+          translated,
+        );
+        const writable = Object.keys(
+          (targetTool.input_schema as { properties?: Record<string, unknown> }).properties ?? {},
+        ).filter((k) => k !== "confirm");
+        if (!check.ok) {
+          return {
+            ok: false,
+            errorCode: "invalid_payload",
+            errorMessage:
+              `The proposed ${verb} ${kind} does not match what the system can write: ` +
+              `${check.errors.join("; ")}. Writable fields: ${writable.join(", ")}. Correct the payload and propose again.`,
+            data: { stage: "failed", verb, kind, targetId, errors: check.errors, ignoredFields: check.ignoredFields },
+          };
+        }
+        // The translator may rename keys; map ignored TRANSLATED keys back
+        // to the model's keys where the names coincide, otherwise keep them.
+        ignoredFields = check.ignoredFields;
+        previewPayload = Object.fromEntries(
+          Object.entries(payload).filter(([k]) => !ignoredFields.includes(k)),
+        );
+        if (ignoredFields.length > 0 && Object.keys(previewPayload).length === 0) {
+          return {
+            ok: false,
+            errorCode: "invalid_payload",
+            errorMessage:
+              `None of the proposed fields (${ignoredFields.join(", ")}) can be written on a ${kind}. ` +
+              `Writable fields: ${writable.join(", ")}.`,
+            data: { stage: "failed", verb, kind, targetId, ignoredFields },
+          };
+        }
+      }
       return {
         ok: true,
         data: {
@@ -1272,6 +1754,7 @@ defineCapability({
           kind,
           targetId,
           navigateTo,
+          ...(ignoredFields.length ? { ignoredFields } : {}),
         },
         confirmation: {
           summary,
@@ -1279,13 +1762,14 @@ defineCapability({
             verb,
             kind,
             targetId,
-            payload,
+            payload: previewPayload,
+            ...(ignoredFields.length ? { ignoredFields } : {}),
             ...(navigateTo ? { navigateTo } : {}),
             ...(impact ? { impact } : {}),
           },
           pending: {
             tool: "propose_write",
-            input: { ...input, confirm: true },
+            input: { ...input, payload: previewPayload, confirm: true },
           },
         },
       };

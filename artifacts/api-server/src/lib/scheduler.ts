@@ -1,4 +1,5 @@
 import cron, { type ScheduledTask } from "node-cron";
+import { refreshFxRatesFromEcb } from "./atelier-fx.js";
 import { runPriceScrape } from "./scraper";
 import { logger } from "./logger";
 import { db, atelierUsers } from "@workspace/db";
@@ -26,6 +27,9 @@ import {
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
 const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
+// Phase 0 (Oct 2026 audit): daily FX import. The ECB publishes ~16:00 CET on
+// TARGET business days; 16:30 UTC catches it the same day.
+const FX_IMPORT_CRON = process.env.FX_IMPORT_CRON ?? "30 16 * * *";
 const ASSISTANT_PRIVACY_CRON =
   process.env.ASSISTANT_PRIVACY_CRON ?? "15 4 * * *";
 // Mon 03:00 UTC = Mon 06:00 GST — the start of the working week.
@@ -79,6 +83,7 @@ const SYSTEM_USER_ID = "system";
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
+let fxImportTask: ScheduledTask | null = null;
 let assistantPrivacyTask: ScheduledTask | null = null;
 let walletPaymentProposerTask: ScheduledTask | null = null;
 let winLossSlaTask: ScheduledTask | null = null;
@@ -99,21 +104,29 @@ let payrollClerkTask: ScheduledTask | null = null;
 // lifetime), roll cache windows forward, and safety-sync stale caches.
 const MS_CAL_SYNC_CRON = process.env.MS_CAL_SYNC_CRON ?? "15 * * * *";
 
+let schedulerStarted = false;
+
+// Phase 0 (Oct 2026 audit): the Arçelik retail price scraper is marketing-
+// demo code. It used to launch headless Chromium against twelve retail sites
+// every night from inside the finance/HR API process. It now runs only when
+// a deployment explicitly opts in; the Atelier crons below are unaffected.
+const PRICE_SCRAPER_ENABLED = process.env.ATELIER_PRICE_SCRAPER_ENABLED === "1";
+
 export function startScheduler(): void {
-  if (scheduledTask) {
+  if (schedulerStarted) {
     logger.warn("Scheduler already running, skipping duplicate start");
     return;
   }
+  schedulerStarted = true;
 
-  if (!cron.validate(SCRAPE_CRON)) {
+  if (!PRICE_SCRAPER_ENABLED) {
+    logger.info("Price scrape scheduler disabled (ATELIER_PRICE_SCRAPER_ENABLED is not 1)");
+  } else if (!cron.validate(SCRAPE_CRON)) {
     logger.error(
       { cron: SCRAPE_CRON },
-      "Invalid PRICE_SCRAPE_CRON expression, scheduler not started",
+      "Invalid PRICE_SCRAPE_CRON expression, price scraper not started",
     );
-    return;
-  }
-
-  scheduledTask = cron.schedule(
+  } else scheduledTask = cron.schedule(
     SCRAPE_CRON,
     async () => {
       logger.info("Scheduled price scrape starting...");
@@ -135,11 +148,9 @@ export function startScheduler(): void {
     },
     { timezone: "Etc/UTC" },
   );
-
-  logger.info(
-    { cron: SCRAPE_CRON },
-    "Price scrape scheduler started",
-  );
+  if (scheduledTask) {
+    logger.info({ cron: SCRAPE_CRON }, "Price scrape scheduler started");
+  }
 
   // Daily Roster Steward — scans atelier compliance records, materialises
   // Pane A items for Partners + Operations users so visa/Iqama/firm-license
@@ -197,6 +208,23 @@ export function startScheduler(): void {
       { timezone: "Etc/UTC" },
     );
     logger.info({ cron: WALLET_RETENTION_CRON }, "Wallet retention scheduler started");
+  }
+
+  // Phase 0 — daily FX import (single FX source; see lib/atelier-fx.ts).
+  if (cron.validate(FX_IMPORT_CRON)) {
+    fxImportTask = cron.schedule(
+      FX_IMPORT_CRON,
+      async () => {
+        try {
+          const out = await refreshFxRatesFromEcb();
+          logger.info(out, "FX import finished");
+        } catch (err) {
+          logger.error({ err }, "FX import encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: FX_IMPORT_CRON }, "FX import scheduler started");
   } else {
     logger.error(
       { cron: WALLET_RETENTION_CRON },
@@ -638,6 +666,7 @@ export function startScheduler(): void {
 }
 
 export function stopScheduler(): void {
+  schedulerStarted = false;
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
@@ -647,6 +676,10 @@ export function stopScheduler(): void {
     rosterStewardTask.stop();
     rosterStewardTask = null;
     logger.info("Roster Steward scheduler stopped");
+  }
+  if (fxImportTask) {
+    fxImportTask.stop();
+    fxImportTask = null;
   }
   if (walletRetentionTask) {
     walletRetentionTask.stop();
