@@ -1309,17 +1309,19 @@ try {
     );
   }
   // =====================================================================
-  // S8 — card budget: a read tool returning ok:false must NOT emit a
-  // tool_result frame over SSE (the frame is suppressed client-side).
-  // The orchestrator must still complete the turn without dead-ending.
+  // S8 — card budget. Mid-turn probe failures stay out of the SSE stream,
+  // but (Oct 2026 audit) a read turn that ends with NO card and a failed
+  // read surfaces exactly ONE ok:false tool_result so the user sees a
+  // "not found" card instead of nothing. The orchestrator must still
+  // complete the turn without dead-ending.
   // =====================================================================
   {
     const t8 = await postTurn({ who: FP, prompt: "riser_s8_budget test suppression" });
     assertAlive("S8/budget-suppression", t8.frames);
-    const trFrames8 = t8.frames.filter((f) => f.event === "tool_result");
+    const trFrames8 = t8.frames.filter((f) => f.event === "tool_result" && f.data?.prelude !== true);
     check(
-      "S8: ok:false read-tool_result frame suppressed from SSE (card budget)",
-      trFrames8.length === 0,
+      "S8: a card-less failing read turn surfaces exactly one visible ok:false tool_result",
+      trFrames8.length === 1 && trFrames8[0]?.data?.ok === false,
       trFrames8.map((f) => ({ tool: f.data?.tool, ok: f.data?.ok })),
     );
     const fin8 = finalOf(t8.frames);

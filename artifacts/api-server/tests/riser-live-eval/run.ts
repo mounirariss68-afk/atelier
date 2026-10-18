@@ -58,7 +58,7 @@ type Frame = { ev: string; data: Record<string, unknown> };
 // with write-dispatch.ts DISPATCH_TABLE targets' inputSchema; the repair
 // makes propose_write reject anything outside this set at preview time.
 const KNOWN_WRITE_FIELDS: Record<string, string[]> = {
-  account: ["id", "name", "status", "notes", "website", "sector", "country", "tier", "brandName"],
+  account: ["id", "name", "brandName", "status", "tier", "notes", "hqCity", "size", "primaryCurrency", "primaryLanguage", "partnerOwnerId", "summary"],
 };
 
 const here = dirname(fileURLToPath(import.meta.url));

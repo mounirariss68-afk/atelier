@@ -73,7 +73,10 @@ const TELEMETRY_TOKEN_KEY = /^(tokens?(In|Out|Used|Total|Count|Cached|Input|Outp
 // Keys whose values are protocol selectors or navigation targets, never
 // prose: opaque ids, hrefs, paths. Long alphanumeric runs there are the
 // app's own identifiers (and `/accounts/acct_…` paths are ≥32 chars), not
-// leaked secrets. Bearer values and canaries are still redacted inside them.
+// leaked secrets. A selector value may carry a source prefix and base64
+// padding (`outlook:AAMkAD…=`), so `:`, `=`, `+`, `/` and `.` are allowed
+// there — a space is not, which keeps "Bearer xxx" out. Bearer values and
+// canaries are still redacted inside them.
 const SELECTOR_KEY = /^(id|ids|href|url|path|link|ref|rejected|cursor|next|prev)$|(Id|Ids|Ref|Refs|Href|Url|Path|Link|Key)$/;
 
 const BEARER_VALUE = /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi;
@@ -140,7 +143,7 @@ function redactAssistantValueToClass(
     BEARER_VALUE.lastIndex = 0;
     const preserveLongRuns =
       !hasCanaryOrBearer &&
-      ((key !== undefined && SELECTOR_KEY.test(key) && (OPAQUE_ENTITY_ID.test(value) || PLAIN_LOCATION_VALUE.test(value) || /^[A-Za-z0-9_=-]+$/.test(value))) ||
+      ((key !== undefined && SELECTOR_KEY.test(key) && (OPAQUE_ENTITY_ID.test(value) || PLAIN_LOCATION_VALUE.test(value) || /^[A-Za-z0-9_:=+/.-]+$/.test(value))) ||
         PLAIN_LOCATION_VALUE.test(value));
     let redacted = value
       .replace(BEARER_VALUE, "[REDACTED]")

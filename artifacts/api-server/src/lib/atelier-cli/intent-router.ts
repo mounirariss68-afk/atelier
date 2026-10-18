@@ -262,11 +262,18 @@ export async function classifyIntentTyped(
   // then degrade to the deterministic keyword classifier with lowered
   // confidence. The previous 5s single-shot hard-fail aborted turns
   // constantly under normal proxy latency.
-  const rawTimeout = Number(process.env.ATELIER_CLI_CLASSIFIER_TIMEOUT_MS ?? 15_000);
+  // Oct 2026 audit — the classifier runs BEFORE the turn clock starts, so
+  // its stalls were invisible in `latencyMs` yet the user waited: on the
+  // repaired build one request in four spent ~40 s here (15 s × 2 attempts
+  // + jitter) before the deterministic fallback kicked in. The classifier
+  // now has one 5 s attempt; a stall costs at most 5 s and the keyword
+  // classifier takes over. With every turn on Sonnet the classifier only
+  // supplies the verb and entity hints, which the fallback also provides.
+  const rawTimeout = Number(process.env.ATELIER_CLI_CLASSIFIER_TIMEOUT_MS ?? 5_000);
   // Clamp: NaN/0/negative env values must not produce an instant abort.
   const CLASSIFIER_TIMEOUT_MS =
-    Number.isFinite(rawTimeout) && rawTimeout >= 100 ? rawTimeout : 15_000;
-  const ATTEMPTS = 2;
+    Number.isFinite(rawTimeout) && rawTimeout >= 100 ? rawTimeout : 5_000;
+  const ATTEMPTS = Math.max(1, Number(process.env.ATELIER_CLI_CLASSIFIER_ATTEMPTS ?? 1));
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
   try {

@@ -3925,6 +3925,12 @@ export async function runTurn(
     let presentationSuppressedCount = 0;
     const t0 = Date.now();
     let finalEmitted = false;
+    // Oct 2026 audit — failing READ results are hidden mid-turn as probe
+    // noise (Task #771). When the whole turn ends with no card at all, the
+    // user saw the model "try a different approach" and then nothing; keep
+    // the last failed read so it can be surfaced as a visible failure card
+    // before the final frame.
+    let lastFailedRead: { step: number; tool: string; errorCode?: string; errorMessage?: string } | null = null;
 
     // Task #645 — deterministic dedupe: never stream/persist two identical
     // tool_result frames for the same step+tool in one turn.
@@ -6478,6 +6484,14 @@ export async function runTurn(
             })
           : null;
       const isReadFail = !tool.isWrite && toolResult.ok === false;
+      if (isReadFail) {
+        lastFailedRead = {
+          step,
+          tool: tc.name,
+          errorCode: toolResult.errorCode,
+          errorMessage: toolResult.errorMessage,
+        };
+      }
       const isOverCap =
         !tool.isWrite && toolResult.ok !== false && cardsEmitted >= MAX_CARDS_PER_TURN;
       if (toolResult.ok) {
@@ -7020,6 +7034,33 @@ export async function runTurn(
       // Build planJson from the proposed_plan frame (if any) for replay.
       const planFrame = frames.find((f) => f.type === "proposed_plan");
       const planJson = planFrame ? planFrame.data : null;
+      // Oct 2026 audit — a read turn that produced no card and ended on a
+      // failed read gets one visible failure frame (the client renders it as
+      // a "not found" card); mid-turn probe failures stay hidden.
+      if (
+        !finalEmitted &&
+        lastFailedRead &&
+        !frames.some(
+          (f) =>
+            (f.type === "tool_result" && (f.data as { prelude?: unknown }).prelude !== true) ||
+            f.type === "presentation" ||
+            f.type === "needs_confirmation" ||
+            f.type === "needs_clarification",
+        )
+      ) {
+        record({
+          type: "tool_result",
+          data: {
+            step: lastFailedRead.step,
+            tool: lastFailedRead.tool,
+            ok: false,
+            data: null,
+            errorCode: lastFailedRead.errorCode,
+            errorMessage: lastFailedRead.errorMessage,
+          },
+          outcome: { kind: "failed", committed: false, navigateTo: null },
+        });
+      }
       if (!finalEmitted) {
         record({
           type: "final",

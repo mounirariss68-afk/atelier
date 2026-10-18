@@ -1,7 +1,7 @@
 {
   "manifestSchemaVersion": 1,
   "catalogSchemaVersion": 3,
-  "manifestVersion": "8b4e61ed2a4303abc6ffdf5fdbc64527b6efcd2ddcb21f7e0a313c49b41a70bf",
+  "manifestVersion": "f21d148e51d53d78d8b6c78a93ef4049c5d9858b2341bbfa7aebebbc165acc01",
   "entryCount": 336,
   "entries": [
     {
@@ -4796,7 +4796,7 @@
       "source": "cli-only",
       "catalogVersion": 3,
       "inputSchemaVersion": 3,
-      "inputSchemaHash": "778bfd056b45",
+      "inputSchemaHash": "c84b34a5799b",
       "resultSchemaHash": "94c64f190712",
       "effect": "write",
       "effectClass": "internal_write",
@@ -4813,7 +4813,7 @@
         "senior_manager"
       ],
       "policyClass": "legacy_write",
-      "implementationVersion": "b49cfa3121bf",
+      "implementationVersion": "bc239493143f",
       "approverRoles": [
         "founding_partner",
         "non_equity_partner",

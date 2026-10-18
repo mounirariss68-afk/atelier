@@ -1,14 +1,19 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Live regression gate for Riser. Each case is sent to POST /api/atelier/cli/turn exactly as the web client sends it and judged on the raw SSE frames. Expectations describe the behaviour the repair must produce, so a fresh run against the unrepaired build is expected to fail most cases.",
   "cases": [
     {
       "id": "leave-balance",
       "prompt": "How much leave do I have left?",
       "expect": {
-        "tools": ["my_leave"],
+        "tools": [
+          "my_leave"
+        ],
         "card": true,
-        "textContainsAny": ["annual", "sick"],
+        "textContainsAny": [
+          "annual",
+          "sick"
+        ],
         "noErrors": true
       },
       "finding": "hidden card; entitlement defaults stated as fact"
@@ -17,7 +22,10 @@
       "id": "qib-owes",
       "prompt": "What does QIB owe us?",
       "expect": {
-        "toolsAny": ["statement_of_account", "pending_invoices"],
+        "toolsAny": [
+          "statement_of_account",
+          "pending_invoices"
+        ],
         "card": true,
         "noErrors": true
       },
@@ -27,9 +35,14 @@
       "id": "qib-contacts-list",
       "prompt": "List the contacts at QIB",
       "expect": {
-        "tools": ["contact_list"],
+        "tools": [
+          "contact_list"
+        ],
         "card": true,
-        "textNotContains": ["wasn't found", "not found"],
+        "textNotContains": [
+          "wasn't found",
+          "not found"
+        ],
         "noErrors": true
       },
       "finding": "contact_list resolves accounts by name only, misses brand names"
@@ -39,8 +52,13 @@
       "prompt": "Who is the CFO at QIB?",
       "expect": {
         "maxToolCalls": 2,
-        "textContainsAny": ["Hemani"],
-        "textNotContains": ["different approach", "Let me try"],
+        "textContainsAny": [
+          "Hemani"
+        ],
+        "textNotContains": [
+          "different approach",
+          "Let me try"
+        ],
         "noErrors": true
       },
       "finding": "near-miss tools, leaked reasoning, truncated prose"
@@ -50,8 +68,12 @@
       "prompt": "What is his title and email?",
       "continuesSession": "qib-cfo",
       "expect": {
-        "tools": ["contact_detail"],
-        "textContainsAny": ["Chief Financial Officer"],
+        "tools": [
+          "contact_detail"
+        ],
+        "textContainsAny": [
+          "Chief Financial Officer"
+        ],
         "noErrors": true
       },
       "finding": "follow-up on a named entity"
@@ -61,8 +83,14 @@
       "prompt": "What is the COO's title?",
       "continuesSession": "qib-contacts-list",
       "expect": {
-        "textContainsAny": ["Chief Operating Officer", "COO"],
-        "textNotContains": ["which organization", "clarify"],
+        "textContainsAny": [
+          "Chief Operating Officer",
+          "COO"
+        ],
+        "textNotContains": [
+          "which organization",
+          "clarify"
+        ],
         "noErrors": true
       },
       "finding": "follow-up on a fact that lived only in card data (redacted replay)"
@@ -71,10 +99,15 @@
       "id": "pipeline-by-stage",
       "prompt": "Show me the pipeline by stage",
       "expect": {
-        "tools": ["pipeline_by_stage"],
+        "tools": [
+          "pipeline_by_stage"
+        ],
         "card": true,
         "dataHasKey": "currency",
-        "textNotContains": ["$62.5K", "$62,500"],
+        "textNotContains": [
+          "$62.5K",
+          "$62,500"
+        ],
         "noErrors": true
       },
       "finding": "deal money in account currency labelled USD"
@@ -84,7 +117,9 @@
       "prompt": "ما هي فرص المبيعات المفتوحة؟",
       "noLocalePreamble": true,
       "expect": {
-        "tools": ["pipeline_by_stage"],
+        "tools": [
+          "pipeline_by_stage"
+        ],
         "noErrors": true
       },
       "finding": "non-English routing"
@@ -93,9 +128,13 @@
       "id": "ar-aging",
       "prompt": "What is our AR aging?",
       "expect": {
-        "tools": ["wallet_ar_aging"],
+        "tools": [
+          "wallet_ar_aging"
+        ],
         "card": true,
-        "dataNotContains": ["Unknown customer"],
+        "dataNotContains": [
+          "Unknown customer"
+        ],
         "noErrors": true
       },
       "finding": "customer grouping broken; cross-currency sums labelled USD"
@@ -104,7 +143,9 @@
       "id": "utilisation",
       "prompt": "What is our utilisation this month?",
       "expect": {
-        "tools": ["utilization_firm"],
+        "tools": [
+          "utilization_firm"
+        ],
         "card": true,
         "dataHasKey": "weeksCovered",
         "noErrors": true
@@ -115,18 +156,31 @@
       "id": "days-in-stage",
       "prompt": "How many days has the QIB AI Transformation opportunity been in its current stage?",
       "expect": {
-        "tools": ["opportunity_detail"],
-        "textNotContains": ["0 days", "just added"],
-        "noErrors": true
+        "tools": [
+          "opportunity_detail"
+        ],
+        "textNotContains": [
+          "0 days",
+          "just added"
+        ],
+        "noErrors": true,
+        "dataNotContains": [
+          "\"daysInStage\":0"
+        ]
       },
-      "finding": "dead days_in_stage counter"
+      "finding": "dead days_in_stage counter (judge checks the card data, not the wording)"
     },
     {
       "id": "bandwidth",
       "prompt": "Does Mounir Ariss have bandwidth to take on more work?",
       "expect": {
-        "toolsAny": ["person_workload"],
-        "textNotContains": ["100% available", "0% allocated"],
+        "toolsAny": [
+          "person_workload"
+        ],
+        "textNotContains": [
+          "100% available",
+          "0% allocated"
+        ],
         "noErrors": true
       },
       "finding": "allocationPct default 0 reads as full availability"
@@ -135,10 +189,14 @@
       "id": "pnl-ytd",
       "prompt": "Show me the P&L year to date",
       "expect": {
-        "tools": ["finance_report_pnl"],
+        "tools": [
+          "finance_report_pnl"
+        ],
         "card": true,
         "dataHasKey": "preliminary",
-        "dataNotContains": ["Gbp"],
+        "dataNotContains": [
+          "Gbp"
+        ],
         "noErrors": true
       },
       "finding": "GBP per-entity rows under USD header; honesty flags dropped"
@@ -147,7 +205,9 @@
       "id": "long-number-prompt",
       "prompt": "Search our documents for reference 123456789012345",
       "expect": {
-        "tools": ["search_documents"],
+        "tools": [
+          "search_documents"
+        ],
         "noErrors": true
       },
       "finding": "12-digit number in the prompt ends the turn"
@@ -156,8 +216,12 @@
       "id": "card-links",
       "prompt": "Show me the Tasama opportunity",
       "expect": {
-        "tools": ["opportunity_detail"],
-        "dataNotContains": ["[REDACTED]"],
+        "tools": [
+          "opportunity_detail"
+        ],
+        "dataNotContains": [
+          "[REDACTED]"
+        ],
         "noErrors": true
       },
       "finding": "hrefs over 32 characters redacted as secrets"
@@ -166,9 +230,14 @@
       "id": "meetings-week",
       "prompt": "What meetings do I have this week?",
       "expect": {
-        "tools": ["meeting_list"],
+        "tools": [
+          "meeting_list"
+        ],
         "card": true,
-        "dataNotContains": ["[REDACTED]", "mtg_demo_"],
+        "dataNotContains": [
+          "[REDACTED]",
+          "mtg_demo_"
+        ],
         "noErrors": true
       },
       "finding": "Outlook ids redacted; seed meetings listed"
@@ -177,8 +246,13 @@
       "id": "account-list-query",
       "prompt": "Show me accounts matching QIB",
       "expect": {
-        "tools": ["account_list"],
-        "dataNotContains": ["Masdar", "Aldrees"],
+        "tools": [
+          "account_list"
+        ],
+        "dataNotContains": [
+          "Masdar",
+          "Aldrees"
+        ],
         "noErrors": true
       },
       "finding": "account_list ignores its query"
@@ -205,29 +279,38 @@
       "id": "letter-clarification",
       "prompt": "I need an employment letter",
       "expect": {
-        "frames": ["needs_clarification"],
+        "frames": [
+          "needs_clarification"
+        ],
         "noErrors": true
       },
       "finding": "structured clarification form must survive the repair"
     },
     {
       "id": "write-preview-unknown-fields",
-      "prompt": "Update the QIB account: set its website to https://www.qib.com.qa",
+      "prompt": "Update the QIB account: set its tier to A and add the note 'Board sponsor confirmed'",
       "cancelAfter": true,
       "expect": {
-        "frames": ["needs_confirmation"],
+        "frames": [
+          "needs_confirmation"
+        ],
         "confirmPayloadOnlyKnownFields": "account",
         "noErrors": true
       },
-      "finding": "confirm card shows fields the dispatch target cannot write"
+      "finding": "confirm card must show only fields the dispatch target can write (accounts have no website field; the earlier prompt asked for one)"
     },
     {
       "id": "task-write-commit",
       "prompt": "Add a personal task for me: RISER-EVAL probe task, due tomorrow 9am",
       "commit": true,
       "expect": {
-        "frames": ["needs_confirmation"],
-        "afterCommit": { "card": true, "orProse": true },
+        "frames": [
+          "needs_confirmation"
+        ],
+        "afterCommit": {
+          "card": true,
+          "orProse": true
+        },
         "noErrors": true
       },
       "finding": "committed write shows neither card nor prose",
@@ -237,8 +320,13 @@
       "id": "final-frame-telemetry",
       "prompt": "Show my profile",
       "expect": {
-        "tools": ["my_profile"],
-        "finalNotRedacted": ["tokensIn", "tokensOut"],
+        "tools": [
+          "my_profile"
+        ],
+        "finalNotRedacted": [
+          "tokensIn",
+          "tokensOut"
+        ],
         "noErrors": true
       },
       "finding": "token counts redacted as secrets"
@@ -251,6 +339,26 @@
         "noErrors": true
       },
       "finding": "reads routed to Haiku"
+    },
+    {
+      "id": "nda-new-counterparty",
+      "prompt": "I need to sign a mutual NDA with a company called thesocialclub.ai",
+      "expect": {
+        "tools": [
+          "contract_prepare"
+        ],
+        "textContainsAny": [
+          "add",
+          "create",
+          "not in"
+        ],
+        "textNotContains": [
+          "double-check the spelling",
+          "temporarily unavailable"
+        ],
+        "noErrors": true
+      },
+      "finding": "live 16 Oct: counterparty_not_found dead end, then step timeout; must offer to add the account"
     }
   ]
 }

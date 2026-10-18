@@ -1,0 +1,216 @@
+{
+  "base": "https://587eca17-43f3-4691-865f-c3e4caf9e152-00-1qbciductjhf0.pike.replit.dev",
+  "mode": "legacy",
+  "ranAt": "2026-10-18T14:04:40.607Z",
+  "rows": [
+    {
+      "id": "leave-balance",
+      "pass": true,
+      "ms": 10057,
+      "tools": "my_leave",
+      "fails": [],
+      "finding": "hidden card; entitlement defaults stated as fact"
+    },
+    {
+      "id": "qib-owes",
+      "pass": true,
+      "ms": 7862,
+      "tools": "statement_of_account",
+      "fails": [],
+      "finding": "brand-name resolution through resolve_entity"
+    },
+    {
+      "id": "qib-contacts-list",
+      "pass": true,
+      "ms": 8120,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "contact_list resolves accounts by name only, misses brand names"
+    },
+    {
+      "id": "qib-cfo",
+      "pass": true,
+      "ms": 8132,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "near-miss tools, leaked reasoning, truncated prose"
+    },
+    {
+      "id": "qib-cfo-followup",
+      "pass": true,
+      "ms": 48370,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a named entity"
+    },
+    {
+      "id": "qib-contacts-followup",
+      "pass": true,
+      "ms": 8529,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a fact that lived only in card data (redacted replay)"
+    },
+    {
+      "id": "pipeline-by-stage",
+      "pass": true,
+      "ms": 47309,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "deal money in account currency labelled USD"
+    },
+    {
+      "id": "pipeline-arabic",
+      "pass": true,
+      "ms": 8124,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "non-English routing"
+    },
+    {
+      "id": "ar-aging",
+      "pass": true,
+      "ms": 7152,
+      "tools": "wallet_ar_aging",
+      "fails": [],
+      "finding": "customer grouping broken; cross-currency sums labelled USD"
+    },
+    {
+      "id": "utilisation",
+      "pass": true,
+      "ms": 49535,
+      "tools": "utilization_firm",
+      "fails": [],
+      "finding": "single draft week presented as firm utilisation"
+    },
+    {
+      "id": "days-in-stage",
+      "pass": false,
+      "ms": 7496,
+      "tools": "opportunity_detail",
+      "fails": [
+        "result data lacks key stageEnteredAt"
+      ],
+      "finding": "dead days_in_stage counter (judge checks the card data, not the wording)"
+    },
+    {
+      "id": "bandwidth",
+      "pass": true,
+      "ms": 48814,
+      "tools": "person_workload",
+      "fails": [],
+      "finding": "allocationPct default 0 reads as full availability"
+    },
+    {
+      "id": "pnl-ytd",
+      "pass": true,
+      "ms": 8638,
+      "tools": "finance_report_pnl",
+      "fails": [],
+      "finding": "GBP per-entity rows under USD header; honesty flags dropped"
+    },
+    {
+      "id": "long-number-prompt",
+      "pass": true,
+      "ms": 8153,
+      "tools": "search_documents",
+      "fails": [],
+      "finding": "12-digit number in the prompt ends the turn"
+    },
+    {
+      "id": "card-links",
+      "pass": true,
+      "ms": 46507,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "hrefs over 32 characters redacted as secrets"
+    },
+    {
+      "id": "meetings-week",
+      "pass": false,
+      "ms": 9957,
+      "tools": "meeting_list",
+      "fails": [
+        "result data contains \"[REDACTED]\""
+      ],
+      "finding": "Outlook ids redacted; seed meetings listed"
+    },
+    {
+      "id": "account-list-query",
+      "pass": true,
+      "ms": 46412,
+      "tools": "account_list",
+      "fails": [],
+      "finding": "account_list ignores its query"
+    },
+    {
+      "id": "missing-account",
+      "pass": false,
+      "ms": 8242,
+      "tools": "account_lookup",
+      "fails": [
+        "failing read produced no visible failure frame"
+      ],
+      "finding": "failing reads hidden from the client"
+    },
+    {
+      "id": "weather-refusal",
+      "pass": true,
+      "ms": 5588,
+      "tools": "",
+      "fails": [],
+      "finding": "graceful refusal without tool calls"
+    },
+    {
+      "id": "letter-clarification",
+      "pass": true,
+      "ms": 5761,
+      "tools": "request_employment_letter",
+      "fails": [],
+      "finding": "structured clarification form must survive the repair"
+    },
+    {
+      "id": "write-preview-unknown-fields",
+      "pass": false,
+      "ms": 47301,
+      "tools": "propose_write",
+      "fails": [
+        "missing frame needs_confirmation"
+      ],
+      "finding": "confirm card shows fields the dispatch target cannot write"
+    },
+    {
+      "id": "task-write-commit",
+      "pass": true,
+      "ms": 6118,
+      "tools": "create_my_task",
+      "fails": [],
+      "finding": "committed write shows neither card nor prose"
+    },
+    {
+      "id": "final-frame-telemetry",
+      "pass": true,
+      "ms": 7030,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "token counts redacted as secrets"
+    },
+    {
+      "id": "model-tier",
+      "pass": true,
+      "ms": 43046,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "reads routed to Haiku"
+    },
+    {
+      "id": "nda-new-counterparty",
+      "pass": true,
+      "ms": 8390,
+      "tools": "contract_prepare",
+      "fails": [],
+      "finding": "live 16 Oct: counterparty_not_found dead end, then step timeout; must offer to add the account"
+    }
+  ],
+  "note": "First run on the repaired build (batches 1\u20134, legacy card mode). 21/25 by the v1 judge. Of the 4 failures: days-in-stage and write-preview were judge/case errors (data showed 67 days; accounts have no website field) \u2014 fixed in questions.json v2; meetings-week (prefixed Outlook ids redacted) and missing-account (failing read hidden) were real and fixed in batch 5. Wall-clock 43\u201349 s on 8 cases came from the Haiku classifier stalling before the turn clock (15 s \u00d7 2) \u2014 bounded to one 5 s attempt in batch 5."
+}

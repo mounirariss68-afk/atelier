@@ -2012,17 +2012,25 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "account",
   toolName: "account_update",
-  description: "Update lightweight fields on an account (name/status/notes). Stage transitions live elsewhere.",
+  description:
+    "Update an account's editable fields: name, brand name, status, tier (A–D), notes, HQ city, size, primary currency, primary language, partner owner. Country, sector and firmographics (revenue, headcount, structure) are edited on the Accounts page; there is no website field. Stage transitions live elsewhere.",
   slashAliases: { en: ["/account-update"] },
-  representativePrompts: { en: ["Mark Acme as dormant."] },
+  representativePrompts: { en: ["Mark Acme as dormant.", "Set QIB's tier to A.", "Add a note to the Tasama account."] },
   inputSchema: {
     type: "object",
     properties: {
       ...COMMON_INPUT_PROPS,
       id: { type: "string", minLength: 4 },
       name: { type: "string" },
+      brandName: { type: "string", description: "Short brand / trading name (e.g. QIB)." },
       status: { type: "string", enum: ["active", "dormant", "archived"] },
+      tier: { type: "string", enum: ["A", "B", "C", "D"] },
       notes: { type: "string" },
+      hqCity: { type: "string" },
+      size: { type: "string", enum: ["enterprise", "large", "mid", "small"] },
+      primaryCurrency: { type: "string", description: "ISO-4217 code the account's deals are quoted in." },
+      primaryLanguage: { type: "string", enum: ["en", "ar", "fr", "tr"] },
+      partnerOwnerId: { type: "string" },
     },
     required: ["id"],
     additionalProperties: false,
@@ -2042,8 +2050,15 @@ defineCapability({
     const id = String(input.id);
     const patch: Partial<typeof atelierAccounts.$inferInsert> = { updatedAt: new Date() };
     if (input.name !== undefined) patch.name = String(input.name);
+    if (input.brandName !== undefined) patch.brandName = String(input.brandName);
     if (input.status !== undefined) patch.status = String(input.status);
+    if (input.tier !== undefined) patch.tier = String(input.tier).toUpperCase();
     if (input.notes !== undefined) patch.notes = String(input.notes);
+    if (input.hqCity !== undefined) patch.hqCity = String(input.hqCity);
+    if (input.size !== undefined) patch.size = String(input.size);
+    if (input.primaryCurrency !== undefined) patch.primaryCurrency = String(input.primaryCurrency).toUpperCase();
+    if (input.primaryLanguage !== undefined) patch.primaryLanguage = String(input.primaryLanguage);
+    if (input.partnerOwnerId !== undefined) patch.partnerOwnerId = String(input.partnerOwnerId);
     await db.update(atelierAccounts).set(patch)
       .where(and(eq(atelierAccounts.id, id), eq(atelierAccounts.orgId, ctx.persona.orgId), isNull(atelierAccounts.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "account", id, "update", input);
