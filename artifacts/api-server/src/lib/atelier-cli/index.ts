@@ -1751,7 +1751,11 @@ async function modelStep(args: {
   onStreamReset?: () => void;
 }): Promise<ClaudeStep> {
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 30_000));
+  // Oct 2026 audit: 30 s was too tight for a Sonnet step with a 10K-token
+  // tool menu on a cold cache under concurrent users — the live NDA turn
+  // died here with "Request was aborted". 60 s per step; the turn-level
+  // budget still bounds the whole turn.
+  const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 60_000));
   // Retry-with-jitter on transient upstream failures (5xx / network / 429).
   // Permanent errors (4xx other than 429) bubble up immediately.
   const MAX_TOKENS = Number(process.env.ATELIER_CLI_MAX_TOKENS ?? 2048);

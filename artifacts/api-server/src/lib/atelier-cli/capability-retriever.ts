@@ -67,15 +67,18 @@ const envInt = (name: string, fallback: number): number => {
   const v = Number(process.env[name]);
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
 };
-// Oct 2026 audit: the default menu is now the whole persona surface
-// (~280 tools, well under the 300 cap). The 12–20 tool menu produced the
-// near-miss failures the live tests showed ("Who is the CFO at QIB?" surfaced
-// roster tools but not contact_detail; "Let me try a different approach").
-// The cost is carried by prompt caching: with the menu identical and sorted
-// by name across turns (see modelStep), the tool block is a cache hit.
-// Set ATELIER_CLI_TOOL_CAP / ATELIER_CLI_TOOL_CAP_MAX to restore retrieval.
-const BASE_CAP = () => envInt("ATELIER_CLI_TOOL_CAP", 300);
-const MAX_CAP = () => Math.max(BASE_CAP(), envInt("ATELIER_CLI_TOOL_CAP_MAX", 300));
+// Oct 2026 audit. The 12–20 tool menu produced the near-miss failures the
+// live baseline showed (account_list never chosen; "add a personal task"
+// wrapped as a meeting because create_my_task was not on the menu; "Let me
+// try a different approach"). A first repair put the WHOLE persona surface
+// (220 tools, ~36K tokens) on every call; live, with two users on the dev
+// app, that pushed cold-cache steps past the 30 s step timeout ("AI
+// temporarily unavailable"). The default is now 60 ranked tools (+ the
+// always-on set), extending to 80 on near-ties: ~10K tokens, which the
+// prompt cache covers across turns while keeping the relevant tool on the
+// menu for every baseline case. ATELIER_CLI_TOOL_CAP / _MAX tune it.
+const BASE_CAP = () => envInt("ATELIER_CLI_TOOL_CAP", 60);
+const MAX_CAP = () => Math.max(BASE_CAP(), envInt("ATELIER_CLI_TOOL_CAP_MAX", 80));
 /** Score-tie window for adaptive extension past the base cap. */
 const ADAPTIVE_EPSILON = 0.04;
 
@@ -331,14 +334,19 @@ export async function ensureCapabilityEmbeddings(): Promise<void> {
   } as CliPersona);
   for (const entry of all) {
     const prev = byId.get(entry.id);
+    const text = summaryTextFor(entry);
+    // Oct 2026 audit — re-embed when the SUMMARY TEXT changes too, not only
+    // the schema hash: representative prompts and descriptions are what the
+    // ranking is built on, and edits to them were silently ignored because
+    // the stored vector was never refreshed.
     if (
       prev &&
       prev.schemaHash === entry.schemaHash &&
-      prev.provider === provider
+      prev.provider === provider &&
+      prev.summaryText === text
     ) {
       continue;
     }
-    const text = summaryTextFor(entry);
     const emb = await embedText(text);
     if (prev) {
       await db

@@ -2448,7 +2448,17 @@ defineCapability({
   toolName: "person_workload",
   description:
     "One-shot compound answer for a person: which accounts they're on the team for (with role), which active engagements they're staffed on (role + allocation %), and which open opportunities they own or lead. Use for questions like 'what is X working on?' or 'what is X staffed on across accounts and deals?'. Accepts a roster person id or a name. Never returns compensation or HR data.",
-  slashAliases: { en: ["/workload", "/working-on"], fr: ["/charge"] },
+  slashAliases: { en: ["/workload", "/working-on", "/bandwidth"], fr: ["/charge"] },
+  // Oct 2026 audit — the retriever ranks on these; "bandwidth" / "capacity"
+  // phrasing never surfaced this tool under the smaller menu.
+  representativePrompts: {
+    en: [
+      "Does Mounir have bandwidth to take on more work?",
+      "How loaded is Sarah right now?",
+      "Can Karim take on another engagement?",
+      "What is Sarah working on?",
+    ],
+  },
   inputSchema: {
     type: "object",
     properties: {

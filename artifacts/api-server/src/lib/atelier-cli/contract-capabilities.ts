@@ -359,10 +359,26 @@ defineCapability({
       }
       const name = String(input.counterparty ?? "").trim();
       if (template.contractType !== NEP_CONTRACT_TYPE) {
+        // Oct 2026 audit (live: "sign a mutual NDA with thesocialclub.ai") —
+        // a counterparty that is not yet in the CRM is the NORMAL case for
+        // an NDA with a new prospect. Say so, and tell the model the path:
+        // add the organisation as an account first (two-phase write), then
+        // prepare the agreement against it. Never ask the user to re-spell.
         return {
           ok: false,
           errorCode: "counterparty_not_found",
-          errorMessage: `Nobody in the roster, contacts, or accounts matches "${name}".`,
+          errorMessage:
+            `"${name}" is not in the CRM yet (no account, contact or roster match). ` +
+            `For a ${template.contractType.replace(/_/g, " ")} with a new organisation: offer to add it as an account ` +
+            `(propose_write → create account with name${/\./.test(name) ? `, website "${name}"` : ""}, country and sector), ` +
+            `and once the user confirms, run contract_prepare again with the new account as the counterparty. ` +
+            `If the user named a person at that organisation, add the account first, then the contact.`,
+          data: {
+            stage: "failed",
+            reason: "counterparty_not_found",
+            counterparty: name,
+            nextStep: { tool: "propose_write", input: { verb: "create", kind: "account", payload: { name } } },
+          },
         };
       }
       const email = String(input.newPersonEmail ?? "").trim().toLowerCase();
