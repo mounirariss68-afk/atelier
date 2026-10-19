@@ -1,0 +1,645 @@
+{
+  "base": "https://587eca17-43f3-4691-865f-c3e4caf9e152-00-1qbciductjhf0.pike.replit.dev",
+  "mode": "legacy",
+  "ranAt": "2026-10-19T18:47:21.596Z",
+  "rows": [
+    {
+      "id": "leave-balance",
+      "pass": true,
+      "ms": 9142,
+      "tools": "my_leave",
+      "fails": [],
+      "finding": "hidden card; entitlement defaults stated as fact"
+    },
+    {
+      "id": "qib-owes",
+      "pass": true,
+      "ms": 10053,
+      "tools": "pending_invoices",
+      "fails": [],
+      "finding": "brand-name resolution through resolve_entity"
+    },
+    {
+      "id": "qib-contacts-list",
+      "pass": true,
+      "ms": 39687,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "contact_list resolves accounts by name only, misses brand names"
+    },
+    {
+      "id": "qib-cfo",
+      "pass": true,
+      "ms": 7026,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "near-miss tools, leaked reasoning, truncated prose"
+    },
+    {
+      "id": "qib-cfo-followup",
+      "pass": true,
+      "ms": 8038,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a named entity"
+    },
+    {
+      "id": "qib-contacts-followup",
+      "pass": true,
+      "ms": 47819,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a fact that lived only in card data (redacted replay)"
+    },
+    {
+      "id": "pipeline-by-stage",
+      "pass": true,
+      "ms": 7842,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "deal money in account currency labelled USD"
+    },
+    {
+      "id": "pipeline-arabic",
+      "pass": true,
+      "ms": 51397,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "non-English routing"
+    },
+    {
+      "id": "ar-aging",
+      "pass": true,
+      "ms": 7266,
+      "tools": "wallet_ar_aging",
+      "fails": [],
+      "finding": "customer grouping broken; cross-currency sums labelled USD"
+    },
+    {
+      "id": "utilisation",
+      "pass": true,
+      "ms": 12793,
+      "tools": "utilization_firm",
+      "fails": [],
+      "finding": "single draft week presented as firm utilisation"
+    },
+    {
+      "id": "days-in-stage",
+      "pass": true,
+      "ms": 40467,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "dead days_in_stage counter (judge checks the card data, not the wording)"
+    },
+    {
+      "id": "bandwidth",
+      "pass": true,
+      "ms": 7629,
+      "tools": "person_workload",
+      "fails": [],
+      "finding": "allocationPct default 0 reads as full availability"
+    },
+    {
+      "id": "pnl-ytd",
+      "pass": true,
+      "ms": 48867,
+      "tools": "finance_report_pnl",
+      "fails": [],
+      "finding": "GBP per-entity rows under USD header; honesty flags dropped"
+    },
+    {
+      "id": "long-number-prompt",
+      "pass": true,
+      "ms": 7935,
+      "tools": "search_documents",
+      "fails": [],
+      "finding": "12-digit number in the prompt ends the turn"
+    },
+    {
+      "id": "card-links",
+      "pass": true,
+      "ms": 7758,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "hrefs over 32 characters redacted as secrets"
+    },
+    {
+      "id": "meetings-week",
+      "pass": true,
+      "ms": 48225,
+      "tools": "meeting_list",
+      "fails": [],
+      "finding": "Outlook ids redacted; seed meetings listed"
+    },
+    {
+      "id": "account-list-query",
+      "pass": true,
+      "ms": 8726,
+      "tools": "account_list",
+      "fails": [],
+      "finding": "account_list ignores its query"
+    },
+    {
+      "id": "missing-account",
+      "pass": true,
+      "ms": 48624,
+      "tools": "account_dossier",
+      "fails": [],
+      "finding": "failing reads hidden from the client"
+    },
+    {
+      "id": "weather-refusal",
+      "pass": true,
+      "ms": 5979,
+      "tools": "",
+      "fails": [],
+      "finding": "graceful refusal without tool calls"
+    },
+    {
+      "id": "letter-clarification",
+      "pass": true,
+      "ms": 4377,
+      "tools": "request_employment_letter",
+      "fails": [],
+      "finding": "structured clarification form must survive the repair"
+    },
+    {
+      "id": "write-preview-unknown-fields",
+      "pass": true,
+      "ms": 5624,
+      "tools": "propose_write",
+      "fails": [],
+      "finding": "confirm card must show only fields the dispatch target can write (accounts have no website field; the earlier prompt asked for one)"
+    },
+    {
+      "id": "task-write-commit",
+      "pass": true,
+      "ms": 5607,
+      "tools": "create_my_task",
+      "fails": [],
+      "finding": "committed write shows neither card nor prose"
+    },
+    {
+      "id": "final-frame-telemetry",
+      "pass": true,
+      "ms": 39373,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "token counts redacted as secrets"
+    },
+    {
+      "id": "model-tier",
+      "pass": true,
+      "ms": 6880,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "reads routed to Haiku"
+    },
+    {
+      "id": "nda-new-counterparty",
+      "pass": true,
+      "ms": 55285,
+      "tools": "contract_prepare, prefill_from_specialist",
+      "fails": [],
+      "finding": "live 16 Oct: counterparty_not_found dead end, then step timeout; must offer to add the account"
+    }
+  ],
+  "timing": {
+    "leave-balance": {
+      "wallMs": 9142,
+      "latencyMs": 6369,
+      "preTurnMs": 2377,
+      "classifierMs": 2355,
+      "steps": [
+        {
+          "ms": 2689,
+          "cacheRead": 0,
+          "cacheWrite": 16166
+        },
+        {
+          "ms": 3254,
+          "cacheRead": 16166,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "qib-owes": {
+      "wallMs": 10053,
+      "latencyMs": 8379,
+      "preTurnMs": 1131,
+      "classifierMs": 1121,
+      "steps": [
+        {
+          "ms": 5425,
+          "cacheRead": 0,
+          "cacheWrite": 15145
+        },
+        {
+          "ms": 2645,
+          "cacheRead": 15145,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "qib-contacts-list": {
+      "wallMs": 39687,
+      "latencyMs": 38274,
+      "preTurnMs": 1115,
+      "classifierMs": 1100,
+      "steps": [
+        {
+          "ms": 2892,
+          "cacheRead": 0,
+          "cacheWrite": 16589
+        },
+        {
+          "ms": 34722,
+          "cacheRead": 16589,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "qib-cfo": {
+      "wallMs": 7026,
+      "latencyMs": 5726,
+      "preTurnMs": 964,
+      "classifierMs": 955,
+      "steps": [
+        {
+          "ms": 2760,
+          "cacheRead": 0,
+          "cacheWrite": 14687
+        },
+        {
+          "ms": 2640,
+          "cacheRead": 14687,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "qib-cfo-followup": {
+      "wallMs": 8038,
+      "latencyMs": 6792,
+      "preTurnMs": 955,
+      "classifierMs": 950,
+      "steps": [
+        {
+          "ms": 3804,
+          "cacheRead": 0,
+          "cacheWrite": 16795
+        },
+        {
+          "ms": 2673,
+          "cacheRead": 16795,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "qib-contacts-followup": {
+      "wallMs": 47819,
+      "latencyMs": 6749,
+      "preTurnMs": 40853,
+      "classifierMs": 40847,
+      "steps": [
+        {
+          "ms": 3014,
+          "cacheRead": 0,
+          "cacheWrite": 16498
+        },
+        {
+          "ms": 3426,
+          "cacheRead": 16498,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "pipeline-by-stage": {
+      "wallMs": 7842,
+      "latencyMs": 6417,
+      "preTurnMs": 1121,
+      "classifierMs": 1103,
+      "steps": [
+        {
+          "ms": 2692,
+          "cacheRead": 0,
+          "cacheWrite": 16570
+        },
+        {
+          "ms": 3435,
+          "cacheRead": 16570,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "pipeline-arabic": {
+      "wallMs": 51397,
+      "latencyMs": 49872,
+      "preTurnMs": 1205,
+      "classifierMs": 1196,
+      "steps": [
+        {
+          "ms": 4296,
+          "cacheRead": 0,
+          "cacheWrite": 17221
+        },
+        {
+          "ms": 45169,
+          "cacheRead": 17221,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "ar-aging": {
+      "wallMs": 7266,
+      "latencyMs": 5892,
+      "preTurnMs": 1042,
+      "classifierMs": 1033,
+      "steps": [
+        {
+          "ms": 2373,
+          "cacheRead": 0,
+          "cacheWrite": 15605
+        },
+        {
+          "ms": 3255,
+          "cacheRead": 15605,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "utilisation": {
+      "wallMs": 12793,
+      "latencyMs": 11373,
+      "preTurnMs": 957,
+      "classifierMs": 949,
+      "steps": [
+        {
+          "ms": 3042,
+          "cacheRead": 0,
+          "cacheWrite": 15619
+        },
+        {
+          "ms": 8060,
+          "cacheRead": 15619,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "days-in-stage": {
+      "wallMs": 40467,
+      "latencyMs": 6448,
+      "preTurnMs": 33741,
+      "classifierMs": 33717,
+      "steps": [
+        {
+          "ms": 2862,
+          "cacheRead": 0,
+          "cacheWrite": 18104
+        },
+        {
+          "ms": 3094,
+          "cacheRead": 18104,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "bandwidth": {
+      "wallMs": 7629,
+      "latencyMs": 6308,
+      "preTurnMs": 1010,
+      "classifierMs": 1003,
+      "steps": [
+        {
+          "ms": 2701,
+          "cacheRead": 0,
+          "cacheWrite": 15586
+        },
+        {
+          "ms": 3300,
+          "cacheRead": 15586,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "pnl-ytd": {
+      "wallMs": 48867,
+      "latencyMs": 47518,
+      "preTurnMs": 1042,
+      "classifierMs": 1033,
+      "steps": [
+        {
+          "ms": 3808,
+          "cacheRead": 0,
+          "cacheWrite": 16977
+        },
+        {
+          "ms": 43322,
+          "cacheRead": 16977,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "long-number-prompt": {
+      "wallMs": 7935,
+      "latencyMs": 6637,
+      "preTurnMs": 964,
+      "classifierMs": 957,
+      "steps": [
+        {
+          "ms": 2773,
+          "cacheRead": 0,
+          "cacheWrite": 16989
+        },
+        {
+          "ms": 3169,
+          "cacheRead": 16989,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "card-links": {
+      "wallMs": 7758,
+      "latencyMs": 6397,
+      "preTurnMs": 993,
+      "classifierMs": 968,
+      "steps": [
+        {
+          "ms": 2732,
+          "cacheRead": 0,
+          "cacheWrite": 16870
+        },
+        {
+          "ms": 3377,
+          "cacheRead": 16870,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "meetings-week": {
+      "wallMs": 48225,
+      "latencyMs": 6803,
+      "preTurnMs": 41099,
+      "classifierMs": 41077,
+      "steps": [
+        {
+          "ms": 3023,
+          "cacheRead": 0,
+          "cacheWrite": 17760
+        },
+        {
+          "ms": 2934,
+          "cacheRead": 17760,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "account-list-query": {
+      "wallMs": 8726,
+      "latencyMs": 7107,
+      "preTurnMs": 1216,
+      "classifierMs": 1205,
+      "steps": [
+        {
+          "ms": 3401,
+          "cacheRead": 0,
+          "cacheWrite": 16018
+        },
+        {
+          "ms": 3429,
+          "cacheRead": 16018,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "missing-account": {
+      "wallMs": 48624,
+      "latencyMs": 47149,
+      "preTurnMs": 1144,
+      "classifierMs": 1121,
+      "steps": [
+        {
+          "ms": 2877,
+          "cacheRead": 0,
+          "cacheWrite": 15371
+        },
+        {
+          "ms": 43994,
+          "cacheRead": 15371,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "weather-refusal": {
+      "wallMs": 5979,
+      "latencyMs": 4758,
+      "preTurnMs": 941,
+      "classifierMs": 930,
+      "steps": [
+        {
+          "ms": 4608,
+          "cacheRead": 0,
+          "cacheWrite": 19818
+        }
+      ]
+    },
+    "letter-clarification": {
+      "wallMs": 4377,
+      "latencyMs": 2981,
+      "preTurnMs": 1104,
+      "classifierMs": 1098,
+      "steps": [
+        {
+          "ms": 2711,
+          "cacheRead": 0,
+          "cacheWrite": 18439
+        }
+      ]
+    },
+    "write-preview-unknown-fields": {
+      "wallMs": 5624,
+      "latencyMs": 4349,
+      "preTurnMs": 1100,
+      "classifierMs": 1045,
+      "steps": [
+        {
+          "ms": 4031,
+          "cacheRead": 0,
+          "cacheWrite": 18044
+        }
+      ]
+    },
+    "task-write-commit": {
+      "wallMs": 5607,
+      "latencyMs": 4075,
+      "preTurnMs": 1360,
+      "classifierMs": 1351,
+      "steps": [
+        {
+          "ms": 3821,
+          "cacheRead": 0,
+          "cacheWrite": 18396
+        }
+      ]
+    },
+    "final-frame-telemetry": {
+      "wallMs": 39373,
+      "latencyMs": 5430,
+      "preTurnMs": 33642,
+      "classifierMs": 33633,
+      "steps": [
+        {
+          "ms": 2682,
+          "cacheRead": 0,
+          "cacheWrite": 16850
+        },
+        {
+          "ms": 2384,
+          "cacheRead": 16850,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "model-tier": {
+      "wallMs": 6880,
+      "latencyMs": 5105,
+      "preTurnMs": 1491,
+      "classifierMs": 1483,
+      "steps": [
+        {
+          "ms": 2411,
+          "cacheRead": 0,
+          "cacheWrite": 16732
+        },
+        {
+          "ms": 2449,
+          "cacheRead": 16732,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "nda-new-counterparty": {
+      "wallMs": 55285,
+      "latencyMs": 53885,
+      "preTurnMs": 1076,
+      "classifierMs": 1066,
+      "steps": [
+        {
+          "ms": 3222,
+          "cacheRead": 0,
+          "cacheWrite": 18659
+        },
+        {
+          "ms": 46097,
+          "cacheRead": 18659,
+          "cacheWrite": 0
+        },
+        {
+          "ms": 3725,
+          "cacheRead": 18659,
+          "cacheWrite": 0
+        }
+      ]
+    }
+  },
+  "note": "Third run (batch 6 live: timing telemetry). 25/25. The ~40 s stalls are now located: 4 turns spent 33\u201341 s in the Haiku intent classifier BEFORE the turn clock (its 5 s abort did not fire, so the hang is in the provider gate or a connection that never answers), 6 turns spent 35\u201346 s inside one Sonnet step; healthy steps take 2.4\u20135.4 s. Prompt cache: step 0 of every turn is a cache miss (write ~16K tokens), step 1 a hit \u2014 the per-turn tool menu changes the cached prefix. Batch 7 splits gate vs API time and sets SDK per-request timeouts (20 s + 1 retry for Sonnet; 5 s, no retry for the classifier)."
+}

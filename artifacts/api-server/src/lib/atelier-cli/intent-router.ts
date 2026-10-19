@@ -89,6 +89,10 @@ export interface Intent {
   tokensIn: number;
   tokensOut: number;
   costUsd: number;
+  /** Oct 2026 audit — time in the provider gate vs the API call (diagnostics). */
+  authMs?: number;
+  apiMs?: number;
+  fellBack?: boolean;
 }
 
 const KIND_KEYWORDS: Array<[IntentKind, RegExp]> = [
@@ -237,6 +241,8 @@ export async function classifyIntentTyped(
   },
 ): Promise<Intent> {
   const det = deterministicClassify(prompt);
+  let lastAuthMs = 0;
+  let lastApiMs = 0;
   const fallback = (model: string, costUsd = 0, tokensIn = 0, tokensOut = 0): Intent => ({
     verb: det.verb,
     kind: det.kind,
@@ -249,6 +255,9 @@ export async function classifyIntentTyped(
     tokensIn,
     tokensOut,
     costUsd,
+    authMs: lastAuthMs,
+    apiMs: lastApiMs,
+    fellBack: true,
   });
   // Oct 2026 audit: ATELIER_CLI_CLASSIFIER=off skips the Haiku pre-call and
   // uses the keyword classifier only. With the full tool menu and Sonnet on
@@ -277,6 +286,7 @@ export async function classifyIntentTyped(
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
   try {
+    const tAuth = Date.now();
     const { anthropic } = await getPrivacyAuthorizedAnthropic({
       // Same declaration as modelStep (see index.ts): the user's prompt may
       // hold a 12+ digit reference; Anthropic is allow-listed for RESTRICTED.
@@ -285,8 +295,10 @@ export async function classifyIntentTyped(
       capabilityId: "meta.intent_classifier",
       model: HAIKU_MODEL,
     });
+    lastAuthMs = Date.now() - tAuth;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), CLASSIFIER_TIMEOUT_MS);
+    const tApi = Date.now();
     try {
       const resp = await anthropic.messages.create(
         {
@@ -295,7 +307,10 @@ export async function classifyIntentTyped(
           system: ROUTER_SYSTEM,
           messages: [{ role: "user", content: prompt }],
         },
-        { signal: ac.signal },
+        // The abort above covers the API call; the SDK timeout covers a
+        // connection that never answers; no SDK-level retry here — the
+        // deterministic classifier is the fallback.
+        { signal: ac.signal, timeout: CLASSIFIER_TIMEOUT_MS, maxRetries: 0 },
       );
       const raw = resp.content
         .map((b) => (b.type === "text" ? b.text : ""))
@@ -326,8 +341,12 @@ export async function classifyIntentTyped(
         tokensIn,
         tokensOut,
         costUsd,
+        authMs: lastAuthMs,
+        apiMs: Date.now() - tApi,
+        fellBack: false,
       };
     } finally {
+      lastApiMs = Date.now() - tApi;
       clearTimeout(timer);
     }
   } catch (err) {

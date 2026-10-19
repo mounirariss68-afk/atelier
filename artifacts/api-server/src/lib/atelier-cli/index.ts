@@ -1710,6 +1710,8 @@ interface ClaudeStep {
   /** Prompt-cache usage for this step (0 when the API reports none). */
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** Time spent in the provider gate (control checks) before the API call. */
+  authMs?: number;
   /** Raw stop_reason for diagnostics. */
   stopReason?: string | null;
   /** Real model identifier returned by the Anthropic API for this step. */
@@ -1784,12 +1786,21 @@ async function modelStep(args: {
   // ASSISTANT_PROVIDER_ALLOWLIST; declaring only CONFIDENTIAL made the
   // provider guard end the turn ("AI temporarily unavailable") whenever such
   // a value appeared. SECRET (bearer values, canaries) is still refused.
+  const tAuth = Date.now();
   const { anthropic } = await getPrivacyAuthorizedAnthropic({
     dataClasses: ["confidential", "restricted"],
     orgId: args.orgId,
     capabilityId: "meta.orchestrate_turn",
     model: chosenModel,
   });
+  // Oct 2026 audit — split a step's time into the provider gate (DB-backed
+  // control checks) and the API call itself. One call in four stalled ~40 s
+  // on the dev app and nothing said which half.
+  const authMs = Date.now() - tAuth;
+  // Per-request SDK timeout + retries: a stalled connection to the
+  // integration gateway is cut at 20 s and retried instead of waiting on
+  // the 60 s step abort. Streaming bodies are not cut once headers arrive.
+  const SDK_OPTS = { signal: ac.signal, timeout: Number(process.env.ATELIER_CLI_SDK_TIMEOUT_MS ?? 20_000), maxRetries: 1 } as const;
   // Task #411 — prompt caching. The system prompt + tool block are
   // stable per turn (and across most turns within a session), so we
   // mark each as `cache_control: { type: "ephemeral" }` to amortise
@@ -1841,7 +1852,7 @@ async function modelStep(args: {
         tool_choice: toolsForCall.length > 0 ? { type: "auto", disable_parallel_tool_use: true } : undefined,
         messages: args.history as MsgCreateParams["messages"],
       },
-      { signal: ac.signal },
+      SDK_OPTS,
     );
   // Shared tail: cost + stop_reason mapping for both transports.
   const finishStep = (s: {
@@ -1878,6 +1889,7 @@ async function modelStep(args: {
       tokensOut: s.tokensOut,
       cacheReadTokens: s.cacheReadTokens ?? 0,
       cacheWriteTokens: s.cacheWriteTokens ?? 0,
+      authMs,
       stopReason: s.stopReason,
       model: s.model || chosenModel,
     };
@@ -1895,7 +1907,7 @@ async function modelStep(args: {
         messages: args.history as MsgCreateParams["messages"],
         stream: true,
       },
-      { signal: ac.signal },
+      SDK_OPTS,
     )) as AsyncIterable<Record<string, unknown>>;
     let text = "";
     let model = "";
@@ -6044,6 +6056,7 @@ export async function runTurn(
           tokensIn: claudeStep.tokensIn,
           cacheReadTokens: claudeStep.cacheReadTokens ?? 0,
           cacheWriteTokens: claudeStep.cacheWriteTokens ?? 0,
+          authMs: claudeStep.authMs ?? 0,
         },
       });
 
@@ -7110,6 +7123,9 @@ export async function runTurn(
             // Where the time went before the turn clock started.
             queueWaitMs,
             classifierMs,
+            classifierAuthMs: earlyTypedIntent.authMs ?? 0,
+            classifierApiMs: earlyTypedIntent.apiMs ?? 0,
+            classifierFellBack: earlyTypedIntent.fellBack ?? false,
             preTurnMs: t0 - tArrive,
             error: runtimeError ?? undefined,
           },
