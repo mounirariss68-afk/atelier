@@ -1707,6 +1707,9 @@ interface ClaudeStep {
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
+  /** Prompt-cache usage for this step (0 when the API reports none). */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   /** Raw stop_reason for diagnostics. */
   stopReason?: string | null;
   /** Real model identifier returned by the Anthropic API for this step. */
@@ -1848,6 +1851,8 @@ async function modelStep(args: {
     tokensIn: number;
     tokensOut: number;
     model: string;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
   }): ClaudeStep => {
     const inRate = s.model.includes("haiku") ? 1 : 3;
     const outRate = s.model.includes("haiku") ? 5 : 15;
@@ -1871,6 +1876,8 @@ async function modelStep(args: {
       costUsd,
       tokensIn: s.tokensIn,
       tokensOut: s.tokensOut,
+      cacheReadTokens: s.cacheReadTokens ?? 0,
+      cacheWriteTokens: s.cacheWriteTokens ?? 0,
       stopReason: s.stopReason,
       model: s.model || chosenModel,
     };
@@ -1894,12 +1901,14 @@ async function modelStep(args: {
     let model = "";
     let tokensIn = 0;
     let tokensOut = 0;
+    let cacheRead = 0;
+    let cacheWrite = 0;
     let stopReason: string | null = null;
     let tool: { id: string; name: string; json: string } | null = null;
     for await (const raw of stream) {
       const ev = raw as {
         type?: string;
-        message?: { model?: string; usage?: { input_tokens?: number } };
+        message?: { model?: string; usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } };
         content_block?: { type?: string; id?: string; name?: string };
         delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
         usage?: { output_tokens?: number };
@@ -1907,6 +1916,8 @@ async function modelStep(args: {
       if (ev.type === "message_start") {
         model = ev.message?.model ?? model;
         tokensIn = ev.message?.usage?.input_tokens ?? tokensIn;
+        cacheRead = ev.message?.usage?.cache_read_input_tokens ?? cacheRead;
+        cacheWrite = ev.message?.usage?.cache_creation_input_tokens ?? cacheWrite;
       } else if (ev.type === "content_block_start") {
         if (ev.content_block?.type === "tool_use") {
           // Last tool_use block wins (mirrors the non-streaming path).
@@ -1935,7 +1946,7 @@ async function modelStep(args: {
       }
       toolCall = { id: tool.id, name: tool.name, input };
     }
-    return finishStep({ text, toolCall, stopReason, tokensIn, tokensOut, model });
+    return finishStep({ text, toolCall, stopReason, tokensIn, tokensOut, model, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite });
   };
   try {
     let attempt = 0;
@@ -1965,6 +1976,8 @@ async function modelStep(args: {
           tokensIn: resp.usage.input_tokens,
           tokensOut: resp.usage.output_tokens,
           model: resp.model ?? "",
+          cacheReadTokens: (resp.usage as { cache_read_input_tokens?: number | null }).cache_read_input_tokens ?? 0,
+          cacheWriteTokens: (resp.usage as { cache_creation_input_tokens?: number | null }).cache_creation_input_tokens ?? 0,
         });
       } catch (err) {
         if (attempt >= RETRY_MAX || !isTransient(err)) throw err;
@@ -3538,12 +3551,21 @@ export async function runTurn(
 
   let aborted = false;
   let turnPersisted = false;
+  // Oct 2026 audit — timing breakdown for the `final` frame. Two live runs
+  // showed turns at 40–50 s wall-clock with `latencyMs` at 6 s: the wait
+  // was BEFORE the turn clock (queue, classifier, resolver) or inside one
+  // model step, and nothing in the frames said which. Now every turn
+  // reports queueWaitMs, preTurnMs (classifier + resolver) and per-step
+  // model durations on plan_step frames.
+  const tArrive = Date.now();
   await enterQueue(persona.id, {
     cancelInflight: input.cancelInflight === true,
     abort: () => {
       aborted = true;
     },
   });
+  const queueWaitMs = Date.now() - tArrive;
+  let classifierMs = 0;
   try {
     // --- Confirm replay path -------------------------------------------
     if (input.confirmTurnId) {
@@ -3711,6 +3733,7 @@ export async function runTurn(
     // Sensitive answers classify a NEUTRAL constant instead of the real
     // prompt: no LLM sees the secret, and no prompt-derived label (in
     // particular "reset") can reroute the turn away from the pending ask.
+    const tClassify = Date.now();
     const earlyTypedIntent = await (await import("./intent-router.js")).classifyIntentTyped(
       sensitivePendingEarly ? "continue" : input.prompt,
       earlySurface,
@@ -3719,6 +3742,7 @@ export async function runTurn(
         deterministicOnly: Boolean(input.continuesTurnId) || sensitivePendingEarly,
       },
     );
+    classifierMs = Date.now() - tClassify;
     const earlyLabel: IntentLabel = (() => {
       const v = earlyTypedIntent.verb;
       if (v === "reset") return "reset";
@@ -5830,6 +5854,7 @@ export async function runTurn(
         emit({ type: "text_delta", data: { text: "", replace: true, step } });
       };
       let claudeStep: ClaudeStep;
+      const tModel = Date.now();
       try {
         claudeStep = await modelStep({
           orgId: persona.orgId,
@@ -6010,7 +6035,17 @@ export async function runTurn(
           resetStreamDelta();
         }
       }
-      record({ type: "plan_step", data: { step, hasTool: !!claudeStep.toolCall } });
+      record({
+        type: "plan_step",
+        data: {
+          step,
+          hasTool: !!claudeStep.toolCall,
+          ms: Date.now() - tModel,
+          tokensIn: claudeStep.tokensIn,
+          cacheReadTokens: claudeStep.cacheReadTokens ?? 0,
+          cacheWriteTokens: claudeStep.cacheWriteTokens ?? 0,
+        },
+      });
 
       // Hallucinated tool-name recovery: the model occasionally invents a
       // near-miss name (e.g. `request_employment_certificate` for
@@ -7072,6 +7107,10 @@ export async function runTurn(
             tokensIn: totalIn,
             tokensOut: totalOut,
             latencyMs,
+            // Where the time went before the turn clock started.
+            queueWaitMs,
+            classifierMs,
+            preTurnMs: t0 - tArrive,
             error: runtimeError ?? undefined,
           },
         });

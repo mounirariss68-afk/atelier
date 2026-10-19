@@ -1,0 +1,208 @@
+{
+  "base": "https://587eca17-43f3-4691-865f-c3e4caf9e152-00-1qbciductjhf0.pike.replit.dev",
+  "mode": "legacy",
+  "ranAt": "2026-10-19T17:49:47.318Z",
+  "rows": [
+    {
+      "id": "leave-balance",
+      "pass": true,
+      "ms": 11139,
+      "tools": "my_leave",
+      "fails": [],
+      "finding": "hidden card; entitlement defaults stated as fact"
+    },
+    {
+      "id": "qib-owes",
+      "pass": true,
+      "ms": 8293,
+      "tools": "pending_invoices",
+      "fails": [],
+      "finding": "brand-name resolution through resolve_entity"
+    },
+    {
+      "id": "qib-contacts-list",
+      "pass": true,
+      "ms": 38435,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "contact_list resolves accounts by name only, misses brand names"
+    },
+    {
+      "id": "qib-cfo",
+      "pass": true,
+      "ms": 7644,
+      "tools": "contact_list",
+      "fails": [],
+      "finding": "near-miss tools, leaked reasoning, truncated prose"
+    },
+    {
+      "id": "qib-cfo-followup",
+      "pass": true,
+      "ms": 8125,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a named entity"
+    },
+    {
+      "id": "qib-contacts-followup",
+      "pass": true,
+      "ms": 45737,
+      "tools": "contact_detail",
+      "fails": [],
+      "finding": "follow-up on a fact that lived only in card data (redacted replay)"
+    },
+    {
+      "id": "pipeline-by-stage",
+      "pass": true,
+      "ms": 7277,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "deal money in account currency labelled USD"
+    },
+    {
+      "id": "pipeline-arabic",
+      "pass": true,
+      "ms": 49153,
+      "tools": "pipeline_by_stage",
+      "fails": [],
+      "finding": "non-English routing"
+    },
+    {
+      "id": "ar-aging",
+      "pass": true,
+      "ms": 13243,
+      "tools": "wallet_ar_aging",
+      "fails": [],
+      "finding": "customer grouping broken; cross-currency sums labelled USD"
+    },
+    {
+      "id": "utilisation",
+      "pass": true,
+      "ms": 11536,
+      "tools": "utilization_firm",
+      "fails": [],
+      "finding": "single draft week presented as firm utilisation"
+    },
+    {
+      "id": "days-in-stage",
+      "pass": true,
+      "ms": 37511,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "dead days_in_stage counter (judge checks the card data, not the wording)"
+    },
+    {
+      "id": "bandwidth",
+      "pass": true,
+      "ms": 8918,
+      "tools": "person_workload",
+      "fails": [],
+      "finding": "allocationPct default 0 reads as full availability"
+    },
+    {
+      "id": "pnl-ytd",
+      "pass": true,
+      "ms": 48048,
+      "tools": "finance_report_pnl",
+      "fails": [],
+      "finding": "GBP per-entity rows under USD header; honesty flags dropped"
+    },
+    {
+      "id": "long-number-prompt",
+      "pass": true,
+      "ms": 8535,
+      "tools": "search_documents",
+      "fails": [],
+      "finding": "12-digit number in the prompt ends the turn"
+    },
+    {
+      "id": "card-links",
+      "pass": true,
+      "ms": 7983,
+      "tools": "opportunity_detail",
+      "fails": [],
+      "finding": "hrefs over 32 characters redacted as secrets"
+    },
+    {
+      "id": "meetings-week",
+      "pass": true,
+      "ms": 47193,
+      "tools": "meeting_list",
+      "fails": [],
+      "finding": "Outlook ids redacted; seed meetings listed"
+    },
+    {
+      "id": "account-list-query",
+      "pass": true,
+      "ms": 8009,
+      "tools": "account_list",
+      "fails": [],
+      "finding": "account_list ignores its query"
+    },
+    {
+      "id": "missing-account",
+      "pass": true,
+      "ms": 47960,
+      "tools": "account_dossier",
+      "fails": [],
+      "finding": "failing reads hidden from the client"
+    },
+    {
+      "id": "weather-refusal",
+      "pass": true,
+      "ms": 5723,
+      "tools": "",
+      "fails": [],
+      "finding": "graceful refusal without tool calls"
+    },
+    {
+      "id": "letter-clarification",
+      "pass": true,
+      "ms": 5244,
+      "tools": "request_employment_letter",
+      "fails": [],
+      "finding": "structured clarification form must survive the repair"
+    },
+    {
+      "id": "write-preview-unknown-fields",
+      "pass": true,
+      "ms": 5454,
+      "tools": "propose_write",
+      "fails": [],
+      "finding": "confirm card must show only fields the dispatch target can write (accounts have no website field; the earlier prompt asked for one)"
+    },
+    {
+      "id": "task-write-commit",
+      "pass": true,
+      "ms": 15432,
+      "tools": "create_my_task",
+      "fails": [],
+      "finding": "committed write shows neither card nor prose"
+    },
+    {
+      "id": "final-frame-telemetry",
+      "pass": true,
+      "ms": 30479,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "token counts redacted as secrets"
+    },
+    {
+      "id": "model-tier",
+      "pass": true,
+      "ms": 8906,
+      "tools": "my_profile",
+      "fails": [],
+      "finding": "reads routed to Haiku"
+    },
+    {
+      "id": "nda-new-counterparty",
+      "pass": true,
+      "ms": 48923,
+      "tools": "contract_prepare",
+      "fails": [],
+      "finding": "live 16 Oct: counterparty_not_found dead end, then step timeout; must offer to add the account"
+    }
+  ],
+  "note": "Second run on the repaired build (batches 1\u20135). 25/25. Wall-clock still 30\u201349 s on 10 of 25 cases while latencyMs was 6\u20138 s on 4 of them and 37\u201347 s on 6: time is lost either before the turn clock or inside one model step; this run had no per-step timing. Batch 6 adds queueWaitMs/classifierMs/preTurnMs to the final frame and ms + cache usage to plan_step frames so the next run says where."
+}
