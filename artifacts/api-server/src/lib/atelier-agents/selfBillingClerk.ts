@@ -34,15 +34,14 @@ import {
   type SelfBilledInvoiceLine,
   type SelfBilledRateSnapshot,
   type SelfBilledVat,
-  type SelfBilledReconciliation,
-} from "@workspace/db";
+  type SelfBilledReconciliation, DEFAULT_ORG_ID } from "@workspace/db";
 import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { convertToUsd } from "../atelier-fx.js";
 import { resolveContractorRate, contractorRatePerHour } from "../atelier-contractor-rates.js";
 import { runAgent } from "./runAgent.js";
 
 const DEFAULT_HOURLY_FALLBACK_USD = 100;
-const ORG_ID = "aico";
+const ORG_ID = DEFAULT_ORG_ID;
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;

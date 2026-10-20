@@ -44,8 +44,7 @@ import {
   type VendorInvoiceExtraction,
   type VendorInvoiceExtractionItem,
   type VendorCostBucketType,
-  type VendorAllocSplit,
-} from "@workspace/db";
+  type VendorAllocSplit, DEFAULT_ORG_ID } from "@workspace/db";
 import { extractFirstJsonObject } from "./atelier-agents/runner.js";
 import { extractPdfText } from "./atelier-merchant/pdf.js";
 import { loadContractBytes } from "./atelier-contracts.js";
@@ -1183,7 +1182,7 @@ export function triggerVendorInvoiceMining(invoiceId: string): void {
       // when the row cannot be read).
       const inv = await loadInvoice(invoiceId).catch(() => null);
       await auditTooling({
-        orgId: inv?.orgId ?? "aico",
+        orgId: inv?.orgId ?? DEFAULT_ORG_ID,
         invoiceId,
         action: "tooling.extraction",
         payload: { status: "failed", reason, async: true },

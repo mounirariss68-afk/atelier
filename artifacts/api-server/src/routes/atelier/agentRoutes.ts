@@ -31,8 +31,7 @@ import {
   atelierPaneAItems,
   atelierDeliverables,
   atelierWinLossDebriefs,
-  atelierPrompts,
-} from "@workspace/db";
+  atelierPrompts, DEFAULT_ORG_ID } from "@workspace/db";
 import {
   SALES_TO_PLM,
   SALES_STAGE_DEFAULT_PROB,
@@ -474,7 +473,7 @@ router.post("/opportunities", async (req, res) => {
         .from(atelierAccounts)
         .where(
           and(
-            eq(atelierAccounts.orgId, me.orgId ?? "aico"),
+            eq(atelierAccounts.orgId, me.orgId ?? DEFAULT_ORG_ID),
             isNull(atelierAccounts.deletedAt),
           ),
         );
@@ -2038,8 +2037,16 @@ router.post("/povs/:povId/draft", async (req, res) => {
     return;
   }
   const [outlineRun] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, pov.runId));
-  const outlineDecisions = (outlineRun?.humanDecisions as Array<{ decision?: string }> | null) ?? [];
-  const outlineApproved = outlineDecisions.some((d) => d?.decision === "approve");
+  const outlineDecisions =
+    (outlineRun?.humanDecisions as Array<{
+      decision?: string;
+      actorId?: string;
+      by?: string;
+      decidedAt?: string;
+      ts?: string;
+    }> | null) ?? [];
+  const outlineApproval = outlineDecisions.find((d) => d?.decision === "approve");
+  const outlineApproved = Boolean(outlineApproval);
   if (!outlineApproved) {
     res.status(412).json({
       error: "outline-not-approved",
@@ -2124,21 +2131,37 @@ router.post("/povs/:povId/draft", async (req, res) => {
         type: "human_approval",
         evidenceSchema: {
           type: "object",
-          properties: { outlineRunId: {}, factSnapshotAt: {} },
-          required: ["outlineRunId", "factSnapshotAt"],
+          properties: {
+            outlineRunId: {},
+            factSnapshotAt: {},
+            approvedBy: { type: "string" },
+            approvedAt: { type: "string" },
+            source: { type: "string", enum: ["outline_run_decision", "revision_request"] },
+          },
+          required: ["outlineRunId", "factSnapshotAt", "approvedBy", "approvedAt", "source"],
           additionalProperties: false,
         },
         expiresInMs: 24 * 60 * 60_000,
       },
     }],
     });
+    // The human approval this checkpoint records is the partner's decision
+    // on the outline run (checked above), not this request. The evidence
+    // names that approver and time so the checkpoint is traceable to a
+    // person rather than to the request that created it.
     const [draftCheckpoint] = await db.select({ id: atelierWorkCheckpoints.id })
       .from(atelierWorkCheckpoints).where(eq(atelierWorkCheckpoints.workItemId, durablePovWork.workItemId));
     if (draftCheckpoint) {
       const approved = await decideWorkCheckpoint({
         orgId: me.orgId, requesterId: me.id, workItemId: durablePovWork.workItemId,
         checkpointId: draftCheckpoint.id, decision: "approve",
-        evidence: { outlineRunId: pov.runId, factSnapshotAt: pov.factSnapshotAt },
+        evidence: {
+          outlineRunId: pov.runId,
+          factSnapshotAt: pov.factSnapshotAt,
+          approvedBy: outlineApproval?.actorId ?? outlineApproval?.by ?? me.id,
+          approvedAt: outlineApproval?.decidedAt ?? outlineApproval?.ts ?? new Date().toISOString(),
+          source: "outline_run_decision",
+        },
       });
       if (!approved) throw new Error("pov-checkpoint-decision-failed");
     } else {
@@ -2492,8 +2515,14 @@ router.post("/povs/:povId/revise", async (req, res) => {
         type: "human_approval",
         evidenceSchema: {
           type: "object",
-          properties: { outlineRunId: {}, factSnapshotAt: {} },
-          required: ["outlineRunId", "factSnapshotAt"],
+          properties: {
+            outlineRunId: {},
+            factSnapshotAt: {},
+            approvedBy: { type: "string" },
+            approvedAt: { type: "string" },
+            source: { type: "string", enum: ["outline_run_decision", "revision_request"] },
+          },
+          required: ["outlineRunId", "factSnapshotAt", "approvedBy", "approvedAt", "source"],
           additionalProperties: false,
         },
         expiresInMs: 24 * 60 * 60_000,
@@ -2503,10 +2532,18 @@ router.post("/povs/:povId/revise", async (req, res) => {
     const [revisionCheckpoint] = await db.select({ id: atelierWorkCheckpoints.id })
       .from(atelierWorkCheckpoints).where(eq(atelierWorkCheckpoints.workItemId, durablePovWork.workItemId));
     if (revisionCheckpoint) {
+      // A revision is requested by the reviewer themselves ("request
+      // changes" with feedback); that request is the human approval.
       const approved = await decideWorkCheckpoint({
         orgId: me.orgId, requesterId: me.id, workItemId: durablePovWork.workItemId,
         checkpointId: revisionCheckpoint.id, decision: "approve",
-        evidence: { outlineRunId: pov.runId, factSnapshotAt: pov.factSnapshotAt },
+        evidence: {
+          outlineRunId: pov.runId,
+          factSnapshotAt: pov.factSnapshotAt,
+          approvedBy: me.id,
+          approvedAt: new Date().toISOString(),
+          source: "revision_request",
+        },
       });
       if (!approved) throw new Error("pov-checkpoint-decision-failed");
     } else {
@@ -2855,11 +2892,46 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     res.status(403).json({ error: "decision-not-authorized" });
     return;
   }
+  // A decision answers a finished (or checkpoint-blocked) run. While the run
+  // is still working there is nothing to approve; once it has failed only a
+  // rejection makes sense.
+  const runState = effectiveAgentRunStatus(r);
+  if (runState === "running") {
+    res.status(409).json({ error: "run-still-running", status: runState });
+    return;
+  }
+  if (runState === "error" && parsed.data.decision !== "reject") {
+    res.status(409).json({ error: "run-failed-cannot-approve", status: runState });
+    return;
+  }
+  // Resolve the checkpoint this decision answers. Clients that send one
+  // must name a checkpoint the agent actually defines; legacy clients that
+  // send none get the agent's single blocking checkpoint when there is
+  // exactly one.
+  const agentDef = getAgent(r.agentId) ?? getAgent(`ag_${r.agentId}`);
+  const definedCheckpoints = agentDef?.humanCheckpoints ?? [];
+  let checkpointId: string | null = parsed.data.checkpointId ?? null;
+  if (checkpointId && definedCheckpoints.length > 0 && !definedCheckpoints.some((cp) => cp.id === checkpointId)) {
+    res.status(400).json({
+      error: "unknown-checkpoint",
+      checkpointId,
+      knownCheckpoints: definedCheckpoints.map((cp) => cp.id),
+    });
+    return;
+  }
+  if (!checkpointId) {
+    const blocking = definedCheckpoints.filter((cp) => cp.blocking);
+    checkpointId = blocking.length === 1 ? blocking[0].id : definedCheckpoints.length === 1 ? definedCheckpoints[0].id : null;
+  }
   const priorDecisions = Array.isArray(r.humanDecisions)
-    ? (r.humanDecisions as Array<{ decision?: string }>)
+    ? (r.humanDecisions as Array<{ decision?: string; checkpointId?: string | null }>)
     : [];
-  if (priorDecisions.some((d) => d.decision === parsed.data.decision)) {
-    res.status(409).json({ error: "decision-already-recorded", decision: parsed.data.decision });
+  if (
+    priorDecisions.some(
+      (d) => d.decision === parsed.data.decision && (d.checkpointId ?? null) === checkpointId,
+    )
+  ) {
+    res.status(409).json({ error: "decision-already-recorded", decision: parsed.data.decision, checkpointId });
     return;
   }
   // Task #1022 — freeze the POV evidence snapshot BEFORE the approval is
@@ -2914,6 +2986,7 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     targetType: r.targetType ?? "agent_run",
     targetId: r.targetId ?? r.id,
     targetLabel: r.targetLabel ?? r.id,
+    checkpointId,
   });
   await recordOutcomeForRun({
     orgId: me.orgId,

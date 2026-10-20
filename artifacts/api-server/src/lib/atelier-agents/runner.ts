@@ -23,7 +23,7 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAgentRunSnapshots, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities, atelierUsers } from "@workspace/db";
+import { db, atelierAgentRuns, atelierAgentRunSnapshots, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities, atelierUsers, DEFAULT_ORG_ID } from "@workspace/db";
 import { eq, and, gte, isNull, inArray, desc } from "drizzle-orm";
 import { loadStageAges } from "../atelier-opportunity-facts.js";
 import { getAgent } from "@workspace/agents";
@@ -57,6 +57,7 @@ import {
   type RateCardRowLite as PricingRateCardRowLite,
   type TeamMixEntry as PricingTeamMixEntry,
 } from "../atelier-pricing.js";
+import { computeProposalPricing, type ProposalPricingModel } from "../atelier-proposal-pricing.js";
 
 /**
  * A probability is "miscalibrated" when it deviates from the default for its
@@ -264,7 +265,7 @@ export async function startRun(input: StartRunInput): Promise<string> {
   // Null-actor scheduled sweeps predate explicit tenant inputs and are
   // intentionally represented by one firm-system run. Their downstream work
   // remains separately scoped to each tenant.
-  const orgId = input.orgId ?? actor?.orgId ?? "aico";
+  const orgId = input.orgId ?? actor?.orgId ?? DEFAULT_ORG_ID;
   const id = rid("run");
   await db.transaction(async (tx) => {
    await tx.insert(atelierAgentRuns).values({
@@ -404,17 +405,30 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
       const check = validateAgentOutput(row.agentId, input.output);
       if (!check.ok) {
         schemaWarning = `[${row.agentId}] ${check.reason}`;
-        if (process.env.ATELIER_AGENT_STRICT_OUTPUT === "1") {
-          throw new Error(`atelier-agent-schema-violation: ${schemaWarning}`);
-        }
         // eslint-disable-next-line no-console
         console.warn(`[atelier-agent-schema-violation] ${schemaWarning}`);
       }
     }
-  } catch (e) {
-    if (process.env.ATELIER_AGENT_STRICT_OUTPUT === "1") throw e;
+  } catch {
     // Best-effort lookup — never break v3 on a registry hiccup.
   }
+
+  // Strict mode (tests, CI, or a tenant that opts in): an output that
+  // breaks its contract fails the run instead of landing as "complete".
+  // The row is closed properly so it never lingers as a stale "running".
+  if (schemaWarning && process.env.ATELIER_AGENT_STRICT_OUTPUT === "1") {
+    await failRun(input.runId, new Error(`atelier-agent-schema-violation: ${schemaWarning}`), {
+      actorLabel: input.actorLabel,
+      targetType: input.targetType,
+      targetId: input.targetId,
+    });
+    throw new Error(`atelier-agent-schema-violation: ${schemaWarning}`);
+  }
+
+  // Soft mode: the output is kept so people can see what the agent
+  // produced, but it is never presented as trustworthy — confidence is
+  // forced to red and the status message carries the violation.
+  const confidence: "green" | "amber" | "red" = schemaWarning ? "red" : input.confidence;
 
   await db
     .update(atelierAgentRuns)
@@ -425,7 +439,7 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
         : "complete",
       progressPct: 100,
       output: input.output as never,
-      confidence: input.confidence,
+      confidence,
       costUsd: input.costUsd,
       durationMs: input.durationMs,
       sourcesCount: input.sourcesCount,
@@ -441,11 +455,11 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
     action: "agent.complete",
     payload: {
       runId: input.runId,
-      confidence: input.confidence,
+      confidence,
       costUsd: input.costUsd,
       schemaWarning,
     },
-    payloadSummary: `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)})${schemaWarning ? " ⚠ schema-violation" : ""}`,
+    payloadSummary: `${input.actorLabel} completed on ${input.targetLabel} (confidence ${confidence}, $${input.costUsd.toFixed(4)})${schemaWarning ? " ⚠ schema-violation" : ""}`,
   });
 
   // Emit a dedicated audit event when the registry schema is violated so
@@ -602,6 +616,46 @@ export function extractFirstJsonObject(text: string): string | null {
   return null;
 }
 
+/**
+ * List prices per million tokens by model family. Overridable with
+ * ATELIER_MODEL_RATES_JSON='{"opus":{"in":5,"out":25}}' when prices move.
+ */
+function modelRatesPerMillion(model: string): { inRate: number; outRate: number } {
+  const defaults: Record<string, { in: number; out: number }> = {
+    haiku: { in: 1, out: 5 },
+    sonnet: { in: 3, out: 15 },
+    opus: { in: 5, out: 25 },
+  };
+  let table = defaults;
+  const raw = process.env.ATELIER_MODEL_RATES_JSON;
+  if (raw) {
+    try {
+      table = { ...defaults, ...(JSON.parse(raw) as Record<string, { in: number; out: number }>) };
+    } catch {
+      /* keep defaults */
+    }
+  }
+  const family = model.includes("haiku") ? "haiku" : model.includes("opus") ? "opus" : "sonnet";
+  const r = table[family] ?? defaults.sonnet;
+  return { inRate: r.in, outRate: r.out };
+}
+
+/**
+ * The model an agent runs on. The registry (`lib/agents`) is the policy
+ * source; the literal in the runner is only the fallback for agents whose
+ * registry entry is "rule-based"/"policy-routed" or missing.
+ * ATELIER_AGENT_MODEL_<AGENT_ID> (upper-case, e.g. ATELIER_AGENT_MODEL_AG_SYNTHESIS_CRITIC)
+ * overrides both for one agent.
+ */
+export function agentModel(agentId: string, fallback: string): string {
+  const envKey = `ATELIER_AGENT_MODEL_${agentId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+  const fromEnv = process.env[envKey];
+  if (fromEnv && fromEnv.startsWith("claude-")) return fromEnv;
+  const def = getAgent(agentId) ?? getAgent(agentId.startsWith("ag_") ? agentId.slice(3) : `ag_${agentId}`);
+  if (def?.model && def.model.startsWith("claude-")) return def.model;
+  return fallback;
+}
+
 async function callClaudeJson<T>(
   model: string,
   systemPrompt: string,
@@ -658,8 +712,7 @@ async function callClaudeJson<T>(
   }
   const tokensIn = resp.usage.input_tokens;
   const tokensOut = resp.usage.output_tokens;
-  const inRate = model.includes("haiku") ? 1 : 3;
-  const outRate = model.includes("haiku") ? 5 : 15;
+  const { inRate, outRate } = modelRatesPerMillion(model);
   const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
   return { value, costUsd, tokensIn, tokensOut };
 }
@@ -1135,7 +1188,7 @@ export async function runPursuitScout(args: {
           .from(atelierOpportunities)
           .where(eq(atelierOpportunities.id, args.opportunityId))
           .limit(1);
-        const ctx872 = await buildAllianceCapabilityContext(oppRow?.orgId ?? "aico");
+        const ctx872 = await buildAllianceCapabilityContext(oppRow?.orgId ?? DEFAULT_ORG_ID);
         allianceBlock = ctx872.block;
         allianceFirmNames = ctx872.firmNames;
       } catch (e) {
@@ -1146,7 +1199,7 @@ export async function runPursuitScout(args: {
       // Claude synthesis) instead of model-memory-only.
       const { value, costUsd, potentiallyStale: scoutStale } =
         await callResearchJson<PursuitScoutOutput>(
-          "claude-sonnet-4-5",
+          agentModel("ag_pursuit_scout", "claude-sonnet-4-5"),
           system,
           JSON.stringify({
             accountName: args.accountName,
@@ -1270,7 +1323,7 @@ export async function runPovOutline(args: {
           : "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.") +
         povDepthDirective(args.depth, "outline");
       const { value, costUsd } = await callClaudeJson<PovOutline>(
-        "claude-haiku-4-5",
+        agentModel("ag_pov_author", "claude-haiku-4-5"),
         system + directive,
         JSON.stringify({
           opportunity: args.opportunityName,
@@ -1382,7 +1435,7 @@ export async function runPovDraft(args: {
           : "\n\n## Run-time directive\nExecute Phase B (sections) ONLY and return { \"sections\": [...] }.") +
         povDepthDirective(args.depth, "sections");
       const b = await callClaudeJson<{ sections: PovDraft["sections"] }>(
-        "claude-sonnet-4-5",
+        agentModel("ag_pov_draft", "claude-sonnet-4-5"),
         system + bDirective,
         JSON.stringify({
           ...baseInput,
@@ -1401,7 +1454,7 @@ export async function runPovDraft(args: {
         "\n\n## Run-time directive\nExecute Phase C (critic) ONLY. You are an INDEPENDENT auditor: check every factual claim in the sections below against the provided facts (and nothing else). Return { \"coverage\": <0..1>, \"voiceFlags\": [...], \"verdict\": \"pass\"|\"revise\", \"notes\": \"...\", \"unsupportedClaims\": [{ \"sectionId\": \"...\", \"claim\": \"...\" }] }.";
       try {
         const c = await callClaudeJson<PovCriticReport>(
-          "claude-sonnet-4-5",
+          agentModel("ag_pov_draft", "claude-sonnet-4-5"),
           system + cDirective,
           JSON.stringify({ sections, facts: args.promotedFacts }),
           { timeoutMs: budget.critic },
@@ -1435,7 +1488,7 @@ export async function runPovDraft(args: {
           "\n\n## Run-time directive\nExecute Phase B (sections) ONCE MORE to address the critic notes below (single revision pass — do not loop). Ground every claim in the provided facts; drop or hedge any claim the critic flagged as unsupported. Return { \"sections\": [...] }.";
         try {
           const r = await callClaudeJson<{ sections: PovDraft["sections"] }>(
-            "claude-sonnet-4-5",
+            agentModel("ag_pov_draft", "claude-sonnet-4-5"),
             system + rDirective,
             JSON.stringify({
               ...baseInput,
@@ -1458,7 +1511,7 @@ export async function runPovDraft(args: {
       const dDirective =
         "\n\n## Run-time directive\nExecute Phase D (stylist) ONLY on the sections below. Preserve every section heading VERBATIM (as an <h2>) and every citation marker exactly — render each cited fact id as <sup data-fact=\"ID\">n</sup> inside its own section and NEVER invent, drop, or alter fact ids. The server audits the final HTML: any section whose heading or citations are missing from your output fails the run. Return { \"html\": \"...\", \"wordCount\": <int> }.";
       const d = await callClaudeJson<{ html: string; wordCount: number }>(
-        "claude-haiku-4-5",
+        agentModel("ag_pov_draft", "claude-haiku-4-5"),
         system + dDirective,
         JSON.stringify({ title: args.outline.title, thesis: args.outline.thesis, sections }),
         { timeoutMs: budget.stylist },
@@ -1557,7 +1610,7 @@ export async function runPovDeepResearch(args: {
         Math.min(16, Number(process.env.ATELIER_POV_RESEARCH_MAX_QUERIES ?? 12)),
       );
       const r = await callResearchJson<{ facts: AgentFact[] }>(
-        "claude-sonnet-4-5",
+        agentModel("ag_pov_researcher", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           opportunity: args.opportunityName,
@@ -1642,7 +1695,7 @@ export async function runMeetingScribe(args: {
       const system = await loadEffectivePrompt("meeting_scribe");
       await ctx.progress(35, "Normalising speakers");
       const { value, costUsd } = await callClaudeJson<MeetingScribeOutput>(
-        "claude-haiku-4-5",
+        agentModel("ag_meeting_scribe", "claude-haiku-4-5"),
         system,
         JSON.stringify({
           transcript: args.transcript,
@@ -1664,6 +1717,20 @@ export async function runMeetingScribe(args: {
 
 // ------- decision logging (ApproveEditReject) -------
 
+/** One entry in `atelier_agent_runs.human_decisions`. The UI reads actorLabel/decidedAt. */
+export interface HumanDecisionRecord {
+  decision: "approve" | "edit" | "reject";
+  rationale: string;
+  checkpointId: string | null;
+  actorId: string;
+  actorLabel: string;
+  decidedAt: string;
+  /** @deprecated same as actorId */
+  by: string;
+  /** @deprecated same as decidedAt */
+  ts: string;
+}
+
 export async function recordDecision(args: {
   orgId?: string;
   runId: string;
@@ -1674,12 +1741,15 @@ export async function recordDecision(args: {
   targetType: string;
   targetId: string;
   targetLabel: string;
+  /** Which human checkpoint (agent definition `humanCheckpoints[].id`) this answers. */
+  checkpointId?: string | null;
 }): Promise<void> {
   const [run] = await db
     .select()
     .from(atelierAgentRuns)
     .where(eq(atelierAgentRuns.id, args.runId));
   const decisions = (run?.humanDecisions as unknown[]) ?? [];
+  const now = new Date().toISOString();
   await db
     .update(atelierAgentRuns)
     .set({
@@ -1688,9 +1758,14 @@ export async function recordDecision(args: {
         {
           decision: args.decision,
           rationale: args.rationale,
+          checkpointId: args.checkpointId ?? null,
+          actorId: args.actorId,
+          actorLabel: args.actorLabel,
+          decidedAt: now,
+          // Legacy keys kept so older readers keep working.
           by: args.actorId,
-          ts: new Date().toISOString(),
-        },
+          ts: now,
+        } satisfies HumanDecisionRecord,
       ],
       updatedAt: new Date(),
     })
@@ -1774,13 +1849,11 @@ export async function runCharterArchitect(args: {
     },
     async (ctx) => {
       const system = await loadEffectivePrompt("charter_architect");
-      await ctx.progress(15, "Objective Distiller — extracting 3–5 outcome-shaped objectives");
-      await ctx.progress(35, "Scope Boundarist — drawing IN/OUT scope sets (MECE)");
-      await ctx.progress(60, "Hypothesis Tree Builder — building tree (max depth 3)");
-      await ctx.progress(80, "RAID Baseliner — triaging baseline RAID items");
+      // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+      await ctx.progress(15, "Generating (single model pass)");
       const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
       const { value, costUsd } = await callClaudeJson<CharterArchitectOutput>(
-        "claude-sonnet-4-5",
+        agentModel("ag_charter_architect", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           engagementId: args.engagementId,
@@ -1861,10 +1934,10 @@ export async function runSynthesisCritic(args: {
     },
     async (ctx) => {
       const system = await loadEffectivePrompt("synthesis_critic");
-      await ctx.progress(25, "Walking sections + checking pyramid structure");
-      await ctx.progress(60, "Auditing citations + hypothesis coverage");
+      // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+      await ctx.progress(25, "Generating (single model pass)");
       const { value, costUsd } = await callClaudeJson<SynthesisCriticOutput>(
-        "claude-opus-4-7",
+        agentModel("ag_synthesis_critic", "claude-opus-4-7"),
         system,
         JSON.stringify({
           deliverableId: args.deliverableId,
@@ -2018,12 +2091,10 @@ export async function runAgentArchitect(args: {
     },
     async (ctx) => {
       const system = await loadEffectivePrompt("agent_architect");
-      await ctx.progress(15, "Process Reader — normalizing input into ordered steps");
-      await ctx.progress(35, "Step Classifier — assigning category per step");
-      await ctx.progress(60, "Agentifiability Judge — yes/partial/no with rationale");
-      await ctx.progress(80, "Agent Designer — clustering into candidate designs");
+      // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+      await ctx.progress(15, "Generating (single model pass)");
       const { value, costUsd } = await callClaudeJson<AgentArchitectOutput>(
-        "claude-sonnet-4-5",
+        agentModel("ag_agent_architect", "claude-sonnet-4-5"),
         system,
         JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
       );
@@ -2139,12 +2210,10 @@ export async function runPrototypeForge(args: {
     },
     async (ctx) => {
       const system = await loadEffectivePrompt("prototype_forge");
-      await ctx.progress(20, "Architecture Drafter — sketching surfaces + agent topology");
-      await ctx.progress(45, "Demo Storyboarder — choosing demo moments");
-      await ctx.progress(70, "Brand Translator — applying brand defaults/overrides");
-      await ctx.progress(90, "Prompt Composer — assembling Replit-ready prompt");
+      // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+      await ctx.progress(20, "Generating (single model pass)");
       const { value: rawValue, costUsd } = await callClaudeJson<PrototypeForgeOutput>(
-        "claude-sonnet-4-5",
+        agentModel("ag_prototype_forge", "claude-sonnet-4-5"),
         system,
         JSON.stringify(args.brief),
       );
@@ -2177,13 +2246,7 @@ export interface ProposalSection {
   citations: string[];
 }
 
-export interface PricingModel {
-  totalRevenueUsd: number;
-  totalCostUsd: number;
-  marginPct: number;
-  verdict: "green" | "amber" | "red" | "partner_override_required";
-  wedgeChart: { role: string; days: number; cost: number; revenue: number }[];
-}
+export type PricingModel = ProposalPricingModel;
 
 export interface ComplianceMatrixRow {
   rfpReqId: string;
@@ -2201,21 +2264,6 @@ export interface ProposalComposerOutput {
   complianceOverall: "green" | "red";
 }
 
-const DAY_RATES: Record<string, number> = {
-  partner: 4000,
-  lead: 3000,
-  sme: 2500,
-  ai_engineer: 2200,
-  business_developer: 1800,
-};
-const SELL_MULTIPLIER: Record<string, number> = {
-  partner: 1.6,
-  lead: 1.7,
-  sme: 1.6,
-  ai_engineer: 1.7,
-  business_developer: 1.5,
-};
-
 export async function runProposalComposer(args: {
   opportunityId: string;
   opportunityName: string;
@@ -2230,7 +2278,7 @@ export async function runProposalComposer(args: {
 }): Promise<{ runId: string; output: ProposalComposerOutput; costUsd: number }> {
   const t0 = Date.now();
   const runId = await startRun({
-    agentId: "proposal_composer",
+    agentId: "ag_proposal_composer",
     triggeredByUserId: args.triggeredByUserId,
     targetType: "opportunity",
     targetId: args.opportunityId,
@@ -2240,26 +2288,41 @@ export async function runProposalComposer(args: {
   });
   try {
     const system = await loadEffectivePrompt("proposal_composer");
-    await progressRun(runId, 10, "Context Writer — framing situation");
-    await progressRun(runId, 22, "Approach Writer — MECE workstreams");
-    await progressRun(runId, 35, "Workplan Writer — phasing deliverables");
-    await progressRun(runId, 48, "Team Bios Writer — proposed team");
-    await progressRun(runId, 60, "Case Study Picker — top-3 credentials");
-    await progressRun(runId, 72, "Pricing Analyst — building wedge");
-    await progressRun(runId, 84, "Terms & Risk Writer — contractual language");
-    await progressRun(runId, 95, "Compliance Reviewer — RFP matrix");
+    // Money is computed server-side from the rate card and handed to the
+    // model to narrate. Whatever the model returns under `pricingModel` is
+    // replaced with these numbers below.
+    await progressRun(runId, 10, "Pricing the team mix against the rate card");
+    const pricingModel = await computeProposalPricing({
+      teamProposed: args.teamProposed,
+      durationWeeks: args.pricingIntent.durationWeeks,
+      targetMarginPct: args.pricingIntent.targetMarginPct,
+    });
+    await progressRun(runId, 25, "Drafting sections, win themes and compliance matrix");
     const { value, costUsd } = await callClaudeJson<ProposalComposerOutput>(
-      "claude-sonnet-4-5",
+      agentModel("ag_proposal_composer", "claude-sonnet-4-5"),
       system,
       JSON.stringify({
         opportunityId: args.opportunityId,
         sectionsRequired: args.sectionsRequired,
         teamProposed: args.teamProposed,
         pricingIntent: args.pricingIntent,
+        pricingModel: {
+          totalRevenueUsd: pricingModel.totalRevenueUsd,
+          totalCostUsd: pricingModel.totalCostUsd,
+          marginPct: pricingModel.marginPct,
+          verdict: pricingModel.verdict,
+          wedgeChart: pricingModel.wedgeChart,
+          note: "Computed by the firm's pricing engine. Narrate these figures in the pricing section; do not change them.",
+        },
         rfpRequirements: args.rfpRequirements,
         curatedWinThemes: args.curatedWinThemes ?? [],
       }),
     );
+    await progressRun(runId, 90, "Applying guardrails");
+    value.pricingModel = pricingModel;
+    if (!Array.isArray(value.sections)) value.sections = [];
+    if (!Array.isArray(value.complianceMatrix)) value.complianceMatrix = [];
+    if (!Array.isArray(value.winThemes)) value.winThemes = [];
     // Task #241: if curated firm-wide themes were supplied, fold them into
     // the output's winThemes so the proposal speaks with the firm's voice
     // rather than the per-deal mock.
@@ -2276,10 +2339,9 @@ export async function runProposalComposer(args: {
       const sec = value.sections.find((s) => s.id === "compliance");
       if (sec) sec.status = "red";
     }
-    // Guardrail: any margin below the partner's target margin must force a
-    // partner override decision — never silently amber/green it through.
-    if (value.pricingModel.marginPct < args.pricingIntent.targetMarginPct) {
-      value.pricingModel.verdict = "partner_override_required";
+    // Guardrail: a margin below the partner's target forces a partner
+    // override decision — never silently amber/green it through.
+    if (value.pricingModel.verdict === "partner_override_required") {
       const sec = value.sections.find((s) => s.id === "pricing");
       if (sec) sec.status = "red";
     }
@@ -2334,7 +2396,7 @@ export async function runBrandProfileWriter(args: {
 }): Promise<{ runId: string; output: BrandProfileOutput; costUsd: number }> {
   const t0 = Date.now();
   const runId = await startRun({
-    agentId: "brand_profile_writer",
+    agentId: "ag_brand_profile_writer",
     triggeredByUserId: args.triggeredByUserId,
     targetType: "firm",
     targetId: args.orgId ?? "firm_profile",
@@ -2344,11 +2406,10 @@ export async function runBrandProfileWriter(args: {
   });
   try {
     const system = await loadEffectivePrompt("brand_profile_writer");
-    await progressRun(runId, 20, "Loading evidence corpus");
-    await progressRun(runId, 50, "Drafting voice + boilerplate");
-    await progressRun(runId, 80, "Drafting differentiators + proof points");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 20, "Generating (single model pass)");
     const { value, costUsd } = await callClaudeJson<BrandProfileOutput>(
-      "claude-sonnet-4-5",
+      agentModel("ag_brand_profile_writer", "claude-sonnet-4-5"),
       system,
       JSON.stringify({
         firmName: args.firmName,
@@ -3141,8 +3202,7 @@ export async function callClaudeJsonWithWebSearch<T>(
   }
   const tokensIn = resp.usage.input_tokens;
   const tokensOut = resp.usage.output_tokens;
-  const inRate = model.includes("haiku") ? 1 : 3;
-  const outRate = model.includes("haiku") ? 5 : 15;
+  const { inRate, outRate } = modelRatesPerMillion(model);
   const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
   return { value, costUsd, tokensIn, tokensOut, citationUrls };
 }
@@ -3429,8 +3489,7 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   }
   const tokensIn = resp.usage.input_tokens;
   const tokensOut = resp.usage.output_tokens;
-  const inRate = model.includes("haiku") ? 1 : 3;
-  const outRate = model.includes("haiku") ? 5 : 15;
+  const { inRate, outRate } = modelRatesPerMillion(model);
   // Perplexity retrieval cost is a rough per-request estimate (sonar-pro
   // request pricing); the Claude token cost dominates.
   const perplexityCostUsd = research.queryCount * 0.006;
@@ -3621,7 +3680,7 @@ export async function runAccountCartographer(args: {
           .limit(1);
         orgId = acctRow?.orgId ?? null;
       }
-      const ctx = await buildAllianceCapabilityContext(orgId ?? "aico");
+      const ctx = await buildAllianceCapabilityContext(orgId ?? DEFAULT_ORG_ID);
       allianceBlock = ctx.block;
       allianceFirmNames = ctx.firmNames;
     } catch (e) {
@@ -3633,7 +3692,7 @@ export async function runAccountCartographer(args: {
     else reportProgress(25, "Searching the public web");
     const { value, costUsd, citationUrls, potentiallyStale: cartographerStale } =
       await callResearchJson<CartographerOutput>(
-        "claude-sonnet-4-5",
+        agentModel("account_cartographer", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           accountName: args.accountName,
@@ -3951,7 +4010,7 @@ export async function runExecutiveMapper(args: {
     await progressRun(runId, 20, "Sweeping the leadership roster");
     const { value, costUsd, citationUrls } =
       await callResearchJson<ExecutiveMapperOutput>(
-        "claude-sonnet-4-5",
+        agentModel("executive_mapper", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           accountName: args.accountName,
@@ -4409,7 +4468,7 @@ export async function runWhitespaceMapper(args: {
   try {
     await progressRun(runId, 40, "Mapping offerings × personas");
     const { value, costUsd } = await callClaudeJson<WhitespaceOutput>(
-      "claude-haiku-4-5",
+      agentModel("whitespace_mapper", "claude-haiku-4-5"),
       "You are Whitespace Mapper. Produce an offerings × personas matrix with grounded rationales.",
       JSON.stringify({ accountName: args.accountName }),
     );
@@ -4461,7 +4520,7 @@ export async function runQbrComposer(args: {
   try {
     await progressRun(runId, 50, "Composing QBR canvas");
     const { value, costUsd } = await callClaudeJson<QbrOutput>(
-      "claude-sonnet-4-5",
+      agentModel("qbr_composer", "claude-sonnet-4-5"),
       "You are QBR Composer. Produce a quarterly business-review canvas: what changed, where we created value, where we lost ground, what to compound. Honest, evidence-bound.",
       JSON.stringify({ accountName: args.accountName }),
     );
@@ -4690,7 +4749,10 @@ export async function runPricingStrategist(args: {
     const { knowledgeSearch, pricingRulesLookup, rateCardRead } = await import(
       "./pricing-strategist-tools.js"
     );
-    const knowledgeHits = knowledgeSearch(args.opportunity.name);
+    const knowledgeHits = await knowledgeSearch(args.opportunity.name, {
+      orgId: args.opportunity.orgId,
+      opportunityId: args.opportunity.id,
+    });
     const rateCardEvidence = await rateCardRead(args.pricing.rateCardId);
 
     await progressRun(runId, 25, "Applying pricing rules + computing primary structure");
@@ -4838,7 +4900,7 @@ export async function runPricingStrategist(args: {
       },
     });
     const llm = await callClaudeJson<NarrativeJson>(
-      "claude-sonnet-4-5",
+      agentModel("ag_pricing_strategist", "claude-sonnet-4-5"),
       systemPrompt,
       userPrompt,
     );
@@ -5148,7 +5210,7 @@ export async function runPricingAnalyst(args: {
       tradeoffs?: string[];
       trendNotes?: string[];
     }
-    const llm = await callClaudeJson<AnalystJson>("claude-sonnet-4-5", systemPrompt, userPrompt);
+    const llm = await callClaudeJson<AnalystJson>(agentModel("ag_pricing_analyst", "claude-sonnet-4-5"), systemPrompt, userPrompt);
 
     // The LLM may only pick among the simulated structures; anything else
     // falls back to the deterministic ranking.
@@ -5302,20 +5364,10 @@ export async function runPricingResearcher(args: {
 
   try {
     await progressRun(runId, 10, "Preparing pricing research brief");
-    let systemPrompt: string;
-    try {
-      systemPrompt = await loadEffectivePrompt("pricing_researcher", 1);
-    } catch {
-      systemPrompt =
-        "You are Cognirise's Pricing Researcher, an AI-consultancy pricing specialist. " +
-        "Use web search to find CURRENT market benchmarks for consulting/AI-advisory pricing relevant to the deal below: " +
-        "typical fee levels, gain-share / success-fee / volume-based / SLA-credit structures in this sector, and typical non-labor cost lines (LLM/API costs, hardware, partner quotes, travel). " +
-        "You NEVER set final numbers — you suggest, a Partner decides. All suggestions are review-only. " +
-        "Respond ONLY with a JSON object: { summary: string, marketBenchmarks: [{metric, value, context?}], " +
-        "suggestedStructures: [{kind: tnm|capped_tnm|fixed_fee|milestone|retainer|outcome_based|hybrid, outcomeVariant?: generic|gain_share|volume_unit|sla_based|success_fee, rationale, suggestedParams?}], " +
-        "suggestedCostLines: [{type: llm_ai|hardware_infra|alliance_partner_quote|travel|other, label, amountUsd, recurrence?: one_time|weekly|monthly, passThrough?: boolean, rationale?}], " +
-        "risks: string[], confidence: green|amber|red }";
-    }
+    // The prompt lives in prompts/pricing_researcher/v1.md. A missing file
+    // is a deployment defect and fails the run rather than silently running
+    // an inline copy that drifts from the versioned one.
+    const systemPrompt = await loadEffectivePrompt("pricing_researcher", 1);
     const userPrompt = JSON.stringify({
       opportunity: {
         name: args.opportunity.name,
@@ -5334,7 +5386,7 @@ export async function runPricingResearcher(args: {
 
     await progressRun(runId, 25, "Researching market pricing benchmarks (web search)");
     const llm = await callResearchJson<Omit<PricingResearcherOutput, "runId" | "citations">>(
-      "claude-sonnet-4-5",
+      agentModel("ag_pricing_researcher", "claude-sonnet-4-5"),
       systemPrompt,
       userPrompt,
       {
@@ -5454,7 +5506,7 @@ export async function runWinLossInterviewer(args: {
       const system = await loadEffectivePrompt("win_loss_interviewer");
       await ctx.progress(30, "Reading buyer transcript");
       const { value, costUsd } = await callClaudeJson<WinLossInterviewerOutput>(
-        "claude-sonnet-4-5",
+        agentModel("ag_win_loss_interviewer", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           opportunity_name: args.opportunityName,
@@ -5530,7 +5582,7 @@ export async function runThemeCurator(args: {
       const system = await loadEffectivePrompt("theme_curator");
       await ctx.progress(40, "Clustering themes");
       const { value, costUsd } = await callClaudeJson<ThemeCuratorOutput>(
-        "claude-sonnet-4-5",
+        agentModel("ag_theme_curator", "claude-sonnet-4-5"),
         system,
         JSON.stringify({
           debrief_themes: args.debriefThemes,
@@ -6543,7 +6595,7 @@ export async function runUtilizationAnalyst(args: {
         numericBlock: args.numericBlock,
       });
       const { value, costUsd } = await callClaudeJson<UtilizationAnalystOutput>(
-        "claude-haiku-4-5",
+        agentModel("ag_utilization_analyst", "claude-haiku-4-5"),
         promptBody,
         userPrompt,
       );
@@ -6643,7 +6695,7 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
         draft: input.draft,
       });
       const { value, costUsd } = await callClaudeJson<ExpenseAuditorProposal>(
-        "claude-haiku-4-5",
+        agentModel("ag_expense_auditor", "claude-haiku-4-5"),
         promptBody,
         userPrompt,
       );
@@ -6727,13 +6779,14 @@ async function runV5GenericAgent(args: {
         args.promptMode,
       );
       const userPrompt = JSON.stringify(args.input);
+      const model = agentModel(String(args.agentId), args.model);
       const { value, costUsd } = args.research
-        ? await callResearchJson<unknown>(args.model, promptBody, userPrompt, {
+        ? await callResearchJson<unknown>(model, promptBody, userPrompt, {
             researchQueries: args.research.queries,
             searchRecencyFilter: args.research.searchRecencyFilter,
             entityLabel: args.research.entityLabel,
           })
-        : await callClaudeJson<unknown>(args.model, promptBody, userPrompt);
+        : await callClaudeJson<unknown>(model, promptBody, userPrompt);
       return { output: value, costUsd, confidence: "amber" as const };
     },
   );
@@ -7282,7 +7335,7 @@ export async function runNextBestAction(
       });
       await c.progress(65, "Ranking next best actions");
       const { value, costUsd } = await callClaudeJson<{ confidence?: "green" | "amber" | "red" }>(
-        "claude-sonnet-4-5",
+        agentModel("ag_next_best_action", "claude-sonnet-4-5"),
         promptBody,
         userPrompt,
       );
@@ -7316,7 +7369,7 @@ export async function runRelationshipHealth(
       const userPrompt = JSON.stringify(ctx);
       await c.progress(65, "Scoring relationship health");
       const { value, costUsd } = await callClaudeJson<{ overall?: "green" | "amber" | "red" }>(
-        "claude-sonnet-4-5",
+        agentModel("ag_relationship_health", "claude-sonnet-4-5"),
         promptBody,
         userPrompt,
       );
@@ -7369,7 +7422,7 @@ export async function runPreMeetingBriefing(
       const { value, costUsd } = await callClaudeJson<{
         facts?: AgentFact[];
         confidence?: "green" | "amber" | "red";
-      }>("claude-sonnet-4-5", promptBody, userPrompt);
+      }>(agentModel("ag_pre_meeting_briefing", "claude-sonnet-4-5"), promptBody, userPrompt);
       // Citation guardrail: unsourced facts are confidence-downgraded.
       const guarded = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
       return { output: guarded, costUsd, confidence: value.confidence ?? "amber" };
@@ -7509,7 +7562,7 @@ export async function runStrategyDeveloper(
       let exemplars: Awaited<ReturnType<typeof retrieveStrategyExemplars>> = [];
       try {
         exemplars = await retrieveStrategyExemplars({
-          orgId: accountRow?.orgId ?? "aico",
+          orgId: accountRow?.orgId ?? DEFAULT_ORG_ID,
           excludeAccountId: input.accountId,
           queryText,
           limit: 3,
@@ -7544,7 +7597,7 @@ export async function runStrategyDeveloper(
         guidanceUsed?: string | null;
         sourcesUsed?: string[];
         confidence?: "green" | "amber" | "red";
-      }>("claude-sonnet-4-5", promptBody, userPrompt);
+      }>(agentModel("ag_strategy_developer", "claude-sonnet-4-5"), promptBody, userPrompt);
       const output: StrategyDeveloperOutput = {
         draftStrategy: clampStrategyDraft(value.draftStrategy),
         rationale: typeof value.rationale === "string" ? value.rationale.slice(0, 2000) : "",
@@ -7737,7 +7790,7 @@ export async function runProcurementNavigator(
       });
       const { value, costUsd, citationUrls } =
         await callResearchJson<ProcurementNavigatorOutput>(
-          "claude-sonnet-4-5",
+          agentModel("ag_procurement_navigator", "claude-sonnet-4-5"),
           system,
           userPrompt,
           {
@@ -7955,12 +8008,11 @@ export async function runContractComposer(
   });
   try {
     const system = await loadEffectivePrompt("contract_composer");
-    await progressRun(runId, 15, "Selecting clauses from library");
-    await progressRun(runId, 40, "Honouring acceptance history");
-    await progressRun(runId, 65, "Rendering body + flagging risks");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 15, "Generating (single model pass)");
     const { value, costUsd } =
       await callClaudeJson<ContractComposerOutput>(
-        "claude-sonnet-4-6",
+        agentModel("contract_composer", "claude-sonnet-4-6"),
         system,
         JSON.stringify(input),
       );
@@ -8063,12 +8115,11 @@ export async function runRedlineAnalyst(
   });
   try {
     const system = await loadEffectivePrompt("redline_analyst");
-    await progressRun(runId, 20, "Diffing inbound vs. last version");
-    await progressRun(runId, 55, "Binding to clauses + classifying risk");
-    await progressRun(runId, 85, "Composing reviewer commentary");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 20, "Generating (single model pass)");
     const { value, costUsd } =
       await callClaudeJson<RedlineAnalystOutput>(
-        "claude-sonnet-4-6",
+        agentModel("redline_analyst", "claude-sonnet-4-6"),
         system,
         JSON.stringify(input),
       );
@@ -8191,12 +8242,11 @@ export async function runEsignOrchestrator(
   });
   try {
     const system = await loadEffectivePrompt("esign_orchestrator");
-    await progressRun(runId, 25, "Validating two-partner countersign gate");
-    await progressRun(runId, 55, "Composing routing order + provider pick");
-    await progressRun(runId, 85, "Reconciling party states");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 25, "Generating (single model pass)");
     const { value, costUsd } =
       await callClaudeJson<EsignOrchestratorOutput>(
-        "claude-sonnet-4-6",
+        agentModel("esign_orchestrator", "claude-sonnet-4-6"),
         system,
         JSON.stringify(input),
       );
@@ -8319,12 +8369,11 @@ export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
   });
   try {
     const system = await loadEffectivePrompt("dpa_sentinel");
-    await progressRun(runId, 30, "Scanning data signals");
-    await progressRun(runId, 65, "Classifying data classes");
-    await progressRun(runId, 90, "Composing recommendations + alerts");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 30, "Generating (single model pass)");
     const { value, costUsd } =
       await callClaudeJson<DpaSentinelOutput>(
-        "claude-sonnet-4-6",
+        agentModel("dpa_sentinel", "claude-sonnet-4-6"),
         system,
         JSON.stringify(input),
       );
@@ -8443,12 +8492,11 @@ export async function runRenewalWatchdog(
   });
   try {
     const system = await loadEffectivePrompt("renewal_watchdog");
-    await progressRun(runId, 35, "Walking active contracts");
-    await progressRun(runId, 70, "Walking active DPAs");
-    await progressRun(runId, 90, "Composing partner summary");
+    // One model call produces the whole result; the former step-by-step labels described sub-agents that do not exist.
+    await progressRun(runId, 35, "Generating (single model pass)");
     const { value, costUsd } =
       await callClaudeJson<RenewalWatchdogOutput>(
-        "claude-haiku-4-5",
+        agentModel("renewal_watchdog", "claude-haiku-4-5"),
         system,
         JSON.stringify(input),
       );
@@ -8660,7 +8708,7 @@ export async function runCashFlowForecaster(
   input: CashFlowForecasterInput & { orgId?: string },
 ): Promise<{ runId: string; output: CashFlowForecasterOutput; costUsd: number }> {
   const t0 = Date.now();
-  const orgId = input.orgId ?? "aico";
+  const orgId = input.orgId ?? DEFAULT_ORG_ID;
   const runId = await startRun({
     agentId: "ag_cash_flow_forecaster",
     triggeredByUserId: input.triggeredByUserId,

@@ -36,8 +36,7 @@ import {
   atelierActivities,
   atelierPersons,
   atelierRaidItems,
-  atelierPersonalTasks,
-} from "@workspace/db";
+  atelierPersonalTasks, DEFAULT_ORG_ID } from "@workspace/db";
 import { notDeclinedAssignment } from "./meTasksRoutes.js";
 import {
   resolveStructuredNameInput,
@@ -947,7 +946,7 @@ router.post("/accounts", async (req, res) => {
     }
   }
 
-  const orgId = me.orgId ?? "aico";
+  const orgId = me.orgId ?? DEFAULT_ORG_ID;
   const trimmedName = input.name.trim();
 
   // Task #38 — duplicate detection, mirroring the duplicate-opportunity guard.
@@ -1243,7 +1242,7 @@ router.post("/accounts/check-duplicates", async (req, res) => {
     return;
   }
   const input = parsed.data;
-  const orgId = me.orgId ?? "aico";
+  const orgId = me.orgId ?? DEFAULT_ORG_ID;
   const rows = await db
     .select({
       id: atelierAccounts.id,

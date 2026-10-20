@@ -218,6 +218,7 @@ function buildOcrFromExpense(
 }
 
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
+import { deriveExpenseFacts } from "../../lib/atelier-expense-auditor-facts.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 // Inline definition retained as a typed wrapper that delegates to the
@@ -956,6 +957,27 @@ async function runAuditOnExpense(
     },
   });
 
+  if (proposal.refused) {
+    // The Auditor declined (no usable OCR). Record the run so the review
+    // trail shows it, but leave the row's classification and money untouched.
+    await db
+      .update(atelierExpenses)
+      .set({
+        auditorRunId: runId,
+        auditorProposal: { ...proposal, refused: true },
+        ocrPayload: ocr,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierExpenses.id, expenseId));
+    const [unchanged] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, expenseId));
+    return { expense: unchanged, runId };
+  }
+
+  const category = proposal.category ?? expense.category;
+
   // Look up submitter role so role-scoped policies (partner caps etc.) match correctly.
   const [submitter] = await db
     .select()
@@ -963,14 +985,13 @@ async function runAuditOnExpense(
     .where(eq(atelierUsers.id, expense.personId));
   const submitterRole = submitter?.role ?? null;
   const flightClass =
-    proposal.category === "flight"
+    category === "flight"
       ? (ocr?.rawText?.match(/\b(first|business|premium_economy|economy)\b/i)?.[1]?.toLowerCase() ?? null)
       : null;
 
-  // Apply Auditor proposal as defaults; user can edit before submit.
   const policy = await evaluateExpense({
     orgId: expense.orgId,
-    category: proposal.category,
+    category,
     usdAmount: expense.usdAmount,
     amount: expense.amount,
     currency: expense.currency,
@@ -979,21 +1000,34 @@ async function runAuditOnExpense(
     flightClass,
   });
 
+  // The model classifies; VAT, markup and billability are derived from the
+  // country, the receipt and the contract digest. Its own numbers stay in
+  // auditorProposal for the reviewer to compare.
+  const facts = deriveExpenseFacts({
+    amount: expense.amount,
+    currency: expense.currency,
+    country: expense.vatCountry ?? ocr?.country ?? null,
+    ocrTax: ocr?.tax ?? null,
+    contractDigest,
+    engagementId: expense.engagementId ?? null,
+    proposal: { ...proposal, category },
+  });
+
   await db
     .update(atelierExpenses)
     .set({
       auditorRunId: runId,
-      auditorProposal: proposal,
-      category: proposal.category,
-      vatTreatment: proposal.vatTreatment,
-      vatAmount: proposal.vatAmount,
+      auditorProposal: { ...proposal, derived: facts },
+      category,
+      vatTreatment: facts.vatTreatment,
+      vatAmount: facts.vatAmount,
       vatCurrency: expense.currency,
-      clientBillable: proposal.clientBillable,
-      markupPct: proposal.markupPct,
+      clientBillable: facts.clientBillable,
+      markupPct: facts.markupPct,
       policyStatus: policy.status,
       policyFindings: policy.findings,
       ocrPayload: ocr,
-      summary: proposal.summary,
+      summary: proposal.summary ?? expense.summary,
       updatedAt: new Date(),
     })
     .where(eq(atelierExpenses.id, expenseId));

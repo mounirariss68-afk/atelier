@@ -24,7 +24,14 @@ import { sql } from "drizzle-orm";
  * substituted later behind the same column type.
  */
 
-const ORG = (name: string) => text(name).notNull().default("aico");
+/**
+ * The tenant every row belongs to when none is given. Still "aico" at the
+ * database level (the column default below); code paths should read
+ * DEFAULT_ORG_ID rather than spelling the literal. Changing the tenant for
+ * a deployment needs ATELIER_DEFAULT_ORG_ID *and* a column-default migration.
+ */
+export const DEFAULT_ORG_ID: string = process.env.ATELIER_DEFAULT_ORG_ID ?? "aico";
+const ORG = (name: string) => text(name).notNull().default(DEFAULT_ORG_ID);
 
 // ============================================================
 // PERSONS — Task #538 unified person model.
@@ -4332,6 +4339,17 @@ export const atelierExpenses = pgTable(
       markupPct?: number;
       summary?: string;
       ocrConfidence?: "green" | "amber" | "red";
+      refused?: boolean;
+      reason?: string;
+      // Deterministic VAT/markup/billability the row actually carries, with
+      // the basis for each and any model values that were overridden.
+      derived?: {
+        vatTreatment: string;
+        vatAmount: number;
+        clientBillable: boolean;
+        markupPct: number;
+        basis: { vat: string; markup: string; billable: string; overrides: string[] };
+      };
     } | null>(),
     receiptFileRef: text("receipt_file_ref"), // synthetic blob ref
     receiptFixtureKey: text("receipt_fixture_key"), // deterministic OCR fixture id

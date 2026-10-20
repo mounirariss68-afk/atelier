@@ -35,6 +35,7 @@ import { buildContractDigest } from "./atelier-contract-digest.js";
 import { convertToUsd } from "./atelier-fx.js";
 import { evaluateExpense } from "./atelier-expense-policy.js";
 import { runExpenseAuditor } from "./atelier-agents/runner.js";
+import { deriveExpenseFacts } from "./atelier-expense-auditor-facts.js";
 import { assertAuditAction } from "../routes/atelier/auditContract.js";
 import { proposeExpenseAllocation } from "./atelier-entity-allocation.js";
 
@@ -671,6 +672,17 @@ export async function parseReceiptForExpense(args: {
         : null,
   });
 
+  // VAT, markup and billability are derived, not copied from the model.
+  const facts = deriveExpenseFacts({
+    amount,
+    currency,
+    country: vision.country ?? row.vatCountry ?? null,
+    ocrTax: ocr.tax,
+    contractDigest,
+    engagementId: row.engagementId ?? null,
+    proposal,
+  });
+
   // Task #383/#396 — layered category resolution:
   // org merchant memory → global merchant DB / keyword / fuzzy matcher →
   // AI (auditor legacy category mapped onto the taxonomy tree).
@@ -768,14 +780,14 @@ export async function parseReceiptForExpense(args: {
       fxRateDate: fx.rateDate,
       usdAmount,
       category: proposal.category,
-      vatTreatment: proposal.vatTreatment,
-      vatAmount: proposal.vatAmount,
+      vatTreatment: facts.vatTreatment,
+      vatAmount: facts.vatAmount,
       vatCurrency: currency,
       vatCountry: vision.country ?? row.vatCountry,
-      clientBillable: proposal.clientBillable,
-      markupPct: proposal.markupPct,
+      clientBillable: facts.clientBillable,
+      markupPct: facts.markupPct,
       auditorRunId: runId,
-      auditorProposal: proposal,
+      auditorProposal: { ...proposal, derived: facts },
       ocrPayload: ocr,
       policyStatus: policy.status,
       policyFindings: policy.findings,

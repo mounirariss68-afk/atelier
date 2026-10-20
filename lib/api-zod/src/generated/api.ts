@@ -10553,6 +10553,7 @@ export const AtelierRecordAgentDecisionBody = zod.object({
   rationale: zod
     .string()
     .default(atelierRecordAgentDecisionBodyRationaleDefault),
+  checkpointId: zod.string().optional(),
 });
 
 export const AtelierRecordAgentDecisionResponse = zod.object({

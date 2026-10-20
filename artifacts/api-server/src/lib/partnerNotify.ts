@@ -14,8 +14,7 @@ import {
   atelierUsers,
   atelierPartnerFirms,
   atelierPartnerNotifications,
-  atelierComplianceRecords,
-} from "@workspace/db";
+  atelierComplianceRecords, DEFAULT_ORG_ID } from "@workspace/db";
 import { sendEmail } from "./email";
 import { buildCogniriseEmail } from "./cognirise-email-templates";
 import { logger } from "./logger";
@@ -158,7 +157,7 @@ export async function runPartnerContractRenewalScan(opts?: {
   orgId?: string;
   now?: Date;
 }): Promise<{ scanned: number; notified: number; skipped: number }> {
-  const orgId = opts?.orgId ?? "aico";
+  const orgId = opts?.orgId ?? DEFAULT_ORG_ID;
   const now = opts?.now ?? new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const in30Iso = new Date(now.getTime() + 30 * 86400_000).toISOString().slice(0, 10);

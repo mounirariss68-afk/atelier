@@ -12863,6 +12863,9 @@ components:
       properties:
         decision: { type: string, enum: [approve, edit, reject] }
         rationale: { type: string, default: "" }
+        checkpointId:
+          type: string
+          description: The human checkpoint this decision answers (from the agent definition's humanCheckpoints). Optional for legacy clients.
 
     AtelierHypothesisBranch:
       type: object

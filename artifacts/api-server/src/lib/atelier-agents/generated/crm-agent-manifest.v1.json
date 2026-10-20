@@ -42,7 +42,7 @@
         "eval-contact-cartographer-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "baab212d7d4133acad8385cf965a225fe440b7dd2e300879b6c0c9bd4325fa12"
     },
     {
@@ -83,7 +83,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "c2efdcec9864729503843a3140b9f6fcf8f67bb238db28a2d297ae8d5c9cea00",
+      "sourceHash": "28e3fd119661c5669d7f063e789afa94c680987de20a718116374990d2cc39dc",
       "promptHash": "512f87848b888121e909fab852aa3a9512612295ac30ef388c6e31d49a5de007"
     },
     {
@@ -156,7 +156,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "f7b8287d518c69332272892bc9106e5a95876f5b7e793b3313ae25dc6060e585",
+      "sourceHash": "efd4d6983bec4f7f848dd27da92e9e286e688e3583699c7c2ec5f752fe633bb3",
       "promptHash": "8f3ba55e5d1e2610c937ca247ec8cdc1dc8779ad44015c4c3028adcb96daf0a8"
     },
     {
@@ -196,7 +196,7 @@
         "eval-contact-executive-mapper-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "9a2e2889eb6197deee379b1c59b1916781bac7374e0924b2b8aff15cfa77321b",
+      "sourceHash": "262d7e86e6a2459e0a16d44f6c8bb48ed6bf9da78eccb1b8fd03929d3beef8e6",
       "promptHash": "431d31f5b6e66bf58c3d57eb914f673c5be7c0ffef01ef86aadb0c3e8277ed26"
     },
     {
@@ -237,7 +237,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": "518053b0bc0fcc2b6798089514a45fcd957b3d4bb864a0058abd84e544f861dc"
     },
     {
@@ -277,7 +277,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "8e10330e1f6b73f23ac3c8c40cda5eda2335bfc201bf325c8d16fadd49640635"
     },
     {
@@ -342,7 +342,7 @@
         "eval-pipeline-forecast-calibration-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": null
     },
     {
@@ -383,7 +383,7 @@
         "eval-pov-fact-promotion-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -424,7 +424,7 @@
         "eval-pov-fact-promotion-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -465,7 +465,7 @@
         "eval-citation-refusal-fact-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": "9a7974d2ecc6d288b72d1792f697cfd5a6251f375f766cea8ee8cd236350f090"
     },
     {
@@ -505,7 +505,7 @@
         "eval-citation-refusal-fact-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "2d10c2929166f8792d6722a0aec3643a87de9ae5d65f8f075774bae4fa67b7ab"
     },
     {
@@ -546,7 +546,7 @@
         "eval-pricing-margin-override-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "1fad2f23c7ff799cf63e81d49c7b395a02cad15adb1d333107aa6c86af8eb319",
+      "sourceHash": "5a2ac6ee9f7736f969ac39cd697f66575245011caf15cf76cf153cfe0317fb3c",
       "promptHash": "acb80fc9e5d5e77b70b67f9614f39c02b6f3e1a52466ecf7b6477ce4f359de9e"
     },
     {
@@ -566,7 +566,7 @@
         "file": "artifacts/api-server/src/routes/atelier/pricingRoutes.ts",
         "hint": "runPricingResearcher"
       },
-      "promptRef": "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are Cognirise's Pricing Researcher",
+      "promptRef": "prompts/pricing_researcher/v1.md",
       "inputSchemaHash": null,
       "outputSchemaHash": null,
       "fixtureRefs": [
@@ -584,8 +584,8 @@
         "eval-pricing-margin-override-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "1fad2f23c7ff799cf63e81d49c7b395a02cad15adb1d333107aa6c86af8eb319",
-      "promptHash": "4f1778ac508590a2959d059451101c38ffee299c1d9761afcd54a7b84163e76e"
+      "sourceHash": "5a2ac6ee9f7736f969ac39cd697f66575245011caf15cf76cf153cfe0317fb3c",
+      "promptHash": "11d79c0a7bbf21e0971056966238568bb2c5df995d2b5844b9d2682f184404eb"
     },
     {
       "id": "ag_pricing_strategist",
@@ -625,8 +625,8 @@
         "eval-pricing-margin-override-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "1fad2f23c7ff799cf63e81d49c7b395a02cad15adb1d333107aa6c86af8eb319",
-      "promptHash": "1a901478751c48c15de04ba0dc92576483c2ba502f6a7136ed40fb180cd78607"
+      "sourceHash": "5a2ac6ee9f7736f969ac39cd697f66575245011caf15cf76cf153cfe0317fb3c",
+      "promptHash": "fe2ca7cc4da49a0a95e485967bcc219da5b462cac45823376b7775996f164a21"
     },
     {
       "id": "ag_procurement_navigator",
@@ -666,7 +666,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "078f2ec60d9543b33281e50856f4e001aa58cc3db0bfe716b9b41218097a5480"
     },
     {
@@ -707,7 +707,7 @@
         "eval-proposal-approval-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "78a87e617b0e9fe948dd0bd33a91a09d512df5843588b8581893994acea8bb7d",
+      "sourceHash": "9d60af0f674a24c311a484fe9b575188efe6ee5371ba063f8b9aa8db5cd6a79a",
       "promptHash": "9f7f9d6e79c89b027ffd5e1a0a873fc62362c74790694770d1aa86833d4806d0"
     },
     {
@@ -749,7 +749,7 @@
         "eval-citation-refusal-fact-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "99af4360bd48e87630db571e49200ce95a85c1e67824acb35fecf5d93e455862",
+      "sourceHash": "d0adf42112c1946956c5cf4e65f45d1ef349e0f305acd713960e614b749aba26",
       "promptHash": "ed5ecc224e6e7e0cbcd0ef1343c3b96aaf7628b47aa751dfe3a536bce09c0fb8"
     },
     {
@@ -786,8 +786,8 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
-      "promptHash": "4f1778ac508590a2959d059451101c38ffee299c1d9761afcd54a7b84163e76e"
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
+      "promptHash": "80e330f6d0e0bad333782deeea56f285f874776b0724ddf44883731f08644877"
     },
     {
       "id": "ag_relationship_health",
@@ -827,7 +827,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "df3b0bad45e4ac60b0c9873635574fe40a1b447a0a3c7dbee859377d046a0c53"
     },
     {
@@ -923,7 +923,7 @@
       "operationalStatus": "utility",
       "deterministicEvalIds": [],
       "approvedDivergences": [],
-      "sourceHash": "a2f93bb1150edb6c742baebe6d09d11a38fa9378598f373c0ebf3ef5fda94a08",
+      "sourceHash": "748e18224bd9d3261933e6d3b985752809d62dbc9a6fae18484b4c4bb29d2ee3",
       "promptHash": null
     },
     {
@@ -964,7 +964,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
       "promptHash": "a64a9e0edf9ce8b04bcad9a3b464dc619a6394e933186a51d2b6b115ba4c2b3a"
     },
     {
@@ -1005,7 +1005,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "f7b8287d518c69332272892bc9106e5a95876f5b7e793b3313ae25dc6060e585",
+      "sourceHash": "efd4d6983bec4f7f848dd27da92e9e286e688e3583699c7c2ec5f752fe633bb3",
       "promptHash": "5222b40a644b2767d38d208ad91e7d7bd65804f6e939bbd00922d145fb0a0633"
     },
     {
@@ -1045,7 +1045,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "087a3de9d97e4334242d29a3f2265c0c5273a81bbf293e64d767509dc900effd",
+      "sourceHash": "c27a7cd72566b8057ffbd2e815c88acdc6996a191fd85aad7d26403827d501c7",
       "promptHash": "f406ac095ac14e24a4997b0f43e6d538b694bb51770618ac9d8f3476006671e1"
     },
     {
@@ -1082,8 +1082,8 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "55d85c993a52b6efda1afaa7478dfcbe31cff0c31af4af71bd35283a33cfd380",
-      "promptHash": "4f1778ac508590a2959d059451101c38ffee299c1d9761afcd54a7b84163e76e"
+      "sourceHash": "a9309725c2de10b24c12835a8fc6cb8b9959cd537af49c9b419751872ea0fd31",
+      "promptHash": "80e330f6d0e0bad333782deeea56f285f874776b0724ddf44883731f08644877"
     },
     {
       "id": "ag_win_loss_interviewer",
@@ -1123,7 +1123,7 @@
         "eval-global-security-tenant-write-v1"
       ],
       "approvedDivergences": [],
-      "sourceHash": "087a3de9d97e4334242d29a3f2265c0c5273a81bbf293e64d767509dc900effd",
+      "sourceHash": "c27a7cd72566b8057ffbd2e815c88acdc6996a191fd85aad7d26403827d501c7",
       "promptHash": "2b377a128963feaaed5d2a2f40f40094ab5040bb3f29c7c0c49cd05ad588b695"
     }
   ]

@@ -114,6 +114,19 @@ export function loadPrompt(
   return readFileSync(path, "utf8");
 }
 
+/**
+ * The mode an org override targets: the `mode: <name>` key in its leading
+ * `---` front matter, or null for the base prompt.
+ */
+export function promptOverrideMode(body: string): string | null {
+  const m = /^---\s*\n([\s\S]*?)\n---/.exec(body.trimStart());
+  if (!m) return null;
+  const line = m[1].split("\n").find((l) => /^\s*mode\s*:/.test(l));
+  if (!line) return null;
+  const value = line.split(":").slice(1).join(":").trim().replace(/^["']|["']$/g, "");
+  return value || null;
+}
+
 /** Resolve an org override, falling back to the immutable filesystem prompt. */
 export async function resolveEffectiveAgentPrompt(args: {
   orgId?: string | null;
@@ -125,12 +138,17 @@ export async function resolveEffectiveAgentPrompt(args: {
   const runtime = getAgent(args.agentId);
   const canonicalAgentId = runtime?.id ?? (args.agentId.startsWith("ag_") ? args.agentId : `ag_${args.agentId}`);
   if (args.orgId) {
-    const [override] = await db.select().from(atelierPrompts).where(and(
+    // An override is written against one prompt file. Mode prompts
+    // (`vN_<mode>_mode.md`, e.g. POV Author press mode) are different
+    // documents, so an override only applies to the mode it declares:
+    // a `mode: <name>` line in its front matter, or none for the base prompt.
+    const overrides = await db.select().from(atelierPrompts).where(and(
       eq(atelierPrompts.orgId, args.orgId),
       eq(atelierPrompts.agentId, canonicalAgentId),
       eq(atelierPrompts.status, "active"),
       isNull(atelierPrompts.deletedAt),
-    )).orderBy(desc(atelierPrompts.version)).limit(1);
+    )).orderBy(desc(atelierPrompts.version)).limit(10);
+    const override = overrides.find((o) => promptOverrideMode(o.body) === (args.mode ?? null));
     if (override) {
       return { body: override.body, source: "override", version: override.version, baseRef: `v${version}`, updatedAt: override.updatedAt };
     }

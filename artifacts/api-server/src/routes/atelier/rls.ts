@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db, pool, atelierEngagementAccess } from "@workspace/db";
+import { db, pool, atelierEngagementAccess, DEFAULT_ORG_ID } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { isBoardObserverRestricted, isRestrictedPersona } from "./personaRoles.js";
 
@@ -60,7 +60,7 @@ export interface AtelierRlsContext {
 function ctxFromReq(req: Request): AtelierRlsContext {
   const persona = req.atelierPersona;
   return {
-    orgId: persona?.orgId ?? "aico",
+    orgId: persona?.orgId ?? DEFAULT_ORG_ID,
     userId: persona?.id ?? "",
     // Task #293 — `app.user_role` is consumed by the column-level RLS
     // mask helpers (atelier_can_view_comp / atelier_can_view_personnel)

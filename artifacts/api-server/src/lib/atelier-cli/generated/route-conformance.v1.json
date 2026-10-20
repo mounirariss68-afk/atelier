@@ -7680,34 +7680,6 @@
       }
     },
     {
-      "routeId": "3a36925839060c36",
-      "file": "artifacts/api-server/src/routes/atelier/walletRoutes.ts",
-      "method": "post",
-      "path": "/wallet/fx/seed",
-      "ordinal": 1,
-      "capabilityId": null,
-      "executorContract": null,
-      "evidence": "none",
-      "conformance": {
-        "auth": "unproven",
-        "validation": "unproven",
-        "recordScope": "unproven",
-        "sideEffects": "unproven",
-        "confirmation": "unproven",
-        "idempotency": "unproven",
-        "audit": "unproven",
-        "navigation": "unproven",
-        "publicErrors": "unproven"
-      },
-      "divergence": {
-        "status": "approved",
-        "owner": "Atelier API Owners",
-        "reason": "pending Task #340 read-parity migration",
-        "reviewBy": "2027-03-31",
-        "rollback": "disable any divergent assistant capability; keep the route authoritative"
-      }
-    },
-    {
       "routeId": "3a9c48a85becc00e",
       "file": "artifacts/api-server/src/routes/atelier/invoiceRoutes.ts",
       "method": "post",
@@ -19659,6 +19631,34 @@
         "status": "approved",
         "owner": "Atelier API Owners",
         "reason": "pending Task #340 read-parity migration",
+        "reviewBy": "2027-03-31",
+        "rollback": "disable any divergent assistant capability; keep the route authoritative"
+      }
+    },
+    {
+      "routeId": "975ed4f65b444db6",
+      "file": "artifacts/api-server/src/routes/atelier/walletRoutes.ts",
+      "method": "post",
+      "path": "/wallet/fx/refresh",
+      "ordinal": 1,
+      "capabilityId": null,
+      "executorContract": null,
+      "evidence": "none",
+      "conformance": {
+        "auth": "unproven",
+        "validation": "unproven",
+        "recordScope": "unproven",
+        "sideEffects": "unproven",
+        "confirmation": "unproven",
+        "idempotency": "unproven",
+        "audit": "unproven",
+        "navigation": "unproven",
+        "publicErrors": "unproven"
+      },
+      "divergence": {
+        "status": "approved",
+        "owner": "Atelier API Owners",
+        "reason": "ops-only FX refresh; no CLI shape",
         "reviewBy": "2027-03-31",
         "rollback": "disable any divergent assistant capability; keep the route authoritative"
       }
@@ -34395,7 +34395,7 @@
       "capabilityId": "account.list",
       "source": "cli-only",
       "executionStatus": "executable",
-      "implementationVersion": "ed7dbc376a4b",
+      "implementationVersion": "e0ef902200e1",
       "divergenceIds": [
         "cli-only-route-parity-v1"
       ]
@@ -35381,7 +35381,7 @@
       "capabilityId": "coverage.account_update",
       "source": "cli-only",
       "executionStatus": "legacy_compat",
-      "implementationVersion": "b49cfa3121bf",
+      "implementationVersion": "bc239493143f",
       "divergenceIds": [
         "cli-only-route-parity-v1",
         "legacy-confirmation-compat-v1"
@@ -37268,7 +37268,7 @@
       "capabilityId": "utilization.firm",
       "source": "cli-only",
       "executionStatus": "executable",
-      "implementationVersion": "58a3375d3822",
+      "implementationVersion": "990998044b13",
       "divergenceIds": [
         "cli-only-route-parity-v1"
       ]
@@ -37409,5 +37409,5 @@
       ]
     }
   ],
-  "conformanceVersion": "6efce4108b95aae163570b75c9f5cc3fae46f6980df668e34116364b7813a285"
+  "conformanceVersion": "a317437948ccbf64aa8bc62cb2edc5da0f83465765510838f812154dfc3407b7"
 }

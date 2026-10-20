@@ -46,8 +46,7 @@ import {
   atelierLegalEntities,
   atelierContractRecords,
   atelierContractSalaryProposals,
-  atelierNepCompPlans,
-} from "@workspace/db";
+  atelierNepCompPlans, DEFAULT_ORG_ID } from "@workspace/db";
 // Task #538 — unified person model: structured names resolve through the
 // shared parser/sanitizer and persist via the person-sync helper.
 import {
@@ -630,8 +629,8 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   }
 
   out.sort((a, b) => a.fullName.localeCompare(b.fullName));
-  await attachStructuredNames(out, opts.orgId ?? "aico");
-  const classifications = await Promise.all(out.map((p) => p.personId ? loadRelationshipClassification(opts.orgId ?? "aico", p.personId) : null));
+  await attachStructuredNames(out, opts.orgId ?? DEFAULT_ORG_ID);
+  const classifications = await Promise.all(out.map((p) => p.personId ? loadRelationshipClassification(opts.orgId ?? DEFAULT_ORG_ID, p.personId) : null));
   for (let i = out.length - 1; i >= 0; i--) {
     const c = classifications[i];
     if (c) Object.assign(out[i], { relationshipType: c.relationshipType, compensationBasis: opts.includeComp ? c.compensationBasis : null, compensationStatus: c.status });

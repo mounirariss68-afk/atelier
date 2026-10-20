@@ -8,7 +8,7 @@
  * always installs defaults so this only matters in dev.
  */
 
-import { db, atelierExpensePolicies, atelierAuditEvents, atelierExpenses } from "@workspace/db";
+import { db, atelierExpensePolicies, atelierAuditEvents, atelierExpenses, DEFAULT_ORG_ID } from "@workspace/db";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { rid } from "./atelier-contracts.js";
 
@@ -366,7 +366,7 @@ export const POLICY_PRINCIPLES =
 export function defaultPoliciesForOrg(orgId: string) {
   return DEFAULT_POLICIES.map((p) => ({
     ...p,
-    id: orgId === "aico" ? p.id : `${p.id}__${orgId}`,
+    id: orgId === DEFAULT_ORG_ID ? p.id : `${p.id}__${orgId}`,
     orgId,
   }));
 }

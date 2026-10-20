@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import { refreshFxRatesFromEcb } from "./atelier-fx.js";
 import { runPriceScrape } from "./scraper";
 import { logger } from "./logger";
-import { db, atelierUsers } from "@workspace/db";
+import { db, atelierUsers, DEFAULT_ORG_ID } from "@workspace/db";
 import { eq, or, sql } from "drizzle-orm";
 import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
 import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
@@ -77,7 +77,7 @@ const REVENUE_RECOGNIZER_CRON = process.env.REVENUE_RECOGNIZER_CRON ?? "0 4 1 * 
 // payroll gate finds drafts ready (Task #1136). Manual trigger shares the
 // same exclusive lock.
 const PAYROLL_CLERK_CRON = process.env.PAYROLL_CLERK_CRON ?? "0 5 25 * *";
-const AUTOPILOT_ORG_ID = process.env.ATELIER_AUTOPILOT_ORG_ID ?? "aico";
+const AUTOPILOT_ORG_ID = process.env.ATELIER_AUTOPILOT_ORG_ID ?? DEFAULT_ORG_ID;
 const SYSTEM_USER_ID = "system";
 
 let scheduledTask: ScheduledTask | null = null;
@@ -397,7 +397,7 @@ export function startScheduler(): void {
           const { launchBillingOrchestratorRun, BILLING_ORCH_SYSTEM_ACTOR } =
             await import("./atelier-agents/billingOrchestratorJobs.js");
           const out = await launchBillingOrchestratorRun({
-            orgId: "aico",
+            orgId: DEFAULT_ORG_ID,
             kind: "billing_orchestrator_auto",
             userId: BILLING_ORCH_SYSTEM_ACTOR,
             label: "Billing Orchestrator — daily scan",
@@ -433,7 +433,7 @@ export function startScheduler(): void {
           const { runCashFlowForecaster } = await import("./atelier-agents/runner.js");
           const out = await runCashFlowForecaster({
             asOf: new Date().toISOString().slice(0, 10),
-            currency: "USD", openingBalance: 0, orgId: "aico",
+            currency: "USD", openingBalance: 0, orgId: DEFAULT_ORG_ID,
             triggeredByUserId: null, actorLabel: "Scheduler",
           });
           logger.info(

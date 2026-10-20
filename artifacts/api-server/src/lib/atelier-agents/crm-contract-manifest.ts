@@ -150,7 +150,7 @@ export const CRM_CONTRACT_ENTRIES: CrmManifestEntry[] = CRM_CONTRACT_ROWS.map(
     : id === "ag_executive_mapper"
     ? "prompts/executive_mapper/v2.md"
     : id === "ag_pricing_researcher"
-    ? "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are Cognirise's Pricing Researcher"
+    ? "prompts/pricing_researcher/v1.md"
     : id === "ag_whitespace_mapper"
     ? "inline:artifacts/api-server/src/lib/atelier-agents/runner.ts#You are Whitespace Mapper"
     : id === "ag_qbr_composer"

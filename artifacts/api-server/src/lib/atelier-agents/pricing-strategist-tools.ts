@@ -12,14 +12,18 @@
  * Atelier corpus + DB, so they are safe to invoke synchronously from the
  * strategist runner without an LLM round-trip.
  */
-import { db, atelierRateCards, atelierRateCardRows } from "@workspace/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { db, atelierRateCards, atelierRateCardRows, atelierWinLossDebriefs } from "@workspace/db";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 export interface KnowledgeHit {
   id: string;
   title: string;
   snippet: string;
-  source: "playbook" | "case_study" | "internal_memo";
+  source: "win_loss_debrief";
+  /** The debrief's opportunity, so the Partner can open the precedent. */
+  opportunityId: string;
+  outcome: string;
+  publishedAt: string | null;
 }
 export interface PricingRule {
   id: string;
@@ -42,37 +46,65 @@ export interface RateCardSnapshot {
 }
 
 /**
- * `knowledge.search` — qualitative deal precedent + playbook lookup.
- * Currently backed by a static corpus seeded from the Cognirise playbooks; the
- * shape is stable so a vector backend can swap in without changing the
- * strategist runner.
+ * `knowledge.search` — qualitative deal precedent lookup.
+ *
+ * Reads the firm's own published win/loss debriefs (themes and lessons
+ * tagged by polarity) for the tenant, most recent first, and returns the
+ * ones whose theme or lesson text mentions the query. Nothing here is
+ * invented: a hit always points at a debrief row a Partner can open. When
+ * the firm has no published debriefs yet the result is empty and the
+ * strategist's narrative says so instead of citing precedent.
  */
-export function knowledgeSearch(query: string): KnowledgeHit[] {
-  const corpus: KnowledgeHit[] = [
-    {
-      id: "kb_pricing_001",
-      title: "Discount precedent compounds across renewals",
-      snippet:
-        "Discounts above 10% on the first engagement reset the anchor for renewal pricing in 78% of accounts (Cognirise 2024-2026 win/loss).",
-      source: "playbook",
-    },
-    {
-      id: "kb_pricing_002",
-      title: "Outcome-based pricing — when to lead",
-      snippet:
-        "Outcome-based works when the buyer has executive sponsorship and a numeric KPI; otherwise revert to fixed fee with a tight scope.",
-      source: "playbook",
-    },
-    {
-      id: "kb_pricing_003",
-      title: "Retainers preserve margin via blend",
-      snippet:
-        "Quarterly retainers with a senior-led core and leveraged delivery hold 8-12 pts more margin than equivalent T&M structures.",
-      source: "case_study",
-    },
-  ];
-  const q = query.toLowerCase();
-  return corpus.filter((h) => h.title.toLowerCase().includes(q) || h.snippet.toLowerCase().includes(q) || q.length === 0).slice(0, 3);
+export async function knowledgeSearch(
+  query: string,
+  opts: { orgId: string; opportunityId?: string | null; limit?: number },
+): Promise<KnowledgeHit[]> {
+  const limit = opts.limit ?? 3;
+  const rows = await db
+    .select({
+      id: atelierWinLossDebriefs.id,
+      opportunityId: atelierWinLossDebriefs.opportunityId,
+      outcome: atelierWinLossDebriefs.outcome,
+      themes: atelierWinLossDebriefs.themes,
+      lessons: atelierWinLossDebriefs.suggestedAtelierLessons,
+      publishedAt: atelierWinLossDebriefs.publishedAt,
+    })
+    .from(atelierWinLossDebriefs)
+    .where(and(eq(atelierWinLossDebriefs.orgId, opts.orgId), isNotNull(atelierWinLossDebriefs.publishedAt)))
+    .orderBy(desc(atelierWinLossDebriefs.publishedAt))
+    .limit(50);
+  const terms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+  const hits: KnowledgeHit[] = [];
+  for (const r of rows) {
+    if (r.opportunityId === opts.opportunityId) continue; // the deal cannot be its own precedent
+    const themes = (r.themes ?? []) as Array<{ name: string; tag: string; evidenceQuote: string; polarity: "win" | "loss" }>;
+    const lessons = (r.lessons ?? []) as Array<{ title: string; summary: string; kind: string }>;
+    const text = [
+      ...themes.map((t) => `${t.name} ${t.tag} ${t.evidenceQuote}`),
+      ...lessons.map((l) => `${l.title} ${l.summary}`),
+    ]
+      .join(" ")
+      .toLowerCase();
+    const relevant = terms.length === 0 || terms.some((t) => text.includes(t));
+    if (!relevant) continue;
+    const pricingThemes = themes.filter((t) => /pric|fee|discount|margin|rate|budget|cost/i.test(`${t.name} ${t.tag} ${t.evidenceQuote}`));
+    const lead = pricingThemes[0] ?? themes[0];
+    if (!lead) continue;
+    hits.push({
+      id: r.id,
+      title: `${lead.polarity === "win" ? "Won" : "Lost"} — ${lead.name}`,
+      snippet: lead.evidenceQuote || lessons[0]?.summary || `Outcome: ${r.outcome}`,
+      source: "win_loss_debrief",
+      opportunityId: r.opportunityId,
+      outcome: r.outcome,
+      publishedAt: r.publishedAt?.toISOString() ?? null,
+    });
+    if (hits.length >= limit) break;
+  }
+  return hits;
 }
 
 /**

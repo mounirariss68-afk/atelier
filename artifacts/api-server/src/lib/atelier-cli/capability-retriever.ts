@@ -19,7 +19,7 @@
  */
 
 import { eq } from "drizzle-orm";
-import { db, atelierCapabilityEmbeddings } from "@workspace/db";
+import { db, atelierCapabilityEmbeddings, DEFAULT_ORG_ID } from "@workspace/db";
 import {
   type CapabilityEntry,
   capabilitiesForPersona,
@@ -330,7 +330,7 @@ export async function ensureCapabilityEmbeddings(): Promise<void> {
     id: "__bootstrap__",
     name: "bootstrap",
     role: "founding_partner",
-    orgId: "aico",
+    orgId: DEFAULT_ORG_ID,
   } as CliPersona);
   for (const entry of all) {
     const prev = byId.get(entry.id);

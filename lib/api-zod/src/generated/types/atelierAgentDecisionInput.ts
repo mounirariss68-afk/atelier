@@ -10,4 +10,6 @@ import type { AtelierAgentDecisionInputDecision } from "./atelierAgentDecisionIn
 export interface AtelierAgentDecisionInput {
   decision: AtelierAgentDecisionInputDecision;
   rationale?: string;
+  /** The human checkpoint this decision answers (from the agent definition's humanCheckpoints). Optional for legacy clients. */
+  checkpointId?: string;
 }

@@ -1,16 +1,9 @@
-import { useAtelierGetMe, useAtelierGetAdminSettings } from "@workspace/api-client-react";
+import { useAtelierGetMe, useAtelierGetAdminSettings, useAtelierListAgents } from "@workspace/api-client-react";
 import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Cpu, Plug, Gauge, Bell, Sparkles } from "lucide-react";
 import { useAutoNavEnabled } from "@/components/cli/autoNav";
-
-const MODEL_DEFAULTS = [
-  { task: "Diagnostic memo", model: "claude-sonnet-4-6", note: "Long-form synthesis" },
-  { task: "Pricing analysis", model: "claude-sonnet-4-6", note: "Numerical reasoning" },
-  { task: "Pursuit scout", model: "claude-haiku-4-1", note: "Cheap recall" },
-  { task: "Proposal compose", model: "claude-opus-4-3", note: "Pyramid structure" },
-];
 
 const MCP_PLACEHOLDERS = [
   { name: "Notion", status: "available", scope: "Read · pages, databases" },
@@ -22,14 +15,23 @@ const MCP_PLACEHOLDERS = [
 export default function Settings() {
   const { data: me, isLoading } = useAtelierGetMe();
   const { data: admin } = useAtelierGetAdminSettings();
+  const { data: agents } = useAtelierListAgents();
   const [autoNavEnabled, setAutoNavEnabled] = useAutoNavEnabled();
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (!me) return null;
 
-  const usedToday = 18420;
   const budget = admin?.perUserDailyTokenBudget ?? 250000;
-  const pct = Math.min(100, Math.round((usedToday / budget) * 100));
+  // The agent registry is the model policy: group the live catalogue by model
+  // so this card shows what actually runs rather than a hand-typed table.
+  const modelRows = Object.entries(
+    (agents ?? [])
+      .filter((a) => a.model.startsWith("claude-"))
+      .reduce<Record<string, string[]>>((acc, a) => {
+        (acc[a.model] ??= []).push(a.name);
+        return acc;
+      }, {}),
+  ).sort((a, b) => b[1].length - a[1].length);
 
   return (
     <div className="animate-in fade-in">
@@ -71,20 +73,12 @@ export default function Settings() {
           </h3>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-text">{usedToday.toLocaleString()} used today</span>
-              <span className="text-text-mute font-mono">
-                budget {budget.toLocaleString()} · {pct}%
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-bg-elevate overflow-hidden">
-              <div
-                className="h-full bg-gold transition-all"
-                style={{ width: `${pct}%` }}
-                data-testid="bar-token-usage"
-              />
+              <span className="text-text">Daily budget</span>
+              <span className="text-text-mute font-mono">{budget.toLocaleString()} tokens</span>
             </div>
             <p className="text-xs text-text-faint font-mono">
-              Budget is set by your firm Partner in Admin · Settings.
+              Budget is set by your firm Partner in Admin · Settings. Per-user usage is
+              not yet reported here; agent runs show their cost on the Agents page.
             </p>
           </div>
         </Card>
@@ -94,17 +88,20 @@ export default function Settings() {
             <Cpu className="w-4 h-4" /> Model Defaults
           </h3>
           <div className="border border-border-soft rounded-md divide-y divide-border-soft">
-            {MODEL_DEFAULTS.map((d) => (
+            {modelRows.length === 0 && (
+              <div className="px-4 py-3 text-xs text-text-mute">Agent catalogue not loaded.</div>
+            )}
+            {modelRows.map(([model, names]) => (
               <div
-                key={d.task}
-                className="flex justify-between items-center px-4 py-3"
-                data-testid={`row-model-${d.task.replace(/\s+/g, "-").toLowerCase()}`}
+                key={model}
+                className="flex justify-between items-start gap-4 px-4 py-3"
+                data-testid={`row-model-${model}`}
               >
-                <div>
-                  <div className="text-text">{d.task}</div>
-                  <div className="text-xs text-text-mute">{d.note}</div>
+                <div className="min-w-0">
+                  <div className="text-text">{names.length} agent{names.length === 1 ? "" : "s"}</div>
+                  <div className="text-xs text-text-mute truncate">{names.slice(0, 6).join(" · ")}{names.length > 6 ? ` · +${names.length - 6}` : ""}</div>
                 </div>
-                <MonoChip>{d.model}</MonoChip>
+                <MonoChip>{model}</MonoChip>
               </div>
             ))}
           </div>
